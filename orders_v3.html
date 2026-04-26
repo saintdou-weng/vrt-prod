@@ -553,8 +553,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
         <div class="sh"><span class="st">連動測試</span></div>
         <div class="sb">
           <div style="font-size:11px;color:var(--tx2);line-height:1.9;margin-bottom:10px">
-            <div>🔵 <strong>車縫系統</strong>：讀取 <code style="color:var(--acc)">localStorage["sewing_prod_v1"]</code></div>
-            <div style="color:var(--mu);padding-left:20px">→ 需在同一瀏覽器開啟並使用 sewing_v5.html</div>
+            <div>🔵 <strong>車縫系統</strong>：讀取 <code style="color:var(--acc)">SewingCloudProd IDB</code>（雲端同步）</div>
+            <div style="color:var(--mu);padding-left:20px">→ 開啟 sewing_v5.html 後自動從雲端拉取</div>
             <div style="margin-top:6px">🟡 <strong>裁剪系統</strong>：讀取 <code style="color:var(--ylw)">IndexedDB "CuttingProd"</code></div>
             <div style="color:var(--mu);padding-left:20px">→ 需在同一瀏覽器開啟並使用 cutting_v3.html</div>
           </div>
@@ -644,12 +644,29 @@ const dbDel=(s,id)=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s)
 
 // Try to read linked system stores (sewing/cutting) - may not exist
 // ── Read sewing from localStorage (sewing_v5 stores there) ──
-function readSewingFromLocalStorage(){
-  try{
-    const raw=localStorage.getItem('sewing_prod_v1')||localStorage.getItem('sew_v4')||'[]';
-    const recs=JSON.parse(raw);
-    return Array.isArray(recs)?recs:[];
-  }catch(e){return [];}
+async function readSewingFromLocalStorage(){
+  // 優先讀 SewingCloudProd IDB（車縫雲端同步後存這裡，無大小限制）
+  try {
+    const idbRecs = await new Promise(res => {
+      const req = indexedDB.open('SewingCloudProd', 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
+      req.onsuccess = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
+        const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
+        q.onsuccess = () => res(q.result || []);
+        q.onerror   = () => res([]);
+      };
+      req.onerror = () => res([]);
+    });
+    if (idbRecs.length > 0) return idbRecs;
+  } catch(e) {}
+  // Fallback: localStorage
+  try {
+    const raw = localStorage.getItem('sewing_prod_v1') || localStorage.getItem('sew_v4') || '[]';
+    const recs = JSON.parse(raw);
+    return Array.isArray(recs) ? recs : [];
+  } catch(e) { return []; }
 }
 
 // ── Read cutting from CuttingProd IndexedDB (cutting_v3 stores there) ──

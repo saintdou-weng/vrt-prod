@@ -522,13 +522,34 @@ function dbAll(){return new Promise((r,j)=>{const q=idbStore('readonly').getAll(
 function dbDel(id){return new Promise((r,j)=>{const q=idbStore('readwrite').delete(id);q.onsuccess=r;q.onerror=()=>j(q.error);});}
 
 // Load sewing data from localStorage (sewing_v5 LS key)
-function loadSewingData(){
-  try{
-    const raw=localStorage.getItem('sewing_prod_v1')||'[]';
-    SEW_DB=JSON.parse(raw);
-    document.getElementById('hSewing').textContent=SEW_DB.length.toLocaleString();
+async function loadSewingData(){
+  // 優先讀 SewingCloudProd IDB（車縫雲端同步後的全量資料）
+  try {
+    const idbRecs = await new Promise(res => {
+      const req = indexedDB.open('SewingCloudProd', 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
+      req.onsuccess = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
+        const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
+        q.onsuccess = () => res(q.result || []);
+        q.onerror   = () => res([]);
+      };
+      req.onerror = () => res([]);
+    });
+    if (idbRecs.length > 0) {
+      SEW_DB = idbRecs;
+      document.getElementById('hSewing').textContent = SEW_DB.length.toLocaleString();
+      return SEW_DB;
+    }
+  } catch(e) {}
+  // Fallback: localStorage
+  try {
+    const raw = localStorage.getItem('sewing_prod_v1') || '[]';
+    SEW_DB = JSON.parse(raw);
+    document.getElementById('hSewing').textContent = SEW_DB.length.toLocaleString();
     return SEW_DB;
-  }catch(e){SEW_DB=[];return [];}
+  } catch(e) { SEW_DB = []; return []; }
 }
 
 // Build SMV dictionary from latest snapshot per section
@@ -568,7 +589,7 @@ function sbadge(s){const c=s==='Garment'?'bg':s==='Cutting'?'bc':'ba';return`<sp
 function updateHeader(){
   document.getElementById('hSnaps').textContent=allSnaps.length;
   document.getElementById('hStyles').textContent=new Set(allSnaps.flatMap(s=>s.items.map(i=>i.style.toUpperCase()))).size;
-  loadSewingData();
+  loadSewingData(); // async, non-blocking
 }
 
 // ══════════════════════════════════════════════════════
@@ -1094,7 +1115,7 @@ openDB().then(async()=>{
   dbReady=true;
   allSnaps=await dbAll();
   allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));
-  loadSewingData();
+  loadSewingData(); // async, non-blocking
   updateHeader();
   console.log('SMV v5 ready. Snaps:',allSnaps.length,' Sewing:',SEW_DB.length);
   initFolderScan();
@@ -1159,6 +1180,168 @@ async function scanAllFolders(silent=false){
   m.style.color="var(--prd)";m.textContent=`📋 解析完畢，請往上點「✅ 確認儲存」（${pending.length} 個版本）`;
 }
 
+</script>
+<!-- ═══ VRT 雲端同步 — SMV ═══ -->
+<style>
+#vcSmvBtn{position:fixed;bottom:22px;right:22px;z-index:9999;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2540,#253058);border:1px solid #7c3aed;color:#c4b5fd;font-size:20px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;transition:.2s}
+#vcSmvBtn:hover{transform:scale(1.08)}
+#vcSmvPanel{position:fixed;bottom:76px;right:22px;z-index:9999;width:230px;background:#0f1929;border:1px solid #1e3050;border-radius:14px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:none;flex-direction:column;gap:9px;font-family:system-ui,sans-serif}
+#vcSmvPanel.show{display:flex}
+.vscp-t{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em}
+.vscp-s{font-size:11px;font-family:monospace;color:#475569;min-height:14px}
+.vscp-s.ok{color:#4ade80}.vscp-s.warn{color:#fbbf24}.vscp-s.err{color:#f87171}
+.vscp-row{display:flex;gap:7px}
+.vscp-btn{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s}
+.vscp-push{background:#1c1500;border:1px solid #92400e;color:#fbbf24}.vscp-push:hover{background:#292000}
+.vscp-pull{background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd}.vscp-pull:hover{background:#0f2040}
+.vscp-btn:disabled{opacity:.4;cursor:not-allowed}
+.vscp-gasrow{display:flex;gap:5px;align-items:center}
+.vscp-gasinput{flex:1;background:#0a1120;border:1px solid #1e3050;border-radius:6px;color:#f1f5f9;padding:5px 8px;font-size:10px;font-family:monospace;outline:none}
+.vscp-gassave{background:#253058;border:none;color:#cbd5e1;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer}
+.vscp-log{font-size:10px;font-family:monospace;color:#475569;max-height:70px;overflow-y:auto;line-height:1.6;border-top:1px solid #1e3050;padding-top:7px}
+.vl-ok{color:#4ade80}.vl-err{color:#f87171}.vl-i{color:#60a5fa}
+@keyframes vsSpin{to{transform:rotate(360deg)}}
+.vsSpin{display:inline-block;animation:vsSpin .7s linear infinite}
+</style>
+<button id="vcSmvBtn" title="☁ 雲端同步" onclick="vsToggle()">☁</button>
+<div id="vcSmvPanel">
+  <div class="vscp-t">☁ 雲端同步 — SMV</div>
+  <div class="vscp-s" id="vsStatus">讀取中...</div>
+  <div class="vscp-row">
+    <button class="vscp-btn vscp-push" id="vsPushBtn" onclick="vsPush()">☁ 推送</button>
+    <button class="vscp-btn vscp-pull" id="vsPullBtn" onclick="vsPull()">⬇ 拉取</button>
+  </div>
+  <div>
+    <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
+    <div class="vscp-gasrow">
+      <input class="vscp-gasinput" id="vsGasInput" placeholder="/exec 結尾"/>
+      <button class="vscp-gassave" onclick="vsSaveGas()">存</button>
+    </div>
+  </div>
+  <div class="vscp-log" id="vsLog"></div>
+</div>
+
+<script>
+(function(){
+  const LS_GAS = 'vrt_portal_gas_url';
+  let gasUrl = '', panelOpen = false;
+
+  function vsInit(){
+    gasUrl = localStorage.getItem(LS_GAS) || '';
+    document.getElementById('vsGasInput').value = gasUrl;
+    vsShowStatus();
+  }
+
+  window.vsToggle = function(){
+    panelOpen = !panelOpen;
+    document.getElementById('vcSmvPanel').classList.toggle('show', panelOpen);
+    if (panelOpen) vsInit();
+  };
+
+  window.vsSaveGas = function(){
+    gasUrl = document.getElementById('vsGasInput').value.trim();
+    if (!gasUrl) return;
+    localStorage.setItem(LS_GAS, gasUrl);
+    vsLog('GAS URL 已儲存','i');
+  };
+
+  async function vsShowStatus(){
+    const el = document.getElementById('vsStatus');
+    try {
+      const cnt = typeof allSnaps !== 'undefined' ? allSnaps.length : 0;
+      el.textContent = `快照 ${cnt} 筆`;
+      el.className = 'vscp-s ok';
+    } catch(e) { el.textContent = '讀取中...'; }
+  }
+
+  window.vsPush = async function(){
+    if (!gasUrl){ vsLog('請先填入 GAS URL','err'); return; }
+    vsBusy(true);
+    vsLog('推送 SMV 快照...','i');
+    try {
+      // 讀取 smv_snapshots IDB
+      const snaps = await new Promise((res,rej) => {
+        const req = indexedDB.open('SewingProd', 6);
+        req.onsuccess = e => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('smv_snapshots')){ res([]); return; }
+          const q = db.transaction('smv_snapshots','readonly').objectStore('smv_snapshots').getAll();
+          q.onsuccess = () => res(q.result || []);
+          q.onerror   = () => res([]);
+        };
+        req.onerror = () => res([]);
+      });
+      const payload = {
+        tool:'smv', recordCount: snaps.length,
+        idbStore:{ db:'SewingProd', ver:6, store:'smv_snapshots', records: snaps },
+        summary:{ snapshotCount: snaps.length }
+      };
+      const r = await fetch(gasUrl,{ method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload), redirect:'follow' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      vsLog(`✓ 推送完成（${snaps.length} 快照）`,'ok');
+    } catch(e){ vsLog('✗ '+e.message,'err'); }
+    finally { vsBusy(false); }
+  };
+
+  window.vsPull = async function(){
+    if (!gasUrl){ vsLog('請先填入 GAS URL','err'); return; }
+    if (!confirm('拉取會覆蓋本機 SMV 快照，確定嗎？')) return;
+    vsBusy(true);
+    vsLog('拉取中...','i');
+    try {
+      const r = await fetch(`${gasUrl}?action=pull&tool=smv`,{ redirect:'follow' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      if (!d.data || !d.data.data){ vsLog('雲端尚無 SMV 資料','err'); return; }
+      const snaps = d.data.data.idbStore?.records || d.data.data.records || [];
+      // 寫入 SewingProd IDB smv_snapshots
+      await new Promise((res,rej) => {
+        const req = indexedDB.open('SewingProd', 6);
+        req.onsuccess = e => {
+          const db = e.target.result;
+          const tx = db.transaction('smv_snapshots','readwrite');
+          const os = tx.objectStore('smv_snapshots');
+          os.clear();
+          snaps.forEach(s => os.put(s));
+          tx.oncomplete = () => res(snaps.length);
+          tx.onerror = rej;
+        };
+        req.onerror = rej;
+      });
+      // 重新載入
+      if (typeof loadData === 'function') await loadData();
+      vsLog(`✓ 拉取完成（${snaps.length} 快照）`,'ok');
+      if (confirm(`已拉取 ${snaps.length} 個 SMV 快照\n立即重新整理？`)) location.reload();
+    } catch(e){ vsLog('✗ '+e.message,'err'); }
+    finally { vsBusy(false); }
+  };
+
+  function vsBusy(on){
+    document.getElementById('vsPushBtn').disabled = on;
+    document.getElementById('vsPullBtn').disabled = on;
+    if (on){ document.getElementById('vsPushBtn').innerHTML='<span class="vsSpin">⏳</span>'; document.getElementById('vsPullBtn').innerHTML='<span class="vsSpin">⏳</span>'; }
+    else   { document.getElementById('vsPushBtn').innerHTML='☁ 推送'; document.getElementById('vsPullBtn').innerHTML='⬇ 拉取'; }
+  }
+
+  function vsLog(msg, type){
+    const el = document.getElementById('vsLog'); if (!el) return;
+    const now = new Date();
+    const t = [now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+    const cls = type==='ok'?'vl-ok':type==='err'?'vl-err':'vl-i';
+    el.innerHTML += `<span class="${cls}">[${t}] ${msg}</span>\n`;
+    el.scrollTop = el.scrollHeight;
+    document.getElementById('vsStatus').textContent = msg;
+    document.getElementById('vsStatus').className = 'vscp-s '+(type==='ok'?'ok':type==='err'?'err':'warn');
+  }
+
+  document.addEventListener('click', e => {
+    if (panelOpen && !e.target.closest('#vcSmvPanel') && !e.target.closest('#vcSmvBtn')){
+      panelOpen = false; document.getElementById('vcSmvPanel').classList.remove('show');
+    }
+  });
+  vsInit();
+})();
 </script>
 </body>
 </html>
