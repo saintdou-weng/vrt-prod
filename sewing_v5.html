@@ -3314,7 +3314,7 @@ async function scanAllFolders(silent=false){
         : JSON.parse(localStorage.getItem('sewing_eff_v1') || '[]');
 
       const total     = allRecs.length;
-      const CHUNK     = 5000; // 每批 5000 筆
+      const CHUNK     = 2000;
       const chunks    = Math.ceil(total / CHUNK);
       vcLog(`開始推送 ${total} 筆（共 ${chunks} 批）...`, 'i');
 

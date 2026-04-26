@@ -2602,7 +2602,7 @@ async function scanAllFolders(silent=false){
         : await vcIdbGetAll('CuttingProd', 1, 'cutting_records');
 
       const total  = allRecs.length;
-      const CHUNK  = 5000;
+      const CHUNK  = 2000;
       const chunks = Math.ceil(total / CHUNK) || 1;
       vcLog(`開始推送裁剪 ${total} 筆（共 ${chunks} 批）...`, 'i');
 
