@@ -685,21 +685,64 @@ async function connectDataFile(){
 // Init
 loadDB().then(async ()=>{
   updateHeader(); renderDBCard(); initFolderScan();
-  // 開啟時永遠從雲端拉取最新資料（雲端為主要來源）
-  await vcAutoSync();
+  // 開啟時從雲端 IDB 補充（IDB 無大小限制，可存全量）
+  await vcLoadFromCloudIDB(); // 先讀本機 cloud IDB
+  await vcAutoSync();         // 再從雲端更新
 });
 
-// 開啟時自動同步雲端（主要資料來源）
+// ── Cloud IDB：SewingCloudProd / cloud_records ──────────────
+const CLOUD_IDB_NAME  = 'SewingCloudProd';
+const CLOUD_IDB_STORE = 'cloud_records';
+
+function openCloudIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(CLOUD_IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(CLOUD_IDB_STORE, { keyPath:'id', autoIncrement:true });
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = rej;
+  });
+}
+async function saveToCloudIDB(recs) {
+  const db = await openCloudIDB();
+  const tx = db.transaction(CLOUD_IDB_STORE, 'readwrite');
+  const os = tx.objectStore(CLOUD_IDB_STORE);
+  await new Promise((res,rej) => { const q=os.clear(); q.onsuccess=res; q.onerror=rej; });
+  for (const r of recs) { os.put(r); }
+  return new Promise((res,rej) => { tx.oncomplete=()=>res(recs.length); tx.onerror=rej; });
+}
+async function loadFromCloudIDB() {
+  try {
+    const db = await openCloudIDB();
+    return await new Promise((res) => {
+      const tx = db.transaction(CLOUD_IDB_STORE, 'readonly');
+      const q  = tx.objectStore(CLOUD_IDB_STORE).getAll();
+      q.onsuccess = () => res(q.result || []);
+      q.onerror   = () => res([]);
+    });
+  } catch(e) { return []; }
+}
+
+// 開啟時先讀本機 cloud IDB（快，無需網路）
+async function vcLoadFromCloudIDB() {
+  const recs = await loadFromCloudIDB();
+  if (!recs.length) return;
+  const merged = dedupAndNorm([...recs]);
+  if (merged.length > DB.length) {
+    DB = merged;
+    updateHeader(); renderDBCard();
+  }
+}
+
+// 開啟時自動從雲端拉取並存入 IDB（主要資料來源）
 async function vcAutoSync(){
   const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
-  if (!gasUrl) return; // 未設定 GAS URL 則略過
+  if (!gasUrl) return;
 
-  // 顯示同步中提示
-  const hdr = document.querySelector('.hdr-right') || document.querySelector('.status-bar');
-  const tip  = document.createElement('span');
-  tip.id     = 'vcSyncTip';
-  tip.style.cssText = 'font-size:11px;color:#f59e0b;margin-left:12px;font-family:monospace';
-  tip.textContent   = '☁ 同步雲端中...';
+  const hdr = document.querySelector('.hdr-right') || document.querySelector('.hdr');
+  const tip = document.createElement('span');
+  tip.id = 'vcSyncTip';
+  tip.style.cssText = 'font-size:11px;color:#f59e0b;margin-left:12px;font-family:monospace;white-space:nowrap';
+  tip.textContent = '☁ 同步雲端中...';
   if (hdr) hdr.appendChild(tip);
 
   try {
@@ -717,34 +760,24 @@ async function vcAutoSync(){
     else if (payload.records) allRecs = payload.records;
     if (!allRecs.length) { tip.remove(); return; }
 
-    // 取近 90 天寫入 localStorage（確保塞得進去）
-    const cut    = new Date(); cut.setDate(cut.getDate() - 90);
-    const cutStr = cut.toISOString().slice(0, 10);
-    let toSave   = allRecs.filter(r => (r.date||'') >= cutStr);
-    if (!toSave.length) toSave = allRecs.slice(-3000);
+    // ★ 全量存入 IDB（無大小限制）
+    tip.textContent = `☁ 寫入 IDB（${allRecs.length.toLocaleString()} 筆）...`;
+    await saveToCloudIDB(allRecs);
 
-    // 寫入（失敗再縮減）
-    let saved = false;
-    for (const slice of [toSave, toSave.slice(-2000), toSave.slice(-1000)]) {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(slice)); saved = true; toSave = slice; break; }
-      catch(e) {}
-    }
-    if (!saved) { tip.textContent = '☁ 本機容量不足'; setTimeout(()=>tip.remove(),3000); return; }
+    // localStorage 存近 90 天備用
+    const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
+    const recent = allRecs.filter(r => (r.date||'') >= cutStr);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
-    // 同步效率資料
-    if (payload.lsKeys && payload.lsKeys.sewing_eff_v1) {
+    // 效率資料
+    if (payload.lsKeys?.sewing_eff_v1)
       try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
-    }
 
-    // 更新記憶體並重新整理畫面
-    DB = dedupAndNorm(toSave);
+    // 更新記憶體：用全量
+    DB = dedupAndNorm(allRecs);
     updateHeader(); renderDBCard();
 
-    const cloudTotal = allRecs.length;
-    const msg = cloudTotal > toSave.length
-      ? `☁ 雲端同步完成（顯示近90天 ${toSave.length.toLocaleString()} 筆 / 全量 ${cloudTotal.toLocaleString()} 筆在 Sheets）`
-      : `☁ 雲端同步完成（${toSave.length.toLocaleString()} 筆）`;
-    tip.textContent = msg;
+    tip.textContent = `☁ 雲端同步完成（${allRecs.length.toLocaleString()} 筆）`;
     tip.style.color = '#10b981';
     setTimeout(() => tip.remove(), 5000);
 

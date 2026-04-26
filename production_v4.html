@@ -418,14 +418,39 @@ async function loadAll(){
     document.getElementById('l-cut').textContent = '裁剪 DB 離線';
   }
 
-  // 3. Sewing: localStorage → sewing_prod_v1
-  setL('讀取車縫 (localStorage)…'); SEW=[];
-  try{
-    const raw = localStorage.getItem(SEW_LS) || '[]';
-    SEW = JSON.parse(raw).filter(r => r?.pieces > 0);
+  // 3. Sewing: SewingCloudProd IDB（優先）→ localStorage fallback
+  setL('讀取車縫 (IDB + localStorage)…'); SEW=[];
+  try {
+    // 先試 SewingCloudProd IDB
+    let idbRecs = [];
+    try {
+      idbRecs = await new Promise((res) => {
+        const req = indexedDB.open('SewingCloudProd', 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
+        req.onsuccess = e => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
+          const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
+          q.onsuccess = () => res(q.result || []);
+          q.onerror   = () => res([]);
+        };
+        req.onerror = () => res([]);
+      });
+    } catch(e) { idbRecs = []; }
+
+    // localStorage
+    let lsRecs = [];
+    try { lsRecs = JSON.parse(localStorage.getItem(SEW_LS) || '[]'); } catch(e) {}
+
+    // 用較多筆數的那個，合併去重
+    const base = idbRecs.length >= lsRecs.length ? idbRecs : lsRecs;
+    SEW = base.filter(r => r?.pieces > 0);
+    const src = idbRecs.length >= lsRecs.length ? 'IDB' : 'localStorage';
     setDot('d-sew', SEW.length ? 'ok' : 'warn');
-    document.getElementById('l-sew').textContent = SEW.length ? `車縫 ${SEW.length} 筆` : '車縫無資料（先開 sewing_v5.html 匯入）';
-  }catch(e){
+    document.getElementById('l-sew').textContent = SEW.length
+      ? `車縫 ${SEW.length.toLocaleString()} 筆`
+      : '車縫無資料（先開 sewing_v5.html 匯入）';
+  } catch(e) {
     setDot('d-sew','err');
     document.getElementById('l-sew').textContent = '車縫讀取失敗';
   }
@@ -1298,31 +1323,35 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
   };
 
   // ── 寫入各工具資料 ──────────────────────────
-  function writeSewing(data) {
+  async function writeSewing(data) {
     let recs = [];
-    if (data.lsKeys && data.lsKeys.sewing_prod_v1) {
+    if (data.lsKeys && data.lsKeys.sewing_prod_v1)
       recs = JSON.parse(data.lsKeys.sewing_prod_v1);
-    } else if (data.records) {
-      recs = data.records;
-    }
-    // 若全量超出 5MB，取近 90 天
-    const tryWrite = (arr) => {
-      try {
-        localStorage.setItem('sewing_prod_v1', JSON.stringify(arr));
-        if (data.lsKeys && data.lsKeys.sewing_eff_v1) {
-          try { localStorage.setItem('sewing_eff_v1', data.lsKeys.sewing_eff_v1); } catch(e){}
-        }
-        return arr.length;
-      } catch(e) { return null; }
-    };
-    let cnt = tryWrite(recs);
-    if (cnt === null) {
-      const cut = new Date(); cut.setDate(cut.getDate() - 90);
-      const cutStr = cut.toISOString().slice(0,10);
-      const recent = recs.filter(r => (r.date||'') >= cutStr);
-      cnt = tryWrite(recent) || 0;
-    }
-    return cnt;
+    else if (data.records) recs = data.records;
+
+    // ★ 全量存入 SewingCloudProd IDB（和 sewing_v5 共用同一個 IDB）
+    try {
+      await new Promise((res, rej) => {
+        const req = indexedDB.open('SewingCloudProd', 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
+        req.onsuccess = e => {
+          const db = e.target.result;
+          const tx = db.transaction('cloud_records', 'readwrite');
+          const os = tx.objectStore('cloud_records');
+          os.clear();
+          recs.forEach(r => os.put(r));
+          tx.oncomplete = res;
+          tx.onerror = rej;
+        };
+        req.onerror = rej;
+      });
+    } catch(e) { console.warn('IDB write failed, falling back to localStorage', e); }
+
+    // localStorage 存近 90 天備用
+    const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
+    const recent = recs.filter(r => (r.date||'') >= cutStr);
+    try { localStorage.setItem('sewing_prod_v1', JSON.stringify(recent)); } catch(e) {}
+    return recs.length;
   }
 
   function writeCutting(data) {
