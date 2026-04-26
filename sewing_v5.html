@@ -683,7 +683,77 @@ async function connectDataFile(){
 }
 
 // Init
-loadDB().then(()=>{ updateHeader(); renderDBCard(); initFolderScan(); });
+loadDB().then(async ()=>{
+  updateHeader(); renderDBCard(); initFolderScan();
+  // 開啟時永遠從雲端拉取最新資料（雲端為主要來源）
+  await vcAutoSync();
+});
+
+// 開啟時自動同步雲端（主要資料來源）
+async function vcAutoSync(){
+  const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
+  if (!gasUrl) return; // 未設定 GAS URL 則略過
+
+  // 顯示同步中提示
+  const hdr = document.querySelector('.hdr-right') || document.querySelector('.status-bar');
+  const tip  = document.createElement('span');
+  tip.id     = 'vcSyncTip';
+  tip.style.cssText = 'font-size:11px;color:#f59e0b;margin-left:12px;font-family:monospace';
+  tip.textContent   = '☁ 同步雲端中...';
+  if (hdr) hdr.appendChild(tip);
+
+  try {
+    const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
+    const d = await r.json();
+    if (!d.ok || !d.data || !d.data.data) {
+      tip.textContent = '☁ 雲端無資料（使用本機）';
+      setTimeout(() => tip.remove(), 3000);
+      return;
+    }
+    const payload = d.data.data;
+    let allRecs = [];
+    if (payload.lsKeys && payload.lsKeys.sewing_prod_v1)
+      allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+    else if (payload.records) allRecs = payload.records;
+    if (!allRecs.length) { tip.remove(); return; }
+
+    // 取近 90 天寫入 localStorage（確保塞得進去）
+    const cut    = new Date(); cut.setDate(cut.getDate() - 90);
+    const cutStr = cut.toISOString().slice(0, 10);
+    let toSave   = allRecs.filter(r => (r.date||'') >= cutStr);
+    if (!toSave.length) toSave = allRecs.slice(-3000);
+
+    // 寫入（失敗再縮減）
+    let saved = false;
+    for (const slice of [toSave, toSave.slice(-2000), toSave.slice(-1000)]) {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(slice)); saved = true; toSave = slice; break; }
+      catch(e) {}
+    }
+    if (!saved) { tip.textContent = '☁ 本機容量不足'; setTimeout(()=>tip.remove(),3000); return; }
+
+    // 同步效率資料
+    if (payload.lsKeys && payload.lsKeys.sewing_eff_v1) {
+      try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
+    }
+
+    // 更新記憶體並重新整理畫面
+    DB = dedupAndNorm(toSave);
+    updateHeader(); renderDBCard();
+
+    const cloudTotal = allRecs.length;
+    const msg = cloudTotal > toSave.length
+      ? `☁ 雲端同步完成（顯示近90天 ${toSave.length.toLocaleString()} 筆 / 全量 ${cloudTotal.toLocaleString()} 筆在 Sheets）`
+      : `☁ 雲端同步完成（${toSave.length.toLocaleString()} 筆）`;
+    tip.textContent = msg;
+    tip.style.color = '#10b981';
+    setTimeout(() => tip.remove(), 5000);
+
+  } catch(e) {
+    tip.textContent = '☁ 雲端離線，使用本機資料';
+    tip.style.color = '#f59e0b';
+    setTimeout(() => tip.remove(), 3000);
+  }
+}
 
 // ═══════════════════════ TABS ═════════════════════════════════════════════════
 function goTab(name, el){
