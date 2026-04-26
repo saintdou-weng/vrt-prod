@@ -3361,14 +3361,58 @@ async function scanAllFolders(silent=false){
       if (!d.ok) throw new Error(d.error);
       if (!d.data || !d.data.data) { vcLog('雲端尚無車縫資料', 'err'); return; }
       const payload = d.data.data;
-      if (payload.lsKeys) {
-        Object.entries(payload.lsKeys).forEach(([k,v]) => { if (v != null) localStorage.setItem(k, v); });
+
+      // 取得完整記錄
+      let allRecs = [];
+      if (payload.lsKeys && payload.lsKeys.sewing_prod_v1) {
+        allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+      } else if (payload.records) {
+        allRecs = payload.records;
       }
-      const cnt = JSON.parse(payload.lsKeys?.sewing_prod_v1 || '[]').length;
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: cnt }));
-      vcLog(`✓ 拉取完成（${cnt} 筆），重新整理頁面即可看到`, 'ok');
+
+      // 嘗試寫入，若超出 quota 自動縮減天數
+      const cutoffs = [180, 90, 60, 30];
+      let saved = false;
+      let savedRecs = allRecs;
+
+      // 先試全量
+      try {
+        const testJson = JSON.stringify(allRecs);
+        localStorage.setItem('sewing_prod_v1', testJson);
+        saved = true;
+        vcLog(`✓ 全量寫入（${allRecs.length} 筆）`, 'ok');
+      } catch(e) {
+        vcLog(`全量超出容量，自動縮減...`, 'i');
+      }
+
+      // 若失敗，依天數縮減
+      if (!saved) {
+        for (const days of cutoffs) {
+          const cutDate = new Date();
+          cutDate.setDate(cutDate.getDate() - days);
+          const cutStr  = cutDate.toISOString().slice(0, 10);
+          savedRecs     = allRecs.filter(rec => (rec.date || '') >= cutStr);
+          try {
+            localStorage.setItem('sewing_prod_v1', JSON.stringify(savedRecs));
+            saved = true;
+            vcLog(`✓ 寫入近 ${days} 天資料（${savedRecs.length} 筆），較舊資料在工廠電腦查看`, 'ok');
+            break;
+          } catch(e2) {
+            vcLog(`近 ${days} 天仍超出，再縮...`, 'i');
+          }
+        }
+      }
+
+      if (!saved) { vcLog('✗ 資料量太大，無法寫入此裝置 localStorage', 'err'); return; }
+
+      // 寫入 eff
+      if (payload.lsKeys && payload.lsKeys.sewing_eff_v1) {
+        try { localStorage.setItem('sewing_eff_v1', payload.lsKeys.sewing_eff_v1); } catch(e) {}
+      }
+
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: savedRecs.length }));
       vcShowStatus();
-      if (confirm(`已拉取 ${cnt} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
+      if (confirm(`已拉取 ${savedRecs.length} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }
