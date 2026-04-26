@@ -3313,7 +3313,7 @@ async function scanAllFolders(silent=false){
         summary: buildSewingSummary(JSON.parse(daily)),
       };
       const r = await fetch(gasUrl, {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'text/plain'},
         body: JSON.stringify(payload), redirect:'follow',
       });
       const d = await r.json();

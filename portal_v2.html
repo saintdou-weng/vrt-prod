@@ -378,7 +378,7 @@ async function push(tool) {
     const payload = await cfg.read();
     if (!payload) { log(`${tool} 無本地資料可推送（請在工具內直接同步）`, 'err'); setBtns(tool, false); return; }
     const r = await fetch(gasUrl, {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'text/plain'},
       body: JSON.stringify(payload), redirect:'follow'
     });
     const d = await r.json();
