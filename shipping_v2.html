@@ -194,6 +194,7 @@ tbody tr:hover td{background:#f8fafc}
     <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📂 開啟檔案</button>
     <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xls" style="display:none" onchange="handleFile(event)">
     <button class="btn btn-ghost" id="btnCloudSync" onclick="syncToGas()" style="display:none;background:#1e2640;color:#fff;border-color:#1e2640">☁️ 同步至雲端</button>
+    <button class="btn btn-ghost" onclick="pullFromGas()" style="background:#0c1a2c;color:#93c5fd;border-color:#1d4ed8">⬇ 雲端拉取</button>
   </div>
 </div>
 
@@ -317,6 +318,59 @@ tbody tr:hover td{background:#f8fafc}
 // ══════════════════════════════════════════════
 let ALL=[], FILTERED=[], TAB='shipped', PAGE=1, PER=50;
 const MONTHS=['','1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const SHIP_LS = 'vrt_shipping_data_v1';
+const SHIP_META_LS = 'vrt_shipping_meta_v1';
+
+// ── 儲存資料到 localStorage ──
+function shipSave(filename) {
+  try {
+    const meta = { filename, savedAt: new Date().toISOString(), count: ALL.length };
+    // 嘗試存全量
+    try {
+      localStorage.setItem(SHIP_LS, JSON.stringify(ALL));
+      localStorage.setItem(SHIP_META_LS, JSON.stringify(meta));
+      console.log(`Shipping saved: ${ALL.length} records`);
+    } catch(e) {
+      // 超出容量：只存最近 12 個月
+      const cutDate = new Date();
+      cutDate.setMonth(cutDate.getMonth() - 12);
+      const recent = ALL.filter(r => {
+        if (!r.etdYear || !r.etdMonth) return true;
+        const d = new Date(r.etdYear, r.etdMonth - 1, 1);
+        return d >= cutDate;
+      });
+      localStorage.setItem(SHIP_LS, JSON.stringify(recent));
+      meta.count = recent.length;
+      meta.trimmed = true;
+      localStorage.setItem(SHIP_META_LS, JSON.stringify(meta));
+    }
+  } catch(e) { console.warn('Shipping save failed:', e); }
+}
+
+// ── 從 localStorage 還原資料 ──
+function shipRestore() {
+  try {
+    const raw  = localStorage.getItem(SHIP_LS);
+    const meta = JSON.parse(localStorage.getItem(SHIP_META_LS) || 'null');
+    if (!raw || !meta) return false;
+    ALL = JSON.parse(raw);
+    if (!ALL.length) return false;
+    const savedAt = new Date(meta.savedAt);
+    const age = Math.round((Date.now() - savedAt) / 86400000);
+    document.getElementById('fileInfo').textContent =
+      `${meta.filename}${meta.trimmed?' (近12月)':''}  ·  ${ALL.length.toLocaleString()} 筆  ·  ${age}天前匯入`;
+    setStatus('已還原',true);
+    buildFilters();
+    applyFilters();
+    document.getElementById('uploadScreen').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    document.getElementById('btnCloudSync').style.display='';
+    // 顯示還原提示
+    const tip = document.getElementById('loadStatus');
+    if (tip) { tip.textContent = `✅ 已自動還原上次資料（${age}天前）`; setTimeout(()=>tip.textContent='',4000); }
+    return true;
+  } catch(e) { return false; }
+}
 
 // ══════════════════════════════════════════════
 // DRAG & DROP
@@ -412,6 +466,8 @@ async function loadFile(file){
     document.getElementById('dashboard').style.display='block';
     document.getElementById('btnCloudSync').style.display='';
     document.getElementById('loadStatus').textContent='';
+    // 儲存到 localStorage（下次開啟自動還原）
+    shipSave(file.name);
   }catch(e){
     setStatus('錯誤','');
     document.getElementById('loadStatus').textContent='❌ '+e.message;
@@ -851,7 +907,6 @@ function exportCSV(){
 async function syncToGas(){
   const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
   if(!gasUrl){
-    alert('找不到 GAS URL。\n請先開啟 portal.html 設定 GAS URL，或手動填入。');
     const u=prompt('請貼上 GAS /exec URL：');
     if(!u)return;
     localStorage.setItem('vrt_portal_gas_url',u.trim());
@@ -867,46 +922,79 @@ async function syncToGas(){
   const shipped   =ALL.filter(r=>r.status==='shipped').length;
   const outstanding=ALL.filter(r=>r.status==='outstanding').length;
   const abnormal  =ALL.filter(r=>r.status==='abnormal').length;
-
-  // Customer breakdown (top customers by outstanding qty)
   const custMap={};
   ALL.filter(r=>r.status==='outstanding').forEach(r=>{
     if(!custMap[r.cust])custMap[r.cust]={cust:r.cust,pos:0,qty:0};
-    custMap[r.cust].pos++;
-    custMap[r.cust].qty+=(r.open||0);
+    custMap[r.cust].pos++;custMap[r.cust].qty+=(r.open||0);
   });
   const topCusts=Object.values(custMap).sort((a,b)=>b.qty-a.qty).slice(0,8);
 
-  const payload={
-    tool:'shipping',
-    recordCount:ALL.length,
-    summary:{
-      total:ALL.length,
-      shipped,outstanding,abnormal,
-      shipRate:ALL.length?Math.round(shipped/ALL.length*100):0,
-      topOutstanding:topCusts,
-      fileDate:new Date().toISOString().slice(0,10),
-    }
-  };
-
+  // 推送完整記錄（分批，每批 2000）
+  const CHUNK=2000;
+  const total=ALL.length;
+  const chunks=Math.ceil(total/CHUNK);
   try{
-    const r=await fetch(url,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify(payload),
-      mode:'cors',redirect:'follow'
-    });
-    const d=await r.json();
-    if(d.ok){
-      btn.textContent='✓ 已同步';
-      btn.style.background='#059669';
-      setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false;},3000);
-    }else throw new Error(d.error||'GAS error');
+    for(let i=0;i<chunks;i++){
+      const slice=ALL.slice(i*CHUNK,(i+1)*CHUNK);
+      const isLast=i===chunks-1;
+      const payload={
+        tool:'shipping', chunk:i, totalChunks:chunks, recordCount:total,
+        records:slice,
+        ...(isLast?{
+          summary:{total,shipped,outstanding,abnormal,
+            shipRate:total?Math.round(shipped/total*100):0,
+            topOutstanding:topCusts,
+            fileDate:new Date().toISOString().slice(0,10)},
+          lsKey:'vrt_shipping_data_v1',
+        }:{})
+      };
+      btn.textContent=chunks>1?`☁ ${i+1}/${chunks}...`:'☁ 同步中...';
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload),redirect:'follow'});
+      const d=await r.json();
+      if(!d.ok)throw new Error(d.error||'GAS error');
+    }
+    btn.textContent='✓ 已同步';
+    btn.style.background='#059669';
+    setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false;},3000);
   }catch(e){
     btn.textContent='✗ 失敗';
     btn.style.background='#dc2626';
     setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false;},3000);
     alert('同步失敗：'+e.message);
+  }
+}
+
+// ── 從雲端拉取出貨資料 ──
+async function pullFromGas(){
+  const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!gasUrl){alert('請先設定 GAS URL');return;}
+  const btn=document.getElementById('btnCloudSync');
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent='⬇ 拉取中...';
+  try{
+    const r=await fetch(`${gasUrl}?action=pull&tool=shipping`,{redirect:'follow'});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error);
+    if(!d.data||!d.data.data){alert('雲端尚無出貨資料，請先匯入 .xlsb 後同步');return;}
+    const payload=d.data.data;
+    ALL=payload.records||[];
+    if(!ALL.length){alert('雲端出貨記錄為空');return;}
+    // 還原狀態
+    const meta=payload.summary||{};
+    const fname=`雲端資料（${meta.fileDate||'--'}）`;
+    document.getElementById('fileInfo').textContent=`${fname}  ·  ${ALL.length.toLocaleString()} 筆記錄`;
+    setStatus('已還原',true);
+    buildFilters(); applyFilters();
+    document.getElementById('uploadScreen').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    document.getElementById('btnCloudSync').style.display='';
+    shipSave(fname);
+    btn.textContent='✓ 已拉取';
+    btn.style.background='#1d4ed8';
+    setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false;},3000);
+  }catch(e){
+    alert('拉取失敗：'+e.message);
+    btn.textContent=orig; btn.disabled=false;
   }
 }
 
@@ -982,6 +1070,8 @@ async function scanAndLoad(silent=false){
 
 // Init on page load
 initFolderScan();
+// 自動還原上次載入的出貨資料
+shipRestore();
 </script>
 </body>
 </html>

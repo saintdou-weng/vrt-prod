@@ -1202,5 +1202,180 @@ async function refresh(){CUST_CLR={};_CI=0;await loadAll();}
 
 window.addEventListener('DOMContentLoaded',()=>loadAll());
 </script>
+<!-- ═══ VRT 雲端同步 — 生產總覽（一鍵拉取車縫＋裁剪＋訂單） ═══ -->
+<style>
+#vcProdBtn{position:fixed;bottom:22px;right:22px;z-index:9999;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#1a2540,#253058);border:1px solid #2d3a6e;color:#93c5fd;font-size:20px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;transition:all .2s}
+#vcProdBtn:hover{transform:scale(1.08);border-color:#3b82f6}
+#vcProdPanel{position:fixed;bottom:76px;right:22px;z-index:9999;width:240px;background:#0f1929;border:1px solid #1e3050;border-radius:14px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:none;flex-direction:column;gap:9px;font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif}
+#vcProdPanel.show{display:flex}
+.vcp-t{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em}
+.vcp-s{font-size:11px;font-family:monospace;min-height:14px;line-height:1.6;color:#475569}
+.vcp-s.ok{color:#4ade80}.vcp-s.warn{color:#fbbf24}.vcp-s.err{color:#f87171}
+.vcp-pull-all{width:100%;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #1d4ed8;background:#0c1a2c;color:#93c5fd;font-family:inherit;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.vcp-pull-all:hover{background:#0f2040}.vcp-pull-all:disabled{opacity:.4;cursor:not-allowed}
+.vcp-gasrow{display:flex;gap:5px;align-items:center}
+.vcp-gasinput{flex:1;background:#0a1120;border:1px solid #1e3050;border-radius:6px;color:#f1f5f9;padding:5px 8px;font-size:10px;font-family:monospace;outline:none}
+.vcp-gasinput:focus{border-color:#f59e0b}
+.vcp-gassave{background:#253058;border:none;color:#cbd5e1;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}
+.vcp-log{font-size:10px;font-family:monospace;color:#475569;max-height:80px;overflow-y:auto;line-height:1.6;border-top:1px solid #1e3050;padding-top:7px}
+.vcl-ok{color:#4ade80}.vcl-err{color:#f87171}.vcl-i{color:#60a5fa}
+@keyframes vcSpin{to{transform:rotate(360deg)}}
+.vcSpin{display:inline-block;animation:vcSpin .7s linear infinite}
+</style>
+
+<button id="vcProdBtn" title="☁ 雲端同步" onclick="vcProdToggle()">☁</button>
+<div id="vcProdPanel">
+  <div class="vcp-t">☁ 雲端同步 — 生產總覽</div>
+  <div class="vcp-s" id="vcProdStatus">點「拉取全部」從雲端載入最新資料</div>
+  <button class="vcp-pull-all" id="vcPullAllBtn" onclick="vcPullAll()">⬇ 拉取全部（車縫＋裁剪＋訂單）</button>
+  <div>
+    <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
+    <div class="vcp-gasrow">
+      <input class="vcp-gasinput" id="vcProdGasInput" placeholder="/exec 結尾的網址"/>
+      <button class="vcp-gassave" onclick="vcProdSaveGas()">存</button>
+    </div>
+  </div>
+  <div class="vcp-log" id="vcProdLog"></div>
+</div>
+
+<script>
+(function(){
+  const LS_GAS = 'vrt_portal_gas_url';
+  let gasUrl = '', panelOpen = false;
+
+  function vcProdInit(){
+    gasUrl = localStorage.getItem(LS_GAS) || '';
+    document.getElementById('vcProdGasInput').value = gasUrl;
+  }
+
+  window.vcProdToggle = function(){
+    panelOpen = !panelOpen;
+    document.getElementById('vcProdPanel').classList.toggle('show', panelOpen);
+    if (panelOpen) vcProdInit();
+  };
+
+  window.vcProdSaveGas = function(){
+    gasUrl = document.getElementById('vcProdGasInput').value.trim();
+    if (!gasUrl) return;
+    localStorage.setItem(LS_GAS, gasUrl);
+    vcProdLog('GAS URL 已儲存', 'i');
+  };
+
+  window.vcPullAll = async function(){
+    if (!gasUrl){ vcProdLog('請先填入 GAS URL', 'err'); return; }
+    const btn = document.getElementById('vcPullAllBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="vcSpin">⏳</span> 拉取中...';
+
+    const tools = [
+      { name:'車縫', key:'sewing', write: writeSewing },
+      { name:'裁剪', key:'cutting', write: writeCutting },
+      { name:'訂單', key:'orders', write: writeOrders },
+    ];
+
+    let anyOk = false;
+    for (const t of tools) {
+      vcProdLog(`拉取 ${t.name}...`, 'i');
+      try {
+        const r = await fetch(`${gasUrl}?action=pull&tool=${t.key}`, { redirect:'follow' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error);
+        if (!d.data || !d.data.data) { vcProdLog(`${t.name}：雲端無資料`, 'err'); continue; }
+        const cnt = await t.write(d.data.data);
+        vcProdLog(`✓ ${t.name} ${cnt} 筆`, 'ok');
+        anyOk = true;
+      } catch(e) {
+        vcProdLog(`✗ ${t.name}：${e.message}`, 'err');
+      }
+    }
+
+    if (anyOk) {
+      vcProdLog('拉取完成，重新整理頁面...', 'i');
+      setTimeout(() => location.reload(), 1200);
+    }
+    btn.disabled = false;
+    btn.innerHTML = '⬇ 拉取全部（車縫＋裁剪＋訂單）';
+  };
+
+  // ── 寫入各工具資料 ──────────────────────────
+  function writeSewing(data) {
+    let recs = [];
+    if (data.lsKeys && data.lsKeys.sewing_prod_v1) {
+      recs = JSON.parse(data.lsKeys.sewing_prod_v1);
+    } else if (data.records) {
+      recs = data.records;
+    }
+    // 若全量超出 5MB，取近 90 天
+    const tryWrite = (arr) => {
+      try {
+        localStorage.setItem('sewing_prod_v1', JSON.stringify(arr));
+        if (data.lsKeys && data.lsKeys.sewing_eff_v1) {
+          try { localStorage.setItem('sewing_eff_v1', data.lsKeys.sewing_eff_v1); } catch(e){}
+        }
+        return arr.length;
+      } catch(e) { return null; }
+    };
+    let cnt = tryWrite(recs);
+    if (cnt === null) {
+      const cut = new Date(); cut.setDate(cut.getDate() - 90);
+      const cutStr = cut.toISOString().slice(0,10);
+      const recent = recs.filter(r => (r.date||'') >= cutStr);
+      cnt = tryWrite(recent) || 0;
+    }
+    return cnt;
+  }
+
+  function writeCutting(data) {
+    return new Promise((res) => {
+      const recs = data.idbStore?.records || data.records || [];
+      const req  = indexedDB.open('CuttingProd', 1);
+      req.onerror = () => res(0);
+      req.onsuccess = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('cutting_records')) { res(0); return; }
+        const tx = db.transaction('cutting_records','readwrite');
+        const os = tx.objectStore('cutting_records');
+        os.clear();
+        recs.forEach(r => os.put(r));
+        tx.oncomplete = () => res(recs.length);
+        tx.onerror    = () => res(0);
+      };
+    });
+  }
+
+  function writeOrders(data) {
+    try {
+      if (data.lsKeys && data.lsKeys.orderSetsV3) {
+        localStorage.setItem('orderSetsV3', data.lsKeys.orderSetsV3);
+        return Object.keys(JSON.parse(data.lsKeys.orderSetsV3)).length;
+      }
+      return 0;
+    } catch(e) { return 0; }
+  }
+
+  // ── Log ──────────────────────────────────────
+  function vcProdLog(msg, type) {
+    const el = document.getElementById('vcProdLog');
+    if (!el) return;
+    const now = new Date();
+    const t   = [now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+    const cls = type==='ok'?'vcl-ok':type==='err'?'vcl-err':'vcl-i';
+    el.innerHTML += `<span class="${cls}">[${t}] ${msg}</span>\n`;
+    el.scrollTop  = el.scrollHeight;
+    document.getElementById('vcProdStatus').textContent = msg;
+    document.getElementById('vcProdStatus').className   = 'vcp-s ' + (type==='ok'?'ok':type==='err'?'err':'warn');
+  }
+
+  document.addEventListener('click', e => {
+    if (panelOpen && !e.target.closest('#vcProdPanel') && !e.target.closest('#vcProdBtn')){
+      panelOpen = false;
+      document.getElementById('vcProdPanel').classList.remove('show');
+    }
+  });
+
+  vcProdInit();
+})();
+</script>
+
 </body>
 </html>
