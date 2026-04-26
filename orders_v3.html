@@ -711,8 +711,8 @@ async function loadAll(){
   APP.orders=await dbAll('po_lines');
   APP.weekly=await dbAll('weekly_snapshots');
   APP.imports=await dbAll('order_imports');
-  // Read sewing from localStorage (sewing_v5 storage)
-  APP.sewing=readSewingFromLocalStorage();
+  // Read sewing: SewingCloudProd IDB first, then localStorage fallback
+  APP.sewing=await readSewingFromLocalStorage();
   // Read cutting from CuttingProd IDB (cutting_v3 storage)
   APP.cutting=await readCuttingFromIDB();
   // Fallback: also check FactoryDB if configured manually
@@ -1663,12 +1663,13 @@ function matchCust(r,cust){
 
 async function testDbLink(){
   const res=document.getElementById('link-test-result');
-  // Test sewing (localStorage)
-  const swData=readSewingFromLocalStorage();
+  // Test sewing (SewingCloudProd IDB first, then localStorage)
+  const swData=await readSewingFromLocalStorage();
   // Test cutting (CuttingProd IDB)
   const ctData=await readCuttingFromIDB();
+  const swSrc = swData.length>0 ? (swData.length>5000?'SewingCloudProd IDB':'localStorage') : '';
   let html=`<span style="color:${swData.length>0?'var(--grn)':'var(--red)'}">
-    車縫 (localStorage "sewing_prod_v1"): ${swData.length>0?swData.length+'筆':'找不到 — 請確認 sewing_v5.html 已在同一瀏覽器開過並匯入資料'}
+    車縫 (${swSrc||'SewingCloudProd IDB'}): ${swData.length>0?swData.length+'筆':'找不到 — 請先開啟 sewing_v5.html 讓它自動從雲端同步'}
   </span><br>
   <span style="color:${ctData.length>0?'var(--grn)':'var(--red)'}">
     裁剪 (IndexedDB "CuttingProd"): ${ctData.length>0?ctData.length+'筆':'找不到 — 請確認 cutting_v3.html 已在同一瀏覽器開過並匯入資料'}
