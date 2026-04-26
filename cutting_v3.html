@@ -2596,26 +2596,40 @@ async function scanAllFolders(silent=false){
   window.vcPush = async function(){
     if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);
-    vcLog('推送裁剪資料...', 'i');
     try {
-      // 優先用全域 CUT 變數（已在記憶體中），否則讀 IDB
-      const recs = (typeof CUT !== 'undefined' && CUT.length)
+      const allRecs = (typeof CUT !== 'undefined' && CUT.length)
         ? CUT
         : await vcIdbGetAll('CuttingProd', 1, 'cutting_records');
-      const payload = {
-        tool: 'cutting',
-        recordCount: recs.length,
-        idbStore: { db:'CuttingProd', ver:1, store:'cutting_records', records: recs },
-        summary: buildCuttingSummary(recs),
-      };
-      const r = await fetch(gasUrl, {
-        method:'POST', headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify(payload), redirect:'follow',
-      });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
-      vcLog(`✓ 推送完成（${recs.length} 筆）`, 'ok');
+
+      const total  = allRecs.length;
+      const CHUNK  = 5000;
+      const chunks = Math.ceil(total / CHUNK) || 1;
+      vcLog(`開始推送裁剪 ${total} 筆（共 ${chunks} 批）...`, 'i');
+
+      for (let i = 0; i < chunks; i++) {
+        const slice  = allRecs.slice(i * CHUNK, (i + 1) * CHUNK);
+        const isLast = (i === chunks - 1);
+        const payload = {
+          tool        : 'cutting',
+          chunk       : i,
+          totalChunks : chunks,
+          recordCount : total,
+          records     : slice,
+          ...(isLast ? {
+            idbStore: { db:'CuttingProd', ver:1, store:'cutting_records', records:[] }, // placeholder for pull
+            summary : buildCuttingSummary(allRecs),
+          } : {}),
+        };
+        vcLog(`推送第 ${i+1}/${chunks} 批（${slice.length} 筆）...`, 'i');
+        const r = await fetch(gasUrl, {
+          method:'POST', headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify(payload), redirect:'follow',
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error);
+      }
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: total }));
+      vcLog(`✓ 推送完成（共 ${total} 筆）`, 'ok');
       vcShowStatus();
     } catch(e) {
       vcLog('✗ 推送失敗：' + e.message, 'err');

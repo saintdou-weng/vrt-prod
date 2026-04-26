@@ -3284,9 +3284,11 @@ async function scanAllFolders(silent=false){
   };
 
   function vcShowStatus(){
-    const el  = document.getElementById('vcStatus');
+    const el   = document.getElementById('vcStatus');
     const meta = JSON.parse(localStorage.getItem(LS_META) || 'null');
-    const recs = JSON.parse(localStorage.getItem('sewing_prod_v1') || '[]').length;
+    // 優先用記憶體 DB（有全部資料），fallback 到 localStorage
+    const recs = (typeof DB !== 'undefined' && DB.length) ? DB.length
+               : JSON.parse(localStorage.getItem('sewing_prod_v1') || '[]').length;
     if (meta) {
       const mins = (Date.now() - new Date(meta.ts)) / 60000;
       const age  = mins < 60 ? `${Math.round(mins)}分前` : `${Math.round(mins/60)}小時前`;
@@ -3302,24 +3304,46 @@ async function scanAllFolders(silent=false){
   window.vcPush = async function(){
     if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);
-    vcLog('推送車縫資料...', 'i');
     try {
-      const daily = localStorage.getItem('sewing_prod_v1') || '[]';
-      const eff   = localStorage.getItem('sewing_eff_v1')  || '[]';
-      const payload = {
-        tool: 'sewing',
-        recordCount: JSON.parse(daily).length,
-        lsKeys: { sewing_prod_v1: daily, sewing_eff_v1: eff },
-        summary: buildSewingSummary(JSON.parse(daily)),
-      };
-      const r = await fetch(gasUrl, {
-        method:'POST', headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify(payload), redirect:'follow',
-      });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: payload.recordCount }));
-      vcLog(`✓ 推送完成（${payload.recordCount} 筆）`, 'ok');
+      // 讀記憶體 DB（全部資料），fallback 到 localStorage
+      const allRecs = (typeof DB !== 'undefined' && DB.length)
+        ? DB
+        : JSON.parse(localStorage.getItem('sewing_prod_v1') || '[]');
+      const eff = (typeof EFF_DB !== 'undefined' && EFF_DB.length)
+        ? EFF_DB
+        : JSON.parse(localStorage.getItem('sewing_eff_v1') || '[]');
+
+      const total     = allRecs.length;
+      const CHUNK     = 5000; // 每批 5000 筆
+      const chunks    = Math.ceil(total / CHUNK);
+      vcLog(`開始推送 ${total} 筆（共 ${chunks} 批）...`, 'i');
+
+      for (let i = 0; i < chunks; i++) {
+        const slice   = allRecs.slice(i * CHUNK, (i + 1) * CHUNK);
+        const isLast  = (i === chunks - 1);
+        const payload = {
+          tool        : 'sewing',
+          chunk       : i,
+          totalChunks : chunks,
+          recordCount : total,
+          records     : slice,
+          // 只在最後一批帶 eff 和 summary
+          ...(isLast ? {
+            eff    : eff,
+            summary: buildSewingSummary(allRecs),
+          } : {}),
+        };
+        vcLog(`推送第 ${i+1}/${chunks} 批（${slice.length} 筆）...`, 'i');
+        const r = await fetch(gasUrl, {
+          method:'POST', headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify(payload), redirect:'follow',
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error);
+      }
+
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: total }));
+      vcLog(`✓ 推送完成（共 ${total} 筆）`, 'ok');
       vcShowStatus();
     } catch(e) {
       vcLog('✗ 推送失敗：' + e.message, 'err');

@@ -366,24 +366,46 @@ async function fetchStatus() {
   } catch(e) { /* silent */ }
 }
 
-// ─── PUSH ───────────────────────────────────────────────
+// ─── PUSH（支援分批上傳）─────────────────────────────────
 async function push(tool) {
   if (!gasUrl) { alert('請先設定 GAS URL'); return; }
   const cfg = TOOLS[tool];
-  if (!cfg || !cfg.read) { log(`${tool} 無法從 portal 推送`, 'err'); return; }
+  if (!cfg || !cfg.read) { log(`${tool} 無法從 portal 推送（請在工具內直接同步）`, 'err'); return; }
 
   setBtns(tool, true);
   log(`推送 ${tool}...`, 'info');
   try {
     const payload = await cfg.read();
-    if (!payload) { log(`${tool} 無本地資料可推送（請在工具內直接同步）`, 'err'); setBtns(tool, false); return; }
-    const r = await fetch(gasUrl, {
-      method:'POST', headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify(payload), redirect:'follow'
-    });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-    log(`✓ ${tool} 推送完成（${payload.recordCount} 筆）`, 'ok');
+    if (!payload) { log(`${tool} 無本地資料`, 'err'); setBtns(tool, false); return; }
+
+    // 取得要分批的資料陣列
+    const CHUNK   = 5000;
+    const allRecs = payload.records || payload.lsKeys
+      ? (payload.records || JSON.parse(payload.lsKeys?.sewing_prod_v1 || '[]'))
+      : [];
+    const total   = payload.recordCount || allRecs.length;
+    const chunks  = allRecs.length > CHUNK ? Math.ceil(allRecs.length / CHUNK) : 1;
+
+    if (chunks === 1) {
+      // 單批直接推
+      const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload), redirect:'follow' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      log(`✓ ${tool} 推送完成（${total} 筆）`, 'ok');
+    } else {
+      log(`${tool} 共 ${total} 筆，分 ${chunks} 批推送...`, 'info');
+      for (let i = 0; i < chunks; i++) {
+        const slice  = allRecs.slice(i * CHUNK, (i + 1) * CHUNK);
+        const isLast = i === chunks - 1;
+        const chunk  = { tool, chunk: i, totalChunks: chunks, recordCount: total, records: slice,
+          ...(isLast ? { summary: payload.summary || {} } : {}) };
+        const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(chunk), redirect:'follow' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error);
+        log(`第 ${i+1}/${chunks} 批完成`, 'info');
+      }
+      log(`✓ ${tool} 全部推送完成（${total} 筆）`, 'ok');
+    }
     fetchStatus();
   } catch(e) {
     log(`✗ ${tool} 推送失敗：` + e.message, 'err');
