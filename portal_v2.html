@@ -461,7 +461,8 @@ function setBtns(tool, disabled) {
 }
 
 function log(msg, type) {
-  const el  = document.getElementById('logBody');
+  const el = document.getElementById('logBody');
+  if (!el) return;
   const now = new Date();
   const t   = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   const cls = type === 'ok' ? 'l-ok' : type === 'err' ? 'l-err' : 'l-info';
