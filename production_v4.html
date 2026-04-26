@@ -458,7 +458,7 @@ async function loadAll(){
   // 4. SMV: SewingProd v5 → smv_snapshots
   setL('讀取 SMV (SewingProd v5)…'); SMV_MAP={}; SMV_INFO='';
   try{
-    const db    = await idbOpen('SewingProd', 5);
+    const db    = await idbOpen('SewingProd', 6);
     const snaps = await idbAll(db,'smv_snapshots');
     if(snaps.length){
       // Use the most recently imported snapshot (multiple sections → merge all)
