@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT 訂單管理系統 v3</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#f0f2f5;--sur:#ffffff;--sur2:#f5f7fa;--bor:#dde1e9;
+  --acc:#2563eb;--grn:#059669;--ylw:#d97706;--red:#dc2626;--pur:#7c3aed;--cyn:#0891b2;
+  --tx:#111827;--tx2:#4b5563;--mu:#9ca3af;
+  --mono:'Courier New',monospace;--ui:'Segoe UI',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;min-height:100vh}
+/* HEADER */
+.hdr{background:linear-gradient(90deg,#1e3a5f,#1d4ed8,#1e3a5f);border-bottom:1px solid #1e40af;padding:10px 18px;display:flex;align-items:center;gap:12px}
+.logo{font-size:16px;font-weight:800;letter-spacing:3px;color:#fff}.logo b{color:#93c5fd}
+.sub{font-size:9px;color:#bfdbfe;letter-spacing:1.5px;text-transform:uppercase}
+/* TABS */
+.tabbar{display:flex;background:var(--sur);border-bottom:2px solid var(--bor);padding:0 16px;overflow-x:auto;gap:1px}
+.tb{background:none;border:none;color:var(--tx2);cursor:pointer;padding:9px 13px;font-size:12px;font-family:var(--ui);border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:.15s}
+.tb:hover{color:var(--tx)}.tb.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+/* GROUP LABEL in tabbar */
+.tab-sep{padding:9px 6px;font-size:9px;color:var(--mu);letter-spacing:1px;text-transform:uppercase;align-self:center;white-space:nowrap}
+/* PANELS */
+.pnl{display:none;padding:14px}.pnl.on{display:block}
+/* CARDS */
+.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;margin-bottom:14px}
+.kc{background:#fff;border:1px solid var(--bor);border-radius:7px;padding:11px 13px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kl{font-size:9px;color:var(--tx2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.kv{font-size:19px;font-weight:700;font-family:var(--mono)}.ks{font-size:9px;color:var(--mu);margin-top:2px}
+.kc.ac .kv{color:var(--acc)}.kc.gr .kv{color:var(--grn)}.kc.yl .kv{color:var(--ylw)}
+.kc.rd .kv{color:var(--red)}.kc.pu .kv{color:var(--pur)}.kc.cy .kv{color:var(--cyn)}
+/* SECTION */
+.sec{background:#fff;border:1px solid var(--bor);border-radius:7px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sh{padding:9px 13px;border-bottom:1px solid var(--bor);background:#f9fafb;display:flex;align-items:center;justify-content:space-between}
+.st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx2)}
+.sb{padding:13px}
+/* TABLE */
+.tw{overflow-x:auto}
+.dt{width:100%;border-collapse:collapse;font-size:11.5px}
+.dt th{background:#eef2ff;padding:7px 9px;text-align:left;color:#3730a3;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #c7d2fe;white-space:nowrap;cursor:pointer;user-select:none}
+.dt th:hover{color:var(--acc)}
+.dt td{padding:6px 9px;border-bottom:1px solid #e5e7eb;white-space:nowrap;vertical-align:middle}
+.dt tr:hover td{background:#eff6ff}
+.num{text-align:right;font-family:var(--mono)}.ctr{text-align:center}.mono{font-family:var(--mono)}
+/* BADGE */
+.bd{display:inline-block;padding:2px 6px;border-radius:20px;font-size:9px;font-weight:700}
+.bg{background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.3)}
+.by{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+.br{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+.bb{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)}
+.bp{background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.3)}
+.bc{background:rgba(6,182,212,.15);color:#22d3ee;border:1px solid rgba(6,182,212,.3)}
+.bk{background:rgba(75,85,99,.2);color:#9ca3af;border:1px solid rgba(75,85,99,.3)}
+/* FILTER BAR */
+.fb{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px;align-items:center}
+.fb select,.fb input{background:#fff;border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:5px 8px;font-size:11px;font-family:var(--ui)}
+.fb select:focus,.fb input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px #dbeafe}
+/* PERIOD TABS */
+.pts{display:flex;gap:3px}
+.pt{padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:700;background:#fff;border:1px solid var(--bor);color:var(--tx2);transition:.12s}
+.pt:hover{background:#eff6ff;border-color:var(--acc)}
+.pt.on{background:var(--acc);border-color:var(--acc);color:#fff}
+/* BUTTONS */
+.btn{padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--ui);font-weight:600;transition:opacity .2s}
+.btn:hover{opacity:.85}.bp2{background:var(--acc);color:#fff}.bd2{background:var(--red);color:#fff}.bg2{background:#fff;border:1px solid var(--bor);color:var(--tx)}
+/* DROP ZONE */
+.dz{border:2px dashed #c7d2fe;border-radius:8px;padding:28px 14px;text-align:center;cursor:pointer;background:#eef2ff;transition:.2s}
+.dz:hover,.dz.ov{border-color:var(--acc);background:#dbeafe}
+/* LOG */
+.log{background:#1e293b;border:1px solid #334155;border-radius:5px;font-family:var(--mono);font-size:10.5px;padding:8px;height:180px;overflow-y:auto;color:#a7f3d0}
+.le{color:#fca5a5}.lw{color:#fde68a}.li{color:#bfdbfe}
+/* PIVOT */
+.pt2{border-collapse:collapse;font-size:11px;width:100%}
+.pt2 th{background:#eef2ff;padding:6px 9px;text-align:center;color:#3730a3;font-size:9px;font-weight:700;border:1px solid #c7d2fe}
+.pt2 td{padding:5px 9px;text-align:center;border:1px solid #e5e7eb;font-family:var(--mono)}
+.pt2 .rh{text-align:left;font-weight:600;color:var(--tx);background:#f8fafc}
+.pt2 .tr td{background:#eff6ff;font-weight:700;color:var(--acc)}
+.pt2 .tc{background:#ecfdf5;font-weight:700;color:var(--grn)}
+/* SMV PROGRESS BAR */
+.smv-bar-track{height:8px;background:var(--bor);border-radius:4px;overflow:hidden;flex:1}
+.smv-bar-done{height:100%;background:var(--grn);border-radius:4px;transition:width .5s}
+/* DIFF INDICATOR */
+.diff-pos{color:var(--grn)}.diff-neg{color:var(--red)}.diff-zero{color:var(--mu)}
+/* CARTON PROGRESS */
+.ctn-row{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--bor)}
+.ctn-name{flex:1.5;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.ctn-bar-wrap{flex:2;height:8px;background:var(--bor);border-radius:4px;position:relative;overflow:hidden}
+.ctn-bar-prod{position:absolute;height:100%;background:var(--grn);border-radius:4px}
+.ctn-bar-scan{position:absolute;height:100%;background:var(--cyn);opacity:.7;border-radius:4px}
+/* INFO BOX */
+.info-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 13px;font-size:11px;color:var(--tx2);line-height:1.7}
+.info-box strong{color:var(--tx)}
+/* LINK STATUS */
+.link-ok{color:var(--grn);font-size:10px}.link-no{color:var(--mu);font-size:10px}
+/* 2-col layout */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
+@media(max-width:900px){.g2,.g3{grid-template-columns:1fr}}
+/* SETTING */
+.sl{font-size:10px;color:var(--tx2);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:block}
+.si{background:#fff;border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:7px 9px;width:100%;font-family:var(--mono);font-size:12px}
+.si:focus{outline:none;border-color:var(--acc)}
+.sh2{font-size:10px;color:var(--mu);margin-top:3px}
+.empty{text-align:center;padding:28px 14px;color:var(--mu)}
+.empty .ei{font-size:26px;margin-bottom:7px}
+/* color dot */
+.cd{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:middle}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3</div></div>
+  <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <span class="link-no" id="sw-link">● 車縫未連接</span>
+    <span class="link-no" id="ct-link">● 裁剪未連接</span>
+    <span style="font-size:10px;color:#6b7280" id="db-st">● DB…</span>
+  </div>
+</div>
+
+<div class="tabbar">
+  <span class="tab-sep">訂單</span>
+  <button class="tb on" onclick="go('import',this)">📥 匯入</button>
+  <button class="tb" onclick="go('master',this)">📋 訂單總表</button>
+  <button class="tb" onclick="go('pivot',this)">🎨 尺碼色表</button>
+  <span class="tab-sep">週報</span>
+  <button class="tb" onclick="go('weekly',this)">📊 週報分析</button>
+  <button class="tb" onclick="go('smv',this)">⏱ SMV分析</button>
+  <button class="tb" onclick="go('carton',this)">📦 裝箱比對</button>
+  <span class="tab-sep">連動</span>
+  <button class="tb" onclick="go('link',this)">🔗 生產連動</button>
+  <button class="tb" onclick="go('settings',this)">⚙️ 設定</button>
+</div>
+
+<!-- ══════════════════════ IMPORT ══════════════════════ -->
+<div id="pnl-import" class="pnl on">
+  <div class="g2">
+    <div>
+      <div class="dz" id="dz" onclick="document.getElementById('fi').click()"
+        ondragover="dov(event)" ondragleave="dol(event)" ondrop="ddr(event)">
+        <div style="font-size:28px;opacity:.6;margin-bottom:8px">📧</div>
+        <div style="font-size:13px;color:var(--tx2)">拖曳 .msg 郵件至此</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:5px">
+          自動識別：ADI · Northern · Dickson · Magnus · Vestis/WPL · Virginia(AI) · 週報
+        </div>
+      </div>
+      <input type="file" id="fi" accept=".msg" multiple style="display:none" onchange="fsel(event)">
+      <div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:10px;color:var(--tx2)">處理記錄</span>
+          <button class="btn bg2" style="font-size:9px;padding:2px 7px" onclick="clearLog()">清除</button>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec">
+        <div class="sh"><span class="st">已匯入</span>
+          <button class="btn bd2" style="font-size:9px;padding:2px 7px" onclick="ccAll()">清除全部</button>
+        </div>
+        <div style="padding:8px;max-height:280px;overflow-y:auto" id="recent"></div>
+      </div>
+      <div class="sec" style="margin-top:10px">
+        <div class="sh"><span class="st">Gemini AI 解析</span></div>
+        <div class="sb" style="padding:9px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;margin-bottom:7px">
+            <input type="checkbox" id="use-ai" onchange="saveSets()">啟用 Gemini AI（未知格式用）
+          </label>
+          <label class="sl" style="font-size:9px">API KEY（免費）</label>
+          <input type="password" class="si" id="ki" placeholder="AIza…" onchange="saveSets()" style="font-size:11px">
+          <div class="sh2">申請：<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--acc)">aistudio.google.com</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ MASTER TABLE ══════════════════════ -->
+<div id="pnl-master" class="pnl">
+  <div class="info-box" style="margin-bottom:12px">
+    <strong>📌 數量以週報為主</strong>：總表以最新 Weekly Open Order Summary 的開放數量為準（各客戶 Garment/Apron/Top/Napkin）。
+    個別 PO 匯入數據作為尺寸色號明細補充。週報日期：<strong id="master-weekly-date">—</strong>
+  </div>
+  <div class="krow" id="master-kpis"></div>
+  <div class="fb">
+    <select id="f-c" onchange="renderMaster()"><option value="">全部客戶</option></select>
+    <select id="f-type" onchange="renderMaster()">
+      <option value="">全部類型</option>
+      <option value="garment">成衣</option>
+      <option value="apron">圍裙</option>
+      <option value="topNapkin">上衣/餐巾</option>
+    </select>
+    <select id="f-amt" onchange="renderMaster()">
+      <option value="">全部金額狀態</option>
+      <option value="high">高 (&gt;$100K)</option>
+      <option value="mid">中 ($10K-$100K)</option>
+      <option value="low">低 (&lt;$10K)</option>
+    </select>
+    <div class="pts">
+      <div class="pt on" onclick="setPeriod('all',this)">全部</div>
+      <div class="pt" onclick="setPeriod('week',this)">本週</div>
+      <div class="pt" onclick="setPeriod('month',this)">本月</div>
+      <div class="pt" onclick="setPeriod('year',this)">本年</div>
+    </div>
+    <input type="text" id="f-s" placeholder="搜尋客戶…" oninput="renderMaster()" style="min-width:120px">
+    <button class="btn bg2" style="font-size:10px;padding:4px 8px" onclick="expMasterCsv()">⬇ CSV</button>
+  </div>
+  <div class="sec">
+    <div class="sh"><span class="st">訂單總表（週報為主）</span><span style="font-size:10px;color:var(--mu)" id="mc"></span></div>
+    <div class="tw">
+      <table class="dt" id="mt">
+        <thead><tr>
+          <th onclick="srt('customer')">客戶</th>
+          <th onclick="srt('as_of_date')">週報日期</th>
+          <th class="num" onclick="srt('garment')">成衣 (件)</th>
+          <th class="num" onclick="srt('apron')">圍裙 (件)</th>
+          <th class="num" onclick="srt('topNapkin')">上衣/餐巾 (件)</th>
+          <th class="num">合計 (件)</th>
+          <th class="num" onclick="srt('fabric')">布料 (碼)</th>
+          <th class="num" onclick="srt('totalOpenCtns')">開放箱數</th>
+          <th class="num" onclick="srt('producedCtns')">已生產箱</th>
+          <th class="num" onclick="srt('unproducedCtns')">未生產箱</th>
+          <th class="num" onclick="srt('openAmount')">開放金額 ($)</th>
+          <th class="ctr">完成率</th>
+          <th>備註</th>
+        </tr></thead>
+        <tbody id="mtb"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- PO detail supplement -->
+  <div class="sec">
+    <div class="sh"><span class="st">PO明細補充（顏色/尺寸）</span><span style="font-size:10px;color:var(--mu)">來源：個別PO匯入，作為週報數量的顏色/尺寸細分</span></div>
+    <div class="tw">
+      <table class="dt">
+        <thead><tr>
+          <th>客戶</th><th>PO號碼</th><th>款式</th><th>SKU</th>
+          <th>顏色</th><th>尺寸</th><th class="num">數量</th><th>出貨日</th><th>格式</th>
+        </tr></thead>
+        <tbody id="po-sup-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ PIVOT ══════════════════════ -->
+<div id="pnl-pivot" class="pnl">
+  <div class="fb">
+    <select id="pvc" onchange="renderPivot()"><option value="">全部客戶</option></select>
+    <select id="pvp" onchange="renderPivot()"><option value="">全部PO</option></select>
+    <select id="pvst" onchange="renderPivot()"><option value="">全部款式</option></select>
+    <select id="pvr" onchange="renderPivot()"><option value="size">列=尺寸</option><option value="color">列=顏色</option></select>
+  </div>
+  <div class="sec">
+    <div class="sh"><span class="st">尺寸 × 顏色 交叉表</span>
+      <button class="btn bg2" style="font-size:9px;padding:3px 7px" onclick="expPivot()">⬇ CSV</button>
+    </div>
+    <div class="sb" style="padding:0;overflow-x:auto" id="pvc2">
+      <div class="empty"><div class="ei">🎨</div><p>選擇客戶/PO/款式</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ WEEKLY ANALYSIS ══════════════════════ -->
+<div id="pnl-weekly" class="pnl">
+  <!-- Controls -->
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--bor);border-radius:7px;padding:10px 14px">
+    <span style="font-size:11px;font-weight:600;color:var(--tx2)">主要週報：</span>
+    <select id="wd" onchange="renderWeekly()" style="background:#fff;border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:5px 8px;font-size:11px">
+      <option value="">選擇週報日期</option>
+    </select>
+    <span style="font-size:11px;font-weight:600;color:var(--tx2)">對比週報：</span>
+    <select id="wd2" onchange="renderWeekly()" style="background:#fff;border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:5px 8px;font-size:11px">
+      <option value="">上一週（自動）</option>
+    </select>
+    <span style="font-size:11px;color:var(--mu)">共 <span id="wc">0</span> 份週報</span>
+    <button class="btn bg2" style="font-size:10px;padding:4px 8px;margin-left:auto" onclick="expWeeklyCsv()">⬇ 匯出CSV</button>
+  </div>
+
+  <!-- KPI row: totals + week-over-week change -->
+  <div class="krow" id="w-kpis"></div>
+
+  <!-- Two column: bar chart + type summary -->
+  <div class="g2" style="margin-bottom:12px">
+    <div class="sec">
+      <div class="sh">
+        <span class="st">各客戶開放箱數</span>
+        <span style="font-size:9px;color:var(--mu)"><span style="color:var(--acc)">■</span>開放 <span style="color:var(--grn)">■</span>已生產</span>
+      </div>
+      <div id="wbars"></div>
+    </div>
+    <div class="sec">
+      <div class="sh"><span class="st">訂單類型匯總</span></div>
+      <div class="sb" id="wtypes"></div>
+    </div>
+  </div>
+
+  <!-- ★ MULTI-WEEK TREND TABLE (all weeks, per customer) -->
+  <div class="sec" style="margin-bottom:12px">
+    <div class="sh">
+      <span class="st">📈 每週訂單增減 & 完成進度趨勢（全客戶）</span>
+      <span style="font-size:9px;color:var(--mu)" id="w-trend-range"></span>
+    </div>
+    <div class="tw" id="w-trend-table-wrap">
+      <div class="empty"><div class="ei">📊</div><p>匯入多份週報後顯示趨勢</p></div>
+    </div>
+  </div>
+
+  <!-- ★ PER-CUSTOMER TREND (selected customer deep dive) -->
+  <div class="sec" style="margin-bottom:12px">
+    <div class="sh">
+      <span class="st">🔍 單一客戶週次明細</span>
+      <select id="w-cust-sel" onchange="renderCustomerTrend()" style="background:#fff;border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:3px 7px;font-size:11px">
+        <option value="">選擇客戶</option>
+      </select>
+    </div>
+    <div id="w-cust-detail">
+      <div class="empty"><div class="ei">👤</div><p>選擇客戶後顯示各週詳細數字</p></div>
+    </div>
+  </div>
+
+  <!-- Original weekly detail table -->
+  <div class="sec">
+    <div class="sh"><span class="st">週報明細</span><span style="font-size:10px;color:var(--mu)" id="wasof"></span></div>
+    <div class="tw">
+      <table class="dt">
+        <thead><tr>
+          <th>客戶</th><th class="num">成衣</th><th class="num">圍裙</th><th class="num">上衣/餐巾</th>
+          <th class="num">布料(碼)</th><th class="num">開放箱</th><th class="num">已生產</th>
+          <th class="num">未生產</th><th class="num" style="color:var(--acc)">週增減(箱)</th>
+          <th class="num">完成率</th><th class="num">開放金額</th><th>備註</th>
+        </tr></thead>
+        <tbody id="wtb"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ SMV ANALYSIS ══════════════════════ -->
+<div id="pnl-smv" class="pnl">
+  <div class="info-box" style="margin-bottom:12px">
+    <strong>⏱ SMV（Standard Minute Value）分析</strong>：此頁面分析工時計劃 vs 實際完成。
+    左側來自週報的 <strong>Total Open SMV</strong>（待完成分鐘數），右側待連接車縫系統的實際日/週產出分鐘數。
+    <br>SMV數據完全獨立於訂單總表和箱數比對，僅作工效分析。
+  </div>
+  <div class="krow" id="smv-kpis"></div>
+  <div class="g2">
+    <!-- Left: Weekly SMV from report -->
+    <div>
+      <div class="sec">
+        <div class="sh"><span class="st">各客戶待完成 SMV（週報）</span></div>
+        <div id="smv-by-cust"></div>
+      </div>
+      <div class="sec" style="margin-top:10px">
+        <div class="sh"><span class="st">週報 SMV 趨勢</span></div>
+        <div class="sb" id="smv-trend">
+          <div class="empty"><div class="ei">📈</div><p>匯入多份週報後顯示趨勢</p></div>
+        </div>
+      </div>
+    </div>
+    <!-- Right: Sewing system actual output -->
+    <div>
+      <div class="sec">
+        <div class="sh">
+          <span class="st">車縫實際產出（分鐘）</span>
+          <span id="sw-link2" class="link-no">● 車縫系統未連接</span>
+        </div>
+        <div class="sb" id="smv-sewing">
+          <div class="empty"><div class="ei">🔌</div>
+            <p>需連接車縫系統 (sewing_v5.html)<br>共用 FactoryDB 資料庫</p>
+            <div style="margin-top:8px;font-size:10px;color:var(--mu)">車縫系統需有<br><code style="color:var(--acc)">sewing_records</code> 資料表</div>
+          </div>
+        </div>
+      </div>
+      <div class="sec" style="margin-top:10px">
+        <div class="sh"><span class="st">SMV 完成率估算</span></div>
+        <div class="sb" id="smv-completion">
+          <div class="empty"><div class="ei">📊</div><p>連接車縫系統後自動計算</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Production minutes breakdown by week -->
+  <div class="sec">
+    <div class="sh">
+      <span class="st">每週產出分鐘數對比</span>
+      <div class="pts">
+        <div class="pt on" onclick="setSmvPeriod('week',this)">週</div>
+        <div class="pt" onclick="setSmvPeriod('month',this)">月</div>
+        <div class="pt" onclick="setSmvPeriod('year',this)">年</div>
+      </div>
+    </div>
+    <div class="tw">
+      <table class="dt" id="smv-table">
+        <thead><tr>
+          <th>客戶</th>
+          <th class="num">週報 Open SMV (min)</th>
+          <th class="num">車縫實際 (min)</th>
+          <th class="num">差異 (min)</th>
+          <th class="ctr">完成率</th>
+          <th class="num">預計完成週數</th>
+        </tr></thead>
+        <tbody id="smv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ CARTON COMPARE ══════════════════════ -->
+<div id="pnl-carton" class="pnl">
+  <div class="info-box" style="margin-bottom:12px">
+    <strong>📦 裝箱比對</strong>：週報的「已生產箱數（TOTAL CTNS PRODUCED-SCANNED）」對比車縫系統的實際掃描箱數。
+    兩者來源不同，若有差異表示可能有箱未掃描或週報資料尚未更新。
+  </div>
+  <div class="krow" id="ctn-kpis"></div>
+  <div class="g2">
+    <div class="sec">
+      <div class="sh"><span class="st">週報裝箱狀況（各客戶）</span></div>
+      <div id="ctn-bars"></div>
+    </div>
+    <div class="sec">
+      <div class="sh">
+        <span class="st">車縫掃描 vs 週報比對</span>
+        <span id="sw-link3" class="link-no">● 車縫系統未連接</span>
+      </div>
+      <div class="sb" id="ctn-sewing">
+        <div class="empty"><div class="ei">🔌</div><p>需連接車縫系統以比對實際掃描箱數</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="sec">
+    <div class="sh"><span class="st">裝箱明細表</span></div>
+    <div class="tw">
+      <table class="dt">
+        <thead><tr>
+          <th>客戶</th>
+          <th class="num">開放箱數</th>
+          <th class="num">週報已生產</th>
+          <th class="num">週報未生產</th>
+          <th class="num">車縫掃描</th>
+          <th class="num">差異</th>
+          <th class="ctr">週報完成率</th>
+          <th class="ctr">掃描/週報比</th>
+          <th>備註</th>
+        </tr></thead>
+        <tbody id="ctn-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ PRODUCTION LINK ══════════════════════ -->
+<div id="pnl-link" class="pnl">
+  <div class="info-box" style="margin-bottom:12px">
+    <strong>🔗 生產連動分析</strong>：訂單（週報數量）× 裁剪產出 × 車縫產出 三方比對。
+    可按週/月/年查看進度差異，找出哪個客戶/款式有落差。
+    <br>需同時開啟並使用 <code style="color:var(--acc)">sewing_v5.html</code> 和 <code style="color:var(--acc)">cutting_v2.html</code>，共用 FactoryDB。
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <select id="lk-c" onchange="renderLink()" style="background:var(--sur2);border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:5px 8px;font-size:11px">
+      <option value="">全部客戶</option>
+    </select>
+    <div class="pts">
+      <div class="pt on" onclick="setLinkPeriod('week',this)">本週</div>
+      <div class="pt" onclick="setLinkPeriod('month',this)">本月</div>
+      <div class="pt" onclick="setLinkPeriod('year',this)">本年</div>
+      <div class="pt" onclick="setLinkPeriod('all',this)">全部</div>
+    </div>
+  </div>
+  <!-- Connection status -->
+  <div class="g3" style="margin-bottom:12px">
+    <div class="kc"><div class="kl">訂單（週報）</div><div class="kv gr" id="lk-order-ok">✓</div><div class="ks">已連接</div></div>
+    <div class="kc"><div class="kl">車縫系統</div><div class="kv" id="lk-sew-v" style="font-size:14px">—</div><div class="ks" id="lk-sew-s">未連接</div></div>
+    <div class="kc"><div class="kl">裁剪系統</div><div class="kv" id="lk-cut-v" style="font-size:14px">—</div><div class="ks" id="lk-cut-s">未連接</div></div>
+  </div>
+  <!-- Three-way comparison table -->
+  <div class="sec">
+    <div class="sh"><span class="st">三方比對（訂單 vs 裁剪 vs 車縫）</span></div>
+    <div class="tw">
+      <table class="dt">
+        <thead><tr>
+          <th>客戶</th>
+          <th class="num" style="color:var(--acc)">訂單開放(件)</th>
+          <th class="num" style="color:var(--ylw)">裁剪產出(件)</th>
+          <th class="num" style="color:var(--grn)">車縫產出(件)</th>
+          <th class="num">裁剪缺口</th>
+          <th class="num">車縫缺口</th>
+          <th class="ctr">裁剪率</th>
+          <th class="ctr">車縫率</th>
+        </tr></thead>
+        <tbody id="lk-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- Style-level breakdown -->
+  <div class="sec" style="margin-top:12px">
+    <div class="sh"><span class="st">款式級別比對</span><span style="font-size:10px;color:var(--mu)">需車縫/裁剪系統有款式記錄</span></div>
+    <div class="tw">
+      <table class="dt">
+        <thead><tr>
+          <th>客戶</th><th>款式</th>
+          <th class="num" style="color:var(--acc)">訂單</th>
+          <th class="num" style="color:var(--ylw)">裁剪</th>
+          <th class="num" style="color:var(--grn)">車縫</th>
+          <th class="num">差異</th><th class="ctr">進度</th>
+        </tr></thead>
+        <tbody id="lk-style-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- Weekly/Monthly trend -->
+  <div class="sec" style="margin-top:12px">
+    <div class="sh"><span class="st">進度趨勢</span></div>
+    <div class="sb" id="lk-trend">
+      <div class="empty"><div class="ei">📈</div><p>匯入多份週報 + 連接生產系統後顯示</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ SETTINGS ══════════════════════ -->
+<div id="pnl-settings" class="pnl">
+  <div class="g2">
+    <div>
+      <div class="sec">
+        <div class="sh"><span class="st">Gemini AI</span></div>
+        <div class="sb">
+          <label class="sl">API Key（免費）</label>
+          <input type="password" class="si" id="s-ki" placeholder="AIzaSy…">
+          <div class="sh2">申請：<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--acc)">aistudio.google.com</a></div>
+          <button class="btn bp2" style="margin-top:10px" onclick="saveAllSets()">儲存</button>
+        </div>
+      </div>
+      <div class="sec" style="margin-top:10px">
+        <div class="sh"><span class="st">支援格式</span></div>
+        <div class="sb">
+          <div style="font-size:11px;color:var(--tx2);line-height:2.1">
+            ✅ ADI（American Dawn）<br>
+            ✅ Northern Uniform<br>
+            ✅ Dickson Industries<br>
+            ✅ Magnus Textiles<br>
+            ✅ Vestis / WPL（FGCL格式）<br>
+            🤖 Virginia Linen / 其他 → Gemini AI<br>
+            📊 VRT Weekly Open Order Summary
+          </div>
+        </div>
+      </div>
+      <div class="sec" style="margin-top:10px">
+        <div class="sh"><span class="st">連動測試</span></div>
+        <div class="sb">
+          <div style="font-size:11px;color:var(--tx2);line-height:1.9;margin-bottom:10px">
+            <div>🔵 <strong>車縫系統</strong>：讀取 <code style="color:var(--acc)">localStorage["sewing_prod_v1"]</code></div>
+            <div style="color:var(--mu);padding-left:20px">→ 需在同一瀏覽器開啟並使用 sewing_v5.html</div>
+            <div style="margin-top:6px">🟡 <strong>裁剪系統</strong>：讀取 <code style="color:var(--ylw)">IndexedDB "CuttingProd"</code></div>
+            <div style="color:var(--mu);padding-left:20px">→ 需在同一瀏覽器開啟並使用 cutting_v3.html</div>
+          </div>
+          <button class="btn bp2" style="font-size:11px" onclick="testDbLink()">🔍 立即測試連接</button>
+          <div style="margin-top:8px;font-size:11px;line-height:1.8" id="link-test-result"></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="sec">
+        <div class="sh"><span class="st">資料庫管理</span></div>
+        <div class="sb">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn bg2" onclick="backup()">⬇ 備份資料</button>
+            <button class="btn bg2" onclick="document.getElementById('ri').click()">⬆ 還原備份</button>
+            <input type="file" id="ri" accept=".json" style="display:none" onchange="restore(event)">
+            <hr style="border-color:var(--bor);margin:2px 0">
+            <button class="btn bd2" onclick="ccOrders()">🗑 清除全部訂單</button>
+          </div>
+          <div style="margin-top:10px;padding:9px;background:var(--sur2);border-radius:4px;font-size:10px;color:var(--mu);font-family:var(--mono)" id="db-stats"></div>
+        </div>
+      </div>
+      <div class="sec" style="margin-top:10px">
+        <div class="sh"><span class="st">架構說明</span></div>
+        <div class="sb">
+          <div style="font-size:11px;color:var(--tx2);line-height:1.9">
+            <div style="margin-bottom:6px"><strong style="color:var(--tx)">數量來源優先級：</strong></div>
+            <div>① 週報（Weekly Summary）→ 訂單總表主要數字</div>
+            <div>② 個別PO匯入 → 顏色/尺寸明細補充</div>
+            <hr style="border-color:var(--bor);margin:8px 0">
+            <div style="margin-bottom:6px"><strong style="color:var(--tx)">SMV 分析：</strong></div>
+            <div>週報 Open SMV → 工時計劃</div>
+            <div>車縫 sewing_records → 實際產出分鐘</div>
+            <hr style="border-color:var(--bor);margin:8px 0">
+            <div style="margin-bottom:6px"><strong style="color:var(--tx)">裝箱比對：</strong></div>
+            <div>週報 CTNS PRODUCED → 計劃掃描箱數</div>
+            <div>車縫掃描記錄 → 實際箱數</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ══ STATE ══
+const DBNAME='FactoryDB', DBVER=12;
+let db=null;
+let APP={
+  orders:[],weekly:[],imports:[],
+  sewing:[],cutting:[], // from linked systems
+  sortCol:'customer',sortDir:1,
+  period:'all',smvPeriod:'week',linkPeriod:'week',
+  sets:{apiKey:'',useAi:false,swStore:'sewing_records',ctStore:'cutting_records'}
+};
+
+// ══ DB ══
+function openDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DBNAME,DBVER);
+    r.onupgradeneeded=e=>{
+      const d=e.target.result;
+      const stores=[
+        ['po_headers',{keyPath:'id',autoIncrement:true}],
+        ['po_lines',{keyPath:'id',autoIncrement:true}],
+        ['weekly_snapshots',{keyPath:'id',autoIncrement:true}],
+        ['order_imports',{keyPath:'id',autoIncrement:true}],
+      ];
+      stores.forEach(([name,opts])=>{
+        if(!d.objectStoreNames.contains(name)){
+          const s=d.createObjectStore(name,opts);
+          if(name==='po_lines') ['customer','po_number','sku','style_code','color','size'].forEach(k=>s.createIndex(k,k,{unique:false}));
+          if(name==='weekly_snapshots') s.createIndex('as_of_date','as_of_date',{unique:false});
+        }
+      });
+    };
+    r.onsuccess=e=>{db=e.target.result;res(db)};
+    r.onerror=()=>rej(r.error);
+  });
+}
+const dbAll=s=>new Promise((r,j)=>{const t=db.transaction(s,'readonly');const q=t.objectStore(s).getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
+const dbAdd=(s,d)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite');const q=t.objectStore(s).add(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
+const dbClear=s=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).clear().onsuccess=()=>r()});
+const dbDel=(s,id)=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).delete(id).onsuccess=()=>r()});
+
+// Try to read linked system stores (sewing/cutting) - may not exist
+// ── Read sewing from localStorage (sewing_v5 stores there) ──
+function readSewingFromLocalStorage(){
+  try{
+    const raw=localStorage.getItem('sewing_prod_v1')||localStorage.getItem('sew_v4')||'[]';
+    const recs=JSON.parse(raw);
+    return Array.isArray(recs)?recs:[];
+  }catch(e){return [];}
+}
+
+// ── Read cutting from CuttingProd IndexedDB (cutting_v3 stores there) ──
+function readCuttingFromIDB(){
+  return new Promise(res=>{
+    try{
+      const req=indexedDB.open('CuttingProd',1);
+      req.onupgradeneeded=e=>{
+        const d=e.target.result;
+        if(!d.objectStoreNames.contains('cutting_records'))
+          d.createObjectStore('cutting_records',{keyPath:'id'});
+      };
+      req.onsuccess=e=>{
+        try{
+          const idb=e.target.result;
+          if(!idb.objectStoreNames.contains('cutting_records')){res([]);return;}
+          const t=idb.transaction('cutting_records','readonly');
+          const q=t.objectStore('cutting_records').getAll();
+          q.onsuccess=()=>res(q.result||[]);
+          q.onerror=()=>res([]);
+        }catch(e2){res([]);}
+      };
+      req.onerror=()=>res([]);
+    }catch(e){res([]);}
+  });
+}
+
+// ── Legacy: try reading from FactoryDB (fallback) ──
+async function tryReadLinkedStore(storeName){
+  return new Promise(res=>{
+    try{
+      if(!db.objectStoreNames.contains(storeName)){res([]);return;}
+      const t=db.transaction(storeName,'readonly');
+      const q=t.objectStore(storeName).getAll();
+      q.onsuccess=()=>res(q.result||[]);
+      q.onerror=()=>res([]);
+    }catch(e){res([]);}
+  });
+}
+
+async function loadAll(){
+  APP.orders=await dbAll('po_lines');
+  APP.weekly=await dbAll('weekly_snapshots');
+  APP.imports=await dbAll('order_imports');
+  // Read sewing from localStorage (sewing_v5 storage)
+  APP.sewing=readSewingFromLocalStorage();
+  // Read cutting from CuttingProd IDB (cutting_v3 storage)
+  APP.cutting=await readCuttingFromIDB();
+  // Fallback: also check FactoryDB if configured manually
+  if(!APP.sewing.length){
+    const fbSew=await tryReadLinkedStore(APP.sets.swStore||'sewing_records');
+    if(fbSew.length)APP.sewing=fbSew;
+  }
+  if(!APP.cutting.length){
+    const fbCut=await tryReadLinkedStore(APP.sets.ctStore||'cutting_records');
+    if(fbCut.length)APP.cutting=fbCut;
+  }
+  updateLinkStatus();
+  updateDbStats();
+}
+
+function updateLinkStatus(){
+  const swOk=APP.sewing.length>0;
+  const ctOk=APP.cutting.length>0;
+  const update=(id,ok,label)=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.textContent=ok?`● ${label} ${APP.sewing.length||APP.cutting.length}筆`:`● ${label}未連接`;
+    el.style.color=ok?'var(--grn)':'var(--mu)';
+  };
+  ['sw-link','sw-link2','sw-link3'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent=swOk?`● 車縫已連接 ${APP.sewing.length}筆`:'● 車縫未連接';el.style.color=swOk?'var(--grn)':'var(--mu)';}});
+  const ctl=document.getElementById('ct-link');if(ctl){ctl.textContent=ctOk?`● 裁剪已連接 ${APP.cutting.length}筆`:'● 裁剪未連接';ctl.style.color=ctOk?'var(--grn)':'var(--mu)';}
+}
+
+function updateDbStats(){
+  const el=document.getElementById('db-stats');
+  if(el)el.textContent=`PO明細: ${APP.orders.length}筆\n週報快照: ${APP.weekly.length}筆\n車縫記錄: ${APP.sewing.length}筆\n裁剪記錄: ${APP.cutting.length}筆`;
+}
+
+// ══ MSG BINARY ══
+function findAll(data,pat,minP=5000){
+  const u=data instanceof Uint8Array?data:new Uint8Array(data);
+  const res=[];let p=minP;
+  outer:while(p<=u.length-pat.length){
+    for(let j=0;j<pat.length;j++)if(u[p+j]!==pat[j]){p++;continue outer;}
+    res.push(p);p++;
+  }
+  return res;
+}
+function extractUtf16(buf){
+  const b=new Uint8Array(buf);const res=[];
+  for(let i=0;i<b.length-1;i++){
+    if(b[i+1]===0&&b[i]>=0x20&&b[i]<=0x7e){
+      let s='',j=i;
+      while(j<b.length-1&&b[j+1]===0&&b[j]>=0x20&&b[j]<=0x7e){s+=String.fromCharCode(b[j]);j+=2;}
+      if(s.length>=5)res.push(s);i=j;
+    }
+  }
+  return res;
+}
+function extractPdfs(buf){
+  const u=new Uint8Array(buf);
+  const pos=findAll(u,[0x25,0x50,0x44,0x46,0x2D],5000);
+  const names=extractUtf16(buf).filter(s=>s.toLowerCase().endsWith('.pdf'));
+  return pos.map((p,i)=>({data:buf.slice(p),name:names[i]||`att_${i+1}.pdf`}));
+}
+function extractXlsx(buf){
+  const u=new Uint8Array(buf);
+  const pos=findAll(u,[0x50,0x4B,0x03,0x04],50000);
+  for(const p of pos)if(p%512<10)return buf.slice(p);
+  const p=pos.find(x=>x>100000);
+  return p!==undefined?buf.slice(p):null;
+}
+function detectType(buf){
+  const s=extractUtf16(buf).join(' ').toLowerCase();
+  return(s.includes('weekly open order summary')||s.includes('weekly customer open order'))?'weekly':'po';
+}
+function getMsgSubject(buf){
+  const ss=extractUtf16(buf);
+  for(const s of ss)if((s.includes('Order')||s.includes('Weekly'))&&!s.startsWith('Root')&&!s.startsWith('POP')&&!s.startsWith('Received')&&s.length>10)return s;
+  return 'Unknown';
+}
+function hashBuf(buf){
+  const a=new Uint8Array(buf);let h=0;
+  for(let i=0;i<Math.min(a.length,500);i++)h=(h*31+a[i])>>>0;
+  return h+'_'+a.length;
+}
+
+// ══ PDF TEXT ══
+async function pdfText(buf){
+  try{
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+    let t='';
+    for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i);const ct=await pg.getTextContent();t+=ct.items.map(x=>x.str).join(' ')+'\n';}
+    return t;
+  }catch(e){return '';}
+}
+
+// ══ PARSERS ══
+const SZ={XS:'XS',XSML:'XS','X-SMALL':'XS',SM:'S',SML:'S',SMALL:'S',MD:'M',MED:'M',MEDIUM:'M',LR:'L',LRG:'L',LARGE:'L',XL:'XL',XLARGE:'XL','X-LARGE':'XL','2X':'2XL','2XL':'2XL',XXL:'2XL','3X':'3XL','3XL':'3XL','4X':'4XL','4XL':'4XL','5X':'5XL','5XL':'5XL','1X':'1XL','1XL':'1XL'};
+const CL={WHT:'White',WH:'White',WHITE:'White',NBL:'Navy',NVY:'Navy',NAVY:'Navy',NAV:'Navy',NV:'Navy',BLK:'Black',BK:'Black',BLACK:'Black',GRY:'Grey',GREY:'Grey',GRAY:'Grey',GY:'Grey',RED:'Red',RD:'Red',MR:'Maroon',MRN:'Maroon',MAROON:'Maroon',RY:'Royal',ROY:'Royal',ROYAL:'Royal',KCT:'Khaki',KH:'Khaki',KHAKI:'Khaki',GRN:'Green',GREEN:'Green',WO:'White'};
+const ns=s=>{if(!s)return '';const u=s.toUpperCase().trim();return SZ[u]||u;};
+const nc=s=>{if(!s)return '';const u=s.toUpperCase().trim();return CL[u]||s.trim();};
+
+function detectFmt(t){
+  if(t.includes('American Dawn')||t.includes('AMERICAN DAWN'))return 'ADI';
+  if(t.includes('Northern Uniform')||t.includes('Vantage River Order Form'))return 'NORTHERN';
+  if(t.includes('Dickson Industries'))return 'DICKSON';
+  if(t.includes('Magnus Textile')||t.includes('Magnus - NJ'))return 'MAGNUS';
+  if(t.includes('FGCL')||t.includes('Finished Goods Confirmation'))return 'VESTIS';
+  if(t.includes('Virginia Line'))return 'VIRGINIA';
+  return 'UNKNOWN';
+}
+function parseSkuCS(sku,ctx=''){
+  const u=sku.toUpperCase();
+  let color='',size='';
+  const sm=u.match(/(XS|SM|MD|LR|XL|2X|3X|4X|5X|1X)$/)||u.replace(/-GL$/,'').match(/(XS|SM|MD|LR|XL|2X|3X|4X|5X|1X)$/);
+  if(sm)size=ns(sm[1]);
+  for(const cc of['NBL','BLK','WHT','WH','GRY','RED','MRN','ROY','KCT','RD','NV','NVY','GY','MR','WO']){if(u.includes(cc)){color=nc(cc);break;}}
+  if(!color||!size){const r=parseDesc(ctx);if(!color&&r.color)color=r.color;if(!size&&r.size)size=r.size;}
+  const style=sku.replace(/-GL$/,'').replace(/(XS|SM|MD|LR|XL|2X|3X|4X|5X|1X)$/,'').replace(/(NBL|BLK|WHT|WH|GRY|RED|MRN|ROY|KCT|RD|NV|NVY|GY|MR|WO)$/,'');
+  return{color,size,style};
+}
+function parseMagnusCS(sku,desc=''){
+  const base=sku.replace(/-GL$/,'');
+  const m=base.match(/^([A-Z]{2,4}\d{3,4})(XS|SM|MD|LR|XL|2X|3X|4X|5X|1X)(WH|BL|RD|GY|MR|NV|BK|GL|WO|WH)$/i);
+  if(m)return{style:m[1],size:ns(m[2]),color:nc(m[3])};
+  const r=parseDesc(desc);return{style:base.match(/^([A-Z]{2}\d{3})/)?.[1]||base,...r};
+}
+function parseDesc(t){
+  if(!t)return{color:'',size:''};
+  const sm=t.match(/[-–]\s*(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|Extra Large|2X Large|3X Large)\s*$/i)||
+            t.match(/\b(X-Small|Small|Medium|Large|X-Large|Extra Large|2X\s+Large|3X\s+Large)\b/i)||
+            t.match(/\s(XS|SM|MD|LR|XL|2X|3X|4X|5X)\b/i);
+  const size=sm?ns((sm[1]||sm[0]).trim()):'';
+  const cm=t.match(/\b(White|Navy|Black|Grey|Gray|Red|Maroon|Royal|Khaki|Green|Pink|Blue)\b/i);
+  const color=cm?nc(cm[1]):'';
+  return{color,size};
+}
+function parseVDate(d){const m=d.match(/(\d{2})\/(\d{2})\/(\d{2,4})/);if(!m)return d;const yr=parseInt(m[3])<100?(parseInt(m[3])<50?2000+parseInt(m[3]):1900+parseInt(m[3])):parseInt(m[3]);return`${m[1]}/${m[2]}/${yr}`;}
+
+function parseADI(t){
+  const h={customer:'AMERICAN DAWN INC',format:'ADI'};
+  h.po_number=(t.match(/(\d{6,7})\s/)||[])[1]||'';
+  h.order_date=(t.match(/Date\s+([\d-]+)/i)||[])[1]||'';
+  const lines=[];const re=/(\d+)\s+([A-Z0-9]+)\s+(\d{2}-[A-Z]{3}-\d{2,4})\s+([\d.]+)\s+Each\s+N?([\d.]+)\s+([\d.,]+)/g;
+  let m;
+  while((m=re.exec(t))!==null){
+    const{color,size,style}=parseSkuCS(m[2],t.slice(m.index,m.index+200));
+    lines.push({line_num:+m[1],sku:m[2],style_code:style,color,size,cancel_date:m[3],ship_date:'',order_date:h.order_date,qty:+m[4],unit_price:+m[5],ext_price:+(m[6].replace(',','')),description:t.slice(m.index+m[0].length,m.index+m[0].length+100).split('\n')[0].trim().substring(0,100)});
+  }
+  return{header:h,lines};
+}
+function parseNorthern(t){
+  const h={customer:'NORTHERN UNIFORM',format:'NORTHERN'};
+  h.po_number=(t.match(/Order Date:\s*([A-Z0-9-]+)/i)||t.match(/PO:\s*([A-Z0-9-]+)/i)||[])[1]?.trim()||'';
+  h.order_date=(t.match(/(\w+\s+\d+,\s*\d{4})/)||[])[1]||'';
+  const lines=[];const re=/Line\s+(\d+)\s+([A-Z0-9]+)\s+(.*?)\s+([\d.]+)\s+\$\s*([\d,.]+)/g;let m;
+  while((m=re.exec(t))!==null){
+    const after=t.slice(m.index,m.index+500);
+    const{color,size:sz,style}=parseSkuCS(m[2],m[3]);
+    const sM=after.match(/Size\s+([A-Z0-9X]+)/i);
+    lines.push({line_num:+m[1],sku:m[2],style_code:style,color,size:sM?ns(sM[1]):sz,cancel_date:'',ship_date:'',order_date:h.order_date,qty:+(after.match(/Qty\s+(\d+)/i)||[0,0])[1],unit_price:+m[4],ext_price:+(m[5].replace(',','')),description:m[3].trim().substring(0,100)});
+  }
+  return{header:h,lines};
+}
+function parseDickson(t){
+  const h={customer:'DICKSON INDUSTRIES INC',format:'DICKSON'};
+  h.po_number=(t.match(/Purchase Order No:\s*(\d+)/i)||[])[1]?.trim()||'';
+  h.order_date=(t.match(/PO[.\s]+Date:\s*([\d-]+)/i)||t.match(/(\d{2}-\d{2}-\d{4})/)||[])[1]||'';
+  const ship_date=(t.match(/Requested Delivery Date\s*([^\n]+)/i)||[])[1]?.trim()||'';
+  const lines=[];const re=/(\d{4})\s+([\s\S]{10,200}?)\s+(\d+)\s+1\s+\$([\d.]+)\s+\$([\d,.]+)/g;let m;
+  while((m=re.exec(t))!==null){
+    const rd=m[2].replace(/\s+/g,' ').trim();
+    const sm=rd.match(/\b(XS|SM|SML|MD|MED|LR|LRG|XL|2X|3X|4X|5X)\b/i);
+    const cm=rd.match(/\b(WHITE|NAVY|BLACK|GREY|GRAY|RED|MAROON|ROYAL|KHAKI|KCT|NBL)\b/i);
+    const sty=(rd.match(/^(DI[-\s]?\d+)/i)||[])[1]||('DI-'+m[1]);
+    lines.push({line_num:lines.length+1,sku:m[1],style_code:sty,color:cm?nc(cm[1]):'',size:sm?ns(sm[1]):'',cancel_date:'',ship_date,order_date:h.order_date,qty:+m[3],unit_price:+m[4],ext_price:+(m[5].replace(',','')),description:rd.substring(0,120)});
+  }
+  if(!lines.length){const re2=/(\d{4})\s+.*?(\d+)\s+1\s+\$([\d.]+)/g;while((m=re2.exec(t))!==null&&lines.length<50)lines.push({line_num:lines.length+1,sku:m[1],style_code:'DI-'+m[1],color:'',size:'',cancel_date:'',ship_date,order_date:h.order_date,qty:+m[2],unit_price:+m[3],ext_price:0,description:''});}
+  return{header:h,lines};
+}
+function parseMagnus(t){
+  const h={customer:'MAGNUS TEXTILES',format:'MAGNUS'};
+  h.po_number=(t.match(/^(PO\d+)/m)||t.match(/(PO\d+)/)||[])[1]||'';
+  h.order_date=(t.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)||[])[1]||'';
+  const ship_date=(t.match(/Receive By\s+([\d\/]+)/i)||[])[1]||'';
+  const lines=[];const re=/([A-Z0-9][-A-Z0-9]+(?:-GL)?)\s+([\w-]+)\s+(\d+)\s+EA\s+\$([\d.]+)\s+\$([\d.,]+)/g;let m;
+  while((m=re.exec(t))!==null){
+    const before=t.slice(Math.max(0,m.index-300),m.index);
+    const desc=(before.split('\n').filter(l=>l.trim().length>5).slice(-1)[0]||'').trim();
+    const{color,size,style}=parseMagnusCS(m[1],desc);
+    lines.push({line_num:lines.length+1,sku:m[1],style_code:style,color,size,cancel_date:ship_date,ship_date,order_date:h.order_date,qty:+m[3],unit_price:+m[4],ext_price:+(m[5].replace(',','')),description:desc.substring(0,120)});
+  }
+  return{header:h,lines};
+}
+function parseVestis(t){
+  let customer='VESTIS';
+  if(t.includes('WHITE PLAIN LINEN')||t.includes('VRT PO'))customer='WHITE PLAIN LINEN';
+  const h={customer,format:'VESTIS'};
+  h.po_number=(t.match(/Batch\s*#\s*(FGCL[-\s]?\w+)/i)||t.match(/(FGCL[-\s]?\w+)/i)||[])[1]?.replace(/\s/g,'')||'';
+  h.order_date=(t.match(/Date Created:\s*([\d\/]+)/i)||[])[1]||'';
+  const lines=[];const seen=new Set();
+  const re=/([A-Z][A-Z0-9]{3,15})\s+([A-Z][A-Z0-9]{3,15})\s+([\w,\s]+?)\s+(\d{2}\/\d{2}\/\d{2})\s+\w+\s+EA\s+([A-Z0-9]+)\s+(\w+)\s+([A-Z]{3,})\s+([A-Z0-9]+)\s+N\/A\s+(\d+)\s+\$([\d.]+)/g;
+  let m;
+  while((m=re.exec(t))!==null){
+    const k=m[1]+m[4]+m[6];if(seen.has(k))continue;seen.add(k);
+    const sd=parseVDate(m[4]);
+    lines.push({line_num:lines.length+1,sku:m[1],style_code:m[7],color:nc(m[6]),size:ns(m[8]),cancel_date:sd,ship_date:sd,order_date:h.order_date,qty:+m[9],unit_price:+m[10],ext_price:+m[10],description:(m[3]||'').trim().substring(0,120)});
+  }
+  if(!lines.length){
+    const re2=/([A-Z][A-Z0-9]{3,20})\s+.*?(\d{2}\/\d{2}\/\d{2})\s+.*?(\d+)\s+\$([\d.]+)\s+\$([\d.]+)/g;const seen2=new Set();
+    while((m=re2.exec(t))!==null){if(seen2.has(m[1]+m[2]))continue;seen2.add(m[1]+m[2]);const{color,size,style}=parseSkuCS(m[1],t.slice(m.index-100,m.index+200));const sd=parseVDate(m[2]);lines.push({line_num:lines.length+1,sku:m[1],style_code:style,color,size,cancel_date:sd,ship_date:sd,order_date:h.order_date,qty:+m[3],unit_price:+m[4],ext_price:+m[5],description:''});}
+  }
+  return{header:h,lines};
+}
+async function aiParse(t,key){
+  if(!key)return null;
+  try{
+    const prompt=`Parse this garment factory PO. Return ONLY JSON (no markdown):
+{"customer":"","po_number":"","order_date":"","lines":[{"line_num":1,"sku":"","style_code":"","color":"","size":"","description":"","qty":0,"unit_price":0,"ext_price":0,"ship_date":"","cancel_date":""}]}
+PO TEXT:\n${t.substring(0,3000)}`;
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2048}})});
+    const d=await r.json();
+    if(d.error){
+      const msg=d.error.message||'';
+      const isQuota=msg.toLowerCase().includes('quota')||msg.toLowerCase().includes('limit')||d.error.code===429;
+      if(isQuota){
+        log('⚠ Gemini 免費額度已用盡（每分鐘15次/每天1500次上限）','warn');
+        log('→ 請稍等1分鐘後再試，或明天額度重置後繼續','warn');
+        log('→ 此檔案將跳過，其他已知格式的PO不受影響','warn');
+      } else {
+        log('Gemini錯誤: '+msg,'err');
+      }
+      return null;
+    }
+    const raw=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    if(!raw){log('Gemini 回傳空白，略過此PDF','warn');return null;}
+    const p=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    return{header:{customer:p.customer||'UNKNOWN',po_number:p.po_number||'',order_date:p.order_date||'',format:'Gemini'},lines:(p.lines||[]).map((l,i)=>({line_num:l.line_num||i+1,sku:l.sku||'',style_code:l.style_code||l.sku||'',color:nc(l.color||''),size:ns(l.size||''),description:l.description||'',qty:+l.qty||0,unit_price:+l.unit_price||0,ext_price:+l.ext_price||0,ship_date:l.ship_date||'',cancel_date:l.cancel_date||'',order_date:p.order_date||''}))};
+  }catch(e){log('AI解析失敗: '+e.message,'err');return null;}
+}
+function parsePO(t,key){
+  const fmt=detectFmt(t);log(`格式: ${fmt}`,'info');
+  if(fmt==='ADI')return Promise.resolve(parseADI(t));
+  if(fmt==='NORTHERN')return Promise.resolve(parseNorthern(t));
+  if(fmt==='DICKSON')return Promise.resolve(parseDickson(t));
+  if(fmt==='MAGNUS')return Promise.resolve(parseMagnus(t));
+  if(fmt==='VESTIS')return Promise.resolve(parseVestis(t));
+  if(key){log('Gemini AI解析中…','info');return aiParse(t,key);}
+  log('未知格式，請設定 Gemini API Key','warn');
+  return Promise.resolve({header:{customer:'UNKNOWN',format:'UNKNOWN',po_number:'',order_date:''},lines:[]});
+}
+
+// ══ WEEKLY PARSER ══
+function parseWeekly(buf,asOf){
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+  const wsn=wb.SheetNames.find(n=>n.toLowerCase().includes('backlog')||n.toLowerCase().includes('summary'))||wb.SheetNames[0];
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wsn],{header:1,defval:null});
+  for(const row of rows.slice(0,6)){const c=(row||[]).find(c=>typeof c==='string'&&c.includes('AS OF'));if(c)asOf=c.replace('AS OF','').trim();}
+  let hr=-1;for(let i=0;i<rows.length;i++)if((rows[i]||[]).some(c=>typeof c==='string'&&c.includes('CUSTOMER'))){hr=i;break;}
+  if(hr===-1)return null;
+  const skip=new Set(['CUSTOMER','Total Order Backlog','Total Ratio','GRAND TOTAL','AVR.','DAY TO','WEEK TO','TOTAL MIN','EST AVR','TOTAL MIN PRODUCE WEEK 1','TOTAL MIN PRODUCE WEEK 2','TOTAL MIN PRODUCE WEEK 3','TOTAL MIN PRODUCE WEEK 4','TOTAL MIN PRODUCE WEEK 5','GRAND TOTAL MIN PRODUCED','GRAND TOTAL (QTY OPEN PCS)','GRAND TOTAL (QTY OPEN YDS)','GRAND TOTAL (QTY OPEN CTNS)','GRAND TOTAL (CTNS SCANNED)','GRAND TOTAL (OPEN SMV)','GRAND TOTAL (OPEN AMOUNT)','EST AVR. PRODUCE MIN PER WEEK','DAY TO COMPLETE SCHEDULE','WEEK TO COMPLETE SCHEDULE','AVR. MIN PER DAY']);
+  // Also skip rows where the "customer" cell is a number or formula
+  function isSkipRow(cu){
+    if(!cu||cu.length<2)return true;
+    if(skip.has(cu))return true;
+    // Starts-with patterns
+    if(['Total','GRAND','Day','Week','AVR','EST','TOTAL MIN','TOTAL RATIO','COMPARED'].some(p=>cu.toUpperCase().startsWith(p.toUpperCase())))return true;
+    // Pure numbers / formulas
+    if(/^[=\d$,.\s()+-]+$/.test(cu))return true;
+    // Contains "PRODUCE WEEK" anywhere
+    if(cu.toUpperCase().includes('PRODUCE WEEK'))return true;
+    if(cu.toUpperCase().includes('MIN PRODUCED'))return true;
+    if(cu.toUpperCase().includes('MIN PER'))return true;
+    if(cu.toUpperCase().includes('COMPLETE SCHEDULE'))return true;
+    return false;
+  }
+  const snaps=[];
+  for(let i=hr+2;i<rows.length;i++){
+    const row=rows[i]||[];const cu=(row[1]||'').toString().trim();
+    if(isSkipRow(cu))continue;
+    snaps.push({customer:cu,as_of_date:asOf,garment:pn(row[3]),apron:pn(row[4]),topNapkin:pn(row[5]),fabric:pn(row[6]),totalOpenCtns:pn(row[7]),producedCtns:pn(row[8]),unproducedCtns:pn(row[7])-pn(row[8]),openSmv:pn(row[10]),openAmount:pn(row[11]),remark:(row[12]||'').toString().trim()});
+  }
+  return{asOf,snapshots:snaps};
+}
+const pn=v=>{if(v==null)return 0;if(typeof v==='number')return isNaN(v)?0:Math.round(v*100)/100;const n=parseFloat(v.toString().replace(/[,$]/g,''));return isNaN(n)?0:n;};
+
+// ══ MAIN IMPORT ══
+async function processFile(file){
+  log(`處理: ${file.name} (${(file.size/1024).toFixed(0)}KB)`,'info');
+  try{
+    const buf=await file.arrayBuffer();
+    const type=detectType(buf);
+    const subj=getMsgSubject(buf)||file.name;
+    const key=APP.sets.apiKey;
+    if(type==='weekly'){
+      log('識別: 週報','info');
+      const xlsxBuf=extractXlsx(buf);
+      if(!xlsxBuf){log('❌ 找不到XLS','err');return;}
+      const dm=subj.match(/(\w+[-\/]\d+[-\/]\d+|\d{4}[-\/]\d{2}[-\/]\d{2})/);
+      const result=parseWeekly(xlsxBuf,dm?dm[1]:'');
+      if(!result){log('❌ 週報解析失敗','err');return;}
+      let saved=0;
+      for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
+      log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
+      await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,as_of:result.asOf,rows:saved,imported_at:new Date().toISOString()});
+    }else{
+      log('識別: 採購訂單','info');
+      const pdfs=extractPdfs(buf);
+      if(!pdfs.length){log('❌ 找不到PDF','err');return;}
+      const seen=new Set();const unique=[];
+      for(const p of pdfs){const h=hashBuf(p.data);if(!seen.has(h)){seen.add(h);unique.push(p);}else log(`跳過重複: ${p.name}`,'warn');}
+      log(`PDF ${unique.length}個（去重後）`,'info');
+      let total=0;
+      for(const{data:pd,name:pn2}of unique){
+        log(`解析: ${pn2}`,'info');
+        const t=await pdfText(pd);
+        if(!t||t.length<20){log(`⚠ ${pn2} 文字提取失敗（可能為掃描圖片PDF，需Gemini AI）`,'warn');continue;}
+        const parsed=await parsePO(t,key);
+        if(!parsed||!parsed.lines.length){log(`⚠ ${pn2} 未解析到明細`,'warn');continue;}
+        log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行`,'info');
+        const hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:pn2,source_date:new Date().toISOString()});
+        for(const ln of parsed.lines){await dbAdd('po_lines',{...ln,po_id:hid,customer:parsed.header.customer,po_number:parsed.header.po_number});total++;}
+      }
+      if(total>0){log(`✅ 儲存 ${total}筆明細`,'');await dbAdd('order_imports',{type:'po',subject:subj,file_name:file.name,rows:total,imported_at:new Date().toISOString()});}
+    }
+    await loadAll();refreshAll();
+  }catch(e){log('❌ '+e.message,'err');console.error(e);}
+}
+
+// ══ RENDER: MASTER TABLE (Weekly as primary) ══
+function latestWeeklyByCustomer(){
+  if(!APP.weekly.length)return{map:{},date:null};
+  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const latest=dates[0];
+  const map={};
+  APP.weekly.filter(w=>w.as_of_date===latest).forEach(w=>{map[w.customer]=w;});
+  return{map,date:latest};
+}
+
+function renderMaster(){
+  const{map,date}=latestWeeklyByCustomer();
+  document.getElementById('master-weekly-date').textContent=date||'—';
+  const fC=document.getElementById('f-c').value;
+  const fType=document.getElementById('f-type').value;
+  const fAmt=document.getElementById('f-amt').value;
+  const fS=document.getElementById('f-s').value.toLowerCase();
+
+  // Populate customer filter
+  const custs=[...new Set([...Object.keys(map),...APP.orders.map(o=>o.customer)])].sort();
+  const sel=document.getElementById('f-c');const cur=sel.value;
+  sel.innerHTML='<option value="">全部客戶</option>'+custs.map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('');
+
+  // Build rows from weekly data
+  let rows=Object.values(map);
+  if(fC)rows=rows.filter(r=>r.customer===fC);
+  if(fS)rows=rows.filter(r=>r.customer.toLowerCase().includes(fS));
+  if(fType)rows=rows.filter(r=>(r[fType]||0)>0);
+  if(fAmt){rows=rows.filter(r=>{const a=r.openAmount||0;if(fAmt==='high')return a>100000;if(fAmt==='mid')return a>=10000&&a<=100000;return a<10000;});}
+
+  const col=APP.sortCol,dir=APP.sortDir;
+  rows.sort((a,b)=>{let va=a[col]||0,vb=b[col]||0;if(typeof va==='string')return va.localeCompare(vb)*dir;return(va-vb)*dir;});
+
+  // KPIs
+  const totG=rows.reduce((s,r)=>s+(r.garment||0),0);
+  const totA=rows.reduce((s,r)=>s+(r.apron||0),0);
+  const totT=rows.reduce((s,r)=>s+(r.topNapkin||0),0);
+  const totAmt=rows.reduce((s,r)=>s+(r.openAmount||0),0);
+  const totUnprod=rows.reduce((s,r)=>s+(r.unproducedCtns||0),0);
+  document.getElementById('master-kpis').innerHTML=`
+    <div class="kc ac"><div class="kl">客戶數</div><div class="kv">${rows.length}</div></div>
+    <div class="kc"><div class="kl">成衣 (件)</div><div class="kv">${totG.toLocaleString()}</div></div>
+    <div class="kc"><div class="kl">圍裙 (件)</div><div class="kv">${totA.toLocaleString()}</div></div>
+    <div class="kc"><div class="kl">上衣/餐巾 (件)</div><div class="kv">${totT.toLocaleString()}</div></div>
+    <div class="kc gr"><div class="kl">開放總金額</div><div class="kv">$${(totAmt/1000).toFixed(0)}K</div></div>
+    <div class="kc yl"><div class="kl">未生產箱數</div><div class="kv">${totUnprod.toLocaleString()}</div></div>`;
+  document.getElementById('mc').textContent=`${rows.length}個客戶`;
+
+  const tbody=document.getElementById('mtb');
+  tbody.innerHTML=rows.length?rows.map(r=>{
+    const total=(r.garment||0)+(r.apron||0)+(r.topNapkin||0);
+    const pct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0;
+    const pctColor=pct<20?'var(--red)':pct<60?'var(--ylw)':'var(--grn)';
+    return`<tr>
+      <td><strong>${r.customer}</strong></td>
+      <td class="mono" style="font-size:10px">${r.as_of_date||'-'}</td>
+      <td class="num">${(r.garment||0).toLocaleString()}</td>
+      <td class="num">${(r.apron||0).toLocaleString()}</td>
+      <td class="num">${(r.topNapkin||0).toLocaleString()}</td>
+      <td class="num"><strong>${total.toLocaleString()}</strong></td>
+      <td class="num">${r.fabric?(r.fabric).toLocaleString():'-'}</td>
+      <td class="num">${(r.totalOpenCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}</td>
+      <td class="num">$${(r.openAmount||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td class="ctr" style="min-width:80px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="smv-bar-track"><div class="smv-bar-done" style="width:${pct}%;background:${pctColor}"></div></div>
+          <span style="font-size:10px;color:${pctColor};font-family:var(--mono)">${pct}%</span>
+        </div>
+      </td>
+      <td style="font-size:10px;color:var(--tx2);max-width:160px;overflow:hidden;text-overflow:ellipsis">${r.remark||''}</td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="13" style="text-align:center;padding:20px;color:var(--mu)">無週報資料，請先匯入 VRT Weekly Summary</td></tr>`;
+
+  // PO supplement
+  let poRows=APP.orders;
+  if(fC)poRows=poRows.filter(o=>o.customer===fC);
+  const posup=document.getElementById('po-sup-tbody');
+  posup.innerHTML=poRows.slice(0,200).map(o=>`<tr>
+    <td style="font-size:11px">${o.customer}</td>
+    <td class="mono" style="font-size:10px">${o.po_number||'-'}</td>
+    <td class="mono" style="font-size:10px">${o.style_code||'-'}</td>
+    <td class="mono" style="font-size:10px">${o.sku||'-'}</td>
+    <td>${clrDot(o.color)}${o.color||'-'}</td>
+    <td class="ctr"><span class="bd bb" style="font-size:9px">${o.size||'-'}</span></td>
+    <td class="num">${(o.qty||0).toLocaleString()}</td>
+    <td class="mono" style="font-size:10px">${o.ship_date||o.cancel_date||'-'}</td>
+    <td><span class="bd bp" style="font-size:9px">${o.format||'-'}</span></td>
+  </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--mu)">尚無PO明細</td></tr>`;
+}
+
+function srt(col){if(APP.sortCol===col)APP.sortDir*=-1;else{APP.sortCol=col;APP.sortDir=1;}renderMaster();}
+function setPeriod(p,el){APP.period=p;document.querySelectorAll('.pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderMaster();}
+
+// ══ RENDER: PIVOT ══
+function renderPivotInit(){
+  const allC=[...new Set(APP.orders.map(o=>o.customer))].sort();
+  const allP=[...new Set(APP.orders.map(o=>o.po_number).filter(Boolean))].sort();
+  const allS=[...new Set(APP.orders.map(o=>o.style_code).filter(Boolean))].sort();
+  const fill=(id,vals,lbl)=>{const s=document.getElementById(id);const c=s.value;s.innerHTML=`<option value="">${lbl}</option>`+vals.map(v=>`<option value="${v}" ${v===c?'selected':''}>${v}</option>`).join('');};
+  fill('pvc',allC,'全部客戶');fill('pvp',allP,'全部PO');fill('pvst',allS,'全部款式');
+  renderPivot();
+}
+function renderPivot(){
+  const fC=document.getElementById('pvc').value,fP=document.getElementById('pvp').value,fS=document.getElementById('pvst').value;
+  const rowDim=document.getElementById('pvr').value;
+  let rows=APP.orders;
+  if(fC)rows=rows.filter(o=>o.customer===fC);
+  if(fP)rows=rows.filter(o=>o.po_number===fP);
+  if(fS)rows=rows.filter(o=>o.style_code===fS);
+  const c=document.getElementById('pvc2');
+  if(!rows.length){c.innerHTML='<div class="empty"><div class="ei">📊</div><p>無資料</p></div>';return;}
+  const rk=rowDim,ck=rowDim==='size'?'color':'size';
+  const rKeys=[...new Set(rows.map(o=>o[rk]||'-'))].sort((a,b)=>rk==='size'?szOrd(a)-szOrd(b):a.localeCompare(b));
+  const cKeys=[...new Set(rows.map(o=>o[ck]||'-'))].sort((a,b)=>ck==='size'?szOrd(a)-szOrd(b):a.localeCompare(b));
+  const data={};const rTot={};const cTot={};let gTot=0;
+  for(const o of rows){const r=o[rk]||'-',cl=o[ck]||'-',q=o.qty||0;if(!data[r])data[r]={};data[r][cl]=(data[r][cl]||0)+q;rTot[r]=(rTot[r]||0)+q;cTot[cl]=(cTot[cl]||0)+q;gTot+=q;}
+  c.innerHTML=`<div style="padding:10px;overflow-x:auto"><table class="pt2">
+    <thead><tr><th class="rh">${rk==='size'?'尺寸':'顏色'} \\ ${ck==='size'?'尺寸':'顏色'}</th>${cKeys.map(k=>`<th>${ck==='color'?clrDot(k)+k:k}</th>`).join('')}<th class="tc">合計</th></tr></thead>
+    <tbody>${rKeys.map(r=>`<tr><td class="rh">${rk==='size'?`<span class="bd bb" style="font-size:9px">${r}</span>`:clrDot(r)+r}</td>${cKeys.map(cl=>`<td>${data[r]?.[cl]?(data[r][cl]).toLocaleString():''}</td>`).join('')}<td class="tc">${(rTot[r]||0).toLocaleString()}</td></tr>`).join('')}</tbody>
+    <tfoot><tr class="tr"><td class="rh">合計</td>${cKeys.map(cl=>`<td class="tc">${(cTot[cl]||0).toLocaleString()}</td>`).join('')}<td class="tc">${gTot.toLocaleString()}</td></tr></tfoot>
+  </table></div>`;
+}
+
+// ══ RENDER: WEEKLY ══
+function renderWeeklyDateSelect(){
+  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const wd=document.getElementById('wd');const wdc=wd.value;
+  wd.innerHTML='<option value="">選擇週報日期</option>'+dates.map(d=>`<option value="${d}" ${d===wdc?'selected':''}>${d}</option>`).join('');
+  const wd2=document.getElementById('wd2');const wd2c=wd2.value;
+  wd2.innerHTML='<option value="">上一週（自動）</option>'+dates.map(d=>`<option value="${d}" ${d===wd2c?'selected':''}>${d}</option>`).join('');
+  document.getElementById('wc').textContent=dates.length;
+  if(dates.length){wd.value=dates[0];renderWeekly();}
+}
+
+function renderWeekly(){
+  const allDates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const date=document.getElementById('wd').value||allDates[0]||'';
+  const manualDate2=document.getElementById('wd2').value;
+  const dateIdx=allDates.indexOf(date);
+  const date2=manualDate2||(dateIdx>=0&&dateIdx<allDates.length-1?allDates[dateIdx+1]:'');
+  const rows=date?APP.weekly.filter(w=>w.as_of_date===date):[];
+  const rows2=date2?APP.weekly.filter(w=>w.as_of_date===date2):[];
+  document.getElementById('wasof').textContent=date?`主要: ${date}${date2?' ← 對比: '+date2:''}`:''
+
+  const totG=rows.reduce((s,r)=>s+(r.garment||0),0);
+  const totA=rows.reduce((s,r)=>s+(r.apron||0),0);
+  const totT=rows.reduce((s,r)=>s+(r.topNapkin||0),0);
+  const totOpen=rows.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
+  const totProd=rows.reduce((s,r)=>s+(r.producedCtns||0),0);
+  const totUnprod=rows.reduce((s,r)=>s+(r.unproducedCtns||0),0);
+  const totAmt=rows.reduce((s,r)=>s+(r.openAmount||0),0);
+  const totG2=rows2.reduce((s,r)=>s+(r.garment||0),0);
+  const totA2=rows2.reduce((s,r)=>s+(r.apron||0),0);
+  const totT2=rows2.reduce((s,r)=>s+(r.topNapkin||0),0);
+  const totOpen2=rows2.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
+  const totUnprod2=rows2.reduce((s,r)=>s+(r.unproducedCtns||0),0);
+  const totAmt2=rows2.reduce((s,r)=>s+(r.openAmount||0),0);
+  const pctOverall=totOpen>0?Math.round(totProd/totOpen*100):0;
+
+  function chg(now,prev){
+    if(!rows2.length)return'';
+    const d=now-prev,pct=prev>0?Math.round(Math.abs(d)/prev*100):0;
+    const col=d<0?'var(--grn)':d>0?'var(--red)':'var(--mu)';
+    return`<div style="font-size:10px;color:${col};margin-top:2px">${d>=0?'+':''}${d.toLocaleString()} (${d>=0?'+':''}${pct}%)</div>`;
+  }
+
+  const kpis=document.getElementById('w-kpis');
+  if(kpis)kpis.innerHTML=`
+    <div class="kc ac"><div class="kl">成衣開放</div><div class="kv">${totG.toLocaleString()}</div>${chg(totG,totG2)}</div>
+    <div class="kc"><div class="kl">圍裙開放</div><div class="kv">${totA.toLocaleString()}</div>${chg(totA,totA2)}</div>
+    <div class="kc"><div class="kl">上衣/餐巾</div><div class="kv">${totT.toLocaleString()}</div>${chg(totT,totT2)}</div>
+    <div class="kc ${pctOverall>=80?'gr':pctOverall>=40?'yl':'rd'}"><div class="kl">整體完成率</div><div class="kv">${pctOverall}%</div><div class="ks">${totProd}/${totOpen} 箱</div></div>
+    <div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${totUnprod.toLocaleString()}</div>${chg(totUnprod,totUnprod2)}</div>
+    <div class="kc"><div class="kl">開放金額</div><div class="kv" style="font-size:15px">$${(totAmt/1000).toFixed(0)}K</div>${chg(Math.round(totAmt),Math.round(totAmt2))}</div>`;
+
+  document.getElementById('wtypes').innerHTML=rows.length?`
+    <div style="display:flex;flex-direction:column;gap:8px;padding:6px">
+      ${[['成衣 Garment','garment',totG,totG2,'var(--acc)'],['圍裙 Apron','apron',totA,totA2,'var(--pur)'],['上衣/餐巾','topNapkin',totT,totT2,'var(--cyn)']].map(([lbl,key,v,v2,col])=>{
+        const total=totG+totA+totT||1;
+        const pct=(v/total*100).toFixed(0);
+        const d=rows2.length?v-v2:null;
+        return`<div style="display:flex;align-items:center;gap:8px">
+          <div style="width:90px;font-size:11px;font-weight:600">${lbl}</div>
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${col};border-radius:4px"></div>
+          </div>
+          <div style="font-size:11px;font-family:var(--mono);min-width:90px;text-align:right">
+            ${v.toLocaleString()}${d!==null?` <span style="font-size:9px;color:${d<0?'var(--grn)':d>0?'var(--red)':'var(--mu)'}">(${d>=0?'+':''}${d})</span>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`:'<div class="empty"><div class="ei">📊</div><p>選擇週報</p></div>';
+
+  const maxC=Math.max(...rows.map(r=>r.totalOpenCtns||0),1);
+  document.getElementById('wbars').innerHTML=rows.length?rows.filter(r=>(r.totalOpenCtns||0)>0).sort((a,b)=>b.totalOpenCtns-a.totalOpenCtns).map(r=>{
+    const r2=rows2.find(x=>x.customer===r.customer);
+    const pct=((r.totalOpenCtns||0)/maxC*100).toFixed(0);
+    const pp=r.totalOpenCtns?Math.min(100,(r.producedCtns||0)/r.totalOpenCtns*100):0;
+    const diff=r2?(r.totalOpenCtns||0)-(r2.totalOpenCtns||0):null;
+    const n=r.customer.length>22?r.customer.substring(0,20)+'…':r.customer;
+    return`<div style="display:flex;align-items:center;gap:7px;padding:6px 12px;border-bottom:1px solid #f0f2f5">
+      <div style="flex:1.5;font-size:11px;font-weight:600" title="${r.customer}">${n}</div>
+      <div style="flex:2;height:8px;background:#e5e7eb;border-radius:4px;position:relative;overflow:hidden">
+        <div style="position:absolute;height:100%;width:${pct}%;background:#bfdbfe;border-radius:4px"></div>
+        <div style="position:absolute;height:100%;width:${(pp*pct/100).toFixed(0)}%;background:var(--grn);border-radius:4px"></div>
+      </div>
+      <div style="font-size:10px;font-family:var(--mono);min-width:75px;text-align:right">
+        ${(r.producedCtns||0)}/<strong>${(r.totalOpenCtns||0)}</strong>
+        ${diff!==null?`<span style="font-size:9px;color:${diff<0?'var(--grn)':diff>0?'var(--red)':'var(--mu)'}">${diff<0?'▼':diff>0?'▲':'-'}${Math.abs(diff)}</span>`:''}
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty"><div class="ei">📦</div><p>無資料</p></div>';
+
+  const tb=document.getElementById('wtb');
+  tb.innerHTML=rows.length?rows.map(r=>{
+    const r2=rows2.find(x=>x.customer===r.customer);
+    const diffCtns=r2!==undefined?(r.totalOpenCtns||0)-(r2.totalOpenCtns||0):null;
+    const dCls=diffCtns===null?'':diffCtns<0?'diff-pos':diffCtns>0?'diff-neg':'diff-zero';
+    const pct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0;
+    const pctCol=pct>=80?'var(--grn)':pct>=40?'var(--ylw)':'var(--red)';
+    return`<tr>
+      <td><strong>${r.customer}</strong></td>
+      <td class="num">${(r.garment||0).toLocaleString()}</td>
+      <td class="num">${(r.apron||0).toLocaleString()}</td>
+      <td class="num">${(r.topNapkin||0).toLocaleString()}</td>
+      <td class="num">${r.fabric?(r.fabric).toLocaleString():'-'}</td>
+      <td class="num"><strong>${(r.totalOpenCtns||0).toLocaleString()}</strong></td>
+      <td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}</td>
+      <td class="num ${dCls}">${diffCtns!==null?((diffCtns>=0?'+':'')+diffCtns.toLocaleString()):'—'}</td>
+      <td class="ctr"><span style="font-weight:700;color:${pctCol}">${pct}%</span></td>
+      <td class="num">$${(r.openAmount||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="font-size:10px;color:var(--tx2);max-width:130px;overflow:hidden;text-overflow:ellipsis">${r.remark||''}</td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mu)">選擇週報日期</td></tr>`;
+
+  renderWeekTrend(allDates);
+  const custSel=document.getElementById('w-cust-sel');
+  const custs=[...new Set(APP.weekly.map(w=>w.customer))].sort();
+  const curC=custSel?custSel.value:'';
+  if(custSel)custSel.innerHTML='<option value="">選擇客戶</option>'+custs.map(cu=>`<option value="${cu}" ${cu===curC?'selected':''}>${cu}</option>`).join('');
+  if(curC)renderCustomerTrend();
+}
+
+function renderWeekTrend(allDates){
+  const wrap=document.getElementById('w-trend-table-wrap');
+  if(!wrap)return;
+  if(allDates.length<2){wrap.innerHTML='<div class="empty"><div class="ei">📈</div><p>需要至少2份週報才能顯示趨勢</p></div>';return;}
+  const dates=allDates.slice(0,8).reverse();
+  const rangeEl=document.getElementById('w-trend-range');
+  if(rangeEl)rangeEl.textContent=`${dates[0]} → ${dates[dates.length-1]}（${dates.length}週）`;
+  const custs=[...new Set(APP.weekly.filter(w=>dates.includes(w.as_of_date)).map(w=>w.customer))].sort();
+  const dm={};
+  for(const w of APP.weekly){
+    if(!dates.includes(w.as_of_date))continue;
+    if(!dm[w.customer])dm[w.customer]={};
+    dm[w.customer][w.as_of_date]=w;
+  }
+  let html=`<div style="overflow-x:auto"><table class="dt" style="min-width:600px">
+  <thead>
+    <tr>
+      <th rowspan="2" style="vertical-align:middle">客戶</th>
+      ${dates.map((d,i)=>`<th colspan="3" style="text-align:center;background:${i===dates.length-1?'#dbeafe':'#eef2ff'}">${d}</th>`).join('')}
+      <th rowspan="2" style="vertical-align:middle;text-align:center">趨勢</th>
+    </tr>
+    <tr>
+      ${dates.map((_,i)=>`
+        <th class="num" style="font-size:8px;background:${i===dates.length-1?'#dbeafe':'#f5f7ff'}">開放箱</th>
+        <th class="num" style="font-size:8px;background:${i===dates.length-1?'#dbeafe':'#f5f7ff'}">±</th>
+        <th class="ctr" style="font-size:8px;background:${i===dates.length-1?'#dbeafe':'#f5f7ff'}">完成率</th>
+      `).join('')}
+    </tr>
+  </thead>
+  <tbody>`;
+
+  for(const cu of custs){
+    const snaps=dates.map(d=>dm[cu]?.[d]||null);
+    const first=snaps.find(s=>s);const last=[...snaps].reverse().find(s=>s);
+    const trend=first&&last?((last.unproducedCtns||0)<(first.unproducedCtns||0)?'▼ 縮減':'▲ 增加'):'—';
+    const tCol=trend.includes('▼')?'var(--grn)':trend.includes('▲')?'var(--red)':'var(--mu)';
+    html+=`<tr>
+      <td style="font-weight:600">${cu.length>20?cu.substring(0,18)+'…':cu}</td>
+      ${snaps.map((s,i)=>{
+        if(!s)return`<td style="color:#ccc" class="num">—</td><td></td><td></td>`;
+        const prev=snaps.slice(0,i).reverse().find(x=>x);
+        const d=prev?(s.totalOpenCtns||0)-(prev.totalOpenCtns||0):null;
+        const pct=s.totalOpenCtns?Math.round((s.producedCtns||0)/s.totalOpenCtns*100):0;
+        const pc=pct>=80?'var(--grn)':pct>=40?'var(--ylw)':'var(--red)';
+        const dc=d===null?'':d<0?'diff-pos':d>0?'diff-neg':'diff-zero';
+        const bg=i===snaps.length-1?'background:#eff6ff':'';
+        return`<td class="num" style="${bg}">${(s.totalOpenCtns||0).toLocaleString()}</td>
+               <td class="num ${dc}" style="${bg};font-size:10px">${d!==null?(d>=0?'+':'')+d:'—'}</td>
+               <td class="ctr" style="${bg}"><span style="font-size:10px;font-weight:700;color:${pc}">${pct}%</span></td>`;
+      }).join('')}
+      <td class="ctr" style="font-weight:700;color:${tCol}">${trend}</td>
+    </tr>`;
+  }
+
+  const totRow=dates.map((d,i)=>{
+    const wr=APP.weekly.filter(w=>w.as_of_date===d);
+    const tc=wr.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
+    const tp=wr.reduce((s,r)=>s+(r.producedCtns||0),0);
+    const pct=tc?Math.round(tp/tc*100):0;
+    const prev=i>0?APP.weekly.filter(w=>w.as_of_date===dates[i-1]).reduce((s,r)=>s+(r.totalOpenCtns||0),0):null;
+    const dv=prev!==null?tc-prev:null;
+    const dc=dv===null?'':dv<0?'diff-pos':dv>0?'diff-neg':'diff-zero';
+    const pc=pct>=80?'var(--grn)':pct>=40?'var(--ylw)':'var(--red)';
+    const bg=i===dates.length-1?'background:#dbeafe':'background:#f0f7ff';
+    return`<td class="num" style="${bg}"><strong>${tc.toLocaleString()}</strong></td>
+           <td class="num ${dc}" style="${bg};font-size:10px">${dv!==null?(dv>=0?'+':'')+dv:'—'}</td>
+           <td class="ctr" style="${bg}"><span style="color:${pc};font-weight:700">${pct}%</span></td>`;
+  });
+  html+=`<tr style="font-weight:700"><td>合計</td>${totRow.join('')}<td></td></tr>`;
+  html+=`</tbody></table></div>`;
+  wrap.innerHTML=html;
+}
+
+function renderCustomerTrend(){
+  const cu=document.getElementById('w-cust-sel').value;
+  const el=document.getElementById('w-cust-detail');
+  if(!cu){el.innerHTML='<div class="empty"><div class="ei">👤</div><p>選擇客戶</p></div>';return;}
+  const snaps=APP.weekly.filter(w=>w.customer===cu).sort((a,b)=>a.as_of_date.localeCompare(b.as_of_date));
+  if(!snaps.length){el.innerHTML='<div class="empty"><p>無此客戶週報資料</p></div>';return;}
+  let html=`<div style="overflow-x:auto;padding:8px 12px">
+  <table class="dt"><thead><tr>
+    <th>週報日期</th><th class="num">成衣</th><th class="num">圍裙</th><th class="num">上衣/餐巾</th>
+    <th class="num">開放箱</th><th class="num">已生產</th><th class="num">未生產</th>
+    <th class="num">週增減</th><th class="num">完成率</th><th class="num">開放金額</th><th>本週狀態</th>
+  </tr></thead><tbody>`;
+  snaps.forEach((s,i)=>{
+    const prev=snaps[i-1];
+    const dCtns=prev?(s.totalOpenCtns||0)-(prev.totalOpenCtns||0):null;
+    const dProd=prev?(s.producedCtns||0)-(prev.producedCtns||0):null;
+    const pct=s.totalOpenCtns?Math.round((s.producedCtns||0)/s.totalOpenCtns*100):0;
+    const pc=pct>=80?'var(--grn)':pct>=40?'var(--ylw)':'var(--red)';
+    const dc=dCtns===null?'':dCtns<0?'diff-pos':dCtns>0?'diff-neg':'diff-zero';
+    let status='';
+    if(dCtns!==null&&dProd!==null){
+      if(dCtns<0&&dProd>0)status=`<span class="bd bg">訂單減＋生產增</span>`;
+      else if(dCtns>0&&dProd>0)status=`<span class="bd by">新增訂單</span>`;
+      else if(dCtns<0&&dProd<=0)status=`<span class="bd bc">訂單出清</span>`;
+      else if(dCtns>0&&dProd<=0)status=`<span class="bd br">待追趕</span>`;
+      else status=`<span class="bd bk">持平</span>`;
+    }
+    html+=`<tr ${i===snaps.length-1?'style="background:#eff6ff"':''}>
+      <td class="mono">${s.as_of_date}</td>
+      <td class="num">${(s.garment||0).toLocaleString()}</td>
+      <td class="num">${(s.apron||0).toLocaleString()}</td>
+      <td class="num">${(s.topNapkin||0).toLocaleString()}</td>
+      <td class="num"><strong>${(s.totalOpenCtns||0).toLocaleString()}</strong></td>
+      <td class="num" style="color:var(--grn)">${(s.producedCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--ylw)">${(s.unproducedCtns||0).toLocaleString()}</td>
+      <td class="num ${dc}">${dCtns!==null?(dCtns>=0?'+':'')+dCtns:'—'}</td>
+      <td class="ctr"><span style="font-weight:700;color:${pc}">${pct}%</span></td>
+      <td class="num">$${(s.openAmount||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td>${status}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>`;
+  el.innerHTML=html;
+}
+
+function expWeeklyCsv(){
+  if(!APP.weekly.length){alert('無週報資料');return;}
+  const hdrs=['客戶','週報日期','成衣','圍裙','上衣/餐巾','開放箱','已生產','未生產','完成率%','開放金額'];
+  const data=APP.weekly.map(r=>[r.customer,r.as_of_date,r.garment,r.apron,r.topNapkin,r.totalOpenCtns,r.producedCtns,r.unproducedCtns,r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0,r.openAmount]);
+  const csv=[hdrs,...data].map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`weekly_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+}
+
+// ══ RENDER: SMV ══
+// ══ RENDER: SMV ══
+function setSmvPeriod(p,el){APP.smvPeriod=p;document.querySelectorAll('#pnl-smv .pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderSmv();}
+function renderSmv(){
+  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const latest=dates[0]||'';
+  const rows=latest?APP.weekly.filter(w=>w.as_of_date===latest):[];
+  const totSmv=rows.reduce((s,r)=>s+(r.openSmv||0),0);
+  // Sewing actual output - try to read from sewing system
+  const sewMinutes=calcSewingMinutes();
+  document.getElementById('smv-kpis').innerHTML=`
+    <div class="kc pu"><div class="kl">週報待完成 SMV</div><div class="kv">${(totSmv/1000).toFixed(0)}K</div><div class="ks">分鐘</div></div>
+    <div class="kc gr"><div class="kl">車縫實際產出</div><div class="kv">${sewMinutes>0?(sewMinutes/1000).toFixed(0)+'K':'—'}</div><div class="ks">分鐘</div></div>
+    <div class="kc"><div class="kl">週報份數</div><div class="kv">${dates.length}</div></div>
+    <div class="kc yl"><div class="kl">客戶數</div><div class="kv">${rows.length}</div></div>`;
+
+  // Per customer SMV bar chart
+  const maxSmv=Math.max(...rows.map(r=>r.openSmv||0),1);
+  document.getElementById('smv-by-cust').innerHTML=rows.filter(r=>(r.openSmv||0)>0).sort((a,b)=>b.openSmv-a.openSmv).map(r=>{
+    const pct=((r.openSmv||0)/maxSmv*100).toFixed(0);
+    const n=r.customer.length>22?r.customer.substring(0,20)+'…':r.customer;
+    const smvK=((r.openSmv||0)/1000).toFixed(0);
+    return`<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-bottom:1px solid var(--bor)">
+      <div style="flex:1.5;font-size:11px;font-weight:600">${n}</div>
+      <div class="smv-bar-track"><div class="smv-bar-done" style="width:${pct}%;background:var(--pur)"></div></div>
+      <div style="font-size:10px;color:var(--tx2);font-family:var(--mono);min-width:50px;text-align:right">${smvK}K min</div>
+    </div>`;
+  }).join('')||'<div class="empty"><div class="ei">⏱</div><p>無SMV資料</p></div>';
+
+  // Trend
+  if(dates.length>=2){
+    const td=dates.slice(0,8).reverse().map(d=>({date:d,smv:APP.weekly.filter(w=>w.as_of_date===d).reduce((s,r)=>s+(r.openSmv||0),0)}));
+    const maxV=Math.max(...td.map(x=>x.smv),1);
+    document.getElementById('smv-trend').innerHTML=`
+      <div style="font-size:10px;color:var(--tx2);margin-bottom:6px">待完成 SMV 趨勢（週報，越小越好）</div>
+      <div style="display:flex;align-items:flex-end;gap:5px;height:80px">
+        ${td.map(d=>{const h=Math.round(d.smv/maxV*65);return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+          <div style="font-size:8px;color:var(--mu)">${((d.smv||0)/1000).toFixed(0)}K</div>
+          <div style="height:${h}px;width:100%;background:var(--pur);border-radius:2px 2px 0 0;min-height:2px"></div>
+          <div style="font-size:7px;color:var(--mu);writing-mode:vertical-lr;transform:rotate(180deg);height:32px">${d.date.substring(0,10)}</div>
+        </div>`;}).join('')}
+      </div>`;
+  }
+
+  // SMV table
+  const tbody=document.getElementById('smv-tbody');
+  tbody.innerHTML=rows.map(r=>{
+    const smv=r.openSmv||0;
+    const sewMin=getSewingMinutesByCustomer(r.customer);
+    const diff=sewMin>0?smv-sewMin:null;
+    const pct=sewMin>0&&smv>0?Math.min(100,Math.round(sewMin/smv*100)):null;
+    const weeksLeft=sewMin>0&&smv>0?Math.ceil((smv-sewMin)/(sewMin/4)):null;
+    return`<tr>
+      <td><strong>${r.customer}</strong></td>
+      <td class="num" style="color:var(--pur)">${smv.toLocaleString()}</td>
+      <td class="num" style="color:var(--grn)">${sewMin>0?sewMin.toLocaleString():'—'}</td>
+      <td class="num ${diff!==null?(diff<0?'diff-pos':'diff-neg'):'diff-zero'}">${diff!==null?diff.toLocaleString():'—'}</td>
+      <td class="ctr">${pct!==null?`<span style="color:${pct<30?'var(--red)':pct<70?'var(--ylw)':'var(--grn)'}">${pct}%</span>`:'—'}</td>
+      <td class="num">${weeksLeft!==null&&weeksLeft>0?weeksLeft+'週':'—'}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--mu)">無週報資料</td></tr>`;
+}
+
+// ══ RENDER: CARTON ══
+function renderCarton(){
+  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const latest=dates[0]||'';
+  const rows=latest?APP.weekly.filter(w=>w.as_of_date===latest):[];
+  const totOpen=rows.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
+  const totProd=rows.reduce((s,r)=>s+(r.producedCtns||0),0);
+  const totUnprod=rows.reduce((s,r)=>s+(r.unproducedCtns||0),0);
+  const totSew=APP.sewing.length>0?calcSewingCtns():0;
+  document.getElementById('ctn-kpis').innerHTML=`
+    <div class="kc ac"><div class="kl">週報開放箱數</div><div class="kv">${totOpen.toLocaleString()}</div></div>
+    <div class="kc gr"><div class="kl">週報已生產箱</div><div class="kv">${totProd.toLocaleString()}</div></div>
+    <div class="kc yl"><div class="kl">週報未生產箱</div><div class="kv">${totUnprod.toLocaleString()}</div></div>
+    <div class="kc cy"><div class="kl">車縫掃描箱數</div><div class="kv">${totSew>0?totSew.toLocaleString():'—'}</div></div>
+    <div class="kc ${totSew>0&&totProd>0?(Math.abs(totSew-totProd)<totProd*0.05?'gr':'rd'):''}"><div class="kl">掃描差異</div><div class="kv" style="font-size:16px">${totSew>0?((totSew-totProd)>=0?'+':'')+(totSew-totProd).toLocaleString():'—'}</div></div>`;
+
+  const maxC=Math.max(...rows.map(r=>r.totalOpenCtns||0),1);
+  document.getElementById('ctn-bars').innerHTML=rows.filter(r=>(r.totalOpenCtns||0)>0).sort((a,b)=>b.totalOpenCtns-a.totalOpenCtns).map(r=>{
+    const pct=((r.totalOpenCtns||0)/maxC*100).toFixed(0);
+    const pp=r.totalOpenCtns?Math.min(100,(r.producedCtns||0)/r.totalOpenCtns*100):0;
+    const sewCtns=getSewingCtnsByCustomer(r.customer);
+    const sp=r.totalOpenCtns?Math.min(100,(sewCtns/r.totalOpenCtns*100)):0;
+    const n=r.customer.length>22?r.customer.substring(0,20)+'…':r.customer;
+    return`<div class="ctn-row">
+      <div class="ctn-name" title="${r.customer}">${n}</div>
+      <div class="ctn-bar-wrap">
+        <div class="ctn-bar-prod" style="width:${(pp*pct/100).toFixed(0)}%"></div>
+        ${sewCtns>0?`<div class="ctn-bar-scan" style="width:${(sp*pct/100).toFixed(0)}%"></div>`:''}
+      </div>
+      <div style="font-size:9px;color:var(--tx2);font-family:var(--mono);min-width:60px;text-align:right">
+        ${(r.producedCtns||0)}/${(r.totalOpenCtns||0)}
+        ${sewCtns>0?`<span style="color:var(--cyn)"> S:${sewCtns}</span>`:''}
+      </div>
+    </div>`;
+  }).join('')||'<div class="empty"><div class="ei">📦</div><p>無週報裝箱資料</p></div>';
+
+  const tbody=document.getElementById('ctn-tbody');
+  tbody.innerHTML=rows.map(r=>{
+    const sewC=getSewingCtnsByCustomer(r.customer);
+    const diff=sewC>0?(sewC-(r.producedCtns||0)):null;
+    const wkPct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0;
+    const swPct=r.totalOpenCtns&&sewC>0?Math.round(sewC/r.totalOpenCtns*100):null;
+    return`<tr>
+      <td><strong>${r.customer}</strong></td>
+      <td class="num">${(r.totalOpenCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--cyn)">${sewC>0?sewC.toLocaleString():'—'}</td>
+      <td class="num ${diff!==null?(diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'):'diff-zero'}">${diff!==null?((diff>=0?'+':'')+diff.toLocaleString()):'—'}</td>
+      <td class="ctr"><span style="color:${wkPct<30?'var(--red)':wkPct<60?'var(--ylw)':'var(--grn)'}">${wkPct}%</span></td>
+      <td class="ctr">${swPct!==null?`<span style="color:var(--cyn)">${swPct}%</span>`:'—'}</td>
+      <td style="font-size:10px;color:var(--tx2)">${r.remark||''}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--mu)">無資料</td></tr>`;
+}
+
+// ══ RENDER: LINK ══
+function setLinkPeriod(p,el){APP.linkPeriod=p;document.querySelectorAll('#pnl-link .pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderLink();}
+function renderLink(){
+  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const latest=dates[0]||'';
+  const wRows=latest?APP.weekly.filter(w=>w.as_of_date===latest):[];
+  const fC=document.getElementById('lk-c').value;
+  // Fill customer filter
+  const custs=[...new Set(wRows.map(r=>r.customer))].sort();const lsel=document.getElementById('lk-c');const lc=lsel.value;
+  lsel.innerHTML='<option value="">全部客戶</option>'+custs.map(c=>`<option value="${c}" ${c===lc?'selected':''}>${c}</option>`).join('');
+  
+  // Link status
+  document.getElementById('lk-sew-v').textContent=APP.sewing.length>0?APP.sewing.length:'—';
+  document.getElementById('lk-sew-s').textContent=APP.sewing.length>0?'已連接 (筆)':'未連接';
+  document.getElementById('lk-sew-v').style.color=APP.sewing.length>0?'var(--grn)':'var(--mu)';
+  document.getElementById('lk-cut-v').textContent=APP.cutting.length>0?APP.cutting.length:'—';
+  document.getElementById('lk-cut-s').textContent=APP.cutting.length>0?'已連接 (筆)':'未連接';
+  document.getElementById('lk-cut-v').style.color=APP.cutting.length>0?'var(--grn)':'var(--mu)';
+
+  let rows=wRows;if(fC)rows=rows.filter(r=>r.customer===fC);
+  const tbody=document.getElementById('lk-tbody');
+  tbody.innerHTML=rows.map(r=>{
+    const orderQty=(r.garment||0)+(r.apron||0)+(r.topNapkin||0);
+    const cutQty=getCuttingQtyByCustomer(r.customer);
+    const sewQty=getSewingQtyByCustomer(r.customer);
+    const cutGap=cutQty>0?orderQty-cutQty:null;
+    const sewGap=sewQty>0?orderQty-sewQty:null;
+    const cutRate=cutQty>0&&orderQty>0?Math.round(cutQty/orderQty*100):null;
+    const sewRate=sewQty>0&&orderQty>0?Math.round(sewQty/orderQty*100):null;
+    return`<tr>
+      <td><strong>${r.customer}</strong></td>
+      <td class="num" style="color:var(--acc)">${orderQty.toLocaleString()}</td>
+      <td class="num" style="color:var(--ylw)">${cutQty>0?cutQty.toLocaleString():'—'}</td>
+      <td class="num" style="color:var(--grn)">${sewQty>0?sewQty.toLocaleString():'—'}</td>
+      <td class="num ${cutGap!==null?(cutGap<=0?'diff-pos':'diff-neg'):'diff-zero'}">${cutGap!==null?cutGap.toLocaleString():'—'}</td>
+      <td class="num ${sewGap!==null?(sewGap<=0?'diff-pos':'diff-neg'):'diff-zero'}">${sewGap!==null?sewGap.toLocaleString():'—'}</td>
+      <td class="ctr">${cutRate!==null?`<span style="color:${cutRate<50?'var(--red)':cutRate<90?'var(--ylw)':'var(--grn)'}">${cutRate}%</span>`:'—'}</td>
+      <td class="ctr">${sewRate!==null?`<span style="color:${sewRate<50?'var(--red)':sewRate<90?'var(--ylw)':'var(--grn)'}">${sewRate}%</span>`:'—'}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--mu)">無資料</td></tr>`;
+
+  // Style level (from PO lines vs sewing)
+  const stbody=document.getElementById('lk-style-tbody');
+  const styles=[...new Set(APP.orders.map(o=>o.style_code).filter(Boolean))];
+  stbody.innerHTML=styles.slice(0,50).map(st=>{
+    const poRows=APP.orders.filter(o=>o.style_code===st&&(!fC||o.customer===fC));
+    const orderQty=poRows.reduce((s,o)=>s+(o.qty||0),0);
+    const sewQty=getSewingQtyByStyle(st);
+    const cutQty=getCuttingQtyByStyle(st);
+    const diff=sewQty>0?orderQty-sewQty:null;
+    const pct=sewQty>0&&orderQty>0?Math.min(100,Math.round(sewQty/orderQty*100)):null;
+    const cust=[...new Set(poRows.map(o=>o.customer))].join(', ');
+    return`<tr>
+      <td style="font-size:11px;color:var(--tx2)">${cust.substring(0,25)}</td>
+      <td class="mono">${st}</td>
+      <td class="num" style="color:var(--acc)">${orderQty.toLocaleString()}</td>
+      <td class="num" style="color:var(--ylw)">${cutQty>0?cutQty.toLocaleString():'—'}</td>
+      <td class="num" style="color:var(--grn)">${sewQty>0?sewQty.toLocaleString():'—'}</td>
+      <td class="num ${diff!==null?(diff<=0?'diff-pos':'diff-neg'):'diff-zero'}">${diff!==null?diff.toLocaleString():'—'}</td>
+      <td class="ctr">${pct!==null?`<div style="display:flex;align-items:center;gap:4px"><div class="smv-bar-track" style="width:60px"><div class="smv-bar-done" style="width:${pct}%"></div></div><span style="font-size:9px;color:var(--grn)">${pct}%</span></div>`:'—'}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--mu)">匯入PO明細後顯示款式比對</td></tr>`;
+
+  // Trend: multi-week comparison
+  if(dates.length>=2){
+    const td=dates.slice(0,8).reverse().map(d=>{const r=APP.weekly.filter(w=>w.as_of_date===d);return{date:d,order:r.reduce((s,x)=>s+(x.garment||0)+(x.apron||0)+(x.topNapkin||0),0),unprod:r.reduce((s,x)=>s+(x.unproducedCtns||0),0)};});
+    const mxO=Math.max(...td.map(x=>x.order),1);
+    document.getElementById('lk-trend').innerHTML=`
+      <div style="font-size:10px;color:var(--tx2);margin-bottom:6px"><span style="color:var(--acc)">■</span> 開放件數 &nbsp;<span style="color:var(--ylw)">■</span> 未生產箱數</div>
+      <div style="display:flex;align-items:flex-end;gap:5px;height:85px">
+        ${td.map(d=>{const ho=Math.round(d.order/mxO*70);const hu=Math.round(d.unprod/Math.max(...td.map(x=>x.unprod),1)*70);return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+          <div style="height:${Math.max(ho,hu)}px;width:100%;display:flex;gap:1px;align-items:flex-end">
+            <div style="flex:1;height:${ho}px;background:var(--acc);opacity:.6;border-radius:1px 1px 0 0;min-height:1px"></div>
+            <div style="flex:1;height:${hu}px;background:var(--ylw);opacity:.6;border-radius:1px 1px 0 0;min-height:1px"></div>
+          </div>
+          <div style="font-size:7px;color:var(--mu);writing-mode:vertical-lr;transform:rotate(180deg);height:30px">${d.date.substring(0,10)}</div>
+        </div>`;}).join('')}
+      </div>`;
+  }
+}
+
+// ══ LINKED SYSTEM HELPERS ══
+// These try to aggregate data from sewing/cutting DB stores
+// Field names are guesses based on typical schema - adjust in settings if needed
+// ── sewing_v5 record fields: pieces, cartons, smv, styleNo, lineNo, section, efficiency ──
+// ── cutting_v3 record fields: pieces, cartons, styleNo, lineNo, section, efficiency, src ──
+
+function calcSewingMinutes(){
+  // smv per piece × pieces — sewing_v5 stores smv per detail row
+  return APP.sewing.reduce((s,r)=>s+(r.smv>0?(r.smv*(r.pieces||0)):0),0);
+}
+function calcSewingCtns(){
+  return APP.sewing.reduce((s,r)=>s+(r.cartons||0),0);
+}
+function getSewingMinutesByCustomer(cust){
+  // sewing_v5 has no customer field — match via styleNo against our PO data
+  const custStyles=new Set(APP.orders.filter(o=>matchCust({customer:o.customer},cust)).map(o=>o.style_code||o.sku).filter(Boolean));
+  return APP.sewing.filter(r=>custStyles.has(r.styleNo)||custStyles.has(r.selfKey)).reduce((s,r)=>s+(r.smv>0?(r.smv*(r.pieces||0)):0),0);
+}
+function getSewingQtyByCustomer(cust){
+  const custStyles=new Set(APP.orders.filter(o=>matchCust({customer:o.customer},cust)).map(o=>o.style_code||o.sku).filter(Boolean));
+  // If no PO data linked, sum all pieces as fallback
+  if(!custStyles.size) return 0;
+  return APP.sewing.filter(r=>custStyles.has(r.styleNo)||custStyles.has(r.selfKey)).reduce((s,r)=>s+(r.pieces||0),0);
+}
+function getSewingQtyByStyle(st){
+  // Match styleNo (e.g. "A1234") against our style_code
+  return APP.sewing.filter(r=>(r.styleNo&&(r.styleNo===st||r.styleNo.includes(st)||st.includes(r.styleNo)))||(r.selfKey&&r.selfKey===st)).reduce((s,r)=>s+(r.pieces||0),0);
+}
+function getSewingCtnsByCustomer(cust){
+  const custStyles=new Set(APP.orders.filter(o=>matchCust({customer:o.customer},cust)).map(o=>o.style_code||o.sku).filter(Boolean));
+  if(!custStyles.size) return 0;
+  return APP.sewing.filter(r=>custStyles.has(r.styleNo)||custStyles.has(r.selfKey)).reduce((s,r)=>s+(r.cartons||0),0);
+}
+function getCuttingQtyByCustomer(cust){
+  const custStyles=new Set(APP.orders.filter(o=>matchCust({customer:o.customer},cust)).map(o=>o.style_code||o.sku).filter(Boolean));
+  if(!custStyles.size) return 0;
+  return APP.cutting.filter(r=>custStyles.has(r.styleNo)).reduce((s,r)=>s+(r.pieces||0),0);
+}
+function getCuttingQtyByStyle(st){
+  return APP.cutting.filter(r=>r.styleNo&&(r.styleNo===st||r.styleNo.includes(st)||st.includes(r.styleNo))).reduce((s,r)=>s+(r.pieces||0),0);
+}
+function matchCust(r,cust){
+  // Direct customer field (weekly snapshots, PO lines)
+  const rc=(r.customer||r.cust||r.client||'').toLowerCase();
+  const cc=cust.toLowerCase();
+  if(rc&&(rc.includes(cc.substring(0,6))||cc.includes(rc.substring(0,6)))) return true;
+  return false;
+}
+
+async function testDbLink(){
+  const res=document.getElementById('link-test-result');
+  // Test sewing (localStorage)
+  const swData=readSewingFromLocalStorage();
+  // Test cutting (CuttingProd IDB)
+  const ctData=await readCuttingFromIDB();
+  let html=`<span style="color:${swData.length>0?'var(--grn)':'var(--red)'}">
+    車縫 (localStorage "sewing_prod_v1"): ${swData.length>0?swData.length+'筆':'找不到 — 請確認 sewing_v5.html 已在同一瀏覽器開過並匯入資料'}
+  </span><br>
+  <span style="color:${ctData.length>0?'var(--grn)':'var(--red)'}">
+    裁剪 (IndexedDB "CuttingProd"): ${ctData.length>0?ctData.length+'筆':'找不到 — 請確認 cutting_v3.html 已在同一瀏覽器開過並匯入資料'}
+  </span>`;
+  if(swData.length>0&&swData[0])
+    html+=`<br><span style="color:var(--mu);font-size:9px">車縫欄位: ${Object.keys(swData[0]).slice(0,8).join(', ')}…</span>`;
+  if(ctData.length>0&&ctData[0])
+    html+=`<br><span style="color:var(--mu);font-size:9px">裁剪欄位: ${Object.keys(ctData[0]).slice(0,8).join(', ')}…</span>`;
+  res.innerHTML=html;
+  // Reload
+  APP.sewing=swData; APP.cutting=ctData;
+  updateLinkStatus(); updateDbStats();
+}
+
+// ══ UTILS ══
+const SZO=['XS','S','M','L','XL','1XL','2XL','3XL','4XL','5XL'];
+const szOrd=s=>{const i=SZO.indexOf(s);return i===-1?99:i;};
+const CHEX={Navy:'#1e3a5f',White:'#d0d0d0',Black:'#1a1a1a',Grey:'#6b7280',Gray:'#6b7280',Red:'#dc2626',Maroon:'#7f1d1d',Royal:'#1d4ed8',Khaki:'#c4a35a',Green:'#16a34a',Pink:'#ec4899'};
+const clrHex=c=>CHEX[c]||null;
+const clrDot=c=>{const h=clrHex(c);return h?`<span class="cd" style="background:${h}"></span>`:'';}
+
+// ══ EXPORT ══
+function expMasterCsv(){
+  const{map}=latestWeeklyByCustomer();const rows=Object.values(map);
+  if(!rows.length){alert('無資料');return;}
+  const h=['客戶','週報日期','成衣','圍裙','上衣/餐巾','合計','開放箱','已生產箱','未生產箱','開放金額','備註'];
+  const data=rows.map(r=>[r.customer,r.as_of_date,r.garment,r.apron,r.topNapkin,(r.garment||0)+(r.apron||0)+(r.topNapkin||0),r.totalOpenCtns,r.producedCtns,r.unproducedCtns,r.openAmount,r.remark]);
+  dl([h,...data],'master_order');
+}
+function expPivot(){const t=document.querySelector('#pvc2 table');if(!t){alert('無樞紐表');return;}const r=[...t.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(c=>c.textContent.trim()).join(','));dl(r,'pivot');}
+function dl(rows,name){const csv=rows.map(r=>(Array.isArray(r)?r:Object.values(r)).map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`${name}_${new Date().toISOString().slice(0,10)}.csv`;a.click();}
+
+// ══ BACKUP/RESTORE ══
+async function backup(){
+  const b={po_headers:await dbAll('po_headers'),po_lines:await dbAll('po_lines'),weekly_snapshots:await dbAll('weekly_snapshots'),order_imports:await dbAll('order_imports'),v:3,exported_at:new Date().toISOString()};
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(b,null,2)],{type:'application/json'}));a.download=`orders_v3_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();
+}
+async function restore(e){
+  const f=e.target.files[0];if(!f)return;
+  const b=JSON.parse(await f.text());
+  for(const[s,d]of[['po_lines',b.po_lines],['po_headers',b.po_headers],['weekly_snapshots',b.weekly_snapshots],['order_imports',b.order_imports]]){
+    if(d){await dbClear(s);for(const r of d)await dbAdd(s,r);}
+  }
+  await loadAll();refreshAll();alert(`還原成功 ${b.po_lines?.length||0}筆PO, ${b.weekly_snapshots?.length||0}筆週報`);
+}
+async function ccAll(){if(!confirm('清除匯入記錄？'))return;await dbClear('order_imports');await loadAll();renderRecentList();}
+async function ccOrders(){if(!confirm('⚠️ 清除全部訂單資料？'))return;for(const s of['po_lines','po_headers','weekly_snapshots','order_imports'])await dbClear(s);await loadAll();refreshAll();alert('已清除');}
+
+// ══ DRAG DROP ══
+function dov(e){e.preventDefault();e.currentTarget.classList.add('ov');}
+function dol(e){e.currentTarget.classList.remove('ov');}
+async function ddr(e){e.preventDefault();e.currentTarget.classList.remove('ov');const ff=[...e.dataTransfer.files].filter(f=>f.name.endsWith('.msg'));if(!ff.length){log('請拖入.msg','warn');return;}for(const f of ff)await processFile(f);}
+async function fsel(e){for(const f of[...e.target.files])await processFile(f);e.target.value='';}
+
+// ══ RECENT ══
+function renderRecentList(){
+  const el=document.getElementById('recent');
+  if(!APP.imports.length){el.innerHTML='<div class="empty"><div class="ei">📭</div><p>尚未匯入</p></div>';return;}
+  const sorted=[...APP.imports].sort((a,b)=>b.id-a.id).slice(0,20);
+  el.innerHTML=sorted.map(imp=>`<div class="recent-item" style="display:flex;align-items:center;gap:7px;background:var(--sur2);border:1px solid var(--bor);border-radius:4px;padding:7px 10px;margin-bottom:5px">
+    <span>${imp.type==='weekly'?'📊':'📋'}</span>
+    <div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${imp.type==='weekly'?'週報 '+imp.as_of:imp.subject||imp.file_name}</div>
+    <div style="font-size:9px;color:var(--tx2)">${imp.rows}筆 · ${new Date(imp.imported_at).toLocaleString('zh-TW')}</div></div>
+    <button style="background:none;border:none;color:var(--mu);cursor:pointer;font-size:13px" onclick="delImp(${imp.id})">×</button>
+  </div>`).join('');
+}
+async function delImp(id){await dbDel('order_imports',id);APP.imports=APP.imports.filter(i=>i.id!==id);renderRecentList();}
+
+// ══ SETTINGS ══
+function renderSettings(){
+  const ki=document.getElementById('s-ki');if(ki)ki.value=APP.sets.apiKey||'';
+  updateDbStats();
+}
+function saveAllSets(){
+  APP.sets.apiKey=document.getElementById('s-ki').value.trim();
+  // Store names are fixed: sewing=localStorage, cutting=CuttingProd IDB
+  localStorage.setItem('orderSetsV3',JSON.stringify(APP.sets));
+  document.getElementById('ki').value=APP.sets.apiKey;
+  alert('儲存完成');
+}
+function saveSets(){APP.sets.apiKey=document.getElementById('ki').value;APP.sets.useAi=document.getElementById('use-ai').checked;localStorage.setItem('orderSetsV3',JSON.stringify(APP.sets));}
+function loadSets(){
+  try{const s=localStorage.getItem('orderSetsV3');if(s)APP.sets={...APP.sets,...JSON.parse(s)};}catch(e){}
+  document.getElementById('ki').value=APP.sets.apiKey||'';
+  document.getElementById('use-ai').checked=!!APP.sets.useAi;
+}
+
+// ══ LOG ══
+function log(m,t=''){const b=document.getElementById('log');const d=document.createElement('div');d.className=t==='err'?'le':t==='warn'?'lw':t==='info'?'li':'';d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;b.appendChild(d);b.scrollTop=b.scrollHeight;}
+function clearLog(){document.getElementById('log').innerHTML='';}
+
+// ══ TABS ══
+function go(tab,btn){
+  document.querySelectorAll('.pnl').forEach(e=>e.classList.remove('on'));
+  document.querySelectorAll('.tb').forEach(e=>e.classList.remove('on'));
+  document.getElementById('pnl-'+tab).classList.add('on');
+  if(btn)btn.classList.add('on');
+  if(tab==='master')renderMaster();
+  if(tab==='pivot')renderPivotInit();
+  if(tab==='weekly')renderWeekly();
+  if(tab==='smv')renderSmv();
+  if(tab==='carton')renderCarton();
+  if(tab==='link')renderLink();
+  if(tab==='settings')renderSettings();
+}
+
+function refreshAll(){
+  renderRecentList();renderMaster();renderWeeklyDateSelect();renderSmv();renderCarton();renderLink();updateDbStats();
+}
+
+// ══ INIT ══
+async function init(){
+  try{
+    await openDB();
+    document.getElementById('db-st').textContent='● DB已連接';
+    document.getElementById('db-st').style.color='var(--grn)';
+    await loadAll();loadSets();refreshAll();
+    log('VRT 訂單管理系統 v3 就緒','info');
+    log('訂單總表以週報數量為主，個別PO提供顏色/尺寸明細','info');
+    log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
+  }catch(e){
+    document.getElementById('db-st').textContent='● DB錯誤';
+    document.getElementById('db-st').style.color='var(--red)';
+    log('DB錯誤: '+e.message,'err');
+  }
+}
+init();
+</script>
+</body>
+</html>

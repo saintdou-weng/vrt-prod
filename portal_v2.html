@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT 生產系統入口</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f1626;color:#f1f5f9;min-height:100dvh}
+
+/* ── Header ── */
+.hdr{background:linear-gradient(135deg,#1a2540,#253058);border-bottom:1px solid #1e3050;padding:14px 20px;display:flex;align-items:center;gap:12px}
+.logo{width:42px;height:42px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.hdr-title{font-size:16px;font-weight:700}
+.hdr-sub{font-size:11px;color:#64748b;margin-top:2px}
+
+/* ── GAS Config ── */
+.gas-bar{background:#131f35;border-bottom:1px solid #1e3050;padding:10px 20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gas-bar label{font-size:11px;font-weight:700;color:#64748b;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em}
+.gas-bar input{flex:1;min-width:240px;background:#0f1626;border:1px solid #1e3050;border-radius:7px;color:#f1f5f9;padding:6px 10px;font-size:12px;font-family:monospace;outline:none;transition:.2s}
+.gas-bar input:focus{border-color:#f59e0b}
+.btn-xs{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:.15s}
+.btn-save{background:#253058;color:#f1f5f9}.btn-save:hover{background:#2d3a6e}
+.gas-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:#475569}
+.gas-dot.ok{background:#10b981;box-shadow:0 0 5px #10b981}
+.gas-dot.err{background:#ef4444;box-shadow:0 0 5px #ef4444}
+.gas-lbl{font-size:11px;color:#64748b}
+
+/* ── Main ── */
+.main{padding:20px;max-width:700px;margin:0 auto}
+
+/* ── Module Cards ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-bottom:20px}
+
+.mcard{background:#131f35;border:1px solid #1e3050;border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:.2s}
+.mcard:hover{border-color:#253058;transform:translateY(-1px)}
+.mcard-stripe{position:absolute;top:0;left:0;right:0;height:2px}
+.mc-sew  .mcard-stripe{background:linear-gradient(90deg,#f59e0b,transparent)}
+.mc-cut  .mcard-stripe{background:linear-gradient(90deg,#8b5cf6,transparent)}
+.mc-ord  .mcard-stripe{background:linear-gradient(90deg,#10b981,transparent)}
+.mc-ship .mcard-stripe{background:linear-gradient(90deg,#3b82f6,transparent)}
+.mc-prod .mcard-stripe{background:linear-gradient(90deg,#a78bfa,transparent)}
+.mc-smv  .mcard-stripe{background:linear-gradient(90deg,#ef4444,transparent)}
+
+.mc-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.mc-icon{font-size:24px;width:40px;text-align:center}
+.mc-info{flex:1}
+.mc-title{font-size:14px;font-weight:700;color:#f1f5f9}
+.mc-sub{font-size:10px;color:#475569;margin-top:2px}
+.mc-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+.badge-ok{background:#052e16;color:#4ade80;border:1px solid #166534}
+.badge-old{background:#1c1003;color:#fbbf24;border:1px solid #92400e}
+.badge-none{background:#1e293b;color:#64748b;border:1px solid #334155}
+.badge-auto{background:#1e2640;color:#93c5fd;border:1px solid #1d4ed8}
+
+/* Sync time row */
+.mc-sync{font-size:11px;color:#475569;font-family:monospace;margin-bottom:12px;min-height:16px}
+.sync-ok{color:#10b981}.sync-old{color:#f59e0b}.sync-none{color:#475569}
+
+/* Actions */
+.mc-actions{display:flex;gap:8px}
+.btn-open{flex:1;background:#1a2540;border:1px solid #253058;color:#cbd5e1;padding:9px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;transition:.15s}
+.btn-open:hover{background:#253058;color:#f1f5f9}
+.btn-push{flex:1;background:#1c1500;border:1px solid #92400e;color:#fbbf24;padding:9px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;transition:.15s;display:flex;align-items:center;justify-content:center;gap:4px}
+.btn-push:hover{background:#292000}
+.btn-pull{flex:1;background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd;padding:9px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;transition:.15s;display:flex;align-items:center;justify-content:center;gap:4px}
+.btn-pull:hover{background:#0f2040}
+.btn-push:disabled,.btn-pull:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Log ── */
+.log-wrap{background:#0a1120;border:1px solid #1e3050;border-radius:10px;padding:14px}
+.log-hd{font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.log-body{max-height:130px;overflow-y:auto;font-size:11px;font-family:monospace;line-height:1.7;color:#475569}
+.l-ok{color:#4ade80}.l-err{color:#f87171}.l-info{color:#60a5fa}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin .7s linear infinite}
+
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">🏭</div>
+  <div>
+    <div class="hdr-title">VRT 生產系統入口</div>
+    <div class="hdr-sub">VANTAGE RIVER TEXTILES · PHNOM PENH</div>
+  </div>
+</div>
+
+<div class="gas-bar">
+  <label>GAS URL</label>
+  <input id="gasInput" type="text" placeholder="https://script.google.com/macros/s/…/exec" />
+  <button class="btn-xs btn-save" onclick="saveGas()">儲存</button>
+  <div class="gas-dot" id="gasDot"></div>
+  <span class="gas-lbl" id="gasLbl">未設定</span>
+</div>
+
+<div class="main">
+
+  <div class="grid">
+
+    <!-- 車縫 -->
+    <div class="mcard mc-sew">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🧵</div>
+        <div class="mc-info">
+          <div class="mc-title">車縫生產</div>
+          <div class="mc-sub">sewing_v5.html · localStorage: sewing_prod_v1</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-sewing">--</span>
+      </div>
+      <div class="mc-sync" id="st-sewing">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="open('sewing_v5.html','_blank')">📂 開啟</button>
+        <button class="btn-push" id="pp-sewing" onclick="push('sewing')">☁ 推送</button>
+        <button class="btn-pull" id="pl-sewing" onclick="pull('sewing')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- 裁剪 -->
+    <div class="mcard mc-cut">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">✂️</div>
+        <div class="mc-info">
+          <div class="mc-title">裁剪生產</div>
+          <div class="mc-sub">cutting_v3.html · IndexedDB: CuttingProd</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-cutting">--</span>
+      </div>
+      <div class="mc-sync" id="st-cutting">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="open('cutting_v3.html','_blank')">📂 開啟</button>
+        <button class="btn-push" id="pp-cutting" onclick="push('cutting')">☁ 推送</button>
+        <button class="btn-pull" id="pl-cutting" onclick="pull('cutting')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- 訂單 -->
+    <div class="mcard mc-ord">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📦</div>
+        <div class="mc-info">
+          <div class="mc-title">客戶訂單</div>
+          <div class="mc-sub">orders_v3.html · localStorage: orderSetsV3</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-orders">--</span>
+      </div>
+      <div class="mc-sync" id="st-orders">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="open('orders_v3.html','_blank')">📂 開啟</button>
+        <button class="btn-push" id="pp-orders" onclick="push('orders')">☁ 推送</button>
+        <button class="btn-pull" id="pl-orders" onclick="pull('orders')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- 出貨 -->
+    <div class="mcard mc-ship">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🚢</div>
+        <div class="mc-info">
+          <div class="mc-title">出貨追蹤</div>
+          <div class="mc-sub">shipping_v2.html · 解析後同步</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-shipping">--</span>
+      </div>
+      <div class="mc-sync" id="st-shipping">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="open('shipping_v2.html','_blank')">📂 開啟 &amp; 同步</button>
+        <button class="btn-pull" id="pl-shipping" onclick="pull('shipping')" style="flex:none;padding:9px 14px">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- 生產總覽 -->
+    <div class="mcard mc-prod">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📊</div>
+        <div class="mc-info">
+          <div class="mc-title">生產總覽</div>
+          <div class="mc-sub">production_v4.html · 讀取車縫＋裁剪</div>
+        </div>
+        <span class="mc-badge badge-auto">自動讀取</span>
+      </div>
+      <div class="mc-sync" style="color:#3b82f6">先拉取車縫＋裁剪，再開啟即可</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="open('production_v4.html','_blank')" style="flex:1">📊 開啟總覽</button>
+      </div>
+    </div>
+
+    <!-- SMV -->
+    <div class="mcard mc-smv">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">⏱️</div>
+        <div class="mc-info">
+          <div class="mc-title">SMV 管理</div>
+          <div class="mc-sub">smv_manager_v5_final.html</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-smv">--</span>
+      </div>
+      <div class="mc-sync" id="st-smv">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="open('smv_manager_v5_final.html','_blank')">📂 開啟</button>
+        <button class="btn-push" id="pp-smv" onclick="push('smv')">☁ 推送</button>
+        <button class="btn-pull" id="pl-smv" onclick="pull('smv')">⬇ 拉取</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Log -->
+  <div class="log-wrap">
+    <div class="log-hd">操作紀錄</div>
+    <div class="log-body" id="logBody"><span class="l-info">就緒</span></div>
+  </div>
+
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const LS_GAS = 'vrt_portal_gas_url';
+let gasUrl = localStorage.getItem(LS_GAS) || '';
+
+// ─── DATA DEFINITIONS (how to read/write each tool) ────────
+const TOOLS = {
+  sewing: {
+    read: async () => {
+      const raw = localStorage.getItem('sewing_prod_v1') || '[]';
+      const recs = JSON.parse(raw);
+      const effRaw = localStorage.getItem('sewing_eff_v1') || '[]';
+      const eff = JSON.parse(effRaw);
+      return { tool:'sewing', recordCount: recs.length, lsKeys: {
+        sewing_prod_v1: raw,
+        sewing_eff_v1: effRaw,
+      }};
+    },
+    write: (data) => {
+      if (data.lsKeys) {
+        Object.entries(data.lsKeys).forEach(([k,v]) => {
+          if (v != null) localStorage.setItem(k, v);
+        });
+        return JSON.parse(data.lsKeys.sewing_prod_v1 || '[]').length;
+      }
+      return 0;
+    }
+  },
+  cutting: {
+    read: async () => {
+      const recs = await idbGetAll('CuttingProd', 1, 'cutting_records');
+      return { tool:'cutting', recordCount: recs.length, idbStore: { db:'CuttingProd', ver:1, store:'cutting_records', records: recs }};
+    },
+    write: async (data) => {
+      if (data.idbStore) {
+        await idbPutAll(data.idbStore.db, data.idbStore.ver, data.idbStore.store, data.idbStore.records);
+        return data.idbStore.records.length;
+      }
+      return 0;
+    }
+  },
+  orders: {
+    read: async () => {
+      const raw = localStorage.getItem('orderSetsV3') || '{}';
+      return { tool:'orders', recordCount: Object.keys(JSON.parse(raw)).length || 0, lsKeys: { orderSetsV3: raw }};
+    },
+    write: (data) => {
+      if (data.lsKeys) {
+        Object.entries(data.lsKeys).forEach(([k,v]) => { if (v != null) localStorage.setItem(k, v); });
+      }
+      return Object.keys(JSON.parse(data.lsKeys?.orderSetsV3 || '{}')).length;
+    }
+  },
+  shipping: {
+    read: async () => {
+      // Shipping stores to GAS directly from shipping_v2 — portal can only pull (no local store)
+      return null;
+    },
+    write: (data) => {
+      // Shipping has no persistent local store — open shipping_v2 after pulling
+      // We store a flag so shipping_v2 can auto-load on open
+      if (data && data.summary) {
+        localStorage.setItem('vrt_shipping_cloud_cache', JSON.stringify(data));
+        return data.recordCount || 0;
+      }
+      return 0;
+    }
+  },
+  smv: {
+    read: async () => {
+      const raw = localStorage.getItem('sewing_prod_v1') || '[]';
+      return { tool:'smv', recordCount: JSON.parse(raw).length, lsKeys: { sewing_prod_v1: raw }};
+    },
+    write: (data) => {
+      // SMV uses sewing_prod_v1 — no separate key
+      return 0;
+    }
+  },
+};
+
+// ─── INIT ───────────────────────────────────────────────
+function init() {
+  document.getElementById('gasInput').value = gasUrl;
+  if (gasUrl) { verifyGas(); fetchStatus(); }
+}
+
+// ─── GAS URL ────────────────────────────────────────────
+function saveGas() {
+  gasUrl = document.getElementById('gasInput').value.trim();
+  if (!gasUrl) return;
+  localStorage.setItem(LS_GAS, gasUrl);
+  log('GAS URL 已儲存', 'info');
+  verifyGas();
+  fetchStatus();
+}
+
+async function verifyGas() {
+  const dot = document.getElementById('gasDot');
+  const lbl = document.getElementById('gasLbl');
+  dot.className = 'gas-dot';
+  lbl.textContent = '驗證中...';
+  try {
+    const r = await fetch(gasUrl + '?action=status', { redirect:'follow' });
+    const d = await r.json();
+    if (d.ok) {
+      dot.className = 'gas-dot ok';
+      lbl.textContent = '連線正常';
+      log('GAS 連線成功', 'ok');
+    } else throw new Error(JSON.stringify(d));
+  } catch(e) {
+    dot.className = 'gas-dot err';
+    lbl.textContent = '連線失敗';
+    log('GAS 連線失敗：' + e.message, 'err');
+  }
+}
+
+async function fetchStatus() {
+  if (!gasUrl) return;
+  try {
+    const r = await fetch(gasUrl + '?action=status', { redirect:'follow' });
+    const d = await r.json();
+    if (!d.ok) return;
+    const data = d.data || {};
+    ['sewing','cutting','orders','shipping','smv'].forEach(t => {
+      const info = data[t];
+      const stEl = document.getElementById('st-' + t);
+      const bdEl = document.getElementById('bd-' + t);
+      if (!stEl) return;
+      if (info && info.timestamp) {
+        const mins = (Date.now() - new Date(info.timestamp)) / 60000;
+        const age  = mins < 60 ? `${Math.round(mins)}分前` : mins < 1440 ? `${Math.round(mins/60)}小時前` : `${Math.round(mins/1440)}天前`;
+        stEl.textContent = `雲端：${fmtISO(info.timestamp)}（${info.recordCount} 筆，${age}）`;
+        stEl.className   = 'mc-sync ' + (mins < 480 ? 'sync-ok' : 'sync-old');
+        if (bdEl) { bdEl.className = 'mc-badge ' + (mins < 480 ? 'badge-ok' : 'badge-old'); bdEl.textContent = age; }
+      } else {
+        stEl.textContent = '雲端：從未同步';
+        stEl.className   = 'mc-sync sync-none';
+        if (bdEl) { bdEl.className = 'mc-badge badge-none'; bdEl.textContent = '未同步'; }
+      }
+    });
+  } catch(e) { /* silent */ }
+}
+
+// ─── PUSH ───────────────────────────────────────────────
+async function push(tool) {
+  if (!gasUrl) { alert('請先設定 GAS URL'); return; }
+  const cfg = TOOLS[tool];
+  if (!cfg || !cfg.read) { log(`${tool} 無法從 portal 推送`, 'err'); return; }
+
+  setBtns(tool, true);
+  log(`推送 ${tool}...`, 'info');
+  try {
+    const payload = await cfg.read();
+    if (!payload) { log(`${tool} 無本地資料可推送（請在工具內直接同步）`, 'err'); setBtns(tool, false); return; }
+    const r = await fetch(gasUrl, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload), redirect:'follow'
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    log(`✓ ${tool} 推送完成（${payload.recordCount} 筆）`, 'ok');
+    fetchStatus();
+  } catch(e) {
+    log(`✗ ${tool} 推送失敗：` + e.message, 'err');
+  } finally { setBtns(tool, false); }
+}
+
+// ─── PULL ───────────────────────────────────────────────
+async function pull(tool) {
+  if (!gasUrl) { alert('請先設定 GAS URL'); return; }
+  const cfg = TOOLS[tool];
+  if (!cfg) { log(`未知工具：${tool}`, 'err'); return; }
+
+  const pullBtn = document.getElementById('pl-' + tool);
+  if (pullBtn) { pullBtn.disabled = true; pullBtn.innerHTML = '<span class="spin">⏳</span>'; }
+  log(`拉取 ${tool}...`, 'info');
+  try {
+    const r = await fetch(`${gasUrl}?action=pull&tool=${tool}`, { redirect:'follow' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    if (!d.data || !d.data.data) { log(`${tool} 雲端尚無資料`, 'err'); return; }
+    const cnt = await cfg.write(d.data.data);
+    log(`✓ ${tool} 拉取完成（${cnt} 筆）→ 重新整理對應工具即可看到資料`, 'ok');
+  } catch(e) {
+    log(`✗ ${tool} 拉取失敗：` + e.message, 'err');
+  } finally {
+    if (pullBtn) { pullBtn.disabled = false; pullBtn.innerHTML = '⬇ 拉取'; }
+  }
+}
+
+// ─── IDB HELPERS ────────────────────────────────────────
+function idbGetAll(dbName, ver, store) {
+  return new Promise((res) => {
+    const req = indexedDB.open(dbName, ver);
+    req.onerror = () => res([]);
+    req.onupgradeneeded = () => {};
+    req.onsuccess = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(store)) { res([]); return; }
+      const q = db.transaction(store,'readonly').objectStore(store).getAll();
+      q.onsuccess = () => res(q.result || []);
+      q.onerror   = () => res([]);
+    };
+  });
+}
+
+function idbPutAll(dbName, ver, store, records) {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(dbName, ver);
+    req.onerror = rej;
+    req.onsuccess = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(store)) { res(0); return; }
+      const tx = db.transaction(store, 'readwrite');
+      const os = tx.objectStore(store);
+      records.forEach(r => os.put(r));
+      tx.oncomplete = () => res(records.length);
+      tx.onerror    = rej;
+    };
+  });
+}
+
+// ─── UI HELPERS ─────────────────────────────────────────
+function setBtns(tool, disabled) {
+  ['pp-','pl-'].forEach(p => {
+    const el = document.getElementById(p + tool);
+    if (!el) return;
+    el.disabled = disabled;
+    if (disabled) {
+      el.dataset.orig = el.innerHTML;
+      el.innerHTML = '<span class="spin">⏳</span>';
+    } else {
+      el.innerHTML = el.dataset.orig || el.innerHTML;
+    }
+  });
+}
+
+function log(msg, type) {
+  const el  = document.getElementById('logBody');
+  const now = new Date();
+  const t   = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const cls = type === 'ok' ? 'l-ok' : type === 'err' ? 'l-err' : 'l-info';
+  el.innerHTML += `\n<span class="${cls}">[${t}] ${msg}</span>`;
+  el.scrollTop  = el.scrollHeight;
+}
+
+function fmtISO(iso) {
+  try {
+    const d = new Date(iso);
+    return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch(e) { return '--'; }
+}
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+init();
+</script>
+</body>
+</html>

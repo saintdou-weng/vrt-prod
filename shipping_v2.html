@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT 出貨分析儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* ── RESET & BASE ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f1f5f9;--white:#ffffff;--sur:#f8fafc;
+  --bor:#e2e8f0;--bor2:#cbd5e1;
+  --tx:#1e293b;--tx2:#475569;--tx3:#94a3b8;
+  --acc:#3b82f6;--acc-d:#2563eb;--acc-l:#eff6ff;
+  --grn:#16a34a;--grn-l:#f0fdf4;--grn-b:#bbf7d0;
+  --red:#dc2626;--red-l:#fef2f2;--red-b:#fecaca;
+  --ylw:#d97706;--ylw-l:#fffbeb;--ylw-b:#fde68a;
+  --pur:#7c3aed;--pur-l:#f5f3ff;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -1px rgba(0,0,0,.06);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,.08),0 4px 6px -2px rgba(0,0,0,.05);
+  --r:8px;--r-sm:5px;--mono:'Courier New',monospace;--ui:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13.5px;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* ── HEADER ── */
+.hdr{background:var(--white);border-bottom:1px solid var(--bor);padding:0 24px;display:flex;align-items:center;height:56px;gap:16px;box-shadow:var(--shadow)}
+.logo-mark{width:34px;height:34px;background:var(--acc);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-mark svg{width:18px;height:18px;fill:white}
+.logo-text{font-size:15px;font-weight:700;color:var(--tx)}.logo-text span{color:var(--acc)}
+.logo-sub{font-size:11px;color:var(--tx3);margin-top:1px}
+.hdr-right{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.file-info{font-size:11px;color:var(--tx3);background:var(--sur);border:1px solid var(--bor);border-radius:20px;padding:4px 10px}
+.hdr-badge{display:flex;align-items:center;gap:6px;font-size:11px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--tx3)}
+.dot.ok{background:var(--grn)}
+
+/* ── UPLOAD AREA ── */
+.upload-wrap{max-width:660px;margin:40px auto;padding:0 16px}
+.upload-card{background:var(--white);border-radius:16px;box-shadow:var(--shadow-md);overflow:hidden}
+.upload-head{background:linear-gradient(135deg,var(--acc),#6366f1);padding:28px 28px 22px;color:white}
+.upload-head h2{font-size:20px;font-weight:700;margin-bottom:4px}
+.upload-head p{font-size:12px;opacity:.85}
+.upload-body{padding:24px}
+.dz{border:2px dashed var(--bor2);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;background:var(--sur);transition:.2s;position:relative}
+.dz:hover,.dz.ov{border-color:var(--acc);background:var(--acc-l)}
+.dz-icon{font-size:36px;margin-bottom:10px}
+.dz-title{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:4px}
+.dz-sub{font-size:12px;color:var(--tx3)}
+.dz-btn{display:inline-block;margin-top:12px;padding:7px 18px;background:var(--acc);color:white;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+
+/* ── MAIN LAYOUT ── */
+.main{padding:20px 24px;max-width:1600px;margin:0 auto}
+
+/* ── FILTER BAR ── */
+.filter-bar{background:var(--white);border:1px solid var(--bor);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.filter-label{font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.filter-sel{height:32px;padding:0 10px;border:1px solid var(--bor2);border-radius:var(--r-sm);background:var(--white);color:var(--tx);font-size:12px;font-family:var(--ui);cursor:pointer;outline:none;min-width:130px;transition:.15s}
+.filter-sel:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.filter-input{height:32px;padding:0 10px;border:1px solid var(--bor2);border-radius:var(--r-sm);background:var(--white);color:var(--tx);font-size:12px;font-family:var(--ui);outline:none;min-width:160px;transition:.15s}
+.filter-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.filter-sep{width:1px;height:22px;background:var(--bor);flex-shrink:0}
+.btn{height:32px;padding:0 14px;border:none;border-radius:var(--r-sm);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--ui);transition:.15s;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{opacity:.85}
+.btn-primary{background:var(--acc);color:white}
+.btn-ghost{background:var(--sur);border:1px solid var(--bor2);color:var(--tx2)}
+.btn-ghost:hover{background:var(--bg)}
+.btn-sm{height:26px;padding:0 10px;font-size:11px}
+
+/* ── KPI CARDS ── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--white);border:1px solid var(--bor);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--r) var(--r) 0 0}
+.kpi.blue::before{background:var(--acc)}
+.kpi.green::before{background:var(--grn)}
+.kpi.red::before{background:var(--red)}
+.kpi.yellow::before{background:var(--ylw)}
+.kpi.purple::before{background:var(--pur)}
+.kpi-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);margin-bottom:6px}
+.kpi-value{font-size:22px;font-weight:800;font-family:var(--mono);color:var(--tx);margin-bottom:2px;line-height:1}
+.kpi-sub{font-size:10px;color:var(--tx3)}
+.kpi.blue .kpi-value{color:var(--acc)}
+.kpi.green .kpi-value{color:var(--grn)}
+.kpi.red .kpi-value{color:var(--red)}
+.kpi.yellow .kpi-value{color:var(--ylw)}
+.kpi.purple .kpi-value{color:var(--pur)}
+
+/* ── TABS ── */
+.tab-bar{display:flex;gap:0;border-bottom:2px solid var(--bor);margin-bottom:16px}
+.tab-btn{padding:10px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--tx3);font-family:var(--ui);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.tab-btn:hover{color:var(--tx);background:var(--sur);border-radius:6px 6px 0 0}
+.tab-btn.on{color:var(--acc);border-bottom-color:var(--acc)}
+.tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 5px;border-radius:9px;font-size:10px;font-weight:700;background:var(--bor);color:var(--tx2)}
+.tab-btn.on .tab-count{background:var(--acc-l);color:var(--acc)}
+.tab-btn.tab-ship.on{color:var(--grn);border-bottom-color:var(--grn)}
+.tab-btn.tab-ship.on .tab-count{background:var(--grn-l);color:var(--grn)}
+.tab-btn.tab-out.on{color:var(--ylw);border-bottom-color:var(--ylw)}
+.tab-btn.tab-out.on .tab-count{background:var(--ylw-l);color:var(--ylw)}
+.tab-btn.tab-abn.on{color:var(--red);border-bottom-color:var(--red)}
+.tab-btn.tab-abn.on .tab-count{background:var(--red-l);color:var(--red)}
+
+/* ── TABLE ── */
+.tbl-card{background:var(--white);border:1px solid var(--bor);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.tbl-head{padding:12px 16px;border-bottom:1px solid var(--bor);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.tbl-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2)}
+.tbl-meta{font-size:11px;color:var(--tx3)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--sur);padding:8px 10px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--tx3);border-bottom:1px solid var(--bor);white-space:nowrap;position:sticky;top:0;z-index:1}
+thead th.num{text-align:right}
+tbody td{padding:8px 10px;border-bottom:1px solid var(--bor);font-size:12.5px;white-space:nowrap;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#f8fafc}
+.td-num{text-align:right;font-family:var(--mono);font-size:12px}
+.td-ctr{text-align:center}
+.empty-row td{text-align:center;padding:40px;color:var(--tx3);font-size:13px}
+
+/* ── DRILL-DOWN LINKS ── */
+.drill-link{color:var(--acc);cursor:pointer;font-weight:600;border-bottom:1px dashed var(--acc);display:inline-block;transition:.1s}
+.drill-link:hover{color:var(--acc-d);background:var(--acc-l);padding:1px 4px;border-radius:3px;margin:-1px -4px}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.badge-green{background:var(--grn-l);color:var(--grn);border:1px solid var(--grn-b)}
+.badge-red{background:var(--red-l);color:var(--red);border:1px solid var(--red-b)}
+.badge-yellow{background:var(--ylw-l);color:var(--ylw);border:1px solid var(--ylw-b)}
+.badge-blue{background:var(--acc-l);color:var(--acc);border:1px solid #bfdbfe}
+.badge-gray{background:var(--sur);color:var(--tx3);border:1px solid var(--bor)}
+
+/* ── PROGRESS BAR ── */
+.prog-wrap{display:inline-flex;align-items:center;gap:6px;width:100%}
+.prog-bar{flex:1;min-width:50px;height:6px;border-radius:3px;background:var(--bor);overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;transition:width .3s}
+.prog-pct{font-size:10.5px;font-family:var(--mono);color:var(--tx2);min-width:30px;text-align:right}
+
+/* ── PAGINATION ── */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--bor);background:var(--sur);flex-wrap:wrap;gap:8px}
+.page-info{font-size:11px;color:var(--tx3)}
+.page-btns{display:flex;gap:4px}
+.page-btn{width:30px;height:28px;border:1px solid var(--bor2);border-radius:5px;background:var(--white);color:var(--tx2);cursor:pointer;font-size:12px;font-family:var(--ui);display:flex;align-items:center;justify-content:center;transition:.15s}
+.page-btn:hover{background:var(--acc);color:white;border-color:var(--acc)}
+.page-btn.on{background:var(--acc);color:white;border-color:var(--acc);font-weight:700}
+.page-btn:disabled{opacity:.4;cursor:default}
+
+/* ── MODAL ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop.show{display:flex}
+.modal{background:var(--white);border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:860px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-hdr{padding:18px 22px;border-bottom:1px solid var(--bor);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0}
+.modal-title{font-size:15px;font-weight:700;color:var(--tx)}
+.modal-sub{font-size:11px;color:var(--tx3);margin-top:2px}
+.modal-close{width:30px;height:30px;border:1px solid var(--bor2);border-radius:6px;background:none;cursor:pointer;font-size:16px;color:var(--tx3);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s}
+.modal-close:hover{background:var(--red-l);color:var(--red);border-color:var(--red-b)}
+.modal-body{overflow-y:auto;padding:16px 22px;flex:1}
+.modal-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.modal-kc{background:var(--sur);border:1px solid var(--bor);border-radius:6px;padding:10px 12px}
+.modal-kl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);margin-bottom:4px}
+.modal-kv{font-size:17px;font-weight:700;font-family:var(--mono)}
+.modal-kv.blue{color:var(--acc)}.modal-kv.green{color:var(--grn)}.modal-kv.red{color:var(--red)}.modal-kv.yellow{color:var(--ylw)}
+.modal-sec{margin-bottom:14px}
+.modal-sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx3);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--bor)}
+.dist-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dist-item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--sur);border-radius:5px;font-size:11.5px;gap:8px}
+.dist-key{color:var(--tx2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dist-val{font-family:var(--mono);font-weight:700;color:var(--tx);flex-shrink:0}
+
+/* ── TOOLTIP ── */
+[data-tip]{position:relative;cursor:default}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--tx);color:white;padding:4px 8px;border-radius:5px;font-size:10.5px;white-space:nowrap;z-index:100;pointer-events:none}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){.main{padding:12px}.kpi-row{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+  </div>
+  <div>
+    <div class="logo-text">VRT <span>出貨</span> 分析儀表板</div>
+    <div class="logo-sub">Customer Open Order — Shipping Analysis</div>
+  </div>
+  <div class="hdr-right">
+    <span class="file-info" id="fileInfo">尚未載入檔案</span>
+    <div class="hdr-badge">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText" style="font-size:11px;color:var(--tx3)">等待匯入</span>
+    </div>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📂 開啟檔案</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xls" style="display:none" onchange="handleFile(event)">
+    <button class="btn btn-ghost" id="btnCloudSync" onclick="syncToGas()" style="display:none;background:#1e2640;color:#fff;border-color:#1e2640">☁️ 同步至雲端</button>
+  </div>
+</div>
+
+<!-- UPLOAD SCREEN -->
+<div id="uploadScreen" class="upload-wrap">
+  <div class="upload-card">
+    <div class="upload-head">
+      <h2>📦 VRT 出貨排程分析</h2>
+      <p>匯入 VRT-Shipping Schedule Excel 檔 (.xlsb / .xlsx)，自動解析「Customer Open Order」工作表</p>
+    </div>
+    <div class="upload-body">
+      <div class="dz" id="dropZone"
+           ondrop="dzDrop(event)" ondragover="dzOver(event)" ondragleave="dzLeave(event)"
+           onclick="document.getElementById('fileInput').click()">
+        <div class="dz-icon">📊</div>
+        <div class="dz-title">拖曳 Excel 至此</div>
+        <div class="dz-sub">支援 .xlsb · .xlsx · .xls 格式</div>
+        <div class="dz-btn">選擇檔案</div>
+      </div>
+      <div id="loadStatus" style="margin-top:14px;font-size:12px;color:var(--tx2);text-align:center;min-height:20px"></div>
+
+      <!-- Folder Scan -->
+      <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:8px;letter-spacing:.05em">📂 掃描 Outlook 下載資料夾</div>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;line-height:1.7">授權後自動找最新的 .xlsb/.xlsx 出貨排程並載入。支援多個資料夾。<br><span style="color:#d97706">需要 Chrome 或 Edge，重新整理後需再點「允許」。</span></div>
+        <div id="folderList" style="margin-bottom:8px"><div style="font-size:11px;color:var(--tx3);padding:6px 10px;background:var(--bg2);border-radius:6px">尚未設定資料夾</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-ghost" onclick="addScanFolder()" style="font-size:12px;padding:5px 12px">➕ 新增資料夾</button>
+          <button class="btn btn-primary" id="btnScanFolders" onclick="scanAndLoad()" style="display:none;font-size:12px;padding:5px 12px">🔍 掃描並載入最新檔案</button>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--tx3);cursor:pointer">
+            <input type="checkbox" id="chkAutoScan" onchange="saveAutoScanPref()"> 開啟時自動掃描
+          </label>
+        </div>
+        <div id="scanMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none">
+  <div class="main">
+    <!-- FILTER BAR -->
+    <div class="filter-bar">
+      <span class="filter-label">客戶</span>
+      <select class="filter-sel" id="fCust" onchange="applyFilters()"><option value="">全部</option></select>
+      <span class="filter-label">年份</span>
+      <select class="filter-sel" id="fYear" onchange="applyFilters()" style="min-width:90px"><option value="">全部</option></select>
+      <span class="filter-label">月份</span>
+      <select class="filter-sel" id="fMonth" onchange="applyFilters()" style="min-width:80px"><option value="">全部</option></select>
+      <div class="filter-sep"></div>
+      <span class="filter-label">款式</span>
+      <select class="filter-sel" id="fStyle" onchange="applyFilters()"><option value="">全部</option></select>
+      <span class="filter-label">布種</span>
+      <select class="filter-sel" id="fFabric" onchange="applyFilters()"><option value="">全部</option></select>
+      <div class="filter-sep"></div>
+      <input class="filter-input" id="fSearch" placeholder="搜尋 PO / 顏色 / 尺寸 / 備註…" oninput="applyFilters()">
+      <button class="btn btn-ghost" onclick="resetFilters()">✕ 重置</button>
+      <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <!-- TABS -->
+    <div class="tab-bar">
+      <button class="tab-btn tab-ship on" onclick="switchTab('shipped',this)">
+        ✅ 已出明細 <span class="tab-count" id="cnt-shipped">0</span>
+      </button>
+      <button class="tab-btn tab-out" onclick="switchTab('outstanding',this)">
+        📋 未出明細 <span class="tab-count" id="cnt-outstanding">0</span>
+      </button>
+      <button class="tab-btn tab-abn" onclick="switchTab('abnormal',this)">
+        🚨 異常分析 <span class="tab-count" id="cnt-abnormal">0</span>
+      </button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="tbl-card">
+      <div class="tbl-head">
+        <span class="tbl-title" id="tblTitle">已出明細</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="tbl-meta" id="tblMeta"></span>
+          <select class="filter-sel btn-sm" id="pageSize" onchange="setPageSize()" style="min-width:80px">
+            <option value="50">50 筆</option>
+            <option value="100">100 筆</option>
+            <option value="200">200 筆</option>
+            <option value="500">500 筆</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead id="tblHead"></thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-sub" id="modalSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let ALL=[], FILTERED=[], TAB='shipped', PAGE=1, PER=50;
+const MONTHS=['','1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+// ══════════════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════════════
+function dzOver(e){e.preventDefault();document.getElementById('dropZone').classList.add('ov');}
+function dzLeave(){document.getElementById('dropZone').classList.remove('ov');}
+function dzDrop(e){e.preventDefault();dzLeave();const f=e.dataTransfer.files[0];if(f)loadFile(f);}
+function handleFile(e){const f=e.target.files[0];if(f)loadFile(f);e.target.value='';}
+
+// ══════════════════════════════════════════════
+// FILE LOADING & PARSING
+// ══════════════════════════════════════════════
+async function loadFile(file){
+  setStatus('載入中…','');
+  document.getElementById('loadStatus').textContent='⏳ 解析中，請稍候…';
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:false,raw:true});
+    const shName=wb.SheetNames.find(n=>/customer\s*open\s*order/i.test(n));
+    if(!shName)throw new Error('找不到「Customer Open Order」工作表');
+
+    const ws=wb.Sheets[shName];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+
+    // Find header row
+    let hdr=-1;
+    for(let i=0;i<Math.min(12,raw.length);i++){
+      const r=raw[i]||[];
+      if(r.some(c=>String(c||'').toUpperCase().trim()==='ITEM #')&&
+         r.some(c=>String(c||'').toUpperCase().includes('CUSTOMER'))){hdr=i;break;}
+    }
+    if(hdr===-1)throw new Error('找不到標題行（需含 ITEM # 和 CUSTOMER）');
+
+    // Map columns
+    const H=raw[hdr].map(c=>c?String(c).trim():'');
+    const ci={};
+    H.forEach((h,i)=>{
+      const u=h.toUpperCase();
+      if(u==='ITEM #')ci.item=i;
+      else if(u==='CUSTOMER')ci.cust=i;
+      else if(u==='VRT SHIP DATE (ETD)')ci.etd=i;
+      else if(u==='P.O. #')ci.po=i;
+      else if(u==='STYLE/ARTICLE#')ci.style=i;
+      else if(u==='MODEL DESCRIPTION')ci.desc=i;
+      else if(u==='FABRIC ITEM')ci.fabItem=i;
+      else if(u==='FABRIC TYPE')ci.fabType=i;
+      else if(u==='COLOR')ci.color=i;
+      else if(u==='SIZE')ci.size=i;
+      else if(u==='ORIGINAL PO QTY')ci.orig=i;
+      else if(u==='TOTAL QTTY SHIPPED')ci.shipped=i;
+      else if(u==='OPEN QTY')ci.open=i;
+      else if(u==='REMARK')ci.remark=i;
+      else if(u==='ERP SELFKEY#')ci.erp=i;
+    });
+    if(ci.cust===undefined||ci.shipped===undefined)throw new Error('缺少必要欄位（CUSTOMER 或 TOTAL QTTY SHIPPED）');
+
+    // Parse rows
+    ALL=[];
+    for(let i=hdr+1;i<raw.length;i++){
+      const r=raw[i];if(!r)continue;
+      const cust=nvs(r[ci.cust]);if(!cust||cust.toUpperCase()==='CUSTOMER')continue;
+      const po=nvs(r[ci.po]);if(!po)continue;
+      const orig=pn(r[ci.orig]);
+      const shipped=pn(r[ci.shipped]);
+      const open=pn(r[ci.open]);
+      const remark=nvs(r[ci.remark]);
+      const etdRaw=ci.etd!==undefined?r[ci.etd]:null;
+      const etd=xlDate(etdRaw);
+      const fabType=ci.fabType!==undefined?nvs(r[ci.fabType]):'';
+      const fabGroup=parseFabGroup(fabType);
+
+      ALL.push({
+        item:r[ci.item]?+r[ci.item]:0,
+        cust,po,
+        style:ci.style!==undefined?nvs(r[ci.style]):'',
+        desc:ci.desc!==undefined?nvs(r[ci.desc]):'',
+        fabItem:ci.fabItem!==undefined?nvs(r[ci.fabItem]):'',
+        fabType,fabGroup,
+        color:nvs(r[ci.color]).trim(),
+        size:nvs(r[ci.size]).trim(),
+        orig,shipped,open,remark,etd,
+        etdYear:etd?etd.slice(0,4):'',
+        etdMonth:etd?parseInt(etd.slice(5,7)):0,
+        status:classify(orig,shipped,open,remark),
+      });
+    }
+
+    document.getElementById('fileInfo').textContent=`${file.name}  ·  ${ALL.length.toLocaleString()} 筆記錄`;
+    setStatus('就緒',true);
+    buildFilters();
+    applyFilters();
+    document.getElementById('uploadScreen').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    document.getElementById('btnCloudSync').style.display='';
+    document.getElementById('loadStatus').textContent='';
+  }catch(e){
+    setStatus('錯誤','');
+    document.getElementById('loadStatus').textContent='❌ '+e.message;
+    console.error(e);
+  }
+}
+
+// ══════════════════════════════════════════════
+// CLASSIFICATION  (3% tolerance)
+// ══════════════════════════════════════════════
+function classify(orig,shipped,open,remark){
+  const rm=(remark||'').toLowerCase();
+  // Abnormal: cancelled, short-shipped (with remark), or significantly over-shipped
+  if(rm.includes('cancel'))return'abnormal';
+  if(rm.includes('short'))return'abnormal';
+  if(orig>0&&shipped>orig*1.05)return'abnormal'; // >5% over
+  // Shipped: zero open, within 3% tolerance, or remark says shipped
+  const tolerance=orig*0.03;
+  if(open<=0)return'shipped';
+  if(orig>0&&open<=tolerance)return'shipped';
+  if(rm.includes('ship')&&!rm.includes('cancel'))return'shipped';
+  // Outstanding
+  return'outstanding';
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function pn(v){if(v===null||v===undefined||v==='')return 0;const n=parseFloat(String(v).replace(/,/g,''));return isNaN(n)?0:n;}
+function nvs(v){return(v===null||v===undefined)?'':String(v).trim();}
+function nc(s){return s.toLowerCase().replace(/\s+/g,' ').trim();}
+
+function xlDate(v){
+  if(!v&&v!==0)return'';
+  if(typeof v==='number'){
+    try{const d=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);}
+    catch(e){}return'';
+  }
+  if(v instanceof Date)return v.toISOString().slice(0,10);
+  return String(v).slice(0,10);
+}
+
+function parseFabGroup(ft){
+  if(!ft)return'未知';
+  const m=ft.match(/^([\d.]+\s*OZ)/i);
+  if(m)return m[1].replace(/\s/g,'');
+  const parts=ft.split(/[-\s]/);
+  return parts[0]||'其他';
+}
+
+function fmt(n){return Math.round(n).toLocaleString();}
+function pct(a,b){return b>0?Math.round(a/b*100):0;}
+
+function setStatus(txt,ok){
+  const d=document.getElementById('statusDot');
+  const t=document.getElementById('statusText');
+  t.textContent=txt;t.style.color=ok===true?'var(--grn)':ok===''?'var(--red)':'var(--tx3)';
+  d.className='dot'+(ok===true?' ok':'');
+}
+
+// ══════════════════════════════════════════════
+// FILTERS
+// ══════════════════════════════════════════════
+function buildFilters(){
+  const custs=[...new Set(ALL.map(r=>r.cust))].sort();
+  const years=[...new Set(ALL.map(r=>r.etdYear).filter(Boolean))].sort().reverse();
+  const months=[...new Set(ALL.map(r=>r.etdMonth).filter(Boolean))].sort((a,b)=>a-b);
+  const styles=[...new Set(ALL.map(r=>r.style).filter(Boolean))].sort();
+  const fabGroups=[...new Set(ALL.map(r=>r.fabGroup).filter(Boolean))].sort();
+
+  fill('fCust',custs);fill('fYear',years);
+  const mEl=document.getElementById('fMonth');
+  mEl.innerHTML='<option value="">全部月份</option>'+months.map(m=>`<option value="${m}">${MONTHS[m]}</option>`).join('');
+  fill('fStyle',styles);fill('fFabric',fabGroups);
+}
+
+function fill(id,opts){
+  const el=document.getElementById(id);
+  const first=el.querySelector('option[value=""]')?.textContent||'全部';
+  const cur=el.value;
+  el.innerHTML=`<option value="">${first}</option>`+opts.map(o=>`<option value="${o}"${o==cur?'selected':''}>${o}</option>`).join('');
+}
+
+function resetFilters(){
+  ['fCust','fYear','fMonth','fStyle','fFabric'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fSearch').value='';
+  applyFilters();
+}
+
+function applyFilters(){
+  const cust=document.getElementById('fCust').value;
+  const year=document.getElementById('fYear').value;
+  const month=parseInt(document.getElementById('fMonth').value)||0;
+  const style=document.getElementById('fStyle').value;
+  const fab=document.getElementById('fFabric').value;
+  const q=(document.getElementById('fSearch').value||'').toLowerCase();
+
+  FILTERED=ALL.filter(r=>{
+    if(cust&&r.cust!==cust)return false;
+    if(year&&r.etdYear!==year)return false;
+    if(month&&r.etdMonth!==month)return false;
+    if(style&&r.style!==style)return false;
+    if(fab&&r.fabGroup!==fab)return false;
+    if(q&&![r.cust,r.po,r.style,r.color,r.size,r.remark,r.desc,r.fabType].some(v=>v&&String(v).toLowerCase().includes(q)))return false;
+    return true;
+  });
+
+  PAGE=1;
+  renderKPI();
+  renderTab();
+}
+
+function switchTab(tab,btn){
+  TAB=tab;PAGE=1;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderTab();
+}
+
+function setPageSize(){PER=parseInt(document.getElementById('pageSize').value)||50;PAGE=1;renderTab();}
+
+// ══════════════════════════════════════════════
+// KPI
+// ══════════════════════════════════════════════
+function renderKPI(){
+  const shipped=FILTERED.filter(r=>r.status==='shipped');
+  const outstanding=FILTERED.filter(r=>r.status==='outstanding');
+  const abnormal=FILTERED.filter(r=>r.status==='abnormal');
+
+  const totOrig=FILTERED.reduce((s,r)=>s+r.orig,0);
+  const totShip=shipped.reduce((s,r)=>s+r.shipped,0);
+  const totOpen=outstanding.reduce((s,r)=>s+r.open,0);
+  const p=pct(totShip,totOrig);
+
+  document.getElementById('kpiRow').innerHTML=`
+    <div class="kpi blue">
+      <div class="kpi-label">記錄總筆數</div>
+      <div class="kpi-value">${FILTERED.length.toLocaleString()}</div>
+      <div class="kpi-sub">總訂單量 ${fmt(totOrig)}</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">✅ 已出 (含容差)</div>
+      <div class="kpi-value">${fmt(totShip)}</div>
+      <div class="kpi-sub">${shipped.length} 筆 · 出貨率 ${p}%</div>
+    </div>
+    <div class="kpi yellow">
+      <div class="kpi-label">📋 未出 (Outstanding)</div>
+      <div class="kpi-value">${fmt(totOpen)}</div>
+      <div class="kpi-sub">${outstanding.length} 筆待出貨</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">🚨 異常 (Cancel/Short)</div>
+      <div class="kpi-value">${abnormal.length}</div>
+      <div class="kpi-sub">筆異常記錄</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">出貨進度</div>
+      <div class="kpi-value">${p}%</div>
+      <div class="kpi-sub">${fmt(totOrig-totOpen)} 已處理</div>
+    </div>
+  `;
+
+  // Update tab counts
+  document.getElementById('cnt-shipped').textContent=shipped.length;
+  document.getElementById('cnt-outstanding').textContent=outstanding.length;
+  document.getElementById('cnt-abnormal').textContent=abnormal.length;
+}
+
+// ══════════════════════════════════════════════
+// TABLE RENDER
+// ══════════════════════════════════════════════
+function renderTab(){
+  const rows=FILTERED.filter(r=>r.status===TAB);
+  const total=rows.length;
+  const totalPages=Math.max(1,Math.ceil(total/PER));
+  if(PAGE>totalPages)PAGE=totalPages;
+  const start=(PAGE-1)*PER;
+  const slice=rows.slice(start,start+PER);
+
+  const titles={shipped:'✅ 已出明細',outstanding:'📋 未出明細 (Outstanding)',abnormal:'🚨 異常分析'};
+  document.getElementById('tblTitle').textContent=titles[TAB];
+  document.getElementById('tblMeta').textContent=`共 ${total.toLocaleString()} 筆`;
+
+  // HEAD
+  const headMap={
+    shipped:`<th>客戶</th><th>PO #</th><th>款式</th><th>描述</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th>出貨率</th><th>ETD</th><th>布種</th><th>狀態/備註</th>`,
+    outstanding:`<th>客戶</th><th>PO #</th><th>款式</th><th>描述</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th class="num">未出</th><th>ETD</th><th>布種</th><th>備註</th>`,
+    abnormal:`<th>異常類型</th><th>客戶</th><th>PO #</th><th>款式</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th class="num">差異</th><th>ETD</th><th>備註</th>`,
+  };
+  document.getElementById('tblHead').innerHTML=`<tr>${headMap[TAB]}</tr>`;
+
+  // BODY
+  if(!slice.length){
+    document.getElementById('tblBody').innerHTML=`<tr class="empty-row"><td colspan="12">${FILTERED.length?'此分類無資料':'請先選擇篩選條件或匯入資料'}</td></tr>`;
+  } else {
+    document.getElementById('tblBody').innerHTML=slice.map(r=>renderRow(r)).join('');
+  }
+
+  renderPagination(total,totalPages);
+}
+
+function renderRow(r){
+  const p=r.orig>0?pct(r.shipped,r.orig):0;
+  const barColor=p>=100?'var(--acc)':p>=80?'var(--grn)':p>=50?'var(--ylw)':'var(--red)';
+  const custLink=`<span class="drill-link" onclick='drillDown("cust","${esc(r.cust)}")'>${esc(r.cust)}</span>`;
+  const styleLink=r.style?`<span class="drill-link" onclick='drillDown("style","${esc(r.style)}")'>${esc(r.style)}</span>`:'—';
+  const etdStr=r.etd?r.etd.slice(5).replace('-','/'):'—';
+  const fabStr=r.fabGroup?`<span class="badge badge-gray" style="font-size:9px">${esc(r.fabGroup)}</span>`:'—';
+
+  if(TAB==='shipped'){
+    const statusBadge=p>=100?'<span class="badge badge-green">✅ 完出</span>':
+      '<span class="badge badge-blue">≈ 容差結案</span>';
+    const progBar=`<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(p,100)}%;background:${barColor}"></div></div><span class="prog-pct">${p}%</span></div>`;
+    return`<tr>
+      <td>${custLink}</td>
+      <td class="td-num" style="font-size:11px">${esc(r.po)}</td>
+      <td>${styleLink}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--tx2)">${esc(r.desc)||'—'}</td>
+      <td>${esc(r.color)||'—'}</td>
+      <td>${esc(r.size)||'—'}</td>
+      <td class="td-num">${fmt(r.orig)}</td>
+      <td class="td-num" style="color:var(--grn);font-weight:700">${fmt(r.shipped)}</td>
+      <td style="min-width:140px">${progBar}</td>
+      <td style="font-size:11px;color:var(--tx3)">${etdStr}</td>
+      <td>${fabStr}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }
+
+  if(TAB==='outstanding'){
+    const diff=r.orig-r.shipped;
+    return`<tr style="background:#fffbf0">
+      <td>${custLink}</td>
+      <td class="td-num" style="font-size:11px">${esc(r.po)}</td>
+      <td>${styleLink}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:var(--tx2)">${esc(r.desc)||'—'}</td>
+      <td>${esc(r.color)||'—'}</td>
+      <td>${esc(r.size)||'—'}</td>
+      <td class="td-num">${fmt(r.orig)}</td>
+      <td class="td-num">${fmt(r.shipped)}</td>
+      <td class="td-num" style="color:var(--red);font-weight:700">${fmt(r.open)}</td>
+      <td style="font-size:11px;color:var(--tx3)">${etdStr}</td>
+      <td>${fabStr}</td>
+      <td style="font-size:11px;color:var(--tx2)">${esc(r.remark)||'—'}</td>
+    </tr>`;
+  }
+
+  // Abnormal
+  const rm=(r.remark||'').toLowerCase();
+  const anomType=rm.includes('cancel')?'<span class="badge badge-gray">🚫 Cancelled</span>':
+    rm.includes('short')?'<span class="badge badge-yellow">⚠️ Short</span>':
+    r.shipped>r.orig?'<span class="badge badge-red">🔴 多出</span>':
+    '<span class="badge badge-red">異常</span>';
+  const diff=r.shipped-r.orig;
+  return`<tr style="background:#fff5f5">
+    <td>${anomType}</td>
+    <td>${custLink}</td>
+    <td class="td-num" style="font-size:11px">${esc(r.po)}</td>
+    <td>${styleLink}</td>
+    <td>${esc(r.color)||'—'}</td>
+    <td>${esc(r.size)||'—'}</td>
+    <td class="td-num">${fmt(r.orig)}</td>
+    <td class="td-num">${fmt(r.shipped)}</td>
+    <td class="td-num" style="color:${diff>0?'var(--red)':'var(--ylw)'};font-weight:700">${diff>0?'+':''}${fmt(diff)}</td>
+    <td style="font-size:11px;color:var(--tx3)">${etdStr}</td>
+    <td style="font-size:11px;color:var(--tx2)">${esc(r.remark)||'—'}</td>
+  </tr>`;
+}
+
+// ══════════════════════════════════════════════
+// PAGINATION
+// ══════════════════════════════════════════════
+function renderPagination(total,totalPages){
+  const start=(PAGE-1)*PER+1;
+  const end=Math.min(PAGE*PER,total);
+  const pEl=document.getElementById('pagination');
+  if(!total){pEl.innerHTML='';return;}
+
+  let btns=`<button class="page-btn" onclick="goPage(${PAGE-1})" ${PAGE===1?'disabled':''}>‹</button>`;
+  // Show max 7 page buttons
+  const range=pageRange(PAGE,totalPages,7);
+  range.forEach(p=>{
+    if(p==='…') btns+=`<span style="padding:0 4px;color:var(--tx3);font-size:12px">…</span>`;
+    else btns+=`<button class="page-btn${p===PAGE?' on':''}" onclick="goPage(${p})">${p}</button>`;
+  });
+  btns+=`<button class="page-btn" onclick="goPage(${PAGE+1})" ${PAGE===totalPages?'disabled':''}>›</button>`;
+
+  pEl.innerHTML=`<span class="page-info">顯示 ${start.toLocaleString()}–${end.toLocaleString()}，共 ${total.toLocaleString()} 筆</span><div class="page-btns">${btns}</div>`;
+}
+
+function pageRange(cur,total,max){
+  if(total<=max)return Array.from({length:total},(_,i)=>i+1);
+  const half=Math.floor(max/2);
+  let start=Math.max(1,cur-half);
+  let end=Math.min(total,start+max-1);
+  if(end-start<max-1)start=Math.max(1,end-max+1);
+  const arr=[];
+  if(start>1){arr.push(1);if(start>2)arr.push('…');}
+  for(let i=start;i<=end;i++)arr.push(i);
+  if(end<total){if(end<total-1)arr.push('…');arr.push(total);}
+  return arr;
+}
+
+function goPage(p){
+  const rows=FILTERED.filter(r=>r.status===TAB);
+  const totalPages=Math.max(1,Math.ceil(rows.length/PER));
+  if(p<1||p>totalPages)return;
+  PAGE=p;renderTab();
+  document.querySelector('.tbl-card')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ══════════════════════════════════════════════
+// DRILL-DOWN MODAL
+// ══════════════════════════════════════════════
+function drillDown(type,val){
+  const rows=FILTERED.filter(r=>type==='cust'?r.cust===val:r.style===val);
+  if(!rows.length)return;
+
+  const shipped=rows.filter(r=>r.status==='shipped');
+  const outstanding=rows.filter(r=>r.status==='outstanding');
+  const abnormal=rows.filter(r=>r.status==='abnormal');
+  const totOrig=rows.reduce((s,r)=>s+r.orig,0);
+  const totShip=rows.reduce((s,r)=>s+r.shipped,0);
+  const totOpen=outstanding.reduce((s,r)=>s+r.open,0);
+  const p=pct(totShip,totOrig);
+
+  document.getElementById('modalTitle').textContent=val;
+  document.getElementById('modalSub').textContent=type==='cust'?`客戶明細 — ${rows.length} 筆記錄`:`款式明細 — ${rows.length} 筆記錄`;
+
+  // Color distribution
+  const colorMap={};
+  rows.forEach(r=>{const k=r.color||'(未知)';if(!colorMap[k])colorMap[k]={orig:0,ship:0};colorMap[k].orig+=r.orig;colorMap[k].ship+=r.shipped;});
+  const colorDist=Object.entries(colorMap).sort((a,b)=>b[1].orig-a[1].orig);
+
+  // Size distribution
+  const sizeMap={};
+  rows.forEach(r=>{const k=r.size||'(未知)';if(!sizeMap[k])sizeMap[k]={orig:0,ship:0};sizeMap[k].orig+=r.orig;sizeMap[k].ship+=r.shipped;});
+  const sizeDist=Object.entries(sizeMap).sort((a,b)=>b[1].orig-a[1].orig);
+
+  // PO breakdown (for customer drill-down)
+  const poMap={};
+  rows.forEach(r=>{
+    if(!poMap[r.po])poMap[r.po]={orig:0,ship:0,open:0,status:new Set(),styles:new Set()};
+    poMap[r.po].orig+=r.orig;poMap[r.po].ship+=r.shipped;
+    poMap[r.po].open+=r.open;poMap[r.po].status.add(r.status);
+    if(r.style)poMap[r.po].styles.add(r.style);
+  });
+  const poList=Object.entries(poMap).sort((a,b)=>b[1].orig-a[1].orig);
+
+  const distHtml=(arr,showPct=true)=>arr.slice(0,12).map(([k,v])=>{
+    const p2=pct(v.ship,v.orig);
+    return`<div class="dist-item">
+      <span class="dist-key">${esc(k)}</span>
+      <span class="dist-val">${fmt(v.orig)}</span>
+      ${showPct?`<span style="font-size:9px;color:var(--tx3);font-family:var(--mono)">${p2}%</span>`:''}
+    </div>`;
+  }).join('');
+
+  const poRows=poList.slice(0,20).map(([po,v])=>{
+    const st=[...v.status];
+    const badge=st.includes('abnormal')?'badge-red':st.includes('outstanding')?'badge-yellow':'badge-green';
+    const label=st.includes('abnormal')?'異常':st.includes('outstanding')?'未出完':'已出';
+    return`<tr>
+      <td style="font-family:var(--mono);font-size:11px">${esc(po)}</td>
+      <td class="td-num">${fmt(v.orig)}</td>
+      <td class="td-num" style="color:var(--grn)">${fmt(v.ship)}</td>
+      <td class="td-num" style="color:${v.open>0?'var(--red)':'var(--tx3)'}">${fmt(v.open)}</td>
+      <td><span class="badge ${badge}">${label}</span></td>
+      ${type==='cust'?`<td style="font-size:11px;color:var(--tx2)">${[...v.styles].slice(0,3).join(', ')}</td>`:''}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('modalBody').innerHTML=`
+    <div class="modal-kpi">
+      <div class="modal-kc"><div class="modal-kl">記錄筆數</div><div class="modal-kv blue">${rows.length}</div></div>
+      <div class="modal-kc"><div class="modal-kl">PO 總量</div><div class="modal-kv">${fmt(totOrig)}</div></div>
+      <div class="modal-kc"><div class="modal-kl">已出數量</div><div class="modal-kv green">${fmt(totShip)}</div></div>
+      <div class="modal-kc"><div class="modal-kl">未出數量</div><div class="modal-kv yellow">${fmt(totOpen)}</div></div>
+      <div class="modal-kc"><div class="modal-kl">出貨率</div><div class="modal-kv ${p>=90?'green':p>=60?'yellow':'red'}">${p}%</div></div>
+      <div class="modal-kc"><div class="modal-kl">異常筆數</div><div class="modal-kv red">${abnormal.length}</div></div>
+    </div>
+
+    ${type==='cust'?`
+    <div class="modal-sec">
+      <div class="modal-sec-title">PO 明細 (${poList.length} 筆)</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--sur)">
+          <th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--tx3);border-bottom:1px solid var(--bor)">PO #</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--tx3);border-bottom:1px solid var(--bor)">PO量</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--tx3);border-bottom:1px solid var(--bor)">已出</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--tx3);border-bottom:1px solid var(--bor)">未出</th>
+          <th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--tx3);border-bottom:1px solid var(--bor)">狀態</th>
+          <th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--tx3);border-bottom:1px solid var(--bor)">款式</th>
+        </tr></thead>
+        <tbody>${poRows}</tbody>
+      </table>
+      </div>
+    </div>`:''}
+
+    <div class="dist-grid" style="margin-top:0">
+      <div class="modal-sec">
+        <div class="modal-sec-title">顏色分佈 (訂量/出貨率)</div>
+        <div>${distHtml(colorDist)}</div>
+      </div>
+      <div class="modal-sec">
+        <div class="modal-sec-title">尺寸分佈 (訂量/出貨率)</div>
+        <div>${distHtml(sizeDist)}</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal').classList.add('show');
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+// ══════════════════════════════════════════════
+// EXPORT CSV
+// ══════════════════════════════════════════════
+function exportCSV(){
+  const rows=FILTERED.filter(r=>r.status===TAB);
+  if(!rows.length){alert('無資料可匯出');return;}
+  const keys=['cust','po','style','desc','color','size','orig','shipped','open','etdYear','etdMonth','etd','fabGroup','fabType','remark','status'];
+  const header=['客戶','PO#','款式','描述','顏色','尺寸','PO量','已出','未出','年份','月份','ETD','布種分類','布種','備註','狀態'];
+  const lines=[header.join(','),...rows.map(r=>keys.map(k=>{const v=r[k]==null?'':String(r[k]);return v.includes(',')||v.includes('"')?`"${v.replace(/"/g,'""')}"`:v;}).join(','))];
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`vrt_${TAB}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ══════════════════════════════════════════════
+// CLOUD SYNC
+// ══════════════════════════════════════════════
+async function syncToGas(){
+  const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!gasUrl){
+    alert('找不到 GAS URL。\n請先開啟 portal.html 設定 GAS URL，或手動填入。');
+    const u=prompt('請貼上 GAS /exec URL：');
+    if(!u)return;
+    localStorage.setItem('vrt_portal_gas_url',u.trim());
+  }
+  const url=localStorage.getItem('vrt_portal_gas_url');
+  if(!ALL.length){alert('請先載入出貨排程檔案');return;}
+
+  const btn=document.getElementById('btnCloudSync');
+  const orig=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='☁ 同步中...';
+
+  const shipped   =ALL.filter(r=>r.status==='shipped').length;
+  const outstanding=ALL.filter(r=>r.status==='outstanding').length;
+  const abnormal  =ALL.filter(r=>r.status==='abnormal').length;
+
+  // Customer breakdown (top customers by outstanding qty)
+  const custMap={};
+  ALL.filter(r=>r.status==='outstanding').forEach(r=>{
+    if(!custMap[r.cust])custMap[r.cust]={cust:r.cust,pos:0,qty:0};
+    custMap[r.cust].pos++;
+    custMap[r.cust].qty+=(r.open||0);
+  });
+  const topCusts=Object.values(custMap).sort((a,b)=>b.qty-a.qty).slice(0,8);
+
+  const payload={
+    tool:'shipping',
+    recordCount:ALL.length,
+    summary:{
+      total:ALL.length,
+      shipped,outstanding,abnormal,
+      shipRate:ALL.length?Math.round(shipped/ALL.length*100):0,
+      topOutstanding:topCusts,
+      fileDate:new Date().toISOString().slice(0,10),
+    }
+  };
+
+  try{
+    const r=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+      mode:'cors',redirect:'follow'
+    });
+    const d=await r.json();
+    if(d.ok){
+      btn.textContent='✓ 已同步';
+      btn.style.background='#059669';
+      setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false;},3000);
+    }else throw new Error(d.error||'GAS error');
+  }catch(e){
+    btn.textContent='✗ 失敗';
+    btn.style.background='#dc2626';
+    setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false;},3000);
+    alert('同步失敗：'+e.message);
+  }
+}
+
+// ══════════════════════════════════════════════
+// ESCAPE
+// ══════════════════════════════════════════════
+function esc(s){
+  if(!s)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════ FOLDER SCAN ════════════════════════════════════════
+// Shipping: scans folders for newest .xlsb/.xlsx and calls loadFile() directly
+const _AUTOSCAN_LS="shipping_autoscan_v1";
+let _scanFolderList=[];
+
+function _openFolderIDB(){return new Promise((res,rej)=>{const req=indexedDB.open("shipping_folder_handles_v1",1);req.onupgradeneeded=e=>e.target.result.createObjectStore("folders",{keyPath:"id",autoIncrement:true});req.onsuccess=e=>res(e.target.result);req.onerror=()=>rej();});}
+async function _idbGetAll(){try{const db=await _openFolderIDB();return await new Promise(res=>{const r=db.transaction("folders","readonly").objectStore("folders").getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([]);});}catch(e){return[];}}
+async function _idbAdd(handle,label){try{const db=await _openFolderIDB();return await new Promise((res,rej)=>{const r=db.transaction("folders","readwrite").objectStore("folders").add({handle,label,ts:Date.now()});r.onsuccess=()=>res(r.result);r.onerror=rej;});}catch(e){return null;}}
+async function _idbDel(id){try{const db=await _openFolderIDB();await new Promise((res,rej)=>{const r=db.transaction("folders","readwrite").objectStore("folders").delete(id);r.onsuccess=res;r.onerror=rej;});}catch(e){}}
+
+function saveAutoScanPref(){localStorage.setItem(_AUTOSCAN_LS,document.getElementById("chkAutoScan").checked?"1":"0");}
+
+function renderFolderList(){
+  const el=document.getElementById("folderList"),btn=document.getElementById("btnScanFolders");
+  if(!_scanFolderList.length){el.innerHTML=`<div style="font-size:11px;color:var(--tx3);padding:6px 10px;background:var(--bg2);border-radius:6px">尚未設定資料夾</div>`;btn.style.display="none";return;}
+  el.innerHTML=_scanFolderList.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-radius:6px;margin-bottom:4px;border:1px solid var(--border)"><span>📁</span><span style="flex:1;font-size:12px;font-weight:500">${f.label}</span><button onclick="removeFolderEntry(${f.id})" style="font-size:11px;padding:1px 7px;background:#fff5f5;color:#dc2626;border:1px solid #fecaca;border-radius:4px;cursor:pointer">移除</button></div>`).join("");
+  btn.style.display="inline-flex";
+}
+async function addScanFolder(){
+  if(!("showDirectoryPicker" in window)){alert("需要 Chrome 或 Edge (v86+)");return;}
+  try{const handle=await window.showDirectoryPicker({mode:"read",startIn:"downloads"});const label=handle.name;const id=await _idbAdd(handle,label);_scanFolderList.push({id,handle,label});renderFolderList();const m=document.getElementById("scanMsg");m.style.color="#059669";m.textContent=`✓ 已新增「${label}」（共 ${_scanFolderList.length} 個）`;}
+  catch(e){if(e.name!=="AbortError"){document.getElementById("scanMsg").style.color="#dc2626";document.getElementById("scanMsg").textContent="❌ "+e.message;}}
+}
+async function removeFolderEntry(id){await _idbDel(id);_scanFolderList=_scanFolderList.filter(f=>f.id!==id);renderFolderList();}
+
+async function initFolderScan(){
+  const all=await _idbGetAll();const valid=[];
+  for(const f of all){try{const p=await f.handle.queryPermission({mode:"read"});if(p==="granted"||p==="prompt")valid.push(f);}catch(e){}}
+  _scanFolderList=valid;renderFolderList();
+  const autoOn=localStorage.getItem(_AUTOSCAN_LS)==="1";
+  const cb=document.getElementById("chkAutoScan");if(cb)cb.checked=autoOn;
+  if(autoOn&&_scanFolderList.length)setTimeout(()=>scanAndLoad(true),900);
+}
+
+// Shipping scan: find newest .xlsb/.xlsx file across all folders
+async function scanAndLoad(silent=false){
+  const m=document.getElementById("scanMsg");
+  if(!_scanFolderList.length){m.style.color="#dc2626";m.textContent="❌ 尚未設定任何資料夾";return;}
+  m.style.color="var(--tx3)";m.textContent="🔍 掃描中...";
+  const EXTS=new Set(["xlsb","xlsx","xls"]);
+  const candidates=[];
+  for(const folder of _scanFolderList){
+    let perm;try{perm=await folder.handle.queryPermission({mode:"read"});if(perm==="prompt")perm=await folder.handle.requestPermission({mode:"read"});}catch(e){perm="denied";}
+    if(perm!=="granted"){m.style.color="#d97706";m.textContent=`⚠️ 資料夾「${folder.label}」需重新授權`;continue;}
+    try{
+      for await(const entry of folder.handle.values()){
+        if(entry.kind!=="file")continue;
+        const ext=entry.name.split(".").pop().toLowerCase();
+        if(!EXTS.has(ext))continue;
+        const file=await entry.getFile();
+        candidates.push(file);
+      }
+    }catch(e){m.style.color="#dc2626";m.textContent=`❌ 掃描出錯：${e.message}`;}
+  }
+  if(!candidates.length){m.style.color="#d97706";m.textContent="⚠️ 資料夾內找不到 .xlsb/.xlsx 檔案";return;}
+  // Sort by last modified, newest first
+  candidates.sort((a,b)=>b.lastModified-a.lastModified);
+  const newest=candidates[0];
+  m.style.color="var(--tx2)";m.textContent=`📄 載入最新檔案：${newest.name}（共找到 ${candidates.length} 個）`;
+  loadFile(newest);
+}
+
+// Init on page load
+initFolderScan();
+</script>
+</body>
+</html>

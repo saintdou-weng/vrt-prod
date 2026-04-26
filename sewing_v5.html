@@ -1,0 +1,3402 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>車縫生產分析系統</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#f0f2f7;color:#1e2640}
+.header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:35px;height:35px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.h-title{font-size:16px;font-weight:600;color:#fff}
+.h-sub{font-size:11px;color:#8b95b8;margin-top:1px}
+.h-stats{margin-left:auto;display:flex;gap:18px}
+.hstat{text-align:right}
+.hstat-v{font-size:17px;font-weight:700;color:#fbbf24;font-family:monospace}
+.hstat-l{font-size:10px;color:#8b95b8}
+.tabs{background:#fff;border-bottom:2px solid #e2e6f0;display:flex;padding:0 20px;overflow-x:auto;gap:0}
+.tab{padding:12px 15px;font-size:13px;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:all .15s;user-select:none}
+.tab:hover{color:#1e2640;background:#f7f8fc}
+.tab.on{color:#d97706;border-bottom-color:#f59e0b;background:#fffbf0}
+.sec{display:none;padding:18px 20px}
+.sec.on{display:block}
+.card{background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.ct::before{content:'';width:3px;height:11px;background:#f59e0b;border-radius:2px}
+/* Grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+/* KPI */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid #e2e6f0;border-radius:8px;padding:11px;text-align:center;box-shadow:0 1px 3px rgba(30,38,64,.04)}
+.kpi-n{font-size:26px;font-weight:700;font-family:monospace;line-height:1;color:#1e2640}
+.kpi-u{font-size:11px;color:#6b7a9e;margin-left:2px;font-weight:400}
+.kpi-l{font-size:10px;color:#6b7a9e;margin-top:4px}
+/* Drop zone */
+.drop{border:2px dashed #c5c9d8;border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:#fafbfc}
+.drop:hover,.drop.drag{border-color:#f59e0b;background:#fffbf0}
+.drop.done{border-color:#10b981;border-style:solid;background:#f0fdf8}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.btn-y{background:#f59e0b;color:#1c1200}
+.btn-y:hover{background:#d97706}
+.btn-y:disabled{background:#e2e6f0;color:#a0aabf;cursor:not-allowed}
+.btn-g{background:#fff;color:#4a5578;border:1px solid #d0d5e8}
+.btn-g:hover{background:#f7f8fc}
+.btn-r{background:#fff5f5;color:#dc2626;border:1px solid #fecaca}
+/* Line cards */
+.lcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.lc{background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:13px;border-top:3px solid #e2e6f0}
+.lc.hi{border-top-color:#059669}
+.lc.md{border-top-color:#d97706}
+.lc.lo{border-top-color:#dc2626}
+.lc.zero{border-top-color:#9ca3af;opacity:.6}
+.lc-name{font-size:14px;font-weight:700;color:#1e2640}
+.lc-sec{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;display:inline-block;margin-top:2px;text-transform:uppercase}
+.sc-g{background:#e0f2fe;color:#0369a1}
+.sc-a{background:#f3e8ff;color:#7c3aed}
+.eff-b{font-size:16px;font-weight:700;font-family:monospace;padding:2px 9px;border-radius:12px}
+.lc.hi .eff-b{background:#ecfdf5;color:#059669}
+.lc.md .eff-b{background:#fffbeb;color:#d97706}
+.lc.lo .eff-b{background:#fff1f2;color:#dc2626}
+.lc-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:9px 0 7px}
+.lc-stat{background:#f7f8fc;border-radius:6px;padding:7px;text-align:center}
+.lc-sn{font-size:17px;font-weight:700;font-family:monospace;color:#1e2640}
+.lc-sl{font-size:9px;color:#6b7a9e;margin-top:1px}
+.pp{background:#f0f9ff;border-radius:6px;padding:5px 9px;display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px}
+.pp-v{font-family:monospace;font-weight:700;color:#0369a1}
+.ctn-row{display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid #eef0f6;margin-bottom:5px}
+.slist-hd{font-size:9px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.srow{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eef0f6;font-size:11px}
+.sno{font-family:monospace;color:#2d3a5e;font-weight:500}
+.spcs{font-family:monospace;color:#1d4ed8;font-weight:600}
+/* Table */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 11px;color:#6b7a9e;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e6f0;background:#f7f8fc;white-space:nowrap}
+td{padding:8px 11px;border-bottom:1px solid #eef0f6;color:#2d3a5e;white-space:nowrap}
+tr:hover td{background:#fafbfc}
+.mono{font-family:monospace}
+/* Badge */
+.b{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;font-family:monospace}
+.bok{background:#d1fae5;color:#065f46}
+.bwn{background:#fef3c7;color:#92400e}
+.bbd{background:#fee2e2;color:#991b1b}
+/* Alert */
+.al{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#e0f2fe;border:1px solid #7dd3fc;color:#0369a1}
+/* Filter */
+.frow{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;border-radius:6px;font-size:13px;font-family:inherit;cursor:pointer}
+.empty{text-align:center;padding:50px 20px;color:#8b95b8}
+/* Section strip */
+.ss{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.sp{border-radius:7px;padding:6px 12px;border:1px solid;font-size:12px}
+/* Preview panel */
+.preview-file{background:#f7f8fc;border:1px solid #e2e6f0;border-radius:8px;padding:12px;margin-bottom:10px}
+.preview-lines{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.preview-line{background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:4px;font-size:11px;font-family:monospace;font-weight:600}
+/* Capacity bar */
+.capbar{height:8px;background:#e2e6f0;border-radius:4px;overflow:hidden;margin-top:5px}
+.capfill{height:100%;border-radius:4px;transition:width .3s}
+@media(max-width:600px){
+  .g2,.g3,.g4,.lcards{grid-template-columns:1fr}
+  .h-stats,.kpi-strip .kpi:nth-child(n+5){display:none}
+  .sec{padding:12px 12px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">🏭</div>
+  <div><div class="h-title">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.12</div></div>
+  <div class="h-stats">
+    <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">總記錄</div></div>
+    <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l">天數</div></div>
+    <div class="hstat"><div class="hstat-v" id="hLines">0</div><div class="hstat-l">線別</div></div>
+    <div class="hstat"><div class="hstat-v" id="hStorage" style="font-size:12px">-</div><div class="hstat-l" id="hStorageLabel">儲存用量</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="goTab('upload',this)">📥 上傳報表</div>
+  <div class="tab" onclick="goTab('daily',this)">📊 每日報告</div>
+  <div class="tab" onclick="goTab('weekly',this)">📅 週統計</div>
+  <div class="tab" onclick="goTab('monthly',this)">📆 月年趨勢</div>
+  <div class="tab" onclick="goTab('eff',this)">📈 效率報表</div>
+  <div class="tab" onclick="goTab('validate',this)">🔍 數據比對</div>
+  <div class="tab" onclick="goTab('styles',this)">🎯 款式追蹤</div>
+  <div class="tab" onclick="goTab('records',this)">📋 所有記錄</div>
+  <div class="tab" onclick="goTab('smv',this)">📊 產能分析</div>
+</div>
+
+<!-- ══ UPLOAD ══ -->
+<div class="sec on" id="sec-upload">
+  <div class="card">
+    <div class="ct">📧 直接拖郵件或 Excel 進來</div>
+    <div class="g3" style="margin-bottom:14px">
+      <div style="background:#f0fdf4;border-radius:8px;padding:12px;border:1px solid #bbf7d0">
+        <div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:6px">✅ 最推薦：.eml 郵件</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          <b>Gmail：</b>打開郵件 → 右上角「⋮ 更多」→「下載郵件」→ 拖 .eml 進來<br>
+          <b>Outlook：</b>選中郵件 → 「檔案」→「另存新檔」→ 選 .eml 格式<br>
+          <span style="color:#059669;font-size:11px">✓ 100% 穩定，自動提取所有 Excel 附件</span>
+        </div>
+      </div>
+      <div style="background:#f0f9ff;border-radius:8px;padding:12px;border:1px solid #bae6fd">
+        <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px">📊 直接拖 Excel（最快）</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          從 Outlook 把 .xlsx 附件直接拖出<br>
+          或從 Gmail 下載列直接拖進來<br>
+          <b>Garment + Apron 兩個一起拖</b><br>
+          <span style="color:#0369a1;font-size:11px">✓ 自動合併同一天</span>
+        </div>
+      </div>
+      <div style="background:#fefce8;border-radius:8px;padding:12px;border:1px solid #fde68a">
+        <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">⚠️ .msg 格式（限制多）</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          Outlook 的 .msg 是加密格式<br>
+          無法保證能正確提取附件<br>
+          <b>建議改存為 .eml 再拖入</b><br>
+          <span style="color:#92400e;font-size:11px">✓ 同格式，另存一下就好</span>
+        </div>
+      </div>
+    </div>
+    <div id="dz" class="drop" ondragover="dzOver(event)" ondragleave="dzOut()" ondrop="dzDrop(event)"
+      style="padding:40px 20px;border-width:3px">
+      <input type="file" multiple accept=".xlsx,.xls,.csv,.eml,.msg" onchange="dzSelect(event)">
+      <div style="font-size:36px;margin-bottom:10px">📥</div>
+      <div style="font-size:16px;font-weight:600;color:#1e2640;margin-bottom:4px">拖放郵件或 Excel 到這裡</div>
+      <div style="font-size:12px;color:#6b7a9e">.eml 郵件自動提取附件 · .xlsx 直接解析 · 多個檔案可同時拖入</div>
+    </div>
+    <div id="fileList" style="margin-top:10px"></div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-y" id="btnImport" onclick="doImport()" disabled>🔍 解析預覽</button>
+      <span id="importMsg" style="font-size:13px"></span>
+    </div>
+  </div>
+
+  <!-- Parse preview -->
+  <div id="previewArea" style="display:none">
+    <div class="card">
+      <div class="ct">解析預覽</div>
+      <div id="previewContent"></div>
+      <div style="margin-top:12px;display:flex;gap:10px">
+        <button class="btn btn-y" onclick="confirmImport()">✓ 確認存入</button>
+        <button class="btn btn-g" onclick="cancelImport()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DB status -->
+  <div id="dbCard" class="card" style="display:none">
+    <div class="ct">已儲存資料狀況</div>
+    <div id="dbInfo"></div>
+    <div id="fileConnectInfo" style="font-size:12px;color:#059669;margin-top:6px;display:none">📎 已連結本機資料檔案，自動同步</div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="connectDataFile()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">📎 連結本機資料檔案（可放 Google Drive）</button>
+      <button class="btn btn-r" onclick="clearAll()">🗑 清除所有資料</button>
+    </div>
+  </div>
+
+  <!-- Folder Scan Card -->
+  <div class="card" id="folderScanCard">
+    <div class="ct">📂 掃描 Outlook 下載資料夾（自動批次匯入）</div>
+    <div style="font-size:12px;color:#6b7a9e;margin-bottom:10px;line-height:1.8">
+      授權一次後，每次點「掃描」自動找出資料夾內所有 .xlsx/.xls/.eml/.msg 並批次解析。<br>
+      支援多個資料夾（如主資料夾＋備份）。已匯入過的檔案自動跳過不重複匯入。<br>
+      <span style="color:#d97706;font-size:11px">⚠️ 需要 Chrome 或 Edge 瀏覽器，授權過的資料夾重新整理頁面後需再點「允許」一次。</span>
+    </div>
+    <div id="folderList" style="margin-bottom:10px">
+      <div style="font-size:12px;color:#8b95b8;padding:8px 12px;background:#f7f8fc;border-radius:6px;border:1px solid #e2e6f0">
+        尚未設定任何資料夾。點「➕ 新增資料夾」授權存取。
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <button class="btn btn-g" onclick="addScanFolder()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">➕ 新增資料夾</button>
+      <button class="btn btn-y" id="btnScanFolders" onclick="scanAllFolders()" style="display:none">🔍 立即掃描所有資料夾</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#6b7a9e;cursor:pointer;user-select:none">
+        <input type="checkbox" id="chkAutoScan" onchange="saveAutoScanPref()"> 開啟頁面時自動掃描
+      </label>
+      <button onclick="clearScannedLog()" style="font-size:11px;padding:3px 10px;background:#fff5f5;color:#dc2626;border:1px solid #fecaca;border-radius:4px;cursor:pointer" title="清除後下次掃描會重新匯入所有檔案">🗑 重置掃描記錄</button>
+    </div>
+    <div id="scanMsg" style="font-size:13px;min-height:18px"></div>
+  </div>
+
+  <!-- Format guide -->
+  <div class="card">
+    <div class="ct">Excel 格式說明</div>
+    <div class="g2">
+      <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
+        <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px">VRT Daily Output（自動識別）</div>
+        <div style="font-size:12px;color:#6b7a9e;line-height:1.9">
+          • 工作表名含 "Daily Output"<br>
+          • Col C：Line 1、LINE 09 等線別名<br>
+          • Col F：款號 · Col P：件數<br>
+          • Summary 區自動抓人數和效率<br>
+          • Apron + Garment 同時丟，自動合併
+        </div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
+        <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px">標準格式（手動整理）</div>
+        <div style="font-size:12px;color:#6b7a9e;line-height:1.9">
+          • 標題行：日期｜線別｜款號｜件數｜人數｜效率<br>
+          • 欄位名稱中英文均可識別<br>
+          • 日期：YYYY/MM/DD 或 YYYY-MM-DD<br>
+          • 效率填整數（如 30 代表 30%）
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DAILY ══ -->
+<div class="sec" id="sec-daily">
+  <div class="frow">
+    <button class="btn btn-g" onclick="navDay(-1)" style="padding:6px 10px;font-size:16px" title="上一日">◀</button>
+    <label style="font-size:13px;color:#6b7a9e">日期</label>
+    <select id="dsel" onchange="renderDaily()"></select>
+    <button class="btn btn-g" onclick="navDay(1)" style="padding:6px 10px;font-size:16px" title="次日">▶</button>
+    <label style="font-size:13px;color:#6b7a9e;margin-left:6px">Section</label>
+    <select id="dsec" onchange="renderDaily()"><option value="">全部</option></select>
+    <button class="btn btn-g" onclick="toggleDtail()" id="btnDtail" style="font-size:12px;padding:5px 10px">📋 PO明細</button>
+    <span id="dmeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g" onclick="exportExcel('daily')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出 Excel</button>
+  </div>
+  <div id="dKpi" class="kpi-strip"></div>
+  <div id="dSecs" class="ss" style="display:none"></div>
+  <div id="dSunAlert" style="display:none;margin-bottom:10px">
+    <div class="al al-w">⚠️ <b>週日</b>：工廠通常不上班，此日有資料可能來自加班記錄或周報填寫錯誤，請確認。</div>
+  </div>
+  <div id="dTodayAlert" style="display:none;margin-bottom:10px"></div>
+  <div id="dAlerts" style="display:none;margin-bottom:12px"></div>
+  <div id="dCards" class="lcards"></div>
+  <div class="card" id="dTableCard" style="margin-top:14px;display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <div class="ct" style="margin-bottom:0">線別彙整表</div>
+      <div style="display:flex;gap:0;border:1px solid #e2e6f0;border-radius:6px;overflow:hidden">
+        <button id="tabSum" onclick="switchDTab('sum')" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600">彙整</button>
+        <button id="tabPO" onclick="switchDTab('po')" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">PO明細</button>
+      </div>
+    </div>
+    <div id="dSumTable" class="tw"><table><thead><tr>
+      <th>線別</th><th>Section</th><th>人數</th><th>總件數</th>
+      <th>效率</th><th>目標45%</th><th>人均件數</th><th>箱數</th><th>款式數</th>
+    </tr></thead><tbody id="dTbody"></tbody></table></div>
+    <div id="dPOTable" class="tw" style="display:none"><table><thead><tr>
+      <th>線別</th><th>Section</th><th>款號</th><th>SELFKEY</th><th>PO</th><th>顏色</th><th>尺寸</th><th>件數</th><th>箱數</th>
+    </tr></thead><tbody id="dPOBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ WEEKLY ══ -->
+<div class="sec" id="sec-weekly">
+  <div class="frow">
+    <button class="btn btn-g" onclick="navWeek(-1)" style="padding:6px 10px;font-size:16px" title="上一週">◀</button>
+    <select id="wsel" onchange="renderWeekly()"></select>
+    <button class="btn btn-g" onclick="navWeek(1)" style="padding:6px 10px;font-size:16px" title="下一週">▶</button>
+    <span id="wmeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g" onclick="exportExcel('weekly')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出 Excel</button>
+  </div>
+  <!-- Week KPI -->
+  <div id="wKpi" class="kpi-strip"></div>
+  <!-- Per-line weekly breakdown -->
+  <div class="card" id="wLineCard" style="display:none">
+    <div class="ct">本週各線別</div>
+    <div id="wLineCards" class="lcards"></div>
+  </div>
+  <!-- Daily breakdown for the week -->
+  <div class="card" id="wDailyCard" style="display:none">
+    <div class="ct">本週每日明細</div>
+    <div class="tw"><table><thead><tr>
+      <th>日期（星期）</th><th>線別數</th><th>合計人數</th><th>合計件數</th><th>平均效率</th><th>人均件數</th><th>箱數</th>
+    </tr></thead><tbody id="wDailyBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ MONTHLY ══ -->
+<div class="sec" id="sec-monthly">
+  <div class="frow">
+    <button class="btn btn-y" id="btnMon" onclick="setPeriod('monthly')">月報</button>
+    <button class="btn btn-g" id="btnYr" onclick="setPeriod('yearly')">年報</button>
+    <span id="pmeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="ct" id="ptitle" style="margin-bottom:0">月別報表</div>
+      <button class="btn btn-g" onclick="exportExcel('period')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出 Excel</button>
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th>期間</th><th>工作天</th><th>線別數</th><th>合計人數</th>
+      <th>合計件數</th><th>平均效率</th><th>人均件數</th><th>箱數</th>
+    </tr></thead><tbody id="pBody"></tbody></table></div>
+  </div>
+</div>
+
+
+<!-- ══ EFF REPORT ══ -->
+<div class="sec" id="sec-eff">
+  <div class="card">
+    <div class="ct">📈 週/月效率報表上傳</div>
+    <div class="al al-i" style="margin-bottom:12px">
+      <b>月報效率 .msg</b> 拖到這裡解析 → 顯示各線每週效率趨勢。<br>
+      <span style="color:#92400e">⚠️ 周報 .msg（Daily Output 格式）請拖到「📥 上傳報表」頁，不是這裡。</span>
+    </div>
+    <div id="dz-eff" class="drop" ondragover="dzOver2(event)" ondragleave="dzOut2()" ondrop="dzDrop2(event)" style="padding:30px 20px">
+      <input type="file" multiple accept=".xlsx,.xls,.msg" onchange="dzSelect2(event)">
+      <div style="font-size:28px;margin-bottom:8px">📈</div>
+      <div style="font-size:15px;font-weight:600;color:#1e2640;margin-bottom:4px">拖放周報/月報到這裡</div>
+      <div style="font-size:12px;color:#6b7a9e">.msg 自動提取附件 · Apron + Garment 同時拖</div>
+    </div>
+    <div id="effFileList" style="margin-top:8px"></div>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+      <button class="btn btn-y" id="btnEffImport" onclick="doEffImport()" disabled>🔍 解析效率報表</button>
+      <span id="effMsg" style="font-size:13px"></span>
+    </div>
+  </div>
+  <div id="effPreviewArea" style="display:none">
+    <div class="card">
+      <div class="ct">解析預覽</div>
+      <div id="effPreviewContent"></div>
+      <div style="margin-top:12px;display:flex;gap:10px">
+        <button class="btn btn-y" onclick="confirmEffImport()">✓ 確認存入</button>
+        <button class="btn btn-g" onclick="cancelEffImport()">取消</button>
+      </div>
+    </div>
+  </div>
+  <div id="effTableCard" class="card" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="ct" style="margin-bottom:0">效率報表記錄</div>
+      <div style="display:flex;gap:8px">
+        <select id="effPeriodSel" onchange="renderEffTable()" style="font-size:12px"></select>
+        <select id="effSecSel" onchange="renderEffTable()" style="font-size:12px"><option value="">全部Section</option></select>
+        <button class="btn btn-g" onclick="exportEffExcel()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出</button>
+      </div>
+    </div>
+    <div id="effTableWrap" class="tw"></div>
+    <div style="margin-top:10px">
+      <button class="btn btn-r" style="font-size:12px" onclick="clearEffDB()">🗑 清除效率資料</button>
+    </div>
+  </div>
+  <!-- Backup/Restore -->
+  <div class="card" style="margin-top:14px">
+    <div class="ct">💾 備份 / 還原（搬移檔案用）</div>
+    <div style="font-size:12px;color:#6b7a9e;margin-bottom:10px">把所有日報資料備份成 JSON 檔案，搬到新電腦或新資料夾後可還原，資料不會遺失。</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="backupData()">⬇ 備份所有資料（JSON）</button>
+      <label class="btn btn-g" style="cursor:pointer">⬆ 還原資料<input type="file" accept=".json" style="display:none" onchange="restoreData(event)"></label>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ VALIDATE ══ -->
+<div class="sec" id="sec-validate">
+  <div class="card">
+    <div class="ct">🔍 數據比對說明</div>
+    <div style="font-size:12px;color:#6b7a9e;line-height:1.8">
+      <b>比對邏輯：</b>同一天同一條線，日報件數 vs 周報件數，差距 &gt; 5% 標示異常。<br>
+      <b>資料來源：</b>「上傳報表」匯入的所有記錄（日報 + 周報均存入同一 DB）。<br>
+      <b>效率標準：</b>目標 45%・OK 門檻 30%・低於 30% 警示。
+    </div>
+  </div>
+  <div class="frow">
+    <select id="vDate" onchange="renderValidate()"><option value="">所有日期</option></select>
+    <select id="vSec" onchange="renderValidate()"><option value="">所有Section</option></select>
+    <span id="vMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g" onclick="exportValidateExcel()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出比對報告</button>
+  </div>
+  <!-- Summary stats -->
+  <div id="vSummary" class="kpi-strip" style="margin-bottom:14px"></div>
+  <!-- Issues -->
+  <div id="vIssues" style="margin-bottom:14px"></div>
+  <!-- Detail table -->
+  <div class="card" id="vTableCard" style="display:none">
+    <div class="ct">逐日逐線明細</div>
+    <div class="tw"><table><thead><tr>
+      <th>日期</th><th>Section</th><th>線別</th>
+      <th>件數</th><th>人數</th><th>效率</th><th>人均件數</th>
+      <th>效率狀態</th><th>備註</th>
+    </tr></thead><tbody id="vBody"></tbody></table></div>
+  </div>
+</div>
+
+
+<!-- ══ STYLES ══ -->
+<div class="sec" id="sec-styles">
+  <div class="frow" style="flex-wrap:wrap;gap:8px">
+    <select id="stYear" onchange="renderStyles()" style="font-size:12px"><option value="">所有年份</option></select>
+    <select id="stMonth" onchange="renderStyles()" style="font-size:12px"><option value="">所有月份</option></select>
+    <select id="stSec" onchange="renderStyles()" style="font-size:12px"><option value="">所有Section</option></select>
+    <select id="stColor" onchange="renderStyles()" style="font-size:12px"><option value="">所有顏色</option></select>
+    <select id="stPO" onchange="renderStyles()" style="font-size:12px"><option value="">所有PO</option></select>
+    <input id="stSearch" placeholder="款號/PO搜尋..." style="border:1px solid #d0d5e8;border-radius:6px;padding:5px 8px;font-size:12px;min-width:130px" oninput="renderStyles()">
+    <span id="stCutStatus" style="font-size:11px;padding:3px 8px;border-radius:4px;background:#f0fdf4;color:#059669;border:1px solid #bbf7d0"></span>
+    <span id="stMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g" onclick="exportStylesExcel()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出</button>
+  </div>
+  <div id="stKpi" class="kpi-strip" style="margin-bottom:12px"></div>
+  <div class="card">
+    <div class="tw"><table><thead><tr>
+      <th>款號</th><th>PO</th><th>顏色</th><th>尺寸</th><th>Section</th>
+      <th>車縫量</th><th>裁剪量</th><th>車縫/裁剪</th>
+      <th>PO餘量</th>
+      <th>天數</th><th>首日</th><th>最近日</th>
+    </tr></thead><tbody id="stBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ RECORDS ══ -->
+<div class="sec" id="sec-records">
+  <div class="frow">
+    <select id="rDate" onchange="renderRecs()"><option value="">所有日期</option></select>
+    <select id="rSec" onchange="renderRecs()"><option value="">所有Section</option></select>
+    <select id="rLine" onchange="renderRecs()"><option value="">所有線別</option></select>
+    <span id="rMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g" onclick="exportExcel('records')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <button class="btn" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca" onclick="deleteByDate()">🗑 刪除選定日期的資料</button>
+    <button class="btn" style="background:#fff5f5;color:#dc2626;border:1px solid #fecaca" onclick="clearAll()">⚠️ 清除全部資料</button>
+    <span style="font-size:11px;color:#8b95b8">↑ 先用日期篩選再點刪除，可只刪特定一天的錯誤資料</span>
+  </div>
+  <div class="card">
+    <div class="tw"><table><thead><tr>
+      <th>日期</th><th>Section</th><th>線別</th><th>SELFKEY</th><th>PO</th>
+      <th>款號</th><th>顏色</th><th>尺寸</th>
+      <th>件數</th><th>人數</th><th>效率</th><th>箱數</th>
+    </tr></thead><tbody id="rBody"></tbody></table></div>
+    <div id="rMore" style="padding:9px 11px;font-size:11px;color:#8b95b8;display:none"></div>
+  </div>
+</div>
+
+<!-- ══ PRODUCTIVITY ANALYSIS ══ -->
+<div class="sec" id="sec-smv">
+  <div class="card">
+    <div class="ct">📊 正常班 vs 加班 產能分析</div>
+    <div class="al al-i" style="margin-bottom:12px">
+      以當日正常班的「每小時產量」為基準（100%），評估加班的相對產能。<br>
+      <span style="font-size:11px;color:#6b7a9e">加班產能比 = (加班時產量 ÷ 正常班時產量) × 100% · 80%~120% 為正常</span>
+    </div>
+    <div class="frow">
+      <button class="btn btn-g" onclick="navPpoh(-1)" style="padding:6px 10px;font-size:16px">◀</button>
+      <label style="font-size:12px;color:#6b7a9e">日期</label>
+      <select id="smvDate" onchange="renderPpoh()"></select>
+      <button class="btn btn-g" onclick="navPpoh(1)" style="padding:6px 10px;font-size:16px">▶</button>
+      <label style="font-size:12px;color:#6b7a9e">Section</label>
+      <select id="smvSec" onchange="renderPpoh()" style="font-size:12px"><option value="">全部</option></select>
+      <label style="font-size:12px;color:#6b7a9e">線別</label>
+      <select id="smvLine" onchange="renderPpoh()" style="font-size:12px"><option value="">全部</option></select>
+      <label style="font-size:12px;color:#6b7a9e">正常班h</label>
+      <input type="number" id="ppohNormH" step="0.5" min="1" value="8" style="width:55px;padding:5px 8px;border:1px solid #d0d5e8;border-radius:6px;font-size:13px;font-family:monospace" oninput="renderPpoh()">
+      <label style="font-size:12px;color:#6b7a9e">加班h</label>
+      <input type="number" id="ppohOtH" step="0.5" min="0" value="2" style="width:55px;padding:5px 8px;border:1px solid #d0d5e8;border-radius:6px;font-size:13px;font-family:monospace" oninput="renderPpoh()">
+    </div>
+    <div id="ppohSingleLine" style="display:none;margin-bottom:14px"></div>
+    <div class="tw"><table><thead><tr>
+      <th>線別</th><th>Section</th><th>人數</th>
+      <th>正常班件數</th><th>加班件數</th><th>總件數</th>
+      <th>正常班/h</th><th>加班/h</th>
+      <th>加班產能比</th><th>報表效率</th><th>判定</th>
+    </tr></thead><tbody id="ppohBody"></tbody></table></div>
+  </div>
+
+  <!-- Weekly/Monthly aggregate -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <div class="ct" style="margin-bottom:0">📅 週/月 正常班 vs 加班 彙整</div>
+      <div style="display:flex;gap:0;border:1px solid #e2e6f0;border-radius:6px;overflow:hidden">
+        <button id="ppohBtnW" onclick="ppohPeriod='week';renderPpohPeriod()" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600">本週</button>
+        <button id="ppohBtnM" onclick="ppohPeriod='month';renderPpohPeriod()" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">本月</button>
+      </div>
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th>線別</th><th>Section</th><th>工作天</th>
+      <th>正常班總件數</th><th>加班總件數</th>
+      <th>正常班/h</th><th>加班/h</th>
+      <th>加班產能比</th><th>平均報表效率</th>
+    </tr></thead><tbody id="ppohPeriodBody"></tbody></table></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ═══════════════════════ DB STORAGE ═════════════════════════════════════════
+// Primary: File System Access API (persists across file renames/moves, works with Google Drive sync folder)
+// Fallback: localStorage with fixed key (not filename-dependent)
+const LS_KEY = "sewing_prod_v1";
+const LS_EFF  = "sewing_eff_v1";
+let DB = [];
+let EFF_DB = [];
+
+// Style name normalization for matching (uppercase, alphanumeric only)
+function normalizeStyleName(s){
+  return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+// PO/field cleaning: force to string, trim, uppercase
+function cleanField(val){
+  if(val===null||val===undefined) return '';
+  return String(val).trim().toUpperCase();
+}
+let _fileHandle = null;   // File System Access API handle
+let _effFileHandle = null;
+
+// Try to restore saved file handle from IndexedDB
+async function getFileHandle(key){
+  try{
+    return await new Promise((res,rej)=>{
+      const req=indexedDB.open("sewing_handles",1);
+      req.onupgradeneeded=e=>e.target.result.createObjectStore("handles",{keyPath:"key"});
+      req.onsuccess=e=>{
+        const tx=e.target.result.transaction("handles","readonly");
+        const r=tx.objectStore("handles").get(key);
+        r.onsuccess=ev=>res(ev.target.result?.handle||null);
+        r.onerror=()=>res(null);
+      };
+      req.onerror=()=>res(null);
+    });
+  }catch(e){ return null; }
+}
+async function saveFileHandle(key, handle){
+  try{
+    await new Promise((res,rej)=>{
+      const req=indexedDB.open("sewing_handles",1);
+      req.onupgradeneeded=e=>e.target.result.createObjectStore("handles",{keyPath:"key"});
+      req.onsuccess=e=>{
+        const tx=e.target.result.transaction("handles","readwrite");
+        tx.objectStore("handles").put({key,handle});
+        tx.oncomplete=res; tx.onerror=rej;
+      };
+      req.onerror=rej;
+    });
+  }catch(e){}
+}
+
+const FSA = typeof window!=="undefined" && "showOpenFilePicker" in window;
+
+async function pickDataFile(forSave=false){
+  if(!FSA) return null;
+  try{
+    const [h] = await window.showOpenFilePicker({
+      types:[{description:"Sewing Data",accept:{"application/json":[".json"]}}],
+      startIn:"documents"
+    });
+    return h;
+  }catch(e){ return null; }
+}
+async function pickNewFile(){
+  if(!FSA) return null;
+  try{
+    return await window.showSaveFilePicker({
+      suggestedName:"sewing_data.json",
+      types:[{description:"Sewing Data",accept:{"application/json":[".json"]}}],
+      startIn:"documents"
+    });
+  }catch(e){ return null; }
+}
+
+async function readFromFile(handle){
+  try{
+    const file=await handle.getFile();
+    const text=await file.text();
+    return JSON.parse(text);
+  }catch(e){ return null; }
+}
+async function writeToFile(handle, data){
+  try{
+    const writable=await handle.createWritable();
+    await writable.write(JSON.stringify(data));
+    await writable.close();
+    return true;
+  }catch(e){ return false; }
+}
+
+function dedupAndNorm(all){
+  const rawDB=(all||[]).map(r=>({...r,lineNo:normLineNo(r.lineNo||"")}));
+  const dedupMap=new Map();
+  rawDB.forEach(r=>{
+    const k=`${r.date}|${r.lineNo}|${r.styleNo||""}|${r.color||""}|${r.size||""}`;
+    if(!dedupMap.has(k)) dedupMap.set(k,r);
+    else{
+      const ex=dedupMap.get(k);
+      dedupMap.set(k,{...ex,workers:Math.max(ex.workers||0,r.workers||0),efficiency:Math.max(ex.efficiency||0,r.efficiency||0)});
+    }
+  });
+  return [...dedupMap.values()];
+}
+
+async function loadDB(){
+  // 1. Try File System Access handle
+  _fileHandle = await getFileHandle("db");
+  if(_fileHandle){
+    try{
+      const data=await readFromFile(_fileHandle);
+      if(data?.daily){ DB=dedupAndNorm(data.daily); EFF_DB=data.eff||[]; return; }
+    }catch(e){}
+  }
+  // 2. Fallback: localStorage
+  try{
+    const raw=localStorage.getItem(LS_KEY)||localStorage.getItem("sew_v4")||"[]";
+    DB=dedupAndNorm(JSON.parse(raw));
+    try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){ EFF_DB=[]; }
+    if(localStorage.getItem("sew_v4")){ saveDB(); localStorage.removeItem("sew_v4"); }
+  }catch(e){ DB=[]; }
+}
+
+function saveDB(){
+  // Save to file if handle exists
+  if(_fileHandle){
+    writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
+  }
+  // Always also save to localStorage as backup
+  try{ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
+  catch(e){ console.warn("localStorage full"); }
+}
+function initEffDB(){ /* EFF_DB loaded in loadDB */ }
+async function saveEffDB(){
+  EFF_DB=EFF_DB; // already in memory
+  saveDB(); // saves both together
+}
+
+// Connect to a data file (for portability / Google Drive sync folder)
+async function connectDataFile(){
+  if(!FSA){ alert("此瀏覽器不支援檔案連結功能，請使用 Chrome 或 Edge"); return; }
+  const choice=confirm("選擇已有的資料檔案？\n\n確定 = 選擇已有的 sewing_data.json（還原資料）\n取消 = 建立新的資料檔案");
+  const h=choice ? await pickDataFile() : await pickNewFile();
+  if(!h) return;
+  _fileHandle=h;
+  await saveFileHandle("db",h);
+  if(choice){
+    const data=await readFromFile(h);
+    if(data?.daily){ DB=dedupAndNorm(data.daily); EFF_DB=data.eff||[]; }
+    else if(Array.isArray(data)){ DB=dedupAndNorm(data); }
+  }
+  saveDB(); updateHeader(); renderDBCard();
+  alert("✓ 已連結資料檔案："+h.name+"\n\n之後所有資料自動儲存到此檔案，可放在 Google Drive 同步資料夾中實現雲端同步。");
+}
+
+// Init
+loadDB().then(()=>{ updateHeader(); renderDBCard(); initFolderScan(); });
+
+// ═══════════════════════ TABS ═════════════════════════════════════════════════
+function goTab(name, el){
+  document.querySelectorAll(".sec").forEach(s=>s.classList.remove("on"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+  document.getElementById("sec-"+name).classList.add("on");
+  el.classList.add("on");
+  if(name==="daily")  { populateDailySel(); renderDaily(); }
+  if(name==="weekly") { populateWeekSel(); renderWeekly(); }
+  if(name==="monthly"){ renderPeriod(); }
+  if(name==="eff")    { renderEffTable(); }
+  if(name==="validate"){ renderValidate(); }
+  if(name==="styles"){  renderStylesWithCut(); }
+  if(name==="records"){ renderRecs(); }
+  if(name==="smv"){ populatePpohDates(); renderPpoh(); renderPpohPeriod(); }
+}
+
+
+// ═══════════════════════ WEEKLY OUTPUT REPORT PARSER ═════════════════════════
+// Parses "Weekly Output Report" sheet → daily records (same DB as VRT daily)
+function parseWeeklyReport(wb, fname){
+  const ws = wb.Sheets[wb.SheetNames.find(n=>/weekly output report/i.test(n))];
+  if(!ws) return null;
+  const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+  // Detect section from filename or first 4 rows
+  let section = "Sewing";
+  for(let i=0;i<Math.min(4,rows.length);i++){
+    const txt = (rows[i]||[]).map(c=>String(c||"").toLowerCase()).join(" ");
+    if(txt.includes("apron")) section="Apron";
+    else if(txt.includes("garment")) section="Garment";
+  }
+
+  // Row idx 3: header with dates in cols 3-9
+  const header = rows[3]||[];
+  const dateCols = {};
+  for(let ci=3;ci<12;ci++){
+    const v = header[ci];
+    let dateStr = null;
+    if(v instanceof Date || (v && typeof v==="object" && v.getTime)){
+      const d=v; dateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    } else if(typeof v==="string" && v.match(/\d{4}-\d{2}-\d{2}/)){
+      dateStr=v.slice(0,10);
+    }
+    if(dateStr){
+      const dow = new Date(dateStr+"T00:00:00").getDay();
+      // Skip Sunday and Cambodia public holidays
+      if(dow !== 0 && !isKHHoliday(dateStr)){
+        dateCols[ci]=dateStr;
+      }
+    }
+  }
+  if(!Object.keys(dateCols).length) return null;
+
+  // Scan line blocks
+  const LRE2 = /^(LINE|Line)\s+[A-Z]?\d+$/;
+  const lineData = {}; // lineNo → date → {pcs, workers, eff}
+  let cur = null;
+
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i]||[];
+    const c0=String(r[0]||"").trim();
+    const c1=String(r[1]||"").trim().toLowerCase();
+
+    if(LRE2.test(c0)){
+      cur=c0;
+      if(!lineData[cur]) lineData[cur]={};
+      Object.values(dateCols).forEach(d=>{ if(!lineData[cur][d]) lineData[cur][d]={pcs:0,workers:0,eff:0}; });
+    }
+    if(!cur) continue;
+
+    if(c1==="total output"){
+      Object.entries(dateCols).forEach(([ci,date])=>{
+        const v=parseFloat(r[ci]); if(v>0) lineData[cur][date].pcs=Math.round(v);
+      });
+    }
+    if(c1==="man power"){
+      Object.entries(dateCols).forEach(([ci,date])=>{
+        const v=parseFloat(r[ci]); if(v>0) lineData[cur][date].workers=Math.round(v*2)/2;
+      });
+    }
+    if(c1.includes("daily eff%")&&c1.includes("current")){
+      Object.entries(dateCols).forEach(([ci,date])=>{
+        const v=parseFloat(r[ci]);
+        if(v>0) lineData[cur][date].eff=v<=1?Math.round(v*100):Math.round(v);
+      });
+    }
+  }
+
+  // Build records
+  const recs=[];
+  Object.entries(lineData).forEach(([lineNo,dates])=>{
+    Object.entries(dates).forEach(([date,d])=>{
+      if(d.pcs>0){
+        recs.push({id:uid(),date,section,lineNo:normLineNo(lineNo),styleNo:"",
+          pieces:d.pcs, workers:d.workers, efficiency:d.eff, cartons:0});
+      }
+    });
+  });
+  if(!recs.length) return null;
+
+  const lineDates=[...new Set(recs.map(r=>r.date))].sort();
+  const lineNames=[...new Set(recs.map(r=>r.lineNo))];
+  return {recs, summary:{
+    date:`${lineDates[0]}～${lineDates[lineDates.length-1]}`,
+    section, lines:lineNames.length,
+    totalPcs:recs.reduce((s,r)=>s+r.pieces,0),
+    lineNames
+  }};
+}
+
+// ═══════════════════════ VRT PARSER ══════════════════════════════════════════
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+
+// Match: "Line 1","Line 8","LINE 09","Line G20","Line G25" — NOT "Line 1-A","Line 2-A"
+const LRE = /^(LINE|Line)\s+[A-Z]?\d+$/;
+
+// Normalize line names: "LINE 1" → "Line 1", "LINE 09" → "LINE 09" (keep Apron caps)
+// Garment lines 1-8 use "Line N", Apron/high-number use "LINE NN"
+function normLineNo(s){
+  const m=String(s||"").trim().match(/^(?:LINE|Line)\s+([A-Z]?)(\d+)$/i);
+  if(!m) return String(s||"").trim();
+  const prefix=m[1], num=parseInt(m[2],10), numStr=m[2];
+  // Letter prefix (e.g. G20) → "Line G20"
+  if(prefix) return "Line "+prefix+String(num);
+  // Leading zero = Apron (LINE 09, LINE 10) → keep "LINE NN"
+  if(numStr.startsWith("0")) return "LINE "+numStr;
+  // No leading zero = Garment → always "Line N" regardless of number
+  return "Line "+String(num);
+}
+const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+
+// Cambodia public holiday check
+function isKHHoliday(dateStr){
+  if(!dateStr) return false;
+  const md=dateStr.slice(5);
+  const FIXED=["01-01","01-07","02-01","03-08","04-14","04-15","04-16","04-17",
+    "05-01","05-14","05-19","05-22","06-18","09-24","10-15","10-29","11-09"];
+  if(FIXED.includes(md)) return true;
+  if(md>="11-04"&&md<="11-08") return true; // Water Festival
+  return false;
+}
+
+function parseDate(str){
+  if(!str) return "";
+  const m = String(str).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  return "";
+}
+
+function parseVRT(wb, fname){
+  // Fix: prefer exact "Daily Output", then "Daily Output1", then any daily output variant
+  const sheetName = wb.SheetNames.find(n=>n.trim()==="Daily Output") ||
+                    wb.SheetNames.find(n=>n.trim()==="Daily Output1") ||
+                    wb.SheetNames.find(n=>/^daily output/i.test(n.trim())) ||
+                    wb.SheetNames.find(n=>/daily production/i.test(n));
+  if(!sheetName) return null;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:null});
+  // Detect Day Shift format (col C header is different)
+  const isDayShift = sheetName.toLowerCase().includes('day shift') || sheetName.toLowerCase().includes('a&b');
+
+  // ── date + section ──────────────────────────────────────────────────────
+  // Only scan first 6 rows to avoid picking up dates from production data
+  let section="Sewing", date=new Date().toISOString().slice(0,10);
+  let foundDate=false;
+  for(let i=0;i<Math.min(6,rows.length);i++){
+    (rows[i]||[]).forEach(cell=>{
+      if(typeof cell!=="string") return;
+      const cl=cell.toLowerCase();
+      // Section detection
+      if(cl.includes("apron")&&!cl.includes("summary")&&!cl.includes("total")&&!cl.includes("line")) section="Apron";
+      else if(cl.includes("garment")&&!cl.includes("summary")) section="Garment";
+      // Date: prefer cells that contain "as of" to avoid stale dates
+      const asOf = /as of\s+([A-Za-z]{3,})\s+(\d{1,2})[,.\-]?\s*(\d{4})/i.exec(cell);
+      if(asOf && !foundDate){
+        const mo=MONTHS[asOf[1].toLowerCase().slice(0,3)];
+        if(mo){ date=`${asOf[3]}-${String(mo).padStart(2,"0")}-${String(asOf[2]).padStart(2,"0")}`; foundDate=true; }
+      }
+      // Fallback: any "Month DD, YYYY" in first 6 rows (only if no "as of" found yet)
+      if(!foundDate){
+        const m=cell.match(/([A-Za-z]{3,})\s+(\d{1,2})[,.\-]?\s*(\d{4})/);
+        if(m){ const mo=MONTHS[m[1].toLowerCase().slice(0,3)]; if(mo) date=`${m[3]}-${String(mo).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`; }
+      }
+    });
+  }
+
+  // ── BODY SCAN: col[2]=LineName, col[5]=Style, col[6]=SMV, col[10-13]=Normal, col[14]=OT, col[15]=TotalPcs, col[16]=TotalCtn ──
+  const lm = {}; // lineNo → {pcs, ctn, normalPcs, otPcs, smvLoad, styles:{}}
+  let cur = null;
+  let summaryStartRow = rows.length;
+  for(let i=4; i<rows.length; i++){
+    const r = rows[i]||[];
+    const r10 = r.slice(0,12).map(c=>String(c||"").toLowerCase()).join(" ");
+    if(r10.includes("summary shift")||r10.includes("total:")){
+      summaryStartRow = i;
+      break;
+    }
+
+    const c2 = String(r[2]||"").trim();
+    if(c2 && LRE.test(c2)){
+      cur = c2;
+      if(!lm[cur]) lm[cur]={pcs:0,ctn:0,normalPcs:0,otPcs:0,smvLoad:0,styles:{},details:{}};
+    }
+    if(!cur) continue;
+    const selfKey = String(r[3]||"").trim();
+    const po      = String(r[4]||"").trim();
+    const st      = String(r[5]||"").trim();
+    const rowSmv  = parseFloat(r[6])||0; // Current SMV per row
+    const color   = String(r[7]||"").trim();
+    const size    = String(r[8]||"").trim();
+    // Time slots: cols 10-13 = normal shift, col 14 = overtime
+    const slot1   = parseFloat(r[10])||0;
+    const slot2   = parseFloat(r[11])||0;
+    const slot3   = parseFloat(r[12])||0;
+    const slot4   = parseFloat(r[13])||0;
+    const otSlot  = parseFloat(r[14])||0;
+    const normalRow = slot1+slot2+slot3+slot4;
+    const pcs     = parseFloat(r[15]);
+    const ctn     = parseFloat(r[16]);
+    if(st && !isNaN(pcs) && pcs>0){
+      lm[cur].pcs+=pcs;
+      lm[cur].normalPcs+=normalRow;
+      lm[cur].otPcs+=otSlot;
+      if(rowSmv>0) lm[cur].smvLoad+=(pcs*rowSmv);
+      const detailKey=`${st}|${color}|${size}`;
+      if(!lm[cur].details[detailKey]) lm[cur].details[detailKey]={styleNo:st,selfKey,po,color,size,pcs:0,ctn:0,smv:rowSmv,normalPcs:0,otPcs:0};
+      lm[cur].details[detailKey].pcs+=pcs;
+      lm[cur].details[detailKey].normalPcs+=normalRow;
+      lm[cur].details[detailKey].otPcs+=otSlot;
+      if(rowSmv>0 && !lm[cur].details[detailKey].smv) lm[cur].details[detailKey].smv=rowSmv;
+    }
+    if(!isNaN(ctn)&&ctn>0){
+      if(st){
+        const dkc=`${st}|${color}|${size}`;
+        if(lm[cur].details[dkc]&&lm[cur].details[dkc].ctn===0){
+          lm[cur].details[dkc].ctn+=ctn;
+          lm[cur].ctn+=ctn;
+        }
+      } else if(Number.isInteger(ctn)){
+        lm[cur].ctn+=ctn;
+      }
+    }
+  }
+  Object.keys(lm).forEach(k=>{ if(lm[k].pcs===0) delete lm[k]; });
+  if(!Object.keys(lm).length) return null;
+
+
+  // ── SUMMARY SCAN (header-anchor strategy) ────────────────────────────────
+  // 1. Find "Summary..." header rows that contain ≥1 known line name → build colMap
+  // 2. For each colMap, scan ±20 rows for "Number of Sewers" and "Achieve Eff" rows
+  // 3. Read values at colMap indices → workers / eff
+  // This avoids the bidirectional guessing that fails on some XLSX.js builds.
+  const lmNorm = {};
+  Object.keys(lm).forEach(k => lmNorm[k.toUpperCase()] = k);
+  function normLine(s){ return s.toUpperCase().replace(/\s+/g,'').replace(/(\D)0+(\d)/g,'$1$2'); }
+  const lmFuzzy = {};
+  Object.keys(lm).forEach(k => lmFuzzy[normLine(k)] = k);
+
+  function lineNameAt(v){
+    if(!v) return null;
+    const s = String(v).trim();
+    if(!s) return null;
+    if(/^(LINE|Line)\s+[A-Z]?\d+$/.test(s)){
+      return lmNorm[s.toUpperCase()] || lmFuzzy[normLine(s)] || null;
+    }
+    return lmFuzzy[normLine(s)] || null;
+  }
+
+  const workers={}, eff={}, workersOT={}, hoursOT={};
+
+  // Pass 1: header-anchor scan
+  for(let i=0; i<rows.length; i++){
+    const r = rows[i]||[];
+    // Is this a summary header row? Check col 1 (B) for "Summary" keyword
+    const b = String(r[1]||'').trim().toLowerCase();
+    if(!b.startsWith('summary')) continue;
+    // Build colMap: colIndex → lineName
+    const colMap = {};
+    r.forEach((c,ci)=>{ const ln=lineNameAt(c); if(ln) colMap[ci]=ln; });
+    if(Object.keys(colMap).length === 0) continue;
+
+    // Scan rows i+1 to i+20 for worker/eff labels
+    for(let j=i+1; j<Math.min(i+20, rows.length); j++){
+      const jr = rows[j]||[];
+      const lbl = String(jr[1]||jr[0]||'').trim().toLowerCase();
+      const isW = lbl.includes('number of sewer') && !lbl.includes('(ot)') && !lbl.includes('ot)');
+      const isWOT = lbl.includes('number of sewer') && (lbl.includes('(ot)') || lbl.includes('ot)'));
+      const isE = lbl.includes('achieve eff');
+      const isHOT = lbl.includes('working hours') && (lbl.includes('(ot)') || lbl.includes('ot)'));
+      if(isW){
+        Object.entries(colMap).forEach(([ci,ln])=>{
+          const val=parseFloat(jr[ci]);
+          if(!isNaN(val)&&val>0&&!workers[ln]) workers[ln]=val;
+        });
+      }
+      if(isWOT){
+        Object.entries(colMap).forEach(([ci,ln])=>{
+          const val=parseFloat(jr[ci]);
+          if(!isNaN(val)&&val>0&&!workersOT[ln]) workersOT[ln]=val;
+        });
+      }
+      if(isHOT){
+        Object.entries(colMap).forEach(([ci,ln])=>{
+          const val=parseFloat(jr[ci]);
+          if(!isNaN(val)&&val>0&&!hoursOT[ln]) hoursOT[ln]=val;
+        });
+      }
+      if(isE){
+        Object.entries(colMap).forEach(([ci,ln])=>{
+          const val=parseFloat(jr[ci]);
+          if(!isNaN(val)&&val>0&&!eff[ln]) eff[ln]=val>1?Math.round(val):Math.round(val*100);
+        });
+      }
+    }
+  }
+
+  // Pass 2: fallback — label-first bidirectional (for any other layouts)
+  if(Object.keys(workers).length === 0){
+    for(let i=0; i<rows.length; i++){
+      const r=rows[i]||[];
+      const lbls=r.slice(0,10).map(c=>String(c||'').trim().toLowerCase()).filter(s=>s.length>2);
+      const hasW=lbls.some(s=>s.includes('number of sewer')&&!s.includes('(ot)'));
+      const hasE=lbls.some(s=>s.includes('achieve eff'));
+      if(!hasW&&!hasE) continue;
+      let entries=[];
+      for(let d=1;d<=25&&!entries.length;d++){
+        if(i-d>=0) entries=(rows[i-d]||[]).map((c,ci)=>{const ln=lineNameAt(c);return ln?[ln,ci]:null;}).filter(Boolean);
+        if(!entries.length&&i+d<rows.length) entries=(rows[i+d]||[]).map((c,ci)=>{const ln=lineNameAt(c);return ln?[ln,ci]:null;}).filter(Boolean);
+      }
+      if(!entries.length) continue;
+      const vrow=rows[i]||[];
+      entries.forEach(([ln,ci])=>{
+        const val=parseFloat(vrow[ci]);
+        if(isNaN(val)||val<=0) return;
+        if(hasW&&!workers[ln]) workers[ln]=val;
+        if(hasE&&!eff[ln]) eff[ln]=val>1?Math.round(val):Math.round(val*100);
+      });
+    }
+  }
+
+  const wLog=JSON.stringify(workers), eLog=JSON.stringify(eff);
+  console.log('[VRT]', section, date, '| lm:', JSON.stringify(Object.keys(lm)), '| workers:', wLog, '| eff:', eLog);
+
+  // ── Assemble records ──
+  const wUpper={}, eUpper={}, wotUpper={}, hotUpper={};
+  Object.entries(workers).forEach(([k,v])=>wUpper[k.toUpperCase()]=v);
+  Object.entries(eff).forEach(([k,v])=>eUpper[k.toUpperCase()]=v);
+  Object.entries(workersOT).forEach(([k,v])=>wotUpper[k.toUpperCase()]=v);
+  Object.entries(hoursOT).forEach(([k,v])=>hotUpper[k.toUpperCase()]=v);
+  console.log('[VRT]', section, date, '| lm:', JSON.stringify(Object.keys(lm)), '| workers:', JSON.stringify(workers), '| eff:', JSON.stringify(eff));
+  const recs=[];
+  Object.entries(lm).forEach(([lineNo,data])=>{
+    const normLN=normLineNo(lineNo);
+    const w=wUpper[normLN.toUpperCase()]||wUpper[lineNo.toUpperCase()]||0;
+    const e=eUpper[normLN.toUpperCase()]||eUpper[lineNo.toUpperCase()]||0;
+    const details=Object.values(data.details).sort((a,b)=>b.pcs-a.pcs);
+    const wot=wotUpper[normLN.toUpperCase()]||wotUpper[lineNo.toUpperCase()]||0;
+    const hot=hotUpper[normLN.toUpperCase()]||hotUpper[lineNo.toUpperCase()]||0;
+    if(details.length>0){
+      details.forEach((d,idx)=>{
+        const dCtn = d.ctn>0 ? d.ctn : (details.length===1 ? data.ctn : 0);
+        recs.push({id:uid(),date,section,lineNo:normLN,
+          selfKey:d.selfKey,po:d.po,styleNo:d.styleNo,color:d.color,size:d.size,
+          pieces:Math.round(d.pcs),
+          workers:idx===0?w:0, efficiency:e,
+          cartons:Math.round(dCtn*10)/10,
+          smv:d.smv||0, normalPcs:Math.round(d.normalPcs), otPcs:Math.round(d.otPcs),
+          workersOT:idx===0?wot:0, hoursOT:idx===0?hot:0});
+      });
+    } else {
+      recs.push({id:uid(),date,section,lineNo:normLN,
+        selfKey:"",po:"",styleNo:"",color:"",size:"",
+        pieces:Math.round(data.pcs),workers:w,efficiency:e,cartons:Math.round(data.ctn*10)/10,
+        smv:0,normalPcs:Math.round(data.normalPcs),otPcs:Math.round(data.otPcs),
+        workersOT:wot,hoursOT:hot});
+    }
+  });
+  return {recs, summary:{date,section,lines:Object.keys(lm).length,totalPcs:Math.round(Object.values(lm).reduce((s,d)=>s+d.pcs,0)),lineNames:Object.keys(lm),
+    debug:{sheet:sheetName, summaryRow:summaryStartRow, totalRows:rows.length,
+           workersMap: Object.fromEntries(Object.entries(workers).map(([k,v])=>[k,v])),
+           workersFound:Object.keys(workers).length, effFound:Object.keys(eff).length}}};
+}
+
+// ── Standard format parser ──────────────────────────────────────────────────
+function parseStd(wb, fname){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+  if(rows.length<2) return null;
+  const H={};
+  const HM={date:["日期","date"],lineNo:["line","線別","線","組"],styleNo:["款號","款式","style"],
+    pieces:["件數","pcs","pieces","數量"],workers:["人數","workers","staff"],
+    efficiency:["效率","eff"],cartons:["箱數","箱","ctn"],section:["section","部門"]};
+  let hi=0;
+  for(let i=0;i<Math.min(5,rows.length);i++){
+    rows[i].forEach((c,ci)=>{
+      const s=String(c||"").trim().toLowerCase();
+      Object.entries(HM).forEach(([f,ks])=>{ if(ks.some(k=>s.includes(k))&&H[f]===undefined) H[f]=ci; });
+    });
+    if(Object.keys(H).length>=3){ hi=i; break; }
+  }
+  if(H.pieces===undefined) return null;
+  const recs=[]; let lastDate="";
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i]; if(!r||r.every(c=>c===""||c===null)) continue;
+    let ds=H.date!==undefined?parseDate(String(r[H.date]||"")):"";
+    if(!ds) ds=lastDate; else lastDate=ds;
+    if(!ds) continue;
+    const pcs=parseFloat(r[H.pieces])||0; if(pcs<=0) continue;
+    const eff=parseFloat(r[H.efficiency])||0;
+    recs.push({id:uid(),date:ds,
+      section:H.section!==undefined?String(r[H.section]||"").trim():"Sewing",
+      lineNo:H.lineNo!==undefined?String(r[H.lineNo]||"").trim():"",
+      styleNo:H.styleNo!==undefined?String(r[H.styleNo]||"").trim():"",
+      pieces:pcs, workers:H.workers!==undefined?parseFloat(r[H.workers])||0:0,
+      efficiency:eff>1?Math.round(eff):eff>0?Math.round(eff*100):0,
+      cartons:H.cartons!==undefined?parseFloat(r[H.cartons])||0:0});
+  }
+  if(!recs.length) return null;
+  const lines=[...new Set(recs.map(r=>r.lineNo))];
+  return {recs, summary:{date:recs[0].date,section:"Sewing",lines:lines.length,totalPcs:recs.reduce((s,r)=>s+r.pieces,0),lineNames:lines}};
+}
+
+// ═══════════════════════ EMAIL ATTACHMENT EXTRACTORS ═════════════════════════
+
+// ── .eml (standard MIME format) ──────────────────────────────────────────────
+// Restored to original working approach + RFC2047 filename decoding
+async function extractFromEML(file) {
+  const text = await file.text();
+  const results = [];
+
+  // Decode RFC2047 encoded-word filenames
+  function decodeRFC2047(s) {
+    return s.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi, (_, charset, enc, encoded) => {
+      try {
+        if (enc.toUpperCase() === 'B') {
+          const bin = atob(encoded);
+          return new TextDecoder(charset).decode(new Uint8Array([...bin].map(c=>c.charCodeAt(0))));
+        } else {
+          return decodeURIComponent(encoded.replace(/_/g,' ').replace(/=([0-9A-F]{2})/gi,(_,h)=>'%'+h));
+        }
+      } catch(e) { return encoded; }
+    });
+  }
+
+  // Find all MIME boundaries
+  const boundaryRe = /boundary=["']?([^"'\r\n;\s]+)["']?/gi;
+  const boundaries = [];
+  let bm;
+  while ((bm = boundaryRe.exec(text)) !== null) boundaries.push(bm[1]);
+
+  for (const boundary of [...new Set(boundaries)]) {
+    const parts = text.split('--' + boundary);
+    for (const part of parts) {
+      // Match Excel by content-type OR filename extension
+      const isXls = /filename\s*=\s*["']?[^"'\r\n]*\.xlsx?["']?/i.test(part) ||
+                    /content-type:[^\r\n]*(spreadsheet|excel|openxml)/i.test(part) ||
+                    /name\s*=\s*["']?[^"'\r\n]*\.xlsx?["']?/i.test(part);
+      if (!isXls) continue;
+
+      // Extract filename (support RFC2047 and name= fallback)
+      let fname = 'attachment.xlsx';
+      const fnMatch = part.match(/filename\*?(?:=|\*0\*=)\s*(?:[A-Za-z0-9-]+'')?["']?([^"'\r\n;]+\.xlsx?)["']?/i)
+                   || part.match(/\bname\s*=\s*["']?([^"'\r\n;]+\.xlsx?)["']?/i);
+      if (fnMatch) fname = decodeRFC2047(fnMatch[1].trim());
+
+      // Extract base64 body (after first blank line)
+      const bodyMatch = part.match(/\r?\n\r?\n([\s\S]+?)(?:--|\s*$)/);
+      if (!bodyMatch) continue;
+      const b64 = bodyMatch[1].replace(/[\r\n\s]/g, '');
+      if (b64.length < 100) continue;
+
+      try {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
+          results.push({ name: fname.split(/[/\\]/).pop(), data: bytes });
+        }
+      } catch(e) {}
+    }
+  }
+  return results;
+}
+// ─── .msg (Outlook binary — OLE Compound File) ───────────────────────────────
+// Strategy: scan ALL PK\x03\x04 starts, for each search FORWARD for its own EOCD
+// This correctly handles multiple attached Excel files in one email
+async function extractFromMSG(file) {
+  const buf  = await file.arrayBuffer();
+  const all  = new Uint8Array(buf);
+  const results = [];
+
+  // Helper: read LE16
+  const r16 = (b, o) => b[o] | (b[o+1]<<8);
+
+  let searchFrom = 0;
+  while (searchFrom < all.length - 4) {
+    // Find next Local File Header PK\x03\x04
+    let pkPos = -1;
+    for (let i = searchFrom; i < all.length - 3; i++) {
+      if (all[i]===0x50 && all[i+1]===0x4B && all[i+2]===0x03 && all[i+3]===0x04) {
+        pkPos = i; break;
+      }
+    }
+    if (pkPos === -1) break;
+
+    // Search FORWARD (not backward!) for End of Central Directory PK\x05\x06
+    // Limit scan to 128 MB after pkPos to avoid infinite loop on giant files
+    let end = -1;
+    const limit = Math.min(pkPos + 128*1024*1024, all.length - 21);
+    for (let j = pkPos + 22; j < limit; j++) {
+      if (all[j]===0x50 && all[j+1]===0x4B && all[j+2]===0x05 && all[j+3]===0x06) {
+        const commentLen = r16(all, j+20);
+        end = j + 22 + commentLen;
+        break;
+      }
+    }
+
+    if (end > pkPos + 50) {
+      const zipData = all.slice(pkPos, end);
+      try {
+        const wb = XLSX.read(zipData, { type:"array", cellDates:true });
+        // Confirm it's actually an xlsx (must have workbook xml)
+        const hasWorkbook = wb.SheetNames.length > 0 &&
+          Object.keys(wb.Sheets).length > 0;
+        if (hasWorkbook) {
+          // Try to recover filename from nearby OLE bytes (UTF-16 LE)
+          let fname = `attachment_${results.length}.xlsx`;
+          const lookback = Math.max(0, pkPos - 4000);
+          outer: for (let k = pkPos - 8; k > lookback; k--) {
+            // ".xlsx" in UTF-16 LE = 2E 00 78 00 6C 00 73 00 78 00
+            if (all[k]===0x2E&&all[k+1]===0x00&&all[k+2]===0x78&&all[k+3]===0x00&&
+                all[k+4]===0x6C&&all[k+5]===0x00&&all[k+6]===0x73&&all[k+7]===0x00) {
+              // Walk backward to find filename start (stop at non-printable or null-null)
+              let ns = k - 2;
+              while (ns > lookback) {
+                const c = all[ns], h = all[ns+1];
+                if (h === 0x00 && c >= 0x20 && c < 0x7F) ns -= 2;
+                else break;
+              }
+              ns += 2;
+              let fn = '';
+              for (let n = ns; n <= k+9 && n < all.length-1; n+=2)
+                if (all[n]>=0x20 && all[n]<0x7F) fn += String.fromCharCode(all[n]);
+              if (fn.length > 3 && fn.length < 200) { fname = fn; break outer; }
+            }
+          }
+          results.push({ name: fname, data: zipData, wb });
+          searchFrom = end; // continue AFTER this ZIP
+          continue;
+        }
+      } catch(e) {}
+    }
+    searchFrom = pkPos + 4; // skip and keep looking
+  }
+  return results;
+}
+
+// ═══════════════════════ FILE HANDLING ════════════════════════════════════════
+let pendingFiles=[], pendingRecs=[];
+
+function dzOver(e){ e.preventDefault(); document.getElementById("dz").classList.add("drag"); }
+function dzOut(){ document.getElementById("dz").classList.remove("drag"); }
+function dzDrop(e){ e.preventDefault(); dzOut(); addFiles(e.dataTransfer.files); }
+function dzSelect(e){ addFiles(e.target.files); }
+
+function addFiles(fs){
+  Array.from(fs).forEach(f=>{ if(!pendingFiles.find(x=>x.name===f.name&&x.size===f.size)) pendingFiles.push(f); });
+  renderFileList();
+  document.getElementById("btnImport").disabled=pendingFiles.length===0;
+}
+function removeFile(i){ pendingFiles.splice(i,1); renderFileList(); document.getElementById("btnImport").disabled=pendingFiles.length===0; }
+
+function renderFileList(){
+  const el=document.getElementById("fileList");
+  if(!pendingFiles.length){ el.innerHTML=""; document.getElementById("dz").classList.remove("done"); return; }
+  document.getElementById("dz").classList.add("done");
+  el.innerHTML=pendingFiles.map((f,i)=>{
+    const isEmail = /\.(eml|msg)$/i.test(f.name);
+    const icon = isEmail ? "📧" : "📊";
+    const color = isEmail ? "#7c3aed" : "#059669";
+    const hint = isEmail ? " (自動提取附件)" : "";
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eef0f6;font-size:13px">
+      <span style="color:${color}">${icon} ${f.name}<span style="color:#8b95b8;font-size:11px">${hint}</span></span>
+      <button onclick="removeFile(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:18px">×</button>
+    </div>`;
+  }).join("");
+}
+
+async function parseWorkbook(wb, fname) {
+  // Try weekly report first (has "Weekly Output Report" sheet)
+  let result = parseWeeklyReport(wb, fname);
+  if (!result) result = parseVRT(wb, fname);
+  if (!result) result = parseStd(wb, fname);
+  return result;
+}
+
+// Try to parse as efficiency report (monthly/factory summary)
+function tryParseEff(wb, fname){
+  // Exclude files that are clearly daily output (exact name or with "Day Shift" = separate format)
+  const hasExactDaily = wb.SheetNames.some(n=>{
+    const t=n.trim();
+    return t==="Daily Output" || t==="Daily Output1";
+  });
+  if(hasExactDaily) return null;
+  return parseEffReport(wb, fname);
+}
+
+async function doImport(){
+  const btn=document.getElementById("btnImport");
+  const msg=document.getElementById("importMsg");
+  btn.disabled=true; msg.textContent="解析中..."; msg.style.color="#6b7a9e";
+  pendingRecs=[];
+  const previews=[], errors=[];
+
+  for(const f of pendingFiles){
+    const ext = f.name.split('.').pop().toLowerCase();
+    try{
+      if (ext === 'eml') {
+        // Extract Excel attachments from .eml email
+        msg.textContent = `📧 從 ${f.name} 提取附件...`;
+        const attachments = await extractFromEML(f);
+        if (!attachments.length) { errors.push(`${f.name}：未找到 Excel 附件`); continue; }
+        for (const att of attachments) {
+          try {
+            const wb = XLSX.read(att.data, {type:"array", cellDates:true});
+            const result = await parseWorkbook(wb, att.name);
+            if (!result) { errors.push(`${att.name}：未能識別格式`); continue; }
+            pendingRecs.push(...result.recs);
+            previews.push({fname: `📧${f.name} → ${att.name}`, ...result.summary});
+          } catch(e) { errors.push(`${att.name}：${e.message}`); }
+        }
+      } else if (ext === 'msg') {
+        // Extract Excel from .msg Outlook email
+        msg.textContent = `📧 從 ${f.name} 提取附件...`;
+        const attachments = await extractFromMSG(f);
+        if (!attachments.length) {
+          errors.push(`${f.name}：找不到 Excel 附件（.msg 格式限制，請改用 .eml，見下方說明）`);
+          continue;
+        }
+        let foundAny = false;
+        for (const att of attachments) {
+          try {
+            const wb = att.wb || XLSX.read(att.data, {type:"array", cellDates:true});
+            const result = await parseWorkbook(wb, att.name);
+            if (!result) {
+              // Show sheet names to help debug
+              const sheets = wb.SheetNames.join(', ');
+              errors.push(`${att.name}：格式不符（工作表：${sheets}）— 可能提取到錯誤的附件，建議改用 .eml`);
+              continue;
+            }
+            pendingRecs.push(...result.recs);
+            previews.push({fname: `📧 ${att.name}`, ...result.summary});
+            foundAny = true;
+          } catch(e) { errors.push(`${att.name}：${e.message}`); }
+        }
+        if (!foundAny && !errors.find(e=>e.includes(f.name)))
+          errors.push(`${f.name}：已提取 ${attachments.length} 個附件但均無法識別格式`);
+      } else {
+        // Direct Excel file
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(new Uint8Array(buf),{type:"array",cellDates:true});
+        const result = await parseWorkbook(wb, f.name);
+        if(!result){
+          // Try auto-routing to efficiency DB
+          const effResult = tryParseEff(wb, f.name);
+          if(effResult && !effResult._isDailyOutput){
+            initEffDB();
+            const map=new Map(EFF_DB.map(r=>[r.id,r]));
+            effResult.records.forEach(r=>map.set(r.id,r));
+            EFF_DB=[...map.values()];
+            saveEffDB();
+            previews.push({fname:`📈[自動→效率報表] ${f.name}`, date:effResult.summary.period,
+              section:effResult.summary.section, lines:effResult.summary.lines,
+              totalPcs:0, lineNames:[], _isEff:true});
+            continue;
+          }
+          errors.push(`${f.name}：未能識別格式`); continue;
+        }
+        pendingRecs.push(...result.recs);
+        previews.push({fname:f.name, ...result.summary});
+      }
+    }catch(e){ errors.push(`${f.name}：${e.message}`); }
+  }
+
+  msg.textContent="";
+
+  if(pendingRecs.length){
+    const pa=document.getElementById("previewArea");
+    pa.style.display="block";
+    const errHtml=errors.length?`<div class="al al-e" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <b>⚠️ ${errors.length} 個檔案無法識別格式（點擊展開）</b>
+        <span style="font-size:11px;color:#6b7a9e">常見原因：舊版格式 / 附件提取失敗 / 格式不符</span>
+      </div>
+      <div style="display:none;margin-top:8px;font-size:11px;line-height:1.7">${errors.map(e=>`• ${e}`).join('<br>')}</div>
+    </div>`:"";
+    document.getElementById("previewContent").innerHTML=errHtml+previews.map(p=>{
+      if(p._isEff) return `<div class="preview-file" style="border-left:3px solid #7c3aed">
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;color:#7c3aed">${p.fname}</span>
+          <span style="color:#059669;font-size:12px">✓ ${p.lines}條線 → 已存入效率報表</span>
+        </div>
+        <div style="font-size:12px;color:#6b7a9e">期間：<b>${p.date}</b>　Section：<b>${p.section}</b></div>
+      </div>`;
+      return `<div class="preview-file">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:600;color:#1e2640">📄 ${p.fname}</span>
+          <span style="font-size:12px;color:#059669">✓ ${p.lines}條線，${p.totalPcs.toLocaleString()}件</span>
+        </div>
+        <div style="font-size:12px;color:#6b7a9e;margin-top:4px">日期：<b>${p.date}</b>　Section：<b>${p.section}</b></div>
+        ${p.debug?'<div style="font-size:10px;color:#9ca3af;margin-top:3px;font-family:monospace">📋 Sheet:"'+p.debug.sheet+'" Summary行:'+p.debug.summaryRow+'/'+p.debug.totalRows+' 人數:'+p.debug.workersFound+'條['+Object.entries(p.debug.workersMap||{}).map(([k,v])=>k+':'+v).join(',')+'] 效率:'+p.debug.effFound+'條</div>':""}
+        <div class="preview-lines">${p.lineNames.map(ln=>`<span class="preview-line">${ln}</span>`).join("")}</div>
+      </div>`;
+    }).join("")+
+      (previews.length>1?`<div class="al al-ok">✓ ${previews.filter(p=>!p._isEff).length} 個日報檔案，${pendingRecs.length} 筆記錄${previews.filter(p=>p._isEff).length?`・${previews.filter(p=>p._isEff).length} 個效率報表已自動存入`:""}</div>`:"");
+    msg.style.color="#6b7a9e";
+    msg.textContent=`找到 ${pendingRecs.length} 筆記錄，請確認後存入`;
+  } else {
+    msg.textContent="⚠️ "+(errors.length?errors.join("；"):"未找到有效資料");
+    msg.style.color="#dc2626";
+  }
+  btn.disabled=false;
+}
+
+async function confirmImport(){
+  if(!pendingRecs.length) return;
+  // Remove ALL old records for any date covered by this import, then add new
+  const importDates=new Set(pendingRecs.map(r=>r.date));
+  DB=DB.filter(r=>!importDates.has(r.date));
+  // Dedup within the new batch itself (date|lineNo|styleNo)
+  const map=new Map();
+  pendingRecs.forEach(r=>map.set(`${r.date}|${r.lineNo}|${r.styleNo}|${r.color||""}|${r.size||""}`,r));
+  DB=[...DB,...map.values()];
+  saveDB(); updateHeader(); renderDBCard();
+  pendingFiles=[]; pendingRecs=[]; renderFileList();
+  document.getElementById("previewArea").style.display="none";
+  document.getElementById("importMsg").textContent=`✓ 已儲存 ${DB.length} 筆記錄`;
+  document.getElementById("importMsg").style.color="#059669";
+  // Folder scan callback (marks files as scanned after confirm)
+  if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
+}
+
+function cancelImport(){
+  pendingRecs=[]; document.getElementById("previewArea").style.display="none";
+  document.getElementById("importMsg").textContent="";
+}
+
+// ═══════════════════════ HEADER + DB CARD ════════════════════════════════════
+function updateHeader(){
+  document.getElementById("hRecs").textContent=DB.length;
+  document.getElementById("hDays").textContent=[...new Set(DB.map(r=>r.date))].length;
+  document.getElementById("hLines").textContent=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))].length;
+  try{
+    const bytes=new Blob([localStorage.getItem(LS_KEY)||""]).size;
+    const kb=Math.round(bytes/1024);
+    const pct=Math.round(bytes/51200);
+    if(_fileHandle){
+      document.getElementById("hStorage").textContent="📎"+_fileHandle.name.slice(0,8);
+      document.getElementById("hStorage").style.color="#10b981";
+      document.getElementById("hStorageLabel").textContent="已連結";
+      const el=document.getElementById("fileConnectInfo");
+      if(el){ el.style.display="block"; el.textContent="📎 已連結："+_fileHandle.name; }
+    } else {
+      document.getElementById("hStorage").textContent=kb+"KB";
+      document.getElementById("hStorage").style.color=pct>80?"#dc2626":pct>60?"#d97706":"#fbbf24";
+      document.getElementById("hStorageLabel").textContent="儲存用量";
+    }
+  }catch(e){}
+}
+updateHeader();
+
+function renderDBCard(){
+  const card=document.getElementById("dbCard");
+  if(!DB.length){ card.style.display="none"; return; }
+  card.style.display="block";
+  const dates=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  const lines=[...new Set(DB.map(r=>r.lineNo))].filter(Boolean);
+  const secs=[...new Set(DB.map(r=>r.section))].filter(Boolean);
+  document.getElementById("dbInfo").innerHTML=`
+    <div class="g3" style="margin-bottom:10px">
+      ${[{v:DB.length,l:"總記錄筆數",c:"#f59e0b"},{v:dates.length,l:"記錄天數",c:"#3b82f6"},{v:lines.length,l:"生產線數",c:"#10b981"}]
+        .map(k=>`<div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e2e6f0">
+          <div style="font-size:24px;font-weight:700;font-family:monospace;color:${k.c}">${k.v}</div>
+          <div style="font-size:10px;color:#6b7a9e;margin-top:3px">${k.l}</div></div>`).join("")}
+    </div>
+    <div style="font-size:12px;color:#6b7a9e">最近日期：${dates.slice(0,5).join("  ·  ")}</div>
+    <div style="font-size:12px;color:#6b7a9e;margin-top:3px">Sections：${secs.join("  ·  ")}</div>`;
+}
+
+// ═══════════════════════ DAILY REPORT ════════════════════════════════════════
+function populateDailySel(){
+  const sel=document.getElementById("dsel");
+  const prev=sel.value;
+  const dates=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  sel.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join("");
+  if(prev&&dates.includes(prev)) sel.value=prev;
+  // Sections
+  const ss=[...new Set(DB.map(r=>r.section))].filter(Boolean);
+  const ssel=document.getElementById("dsec");
+  const prevS=ssel.value;
+  ssel.innerHTML=`<option value="">全部</option>`+ss.map(s=>`<option value="${s}">${s}</option>`).join("");
+  if(prevS) ssel.value=prevS;
+}
+
+function buildLineMap(recs){
+  const lm={};
+  recs.forEach(r=>{
+    const k=r.lineNo||"(未知)";
+    if(!lm[k]) lm[k]={lineNo:k,section:r.section,workers:0,efficiency:0,totalPcs:0,cartons:0,styles:[]};
+    lm[k].totalPcs+=r.pieces;
+    lm[k].cartons+=r.cartons;
+    if(r.styleNo) lm[k].styles.push({styleNo:r.styleNo,pcs:r.pieces});
+    if(r.workers>lm[k].workers) lm[k].workers=r.workers;
+    if(r.efficiency>lm[k].efficiency) lm[k].efficiency=r.efficiency;
+  });
+  return Object.values(lm).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+}
+
+function effClass(e){ return e>=45?"hi":e>=30?"md":e>0?"lo":"zero"; }
+function effBadge(e){ if(!e) return ""; return `<div class="eff-b">${e}%</div>`; }
+function secClass(s){ return s==="Apron"?"sc-a":"sc-g"; }
+
+function lineCardHTML(line){
+  const ec=effClass(line.efficiency);
+  const pp=line.workers>0?(line.totalPcs/line.workers).toFixed(1):null;
+  const cap=Math.min(line.efficiency/100,1)*100;
+  return `<div class="lc ${ec}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px">
+      <div>
+        <div class="lc-name">${line.lineNo}</div>
+        ${line.section?`<span class="lc-sec ${secClass(line.section)}">${line.section}</span>`:""}
+      </div>
+      ${effBadge(line.efficiency)}
+    </div>
+    <div class="lc-row">
+      <div class="lc-stat"><div class="lc-sn">${line.workers||"-"}</div><div class="lc-sl">👷 人數</div></div>
+      <div class="lc-stat"><div class="lc-sn" style="color:#1d4ed8">${line.totalPcs.toLocaleString()}</div><div class="lc-sl">📦 件數</div></div>
+    </div>
+    ${pp?`<div class="pp"><span style="color:#0369a1">人均產量</span><span class="pp-v">${pp} 件/人</span></div>`:""}
+    ${line.cartons>0?`<div class="ctn-row"><span style="color:#6b7a9e">箱數</span><span class="mono" style="font-weight:600">${Math.round(line.cartons*10)/10} Ctn</span></div>`:""}
+    ${line.efficiency>0?`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7a9e;margin-bottom:2px"><span>效率</span><span>目標45%</span></div><div class="capbar"><div class="capfill" style="width:${cap}%;background:${ec==="hi"?"#059669":ec==="md"?"#d97706":"#dc2626"}"></div></div></div>`:""}
+    ${line.styles.length>0?`<div><div class="slist-hd">款式明細</div>${line.styles.sort((a,b)=>b.pcs-a.pcs).map(s=>`<div class="srow"><span class="sno">${s.styleNo}</span><span class="spcs">${s.pcs.toLocaleString()}件</span></div>`).join("")}</div>`:""}
+  </div>`;
+}
+
+function renderDaily(){
+  if(!DB.length){
+    document.getElementById("dKpi").innerHTML=`<div class="empty" style="grid-column:1/-1"><div style="font-size:36px">📊</div>尚未匯入資料</div>`;
+    document.getElementById("dSecs").style.display="none";
+    document.getElementById("dAlerts").style.display="none";
+    if(document.getElementById("dSunAlert")) document.getElementById("dSunAlert").style.display="none";
+    if(document.getElementById("dTodayAlert")) document.getElementById("dTodayAlert").style.display="none";
+    document.getElementById("dCards").innerHTML="";
+    document.getElementById("dTableCard").style.display="none";
+    return;
+  }
+  const date=document.getElementById("dsel").value;
+  const secF=document.getElementById("dsec").value;
+  let day=DB.filter(r=>r.date===date);
+  if(secF){
+    const filtered=day.filter(r=>r.section===secF);
+    // If selected section has no data for this date, fall back to all sections
+    if(!filtered.length && day.length){
+      document.getElementById("dsec").value="";
+      const ssel=document.getElementById("dsec");
+      // Add info message
+      const meta=document.getElementById("dmeta");
+      meta.textContent=(meta.textContent||"")+" ⚠️ 該日無「"+secF+"」資料，已改為全部";
+    } else {
+      day=filtered;
+    }
+  }
+  const lines=buildLineMap(day);
+  const active=lines.filter(l=>l.totalPcs>0);
+
+  const totW=lines.reduce((s,l)=>s+l.workers,0);
+  const totP=lines.reduce((s,l)=>s+l.totalPcs,0);
+  const totC=lines.reduce((s,l)=>s+l.cartons,0);
+  const effLines=active.filter(l=>l.efficiency>0&&l.workers>0);
+  const totWkrEff=effLines.reduce((s,l)=>s+l.workers,0);
+  // Weighted average: sum(eff*workers)/sum(workers) — matches Excel's ProMins/AttMins method
+  const avgEff=totWkrEff>0?Math.round(effLines.reduce((s,l)=>s+l.efficiency*l.workers,0)/totWkrEff):
+               active.filter(l=>l.efficiency>0).length?Math.round(active.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/active.filter(l=>l.efficiency>0).length):0;
+
+  const selDate=document.getElementById("dsel").value;
+  const isSunday=selDate&&new Date(selDate+"T00:00:00").getDay()===0;
+  const isHoliday=selDate&&isKHHoliday(selDate);
+  const isToday=selDate===new Date().toISOString().slice(0,10);
+  const linesNoWorkers=active.filter(l=>l.workers===0).length;
+  document.getElementById("dmeta").textContent=`${active.length}條線 · ${day.length}筆${isSunday?" ⚠️ 週日":""}${isHoliday?" 🎌 公眾假期":""}${isToday?" 📅 今日":""}`;
+  // Show Sunday/holiday alert
+  const sunAlert=document.getElementById("dSunAlert");
+  if(sunAlert) sunAlert.style.display=(isSunday||isHoliday)&&active.length?"block":"none";
+  if(sunAlert&&(isSunday||isHoliday)&&active.length){
+    // Check if data has style details (= from daily report = real OT) vs no style (= from weekly = ghost)
+    const hasDetail=day.some(r=>r.styleNo&&r.cartons>0);
+    if(isHoliday&&!isSunday){
+      sunAlert.innerHTML=hasDetail
+        ?`<div class="al al-i">🎌 <b>公眾假期加班</b>：此日為柬埔寨公眾假期，但有完整日報資料（含款號/箱數），應為實際加班生產。</div>`
+        :`<div class="al al-w">🎌 <b>公眾假期</b>：此日為柬埔寨公眾假期，資料無款號/箱數，可能來自週報誤分配，建議刪除。</div>`;
+    }
+  }
+  // Show today/partial alert
+  const todayAlert=document.getElementById("dTodayAlert");
+  if(todayAlert){
+    if(isToday){
+      const noWorkerList=active.filter(l=>l.workers===0).map(l=>l.lineNo).join("、");
+      todayAlert.style.display="block";
+      todayAlert.innerHTML=`<div class="al al-i">📅 <b>今日資料（${selDate}）</b>：當天尚未結束，此為目前已收到的部分資料。${linesNoWorkers>0?`<br>⚠️ 以下 ${linesNoWorkers} 條線人數未記錄（可能尚未上報）：${noWorkerList}`:"所有線別均有人數記錄。"}</div>`;
+    } else {
+      todayAlert.style.display="none";
+    }
+  }
+
+  // KPI
+  document.getElementById("dKpi").innerHTML=[
+    {l:"生產線數",v:active.length,u:"條",c:"#f59e0b"},
+    {l:"合計人數",v:totW,u:"人",c:"#1e2640"},
+    {l:"合計件數",v:totP.toLocaleString(),u:"件",c:"#1d4ed8"},
+    {l:"平均效率",v:avgEff,u:"%",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626"},
+    {l:"合計箱數",v:Math.round(totC*10)/10,u:"Ctn",c:"#6b7a9e"},
+    {l:"人均件數",v:totW>0?(totP/totW).toFixed(1):"-",u:"件/人",c:"#0369a1"},
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c}">${k.v}<span class="kpi-u">${k.u}</span></div><div class="kpi-l">${k.l}</div></div>`).join("");
+
+  // Sections
+  const secs=[...new Set(lines.map(l=>l.section))].filter(Boolean);
+  const secsEl=document.getElementById("dSecs");
+  if(secs.length>1 && !secF){
+    secsEl.style.display="flex";
+    secsEl.innerHTML=secs.map(sec=>{
+      const ls=active.filter(l=>l.section===sec);
+      const sc=sec==="Apron"?"#7c3aed":"#0369a1", sb=sec==="Apron"?"#f3e8ff":"#e0f2fe";
+      return `<div class="sp" style="background:${sb};border-color:${sc}30"><b style="color:${sc}">${sec}</b> <span style="color:#374151">${ls.length}組 · ${ls.reduce((s,l)=>s+l.workers,0)}人 · <b>${ls.reduce((s,l)=>s+l.totalPcs,0).toLocaleString()}</b>件</span></div>`;
+    }).join("");
+  } else secsEl.style.display="none";
+
+  // Alerts
+  renderAlerts(active);
+
+  // Cards
+  document.getElementById("dCards").innerHTML=active.length
+    ? active.map(lineCardHTML).join("")
+    : `<div class="empty" style="grid-column:1/-1">該日無資料</div>`;
+
+  // Table - summary + PO detail
+  const tc=document.getElementById("dTableCard");
+  if(active.length){
+    tc.style.display="block";
+    document.getElementById("dTbody").innerHTML=active.map(l=>{
+      const pp=l.workers>0?(l.totalPcs/l.workers).toFixed(1):"-";
+      const diff=l.efficiency?l.efficiency-45:null;
+      return `<tr>
+        <td class="mono" style="font-weight:600">${l.lineNo}</td>
+        <td>${l.section||"-"}</td>
+        <td class="mono">${l.workers||"-"}</td>
+        <td class="mono" style="color:#1d4ed8;font-weight:600">${l.totalPcs.toLocaleString()}</td>
+        <td>${l.efficiency>0?`<span class="b b${effClass(l.efficiency).slice(0,2)==="hi"?"ok":effClass(l.efficiency).slice(0,2)==="md"?"wn":"bd"}">${l.efficiency}%</span>`:"-"}</td>
+        <td>${diff!==null?`<span style="color:${diff>=0?"#059669":"#dc2626"};font-weight:700;font-family:monospace">${diff>=0?"+":""}${diff}%</span>`:"-"}</td>
+        <td class="mono" style="color:#0369a1">${pp}</td>
+        <td class="mono">${l.cartons>0?Math.round(l.cartons*10)/10:"-"}</td>
+        <td class="mono">${l.styles.length||"-"}</td>
+      </tr>`;
+    }).join("");
+    // PO detail table
+    const poRecs=day.filter(r=>r.pieces>0).sort((a,b)=>
+      a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true})||
+      (a.styleNo||"").localeCompare(b.styleNo||"")||
+      (a.color||"").localeCompare(b.color||""));
+    const pob=document.getElementById("dPOBody");
+    if(pob) pob.innerHTML=poRecs.map(r=>`<tr>
+      <td class="mono" style="font-weight:600">${r.lineNo}</td>
+      <td>${r.section||"-"}</td>
+      <td class="mono">${r.styleNo||"-"}</td>
+      <td class="mono" style="color:#6b7a9e;font-size:11px">${r.selfKey||"-"}</td>
+      <td class="mono" style="color:#6b7a9e;font-size:11px">${r.po||"-"}</td>
+      <td style="font-size:12px">${r.color||"-"}</td>
+      <td class="mono">${r.size||"-"}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${(r.pieces||0).toLocaleString()}</td>
+      <td class="mono">${r.cartons>0?Math.round(r.cartons*10)/10:"-"}</td>
+    </tr>`).join("");
+  } else tc.style.display="none";
+}
+
+// ═══════════════════════ WEEKLY ══════════════════════════════════════════════
+function getWeekKey(date){
+  // ISO 8601: week starts Monday, week 1 = week containing first Thursday
+  const d=new Date(date+"T00:00:00");
+  const day=d.getDay()||7; // Mon=1 ... Sun=7
+  d.setDate(d.getDate()+4-day); // shift to Thursday of this week
+  const jan1=new Date(d.getFullYear(),0,1);
+  const weekNum=Math.ceil(((d-jan1)/86400000+1)/7);
+  const yr=new Date(date+"T00:00:00");
+  yr.setDate(yr.getDate()+4-(yr.getDay()||7));
+  return `${yr.getFullYear()}-W${String(weekNum).padStart(2,"0")}`;
+}
+function getWeekDates(wk){
+  return [...new Set(DB.filter(r=>getWeekKey(r.date)===wk).map(r=>r.date))].sort();
+}
+
+function populateWeekSel(){
+  const sel=document.getElementById("wsel");
+  const prev=sel.value;
+  const weeks=[...new Set(DB.map(r=>getWeekKey(r.date)))].sort().reverse();
+  sel.innerHTML=weeks.map(w=>`<option value="${w}">${w}</option>`).join("");
+  if(prev&&weeks.includes(prev)) sel.value=prev;
+}
+
+function renderWeekly(){
+  if(!DB.length){
+    document.getElementById("wKpi").innerHTML=`<div class="empty">尚未匯入資料</div>`;
+    return;
+  }
+  const wk=document.getElementById("wsel").value;
+  const wDates=getWeekDates(wk);
+  const wRecs=DB.filter(r=>getWeekKey(r.date)===wk);
+  const lines=buildLineMap(wRecs);
+  const active=lines.filter(l=>l.totalPcs>0);
+
+  const totW=active.reduce((s,l)=>s+l.workers,0);
+  const totP=active.reduce((s,l)=>s+l.totalPcs,0);
+  const totC=active.reduce((s,l)=>s+l.cartons,0);
+  const effLines=active.filter(l=>l.efficiency>0&&l.workers>0);
+  const totWkrEff=effLines.reduce((s,l)=>s+l.workers,0);
+  // Weighted average: sum(eff*workers)/sum(workers) — matches Excel's ProMins/AttMins method
+  const avgEff=totWkrEff>0?Math.round(effLines.reduce((s,l)=>s+l.efficiency*l.workers,0)/totWkrEff):
+               active.filter(l=>l.efficiency>0).length?Math.round(active.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/active.filter(l=>l.efficiency>0).length):0;
+
+  const wWorkDays=wDates.filter(d=>new Date(d+"T00:00:00").getDay()!==0);
+  const wSunDays=wDates.filter(d=>new Date(d+"T00:00:00").getDay()===0);
+  document.getElementById("wmeta").textContent=`${wWorkDays.length}工作天${wSunDays.length?" · ⚠️"+wSunDays.length+"日有週日資料":""} · ${active.length}條線`;
+
+  document.getElementById("wKpi").innerHTML=[
+    {l:"工作天數",v:wWorkDays.length,u:"天",c:"#f59e0b"},
+    {l:"生產線數",v:active.length,u:"條",c:"#374151"},
+    {l:"合計人次",v:totW,u:"人次",c:"#1e2640"},
+    {l:"合計件數",v:totP.toLocaleString(),u:"件",c:"#1d4ed8"},
+    {l:"平均效率",v:avgEff,u:"%",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626"},
+    {l:"人均件數",v:totW>0?(totP/totW).toFixed(1):"-",u:"件/人",c:"#0369a1"},
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c}">${k.v}<span class="kpi-u">${k.u}</span></div><div class="kpi-l">${k.l}</div></div>`).join("");
+
+  const wlc=document.getElementById("wLineCard");
+  if(active.length){ wlc.style.display="block"; document.getElementById("wLineCards").innerHTML=active.map(lineCardHTML).join(""); }
+  else wlc.style.display="none";
+
+  // Daily breakdown
+  const wdc=document.getElementById("wDailyCard");
+  if(wDates.length){
+    wdc.style.display="block";
+    const DOW=["日","一","二","三","四","五","六"];
+    document.getElementById("wDailyBody").innerHTML=wDates.map(d=>{
+      const dow=new Date(d+"T00:00:00").getDay(); // 0=Sun
+      const isSun=dow===0;
+      const dr=DB.filter(r=>r.date===d);
+      const dl=buildLineMap(dr).filter(l=>l.totalPcs>0);
+      const dW=dl.reduce((s,l)=>s+l.workers,0), dP=dl.reduce((s,l)=>s+l.totalPcs,0);
+      const dC=dl.reduce((s,l)=>s+l.cartons,0);
+      const dEffL=dl.filter(l=>l.efficiency>0&&l.workers>0);
+      const dWE=dEffL.reduce((s,l)=>s+l.workers,0);
+      const dAvgE=dWE>0?Math.round(dEffL.reduce((s,l)=>s+l.efficiency*l.workers,0)/dWE):
+                  dl.filter(l=>l.efficiency>0).length?Math.round(dl.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/dl.filter(l=>l.efficiency>0).length):0;
+      return `<tr style="${isSun?"background:#fef3c7;":""}">
+        <td class="mono" style="font-weight:600">${d} <span style="font-size:10px;color:${isSun?"#dc2626":"#6b7a9e"};font-weight:${isSun?"700":"400"}">(${isSun?"⚠️週日":"週"+DOW[dow]})</span></td>
+        <td class="mono">${dl.length}</td>
+        <td class="mono">${dW}</td>
+        <td class="mono" style="color:#1d4ed8;font-weight:600">${dP.toLocaleString()}</td>
+        <td>${dAvgE>0?`<span class="b b${dAvgE>=45?"ok":dAvgE>=30?"wn":"bd"}">${dAvgE}%</span>`:"-"}</td>
+        <td class="mono" style="color:#0369a1">${dW>0?(dP/dW).toFixed(1):"-"}</td>
+        <td class="mono">${dC>0?Math.round(dC*10)/10:"-"}</td>
+      </tr>`;
+    }).join("");
+  } else wdc.style.display="none";
+}
+
+// ═══════════════════════ MONTHLY/YEARLY ══════════════════════════════════════
+let curPeriod="monthly";
+function setPeriod(p){
+  curPeriod=p;
+  document.getElementById("btnMon").className="btn "+(p==="monthly"?"btn-y":"btn-g");
+  document.getElementById("btnYr").className="btn "+(p==="yearly"?"btn-y":"btn-g");
+  renderPeriod();
+}
+function getPKey(date){ return curPeriod==="yearly"?date.slice(0,4):date.slice(0,7); }
+
+function renderPeriod(){
+  document.getElementById("ptitle").textContent=curPeriod==="yearly"?"年別報表":"月別報表";
+  if(!DB.length){ const pb=document.getElementById("pBody"); pb.innerHTML=""; pb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:30px;color:#8b95b8">尚未有資料</td></tr>`; return; }
+  const map={};
+  DB.forEach(r=>{
+    const k=getPKey(r.date);
+    if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,effs:[],cartons:0};
+    map[k].dates.add(r.date); map[k].lines.add(r.lineNo);
+    map[k].workers+=r.workers; map[k].pieces+=r.pieces;
+    if(r.efficiency>0) map[k].effs.push(r.efficiency);
+    map[k].cartons+=r.cartons;
+  });
+  const periods=Object.keys(map).sort().reverse();
+  const pBody=document.getElementById("pBody"); pBody.innerHTML="";
+  pBody.innerHTML=periods.map(p=>{
+    const d=map[p];
+    const avgE=d.effs.length?Math.round(d.effs.reduce((s,v)=>s+v,0)/d.effs.length):0;
+    const pp=d.workers>0?(d.pieces/d.workers).toFixed(1):"-";
+    return `<tr>
+      <td class="mono" style="color:#f59e0b;font-weight:700">${p}</td>
+      <td class="mono">${d.dates.size}</td>
+      <td class="mono">${d.lines.size}</td>
+      <td class="mono">${d.workers.toLocaleString()}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${d.pieces.toLocaleString()}</td>
+      <td>${avgE>0?`<span class="b b${avgE>=45?"ok":avgE>=30?"wn":"bd"}">${avgE}%</span>`:"-"}</td>
+      <td class="mono" style="color:#0369a1">${pp}</td>
+      <td class="mono">${Math.round(d.cartons*10)/10||"-"}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("pmeta").textContent=`${periods.length} 個期間`;
+}
+
+
+// ═══════════════════════ EXPORT EXCEL ════════════════════════════════════════
+function exportExcel(mode){
+  // ── Daily export ──
+  if(mode==="daily"){
+    const date=document.getElementById("dsel").value;
+    const secF=document.getElementById("dsec").value;
+    if(!date){ alert("請先選擇日期"); return; }
+    let recs=[...DB].filter(r=>r.date===date);
+    if(secF) recs=recs.filter(r=>r.section===secF);
+    recs.sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+    const lines=buildLineMap(recs);
+    const header=["線別","Section","人數","件數","效率%","人均件數","箱數","款式數"];
+    const data=[header,...lines.map(l=>[l.lineNo,l.section||"",l.workers||"",l.totalPcs,
+      l.efficiency||"",l.workers>0?Math.round(l.totalPcs/l.workers*10)/10:"",
+      l.cartons>0?Math.round(l.cartons*10)/10:"",l.styles.length])];
+    // Add detail rows
+    data.push([]);
+    data.push(["=== 款式明細 ==="]);
+    data.push(["日期","Section","線別","SELFKEY","PO","款號","顏色","尺寸","件數","人數","效率%","箱數"]);
+    recs.sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true})||a.styleNo.localeCompare(b.styleNo));
+    recs.forEach(r=>data.push([r.date,r.section||"",r.lineNo||"",r.selfKey||"",r.po||"",r.styleNo||"",r.color||"",r.size||"",r.pieces||0,r.workers||"",r.efficiency||"",r.cartons||""]));
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"]=[{wch:10},{wch:10},{wch:6},{wch:8},{wch:7},{wch:8},{wch:7},{wch:7}];
+    const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,ws,`每日報告_${date}`);
+    XLSX.writeFile(wb2,`sewing_daily_${date}.xlsx`); return;
+  }
+  // ── Weekly export ──
+  if(mode==="weekly"){
+    const wk=document.getElementById("wsel").value;
+    const wDates=getWeekDates(wk);
+    const wRecs=DB.filter(r=>getWeekKey(r.date)===wk);
+    const lines=buildLineMap(wRecs);
+    // Summary sheet
+    const sumHeader=["線別","Section","合計人次","合計件數","效率%","人均件數","箱數"];
+    const sumData=[sumHeader,...lines.filter(l=>l.totalPcs>0).map(l=>[
+      l.lineNo,l.section||"",l.workers||"",l.totalPcs,l.efficiency||"",
+      l.workers>0?Math.round(l.totalPcs/l.workers*10)/10:"",l.cartons>0?Math.round(l.cartons*10)/10:""])];
+    // Daily breakdown sheet
+    const dayHeader=["日期","線別數","合計人數","合計件數","平均效率%","人均件數","箱數"];
+    const dayData=[dayHeader,...wDates.map(d=>{
+      const dr=DB.filter(r=>r.date===d);
+      const dl=buildLineMap(dr).filter(l=>l.totalPcs>0);
+      const dW=dl.reduce((s,l)=>s+l.workers,0),dP=dl.reduce((s,l)=>s+l.totalPcs,0);
+      const dC=dl.reduce((s,l)=>s+l.cartons,0);
+      const dEffL=dl.filter(l=>l.efficiency>0&&l.workers>0);
+      const dWE=dEffL.reduce((s,l)=>s+l.workers,0);
+      const dAvgE=dWE>0?Math.round(dEffL.reduce((s,l)=>s+l.efficiency*l.workers,0)/dWE):
+                  dl.filter(l=>l.efficiency>0).length?Math.round(dl.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/dl.filter(l=>l.efficiency>0).length):0;
+      return [d,dl.length,dW,dP,dAvgE||"",dW>0?Math.round(dP/dW*10)/10:"",Math.round(dC*10)/10||""];
+    })];
+    const wb2=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet(sumData),"線別匯總");
+    XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet(dayData),"每日明細");
+    XLSX.writeFile(wb2,`sewing_weekly_${wk}.xlsx`); return;
+  }
+// ── Period/records export (original) ──
+  const wb = XLSX.utils.book_new();
+  let rows, sheetName, filename;
+
+  if(mode==="records"){
+    const dv=document.getElementById("rDate").value;
+    const sv=document.getElementById("rSec").value;
+    const lv=document.getElementById("rLine").value;
+    let recs=[...DB];
+    if(dv) recs=recs.filter(r=>r.date===dv);
+    if(sv) recs=recs.filter(r=>r.section===sv);
+    if(lv) recs=recs.filter(r=>r.lineNo===lv);
+    recs.sort((a,b)=>b.date.localeCompare(a.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+    rows=[["日期","Section","線別","款號","件數","人數","效率%","箱數"],
+      ...recs.map(r=>[r.date,r.section||"",r.lineNo||"",r.styleNo||"",
+        r.pieces||0,r.workers||"",r.efficiency||"",r.cartons||""])];
+    sheetName="所有記錄"; filename=`sewing_records_${new Date().toISOString().slice(0,10)}.xlsx`;
+  } else {
+    // period report
+    const map={};
+    DB.forEach(r=>{
+      const k=getPKey(r.date);
+      if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,effs:[],cartons:0};
+      map[k].dates.add(r.date); map[k].lines.add(r.lineNo);
+      map[k].workers+=r.workers; map[k].pieces+=r.pieces;
+      if(r.efficiency>0) map[k].effs.push(r.efficiency);
+      map[k].cartons+=r.cartons;
+    });
+    const periods=Object.keys(map).sort().reverse();
+    rows=[["期間","工作天","線別數","合計人數","合計件數","平均效率%","人均件數","箱數"],
+      ...periods.map(p=>{
+        const d=map[p];
+        const avgE=d.effs.length?Math.round(d.effs.reduce((s,v)=>s+v,0)/d.effs.length):0;
+        return [p,d.dates.size,d.lines.size,d.workers,d.pieces,avgE||"",
+          d.workers>0?Math.round(d.pieces/d.workers*10)/10:"",Math.round(d.cartons*10)/10||""];
+      })];
+    sheetName=curPeriod==="yearly"?"年別報表":"月別報表";
+    filename=`sewing_${curPeriod}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  }
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  // Column widths
+  ws["!cols"]=[{wch:12},{wch:10},{wch:10},{wch:14},{wch:8},{wch:6},{wch:8},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  XLSX.writeFile(wb,filename);
+}
+
+// ═══════════════════════ ALERT THRESHOLDS ════════════════════════════════════
+const ALERT_EFF_LOW = 30;   // efficiency % below this = warning (ok threshold)
+const ALERT_EFF_CRIT = 15;  // efficiency % below this = critical
+const ALERT_WORKERS_MIN = 5; // fewer workers than this = flag
+
+function renderAlerts(lines){
+  const el = document.getElementById("dAlerts");
+  if(!el) return;
+  const alerts = [];
+
+  lines.forEach(l=>{
+    if(l.totalPcs===0) return;
+    if(l.efficiency>0 && l.efficiency<ALERT_EFF_CRIT){
+      alerts.push({level:"crit", msg:`⛔ ${l.lineNo}（${l.section}）效率僅 ${l.efficiency}%，遠低於目標 45%`});
+    } else if(l.efficiency>0 && l.efficiency<ALERT_EFF_LOW){
+      alerts.push({level:"warn", msg:`⚠️ ${l.lineNo}（${l.section}）效率 ${l.efficiency}%，低於目標 45%`});
+    }
+    if(l.workers>0 && l.workers<ALERT_WORKERS_MIN){
+      alerts.push({level:"warn", msg:`⚠️ ${l.lineNo}（${l.section}）人數僅 ${l.workers} 人，請確認`});
+    }
+  });
+
+  if(!alerts.length){ el.style.display="none"; return; }
+  el.style.display="block";
+  el.innerHTML=`<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px">
+    <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">📋 今日異常提醒（${alerts.length} 項）</div>
+    ${alerts.map(a=>`<div style="font-size:12px;color:${a.level==="crit"?"#991b1b":"#92400e"};padding:2px 0">${a.msg}</div>`).join("")}
+  </div>`;
+}
+
+
+// EFF_DB and saveEffDB/initEffDB are defined in the DB section above
+
+// Eff report parser
+const EFF_MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function parseEffReport(wb, fname){
+  // Detect if this is a daily output file (wrong tab)
+  const hasDailyOutput = wb.SheetNames.some(n=>/^daily output/i.test(n.trim()));
+  if(hasDailyOutput) return {_isDailyOutput:true, fname};
+  // Priority: Revised > Current Monthly > Monthly Eff (any variant) > Sheet 1 > first
+  const sheetName = wb.SheetNames.find(n=>/revised/i.test(n))
+    || wb.SheetNames.find(n=>/current monthly/i.test(n))
+    || wb.SheetNames.find(n=>/monthly eff/i.test(n))
+    || wb.SheetNames.find(n=>/^sheet 1$/i.test(n.trim()))
+    || wb.SheetNames.find(n=>/^sheet1$/i.test(n.trim()))
+    || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  let period="", section="Sewing";
+  for(let i=0;i<Math.min(6,rows.length);i++){
+    (rows[i]||[]).forEach(cell=>{
+      if(typeof cell!=="string") return;
+      const cl=cell.toLowerCase();
+      if(cl.includes("apron")) section="Apron";
+      else if(cl.includes("garment")) section="Garment";
+      const m=cell.match(/([A-Za-z]+)[_\s]+(\d{4})/);
+      if(m){ const mo=EFF_MONTHS[m[1].toLowerCase().slice(0,3)]; if(mo) period=m[2]+"-"+String(mo).padStart(2,"0"); }
+    });
+  }
+  if(!period) return null;
+  // Find the week header row: contains "1st Week" or "Pro.Min" pattern
+  // Try rows 4-7 (idx 4-7)
+  let weekRowIdx=5;
+  for(let ri=3;ri<Math.min(9,rows.length);ri++){
+    const r=rows[ri]||[];
+    const hasWeek=r.some(c=>typeof c==="string"&&/(1st|2nd|3rd|4th)\s*week/i.test(c));
+    if(hasWeek){ weekRowIdx=ri; break; }
+  }
+  const weekRow=rows[weekRowIdx]||[];
+  const weeks=[];
+  for(let ci=1;ci<=14;ci+=2){
+    const label=weekRow[ci];
+    if(label&&typeof label==="string"&&label.trim()&&!label.toLowerCase().includes("total")&&!label.toLowerCase().includes("eff"))
+      weeks.push({label:label.trim(),proCol:ci,attCol:ci+1});
+  }
+  const records=[];
+  for(let i=7;i<rows.length;i++){
+    const r=rows[i]||[];
+    const lineName=String(r[0]||"").trim();
+    if(!lineName||/^(total|weekly|monthly|section)/i.test(lineName)||!lineName.match(/^[A-Za-z]/)) continue;
+    const weeklyEff=weeks.map(w=>{
+      const pro=parseFloat(r[w.proCol]),att=parseFloat(r[w.attCol]);
+      return (pro>0&&att>0)?Math.round(pro/att*10000)/100:null;
+    });
+    let monthlyEff=parseFloat(r[15]);
+    if(isNaN(monthlyEff)){
+      const tp=parseFloat(r[13]),ta=parseFloat(r[14]);
+      monthlyEff=(tp>0&&ta>0)?tp/ta:0;
+    }
+    if(monthlyEff>1) monthlyEff=monthlyEff/100;
+    const monthlyEffPct=Math.round(monthlyEff*100);
+    if(monthlyEffPct===0&&weeklyEff.every(e=>e===null)) continue;
+    records.push({id:period+"|"+section+"|"+lineName,period,section,lineNo:lineName,weeks:weeks.map((w,i2)=>({label:w.label,eff:weeklyEff[i2]})),monthlyEff:monthlyEffPct});
+  }
+  return records.length?{records,summary:{period,section,lines:records.length,sheet:sheetName}}:null;
+}
+
+// Drop zone 2
+let effPendingFiles=[], effPendingRecs=[];
+function dzOver2(e){ e.preventDefault(); document.getElementById("dz-eff").classList.add("drag"); }
+function dzOut2(){ document.getElementById("dz-eff").classList.remove("drag"); }
+function dzDrop2(e){ e.preventDefault(); dzOut2(); addEffFiles(e.dataTransfer.files); }
+function dzSelect2(e){ addEffFiles(e.target.files); }
+function addEffFiles(fs){
+  Array.from(fs).forEach(f=>{ if(!effPendingFiles.find(x=>x.name===f.name&&x.size===f.size)) effPendingFiles.push(f); });
+  renderEffFileList();
+  document.getElementById("btnEffImport").disabled=effPendingFiles.length===0;
+}
+function renderEffFileList(){
+  const el=document.getElementById("effFileList");
+  if(!effPendingFiles.length){ el.innerHTML=""; return; }
+  el.innerHTML=effPendingFiles.map((f,i)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eef0f6;font-size:13px">
+    <span style="color:#7c3aed">📈 ${f.name}</span>
+    <button onclick="effPendingFiles.splice(${i},1);renderEffFileList();document.getElementById('btnEffImport').disabled=effPendingFiles.length===0" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:18px">x</button>
+  </div>`).join("");
+}
+async function doEffImport(){
+  const btn=document.getElementById("btnEffImport"),msg=document.getElementById("effMsg");
+  btn.disabled=true; msg.textContent="解析中..."; msg.style.color="#6b7a9e";
+  effPendingRecs=[]; const previews=[],errors=[];
+  initEffDB();
+  for(const f of effPendingFiles){
+    const ext=f.name.split(".").pop().toLowerCase();
+    try{
+      let attachments=[];
+      if(ext==="msg") attachments=await extractFromMSG(f);
+      else attachments=[{name:f.name,data:new Uint8Array(await f.arrayBuffer())}];
+      for(const att of attachments){
+        try{
+          const wb=att.wb||XLSX.read(att.data,{type:"array",cellDates:true});
+          const result=parseEffReport(wb,att.name);
+          if(!result){ errors.push(att.name+": 無法識別格式（找不到效率摘要工作表）"); continue; }
+          if(result._isDailyOutput){ errors.push(att.name+": 這是日報格式，請拖到「上傳報表」頁匯入"); continue; }
+          effPendingRecs.push(...result.records);
+          previews.push({fname:att.name,...result.summary});
+        }catch(e){ errors.push(att.name+": "+e.message); }
+      }
+    }catch(e){ errors.push(f.name+": "+e.message); }
+  }
+  msg.textContent="";
+  if(effPendingRecs.length){
+    document.getElementById("effPreviewArea").style.display="block";
+    const errHtml=errors.length?`<div class="al al-e">${errors.join("; ")}</div>`:"";
+    document.getElementById("effPreviewContent").innerHTML=errHtml+previews.map(p=>`<div class="preview-file"><div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">📈 ${p.fname}</span><span style="color:#059669;font-size:12px">✓ ${p.lines}條線</span></div><div style="font-size:12px;color:#6b7a9e">期間: <b>${p.period}</b> Section: <b>${p.section}</b> Sheet: ${p.sheet}</div></div>`).join("")+(previews.length>1?`<div class="al al-ok">✓ 共 ${effPendingRecs.length} 筆效率記錄</div>`:"");
+    msg.textContent="找到 "+effPendingRecs.length+" 筆，請確認後存入";
+  }else{
+    msg.textContent="⚠️ "+(errors.length?errors.join("; "):"未找到有效資料");
+    msg.style.color="#dc2626";
+  }
+  btn.disabled=false;
+}
+async function confirmEffImport(){
+  if(!effPendingRecs.length) return;
+  const map=new Map(EFF_DB.map(r=>[r.id,r]));
+  effPendingRecs.forEach(r=>map.set(r.id,r));
+  EFF_DB=[...map.values()];
+  saveEffDB();
+  effPendingFiles=[]; effPendingRecs=[]; renderEffFileList();
+  document.getElementById("effPreviewArea").style.display="none";
+  document.getElementById("effMsg").textContent="✓ 已儲存 "+EFF_DB.length+" 筆效率記錄";
+  renderEffTable();
+}
+function cancelEffImport(){ effPendingRecs=[]; document.getElementById("effPreviewArea").style.display="none"; }
+
+async function renderEffTable(){
+  initEffDB();
+  const card=document.getElementById("effTableCard");
+  if(!EFF_DB.length){ card.style.display="none"; return; }
+  card.style.display="block";
+  const periods=[...new Set(EFF_DB.map(r=>r.period))].sort().reverse();
+  const secs=[...new Set(EFF_DB.map(r=>r.section))].filter(Boolean);
+  const psel=document.getElementById("effPeriodSel");
+  const prev=psel.value;
+  psel.innerHTML=periods.map(p=>`<option value="${p}">${p}</option>`).join("");
+  if(prev&&periods.includes(prev)) psel.value=prev;
+  const ssel=document.getElementById("effSecSel");
+  const prevS=ssel.value;
+  ssel.innerHTML=`<option value="">全部Section</option>`+secs.map(s=>`<option value="${s}">${s}</option>`).join("");
+  if(prevS) ssel.value=prevS;
+  const period=psel.value, secF=ssel.value;
+  let recs=EFF_DB.filter(r=>r.period===period);
+  if(secF) recs=recs.filter(r=>r.section===secF);
+  recs.sort((a,b)=>a.section.localeCompare(b.section)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+  const sample=recs[0];
+  const weekHeaders=sample?sample.weeks.map(w=>`<th>${w.label}</th>`).join(""):"";
+  const effBadge=e=>e===null?`<td class="mono" style="color:#9ca3af">-</td>`:`<td><span class="b b${e>=45?"ok":e>=30?"wn":"bd"}">${e}%</span></td>`;
+  const rows=recs.map(r=>{
+    const mE=r.monthlyEff;
+    return `<tr><td>${r.section}</td><td class="mono" style="font-weight:600">${r.lineNo}</td>${r.weeks.map(w=>effBadge(w.eff)).join("")}<td><span class="b b${mE>=45?"ok":mE>=30?"wn":"bd"}" style="font-size:13px;padding:2px 10px">${mE}%</span></td></tr>`;
+  }).join("");
+  document.getElementById("effTableWrap").innerHTML=`<table><thead><tr><th>Section</th><th>線別</th>${weekHeaders}<th>月效率</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function exportEffExcel(){
+  if(!EFF_DB.length) return;
+  const period=document.getElementById("effPeriodSel").value;
+  const secF=document.getElementById("effSecSel").value;
+  let recs=EFF_DB.filter(r=>r.period===period);
+  if(secF) recs=recs.filter(r=>r.section===secF);
+  const sample=recs[0]; if(!sample) return;
+  const weekLabels=sample.weeks.map(w=>w.label);
+  const data=[["Section","線別",...weekLabels,"月效率%"],...recs.map(r=>[r.section,r.lineNo,...r.weeks.map(w=>w.eff===null?"":w.eff),r.monthlyEff])];
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,ws,"效率報表");
+  XLSX.writeFile(wb2,"sewing_eff_"+period+".xlsx");
+}
+
+async function clearEffDB(){
+  if(!confirm("確定清除所有效率報表資料？")) return;
+  EFF_DB=[]; saveEffDB(); renderEffTable();
+}
+
+
+
+// ═══════════════════════ DAY / WEEK NAVIGATION ═══════════════════════════════
+function navDay(dir){
+  const sel=document.getElementById("dsel");
+  const opts=[...sel.options].map(o=>o.value);
+  const idx=opts.indexOf(sel.value);
+  const next=idx-dir; // dates are sorted newest first, so -1 = next day
+  if(next>=0 && next<opts.length){ sel.value=opts[next]; renderDaily(); }
+}
+function navWeek(dir){
+  const sel=document.getElementById("wsel");
+  const opts=[...sel.options].map(o=>o.value);
+  const idx=opts.indexOf(sel.value);
+  const next=idx-dir; // weeks sorted newest first
+  if(next>=0 && next<opts.length){ sel.value=opts[next]; renderWeekly(); }
+}
+
+// ── PO detail tab switch ─────────────────────────────────────────────────────
+let _dtailMode = "sum";
+function switchDTab(mode){
+  _dtailMode=mode;
+  document.getElementById("tabSum").style.background=mode==="sum"?"#f59e0b":"#fff";
+  document.getElementById("tabSum").style.color=mode==="sum"?"#1c1200":"#6b7a9e";
+  document.getElementById("tabPO").style.background=mode==="po"?"#f59e0b":"#fff";
+  document.getElementById("tabPO").style.color=mode==="po"?"#1c1200":"#6b7a9e";
+  document.getElementById("dSumTable").style.display=mode==="sum"?"":"none";
+  document.getElementById("dPOTable").style.display=mode==="po"?"":"none";
+}
+function toggleDtail(){
+  const card=document.getElementById("dTableCard");
+  if(card.style.display==="none"){ card.style.display="block"; }
+  switchDTab(_dtailMode==="sum"?"po":"sum");
+}
+
+// ═══════════════════════ CROSS-VALIDATION ════════════════════════════════════
+const EFF_TARGET = 45;  // green threshold
+const EFF_OK     = 30;  // yellow threshold (below = red/alert)
+
+function renderValidate(){
+  // Populate selects
+  const allD=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  const allS=[...new Set(DB.map(r=>r.section))].filter(Boolean);
+  const dsel=document.getElementById("vDate"), ssel=document.getElementById("vSec");
+  const prevD=dsel.value, prevS=ssel.value;
+  dsel.innerHTML=`<option value="">所有日期</option>`+allD.map(d=>`<option value="${d}"${d===prevD?" selected":""}>${d}</option>`).join("");
+  ssel.innerHTML=`<option value="">所有Section</option>`+allS.map(s=>`<option value="${s}"${s===prevS?" selected":""}>${s}</option>`).join("");
+
+  let recs=[...DB];
+  if(prevD) recs=recs.filter(r=>r.date===prevD);
+  if(prevS) recs=recs.filter(r=>r.section===prevS);
+
+  // Build line-day map: key=date|lineNo → aggregated
+  const map={};
+  recs.forEach(r=>{
+    const k=`${r.date}|${r.lineNo}`;
+    if(!map[k]) map[k]={date:r.date,section:r.section,lineNo:r.lineNo,pcs:0,workers:0,eff:0,cartons:0,styles:0};
+    map[k].pcs+=r.pieces;
+    map[k].cartons+=r.cartons;
+    if(r.workers>map[k].workers) map[k].workers=r.workers;
+    if(r.efficiency>map[k].eff) map[k].eff=r.efficiency;
+    map[k].styles++;
+  });
+  const entries=Object.values(map).sort((a,b)=>b.date.localeCompare(a.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+
+  document.getElementById("vMeta").textContent=`${entries.length} 筆線別日記錄`;
+
+  // Summary KPIs
+  const total=entries.length;
+  const noEff=entries.filter(e=>e.eff===0).length;
+  const below30=entries.filter(e=>e.eff>0&&e.eff<EFF_OK).length;
+  const below45=entries.filter(e=>e.eff>=EFF_OK&&e.eff<EFF_TARGET).length;
+  const above45=entries.filter(e=>e.eff>=EFF_TARGET).length;
+  document.getElementById("vSummary").innerHTML=[
+    {v:total,l:"總記錄",c:"#f59e0b"},
+    {v:above45,l:`≥${EFF_TARGET}% 達標`,c:"#059669"},
+    {v:below45,l:`${EFF_OK}~${EFF_TARGET-1}% 尚可`,c:"#d97706"},
+    {v:below30,l:`<${EFF_OK}% 警示`,c:"#dc2626"},
+    {v:noEff,l:"效率未記錄",c:"#9ca3af"},
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+
+  // Issue alerts
+  const issues=[];
+  // Low efficiency lines
+  const lowLines=entries.filter(e=>e.eff>0&&e.eff<EFF_OK);
+  if(lowLines.length){
+    issues.push(`<div class="al al-e" style="margin-bottom:8px">
+      <b>⛔ 效率低於 ${EFF_OK}%（共 ${lowLines.length} 筆）</b><br>
+      ${lowLines.slice(0,10).map(e=>`${e.date} ${e.lineNo}（${e.section}）= ${e.eff}%`).join("・")}
+      ${lowLines.length>10?`<br>…另有 ${lowLines.length-10} 筆`:""}
+    </div>`);
+  }
+  // No efficiency recorded
+  const noEffLines=entries.filter(e=>e.eff===0&&e.pcs>0);
+  if(noEffLines.length){
+    issues.push(`<div class="al al-w" style="margin-bottom:8px">
+      <b>⚠️ 有件數但效率未記錄（共 ${noEffLines.length} 筆）</b><br>
+      ${noEffLines.slice(0,8).map(e=>`${e.date} ${e.lineNo}`).join("・")}
+      ${noEffLines.length>8?`…`:""}
+    </div>`);
+  }
+  // Zero output lines (workers > 0 but no pieces)
+  const zeroOutput=entries.filter(e=>e.pcs===0&&e.workers>0);
+  if(zeroOutput.length){
+    issues.push(`<div class="al al-w" style="margin-bottom:8px">
+      <b>⚠️ 有人數但無件數（${zeroOutput.length} 筆）</b>
+    </div>`);
+  }
+  if(!issues.length) issues.push(`<div class="al al-ok">✓ 所有記錄正常，無異常項目</div>`);
+  document.getElementById("vIssues").innerHTML=issues.join("");
+
+  // Detail table
+  const card=document.getElementById("vTableCard");
+  card.style.display=entries.length?"block":"none";
+  document.getElementById("vBody").innerHTML=entries.map(e=>{
+    const pp=e.workers>0?(e.pcs/e.workers).toFixed(1):"-";
+    let effStatus="", note="";
+    if(e.eff===0){ effStatus=`<span style="color:#9ca3af">未記錄</span>`; note="效率未記錄"; }
+    else if(e.eff>=EFF_TARGET){ effStatus=`<span class="b bok">${e.eff}%</span>`; }
+    else if(e.eff>=EFF_OK){ effStatus=`<span class="b bwn">${e.eff}%</span>`; note="低於目標"; }
+    else { effStatus=`<span class="b bbd">${e.eff}%</span>`; note="⛔ 需關注"; }
+    return `<tr${e.eff>0&&e.eff<EFF_OK?' style="background:#fff1f2"':''}>
+      <td class="mono">${e.date}</td>
+      <td>${e.section||"-"}</td>
+      <td class="mono" style="font-weight:600">${e.lineNo}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${e.pcs.toLocaleString()}</td>
+      <td class="mono">${e.workers||"-"}</td>
+      <td>${effStatus}</td>
+      <td class="mono" style="color:#0369a1">${pp}</td>
+      <td>${e.eff>0?`<span style="font-size:11px;color:${e.eff>=EFF_TARGET?"#059669":e.eff>=EFF_OK?"#d97706":"#dc2626"}">${e.eff>=EFF_TARGET?"✓ 達標":e.eff>=EFF_OK?"尚可":"警示"}</span>`:"-"}</td>
+      <td style="font-size:11px;color:#dc2626">${note}</td>
+    </tr>`;
+  }).join("");
+}
+
+function exportValidateExcel(){
+  const allD=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  const dv=document.getElementById("vDate").value;
+  const sv=document.getElementById("vSec").value;
+  let recs=[...DB];
+  if(dv) recs=recs.filter(r=>r.date===dv);
+  if(sv) recs=recs.filter(r=>r.section===sv);
+
+  const map={};
+  recs.forEach(r=>{
+    const k=`${r.date}|${r.lineNo}`;
+    if(!map[k]) map[k]={date:r.date,section:r.section,lineNo:r.lineNo,pcs:0,workers:0,eff:0,cartons:0};
+    map[k].pcs+=r.pieces; map[k].cartons+=r.cartons;
+    if(r.workers>map[k].workers) map[k].workers=r.workers;
+    if(r.efficiency>map[k].eff) map[k].eff=r.efficiency;
+  });
+  const entries=Object.values(map).sort((a,b)=>b.date.localeCompare(a.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+
+  const header=["日期","Section","線別","件數","人數","效率%","人均件數","效率狀態","備註"];
+  const data=[header,...entries.map(e=>{
+    const pp=e.workers>0?Math.round(e.pcs/e.workers*10)/10:"";
+    const status=e.eff===0?"未記錄":e.eff>=EFF_TARGET?"達標":e.eff>=EFF_OK?"尚可":"警示";
+    const note=e.eff>0&&e.eff<EFF_OK?"效率低於"+EFF_OK+"%":e.eff===0&&e.pcs>0?"效率未記錄":"";
+    return [e.date,e.section,e.lineNo,e.pcs,e.workers||"",e.eff||"",pp,status,note];
+  })];
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws["!cols"]=[{wch:12},{wch:10},{wch:10},{wch:8},{wch:6},{wch:7},{wch:8},{wch:8},{wch:15}];
+  const wb2=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb2,ws,"數據比對");
+  XLSX.writeFile(wb2,`sewing_validate_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════ BACKUP / RESTORE ════════════════════════════════════
+async function backupData(){
+  initEffDB();
+  const backup={version:2,date:new Date().toISOString(),daily:DB,eff:EFF_DB};
+  const blob=new Blob([JSON.stringify(backup)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="sewing_backup_"+new Date().toISOString().slice(0,10)+".json"; a.click();
+}
+async function restoreData(event){
+  const file=event.target.files[0]; if(!file) return;
+  try{
+    const text=await file.text();
+    const backup=JSON.parse(text);
+    if(!backup.daily) throw new Error("格式不符");
+    if(!confirm("確定還原？\n日報: "+backup.daily.length+" 筆\n效率: "+(backup.eff||[]).length+" 筆\n\n⚠️ 目前資料將被覆豓")) return;
+    DB=backup.daily||[]; saveDB(); updateHeader(); renderDBCard();
+    EFF_DB=backup.eff||[]; saveEffDB();
+    alert("✓ 還原成功！日報 "+DB.length+" 筆，效率 "+EFF_DB.length+" 筆");
+    renderEffTable();
+  }catch(e){ alert("還原失敗: "+e.message); }
+  event.target.value="";
+}
+
+
+// ═══════════════════════ STYLES / PO TRACKING ════════════════════════════════
+function renderStyles(){
+  const styleRecs=[...DB].filter(r=>r.styleNo);
+  const allYears=[...new Set(styleRecs.map(r=>r.date.slice(0,4)))].sort().reverse();
+  const allMonths=[...new Set(styleRecs.map(r=>r.date.slice(0,7)))].sort().reverse();
+  const allSecs=[...new Set(styleRecs.map(r=>r.section))].filter(Boolean);
+  const allColors=[...new Set(styleRecs.map(r=>r.color).filter(Boolean))].sort();
+  const allPOs=[...new Set(styleRecs.map(r=>r.po).filter(Boolean))].sort();
+
+  const ysel=document.getElementById("stYear"), msel=document.getElementById("stMonth");
+  const ssel=document.getElementById("stSec"), csel=document.getElementById("stColor"), psel=document.getElementById("stPO");
+  const search=(document.getElementById("stSearch").value||"").toLowerCase().trim();
+  const prevY=ysel.value, prevM=msel.value, prevS=ssel.value, prevC=csel.value, prevP=psel.value;
+
+  ysel.innerHTML=`<option value="">所有年份</option>`+allYears.map(y=>`<option value="${y}"${y===prevY?" selected":""}>${y}</option>`).join("");
+  msel.innerHTML=`<option value="">所有月份</option>`+allMonths.map(m=>`<option value="${m}"${m===prevM?" selected":""}>${m}</option>`).join("");
+  ssel.innerHTML=`<option value="">所有Section</option>`+allSecs.map(s=>`<option value="${s}"${s===prevS?" selected":""}>${s}</option>`).join("");
+  csel.innerHTML=`<option value="">所有顏色</option>`+allColors.map(c=>`<option value="${c}"${c===prevC?" selected":""}>${c}</option>`).join("");
+  psel.innerHTML=`<option value="">所有PO</option>`+allPOs.map(p=>`<option value="${p}"${p===prevP?" selected":""}>${p}</option>`).join("");
+
+  let recs=[...styleRecs];
+  if(prevY) recs=recs.filter(r=>r.date.startsWith(prevY));
+  if(prevM) recs=recs.filter(r=>r.date.startsWith(prevM));
+  if(prevS) recs=recs.filter(r=>r.section===prevS);
+  if(prevC) recs=recs.filter(r=>r.color===prevC);
+  if(prevP) recs=recs.filter(r=>r.po===prevP);
+  if(search) recs=recs.filter(r=>
+    (r.styleNo||"").toLowerCase().includes(search)||
+    (r.selfKey||"").toLowerCase().includes(search)||
+    (r.po||"").toLowerCase().includes(search)
+  );
+
+  // Aggregate sewing by styleNo+po+color+size
+  const sewMap={};
+  recs.forEach(r=>{
+    const k=poKey(r.styleNo,r.po,r.color,r.size);
+    if(!sewMap[k]) sewMap[k]={styleNo:r.styleNo,selfKey:r.selfKey||"",po:r.po||"",color:r.color||"",size:r.size||"",section:r.section,sewPcs:0,dates:new Set(),first:"",last:""};
+    sewMap[k].sewPcs+=r.pieces;
+    sewMap[k].dates.add(r.date);
+    if(!sewMap[k].first||r.date<sewMap[k].first) sewMap[k].first=r.date;
+    if(!sewMap[k].last||r.date>sewMap[k].last) sewMap[k].last=r.date;
+  });
+
+  // Build cutting map with PO-first matching strategy
+  const cutDailyDates=new Set();
+  const cutMap={}; // full key (styleNo|po|color|size) → pcs
+  const cutByPCS={}; // PO|color|size (ignore style) → pcs
+  const cutByStyleAny={}; // styleNo (no section) → pcs
+  const cutByNormAny={}; // normalizedStyle (no section) → pcs
+  const cutByPO_total={}; // PO → total pcs (for balance view)
+  const sewByPO_total={}; // PO → total sew pcs (for balance view)
+  const sewByPCS={}; // PO|color|size → total sew pcs (for per-item balance)
+
+  // Build sewing PO totals for balance
+  recs.forEach(r=>{
+    const po=cleanField(r.po);
+    if(po) sewByPO_total[po]=(sewByPO_total[po]||0)+r.pieces;
+    const pcsK=`${cleanField(r.po)}|${cleanField(r.color)}|${cleanField(r.size)}`;
+    if(po) sewByPCS[pcsK]=(sewByPCS[pcsK]||0)+r.pieces;
+  });
+
+  const cutFiltered=(CUT_DATA||[]).filter(r=>
+    r.pieces>0&&
+    (!prevY||r.date?.startsWith(prevY))&&
+    (!prevM||r.date?.startsWith(prevM))
+  );
+
+  function addCutRecord(r){
+    const k=poKey(r.styleNo||"",r.po||"",r.color||"",r.size||"");
+    cutMap[k]=(cutMap[k]||0)+r.pieces;
+    const pcs=`${cleanField(r.po)}|${cleanField(r.color)}|${cleanField(r.size)}`;
+    if(cleanField(r.po)) cutByPCS[pcs]=(cutByPCS[pcs]||0)+r.pieces;
+    if(r.styleNo){
+      const sa=cleanField(r.styleNo);
+      cutByStyleAny[sa]=(cutByStyleAny[sa]||0)+r.pieces;
+      const na=normalizeStyleName(r.styleNo);
+      cutByNormAny[na]=(cutByNormAny[na]||0)+r.pieces;
+    }
+    const po=cleanField(r.po);
+    if(po) cutByPO_total[po]=(cutByPO_total[po]||0)+r.pieces;
+  }
+
+  // Pass 1: daily records (no src flag — real detail rows)
+  cutFiltered.filter(r=>!r.src).forEach(r=>{
+    cutDailyDates.add(r.date);
+    addCutRecord(r);
+  });
+
+  // Pass 2: weekly/monthly ref records — only add for dates NOT covered by daily
+  cutFiltered.filter(r=>r.src==='ref').forEach(r=>{
+    if(cutDailyDates.has(r.date)) return;
+    addCutRecord(r);
+  });
+
+  // Pass 3: Summary A&B supplement records — only for styles with NO daily/ref data
+  cutFiltered.filter(r=>r.src==='summary').forEach(r=>{
+    const sa=cleanField(r.styleNo||"");
+    if(sa && cutByStyleAny[sa]>0) return; // already have data for this style
+    addCutRecord(r);
+  });
+
+  const entries=Object.values(sewMap).sort((a,b)=>b.sewPcs-a.sewPcs);
+  const totalCutAll=Object.values(cutByPO_total).reduce((s,v)=>s+v,0);
+  const totalSew=entries.reduce((s,e)=>s+e.sewPcs,0);
+  const hasCut=Object.keys(cutByPCS).length>0||Object.keys(cutMap).length>0;
+
+  // KPI
+  const kpiEl=document.getElementById("stKpi");
+  if(kpiEl) kpiEl.innerHTML=[
+    {v:new Set(entries.map(e=>e.styleNo)).size,l:"款式數",c:"#f59e0b"},
+    {v:new Set(entries.map(e=>e.po).filter(Boolean)).size,l:"PO 數",c:"#0369a1"},
+    {v:totalSew.toLocaleString(),l:"車縫合計",c:"#1d4ed8"},
+    ...(hasCut?[{v:totalCutAll.toLocaleString(),l:"裁剪合計 (日+周+摘要)",c:"#059669"},{v:totalSew>0&&totalCutAll>0?Math.round(totalSew/totalCutAll*100)+"%":"-",l:"車縫/裁剪",c:totalSew>=totalCutAll?"#059669":"#d97706"}]:[]),
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:20px">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+
+  document.getElementById("stMeta").textContent=`${entries.length} 筆`;
+  document.getElementById("stBody").innerHTML=entries.slice(0,500).map(e=>{
+    const k=poKey(e.styleNo,e.po,e.color,e.size);
+    // cutByPCS takes priority (sums all style variants for same PO+color+size)
+    const pcsKey=`${cleanField(e.po)}|${cleanField(e.color)}|${cleanField(e.size)}`;
+    const styleAny=cleanField(e.styleNo);
+    const normAny=normalizeStyleName(e.styleNo);
+    // Use the LARGER of exact match vs PO+color+size match (catches multi-style cutting)
+    let cutPcs=Math.max(cutMap[k]||0, cutByPCS[pcsKey]||0)||cutByStyleAny[styleAny]||cutByNormAny[normAny]||0;
+    // Prefix fallback: sum cutting styles starting with sewing style name
+    if(cutPcs===0 && normAny.length>=4){
+      for(const [ck,cv] of Object.entries(cutByNormAny)){
+        if(ck!==normAny && (ck.startsWith(normAny) || normAny.startsWith(ck))){
+          cutPcs+=cv;
+        }
+      }
+    }
+    if(e.sewPcs>0 && cutPcs===0 && hasCut){
+      console.warn('[CUT-MISS]', e.styleNo, 'po='+e.po, 'color='+e.color, 'size='+e.size,
+        'pcsKey='+pcsKey, 'normStyle='+normAny);
+    }
+    const ratio=cutPcs>0?Math.round(e.sewPcs/cutPcs*100):null;
+    const ratioColor=ratio===null?"#9ca3af":ratio>200?"#d97706":ratio>=100?"#059669":ratio>=70?"#d97706":"#dc2626";
+    const ratioWarn=ratio!==null&&ratio>200;
+    // PO+color+size level balance
+    const balCut=cutByPCS[pcsKey]||0;
+    const balSew=sewByPCS[pcsKey]||0;
+    const bal=balCut-balSew;
+    return `<tr style="cursor:pointer" onclick="showStyleDetail('${e.styleNo}','${e.selfKey}','${e.po}','${e.color}','${e.size}','${e.section}','')" title="點擊查看詳情">
+      <td class="mono" style="font-weight:600;color:#1d4ed8">${e.styleNo}</td>
+      <td class="mono" style="color:#6b7a9e;font-size:11px">${e.po||"-"}</td>
+      <td style="font-size:12px">${e.color||"-"}</td>
+      <td class="mono">${e.size||"-"}</td>
+      <td>${e.section||"-"}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${e.sewPcs.toLocaleString()}</td>
+      <td class="mono" style="color:#059669">${cutPcs>0?(ratioWarn?`<span style="color:#d97706" title="裁剪量偏低，可能缺資料">⚠ ${cutPcs.toLocaleString()}</span>`:cutPcs.toLocaleString()):`<span style="color:#9ca3af">-</span>`}</td>
+      <td>${ratio!==null?(ratioWarn?`<span style="font-weight:700;color:#d97706">${ratio}% ⚠</span><div style="font-size:9px;color:#d97706">裁剪資料不完整</div>`:`<span style="font-weight:700;color:${ratioColor}">${ratio}%</span><div style="background:#e2e6f0;border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="width:${Math.min(ratio,100)}%;height:100%;background:${ratioColor}"></div></div>`):`<span style="color:#9ca3af">-</span>`}</td>
+      <td class="mono" style="font-size:11px">${balCut>0?`<span style="color:${bal>=0?"#059669":"#dc2626"};font-weight:600" title="裁${balCut.toLocaleString()} 縫${balSew.toLocaleString()}">${bal>=0?"+":""}${bal.toLocaleString()}</span>`:`<span style="color:#9ca3af">-</span>`}</td>
+      <td class="mono">${e.dates.size}</td>
+      <td class="mono" style="color:#6b7a9e;font-size:11px">${e.first}</td>
+      <td class="mono" style="color:#6b7a9e;font-size:11px">${e.last}</td>
+    </tr>`;
+  }).join("");
+}
+
+// Load cutting data then render (called when tab opens)
+async function renderStylesWithCut(){
+  const el=document.getElementById("stCutStatus");
+  if(el) el.textContent="🔄 讀取裁剪資料...";
+  await loadCuttingData();
+  if(el){
+    if(CUT_DATA&&CUT_DATA.length>0)
+      el.textContent=`✓ 裁剪資料 ${CUT_DATA.length} 筆`;
+    else{
+      el.textContent="⚠️ 無裁剪資料（需在同一瀏覽器開啟裁剪系統）";
+      el.style.background="#fffbeb"; el.style.color="#92400e"; el.style.borderColor="#fcd34d";
+    }
+  }
+  renderStyles();
+}
+
+
+function exportStylesExcel(){
+  const search=(document.getElementById("stSearch").value||"").toLowerCase();
+  const prevY=document.getElementById("stYear").value;
+  const prevM=document.getElementById("stMonth").value;
+  const prevS=document.getElementById("stSec").value;
+  const prevC=document.getElementById("stColor").value;
+  const prevP=document.getElementById("stPO").value;
+  let recs=[...DB].filter(r=>r.styleNo);
+  if(prevY) recs=recs.filter(r=>r.date.startsWith(prevY));
+  if(prevM) recs=recs.filter(r=>r.date.startsWith(prevM));
+  if(prevS) recs=recs.filter(r=>r.section===prevS);
+  if(prevC) recs=recs.filter(r=>r.color===prevC);
+  if(prevP) recs=recs.filter(r=>r.po===prevP);
+  if(search) recs=recs.filter(r=>(r.styleNo||"").toLowerCase().includes(search)||(r.selfKey||"").toLowerCase().includes(search)||(r.po||"").toLowerCase().includes(search));
+  const map={};
+  recs.forEach(r=>{
+    const k=`${r.styleNo}|${r.selfKey||""}|${r.po||""}|${r.color||""}|${r.size||""}|${r.section}|${r.lineNo}`;
+    if(!map[k]) map[k]={styleNo:r.styleNo,selfKey:r.selfKey||"",po:r.po||"",color:r.color||"",size:r.size||"",section:r.section,lineNo:r.lineNo,pcs:0,days:new Set(),first:"",last:""};
+    map[k].pcs+=r.pieces; map[k].days.add(r.date);
+    if(!map[k].first||r.date<map[k].first) map[k].first=r.date;
+    if(!map[k].last||r.date>map[k].last) map[k].last=r.date;
+  });
+  const rows=[["款號","PO","顏色","尺寸","Section","車縫量","裁剪量","車縫/裁剪%","出現天數","首日","最近日"],
+    ...Object.values(map).sort((a,b)=>b.pcs-a.pcs).map(e=>[e.styleNo,e.selfKey,e.po,e.color,e.size,e.section,e.lineNo,e.pcs,e.days.size,e.first,e.last])];
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"]=[{wch:14},{wch:10},{wch:10},{wch:10},{wch:7},{wch:10},{wch:10},{wch:9},{wch:8},{wch:12},{wch:12}];
+  const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,ws,"款式追蹤");
+  XLSX.writeFile(wb2,"sewing_styles_"+new Date().toISOString().slice(0,10)+".xlsx");
+}
+
+
+// ── Style detail modal ────────────────────────────────────────────────────────
+function showStyleDetail(styleNo, selfKey, po, color, size, section, lineNo){
+  const recs=DB.filter(r=>r.styleNo===styleNo&&(selfKey==="-"||!selfKey||(r.selfKey||"")===(selfKey||"")));
+  if(!recs.length) return;
+
+  // Aggregate by color+size
+  const sizeMap={};
+  recs.forEach(r=>{
+    const k=`${r.color||""}|${r.size||""}`;
+    if(!sizeMap[k]) sizeMap[k]={color:r.color||"-",size:r.size||"-",pcs:0,ctn:0,lines:new Set(),pos:new Set()};
+    sizeMap[k].pcs+=r.pieces;
+    sizeMap[k].ctn+=r.cartons||0;
+    sizeMap[k].lines.add(r.lineNo);
+    if(r.po) sizeMap[k].pos.add(r.po);
+  });
+  const totalPcs=recs.reduce((s,r)=>s+r.pieces,0);
+  const totalCtn=recs.reduce((s,r)=>s+(r.cartons||0),0);
+  const allPOs=[...new Set(recs.map(r=>r.po).filter(Boolean))];
+  const allLines=[...new Set(recs.map(r=>r.lineNo))].sort();
+  const dates=[...new Set(recs.map(r=>r.date))].sort();
+
+  const sizeRows=Object.values(sizeMap).sort((a,b)=>b.pcs-a.pcs).map(s=>`
+    <tr>
+      <td style="font-size:12px">${s.color}</td>
+      <td class="mono">${s.size}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${s.pcs.toLocaleString()}</td>
+      <td class="mono">${s.ctn>0?Math.round(s.ctn*10)/10:"-"}</td>
+      <td style="font-size:11px;color:#6b7a9e">${[...s.lines].join(", ")}</td>
+    </tr>`).join("");
+
+  // Remove old modal
+  const old=document.getElementById("styleModal");
+  if(old) old.remove();
+
+  const modal=document.createElement("div");
+  modal.id="styleModal";
+  modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  modal.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#1e2640">${styleNo}</div>
+        <div style="font-size:12px;color:#6b7a9e;margin-top:2px">
+          SELFKEY: ${selfKey||"-"} &nbsp;|&nbsp; 日期: ${dates[0]}${dates.length>1?"～"+dates[dates.length-1]:""} &nbsp;|&nbsp; ${dates.length}天
+        </div>
+      </div>
+      <button onclick="document.getElementById('styleModal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7a9e">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1d4ed8">${totalPcs.toLocaleString()}</div>
+        <div style="font-size:10px;color:#6b7a9e">合計件數</div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#059669">${totalCtn>0?Math.round(totalCtn*10)/10:"-"}</div>
+        <div style="font-size:10px;color:#6b7a9e">合計箱數</div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#f59e0b">${allPOs.length}</div>
+        <div style="font-size:10px;color:#6b7a9e">PO 數量</div>
+      </div>
+    </div>
+    ${allPOs.length?`<div style="font-size:11px;color:#6b7a9e;margin-bottom:10px">PO: ${allPOs.join(" · ")}</div>`:""}
+    <div style="font-size:11px;color:#6b7a9e;margin-bottom:10px">線別: ${allLines.join(" · ")}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f7f8fc">
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6b7a9e">顏色</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6b7a9e">尺寸</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6b7a9e">件數</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6b7a9e">箱數</th>
+        <th style="padding:6px 8px;text-align:left;font-size:11px;color:#6b7a9e">線別</th>
+      </tr></thead>
+      <tbody>${sizeRows}</tbody>
+    </table>
+    <div style="margin-top:12px;text-align:right">
+      <button onclick="exportStyleDetail('${styleNo}')" class="btn btn-g" style="font-size:12px;padding:5px 12px;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出此款 Excel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click",e=>{ if(e.target===modal) modal.remove(); });
+}
+
+function exportStyleDetail(styleNo){
+  const recs=DB.filter(r=>r.styleNo===styleNo&&r.pieces>0);
+  const rows=[["日期","線別","Section","款號","SELFKEY","PO","顏色","尺寸","件數","箱數"],
+    ...recs.sort((a,b)=>a.date.localeCompare(b.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}))
+      .map(r=>[r.date,r.lineNo,r.section,r.styleNo,r.selfKey||"",r.po||"",r.color||"",r.size||"",r.pieces,r.cartons||""])];
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,ws,styleNo.slice(0,31));
+  XLSX.writeFile(wb2,"style_"+styleNo+"_"+new Date().toISOString().slice(0,10)+".xlsx");
+}
+
+
+// ═══════════════════════ PO / CUTTING COMPARISON ════════════════════════════
+function poKey(styleNo, po, color, size){
+  return `${cleanField(styleNo)}|${cleanField(po)}|${cleanField(color)}|${cleanField(size)}`;
+}
+
+// Read cutting_records from IndexedDB (same "SewingProd" DB as cutting_v2.html)
+let CUT_DATA = null; // null = not loaded, [] = loaded but empty
+async function loadCuttingData(){
+  if(CUT_DATA !== null) return CUT_DATA;
+  // Try multiple DB names/stores used by different cutting versions
+  const attempts = [
+    {db:"CuttingProd", ver:1, store:"cutting_records"},  // cutting_v2 latest
+    {db:"SewingProd",  ver:4, store:"cutting_records"},  // older cutting version
+  ];
+  for(const {db,ver,store} of attempts){
+    try{
+      const p = await new Promise((res)=>{
+        const req = indexedDB.open(db, ver);
+        req.onupgradeneeded = e => {
+          const d = e.target.result;
+          if(!d.objectStoreNames.contains(store)) d.createObjectStore(store,{keyPath:"id"});
+        };
+        req.onsuccess = e => {
+          const d = e.target.result;
+          if(!d.objectStoreNames.contains(store)){ res([]); return; }
+          try{
+            const tx = d.transaction(store,"readonly");
+            const all = [];
+            const cursor = tx.objectStore(store).openCursor();
+            cursor.onsuccess = ev => {
+              if(ev.target.result){ all.push(ev.target.result.value); ev.target.result.continue(); }
+              else res(all);
+            };
+            cursor.onerror = () => res([]);
+          }catch(e2){ res([]); }
+        };
+        req.onerror = () => res([]);
+        req.onblocked = () => res([]);
+      });
+      if(p.length > 0){ CUT_DATA = p; return p; }
+    }catch(e){}
+  }
+  CUT_DATA = [];
+  return [];
+}
+
+
+// ═══════════════════════ RECORDS ═════════════════════════════════════════════
+function renderRecs(){
+  const dv=document.getElementById("rDate").value;
+  const sv=document.getElementById("rSec").value;
+  const lv=document.getElementById("rLine").value;
+  const allD=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  const allS=[...new Set(DB.map(r=>r.section))].filter(Boolean);
+  const allL=[...new Set(DB.map(r=>r.lineNo))].filter(Boolean).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  document.getElementById("rDate").innerHTML=`<option value="">所有日期</option>`+allD.map(d=>`<option value="${d}"${d===dv?"selected":""}>${d}</option>`).join("");
+  document.getElementById("rSec").innerHTML=`<option value="">所有Section</option>`+allS.map(s=>`<option value="${s}"${s===sv?"selected":""}>${s}</option>`).join("");
+  document.getElementById("rLine").innerHTML=`<option value="">所有線別</option>`+allL.map(l=>`<option value="${l}"${l===lv?"selected":""}>${l}</option>`).join("");
+  let recs=[...DB];
+  if(dv) recs=recs.filter(r=>r.date===dv);
+  if(sv) recs=recs.filter(r=>r.section===sv);
+  if(lv) recs=recs.filter(r=>r.lineNo===lv);
+  recs.sort((a,b)=>b.date.localeCompare(a.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+  document.getElementById("rMeta").textContent=`${recs.length} 筆`;
+  const show=recs.slice(0,400);
+  document.getElementById("rBody").innerHTML=show.map(r=>`
+    <tr>
+      <td class="mono">${r.date}</td>
+      <td>${r.section||"-"}</td>
+      <td class="mono" style="font-weight:600">${r.lineNo||"-"}</td>
+      <td class="mono" style="color:#6b7a9e">${r.selfKey||"-"}</td>
+      <td class="mono" style="color:#6b7a9e">${r.po||"-"}</td>
+      <td class="mono">${r.styleNo||"-"}</td>
+      <td style="font-size:12px">${r.color||"-"}</td>
+      <td class="mono">${r.size||"-"}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${(r.pieces||0).toLocaleString()}</td>
+      <td class="mono">${r.workers||"-"}</td>
+      <td>${r.efficiency>0?`<span class="b b${r.efficiency>=45?"ok":r.efficiency>=30?"wn":"bd"}">${r.efficiency}%</span>`:"-"}</td>
+      <td class="mono">${r.cartons>0?r.cartons:"-"}</td>
+    </tr>`).join("");
+  const more=document.getElementById("rMore");
+  if(recs.length>400){ more.style.display="block"; more.textContent=`顯示前400筆，共${recs.length}筆`; }
+  else more.style.display="none";
+}
+
+function deleteByDate(){
+  const dv = document.getElementById("rDate").value;
+  if(!dv){ alert("請先在上方「日期」下拉選單選擇要刪除的日期"); return; }
+  const count = DB.filter(r=>r.date===dv).length;
+  if(!count){ alert("該日期沒有資料"); return; }
+  if(!confirm(`確定刪除 ${dv} 的所有資料？（共 ${count} 筆）\n\n⚠️ 此操作無法復原`)) return;
+  DB = DB.filter(r=>r.date!==dv);
+  saveDB(); updateHeader(); renderDBCard(); renderRecs();
+  alert(`已刪除 ${dv} 的 ${count} 筆資料`);
+}
+
+function clearAll(){
+  if(!confirm("確定清除【所有】資料？\n\n⚠️ 此操作無法復原")) return;
+  DB=[]; saveDB(); updateHeader(); renderDBCard();
+  document.getElementById("dKpi").innerHTML="";
+  document.getElementById("dCards").innerHTML="";
+  alert("已清除所有資料");
+}
+
+// ═══════════════════════ PPOH PRODUCTIVITY ANALYSIS ═════════════════════════
+
+function populatePpohDates(){
+  const allD=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  const sel=document.getElementById("smvDate");
+  const prev=sel.value;
+  sel.innerHTML=allD.map(d=>`<option value="${d}"${d===prev?" selected":""}>${d}</option>`).join("");
+  const allSecs=[...new Set(DB.map(r=>r.section).filter(Boolean))];
+  const secSel=document.getElementById("smvSec");
+  const prevS=secSel.value;
+  secSel.innerHTML='<option value="">全部</option>'+allSecs.map(s=>`<option${s===prevS?' selected':''}>${s}</option>`).join('');
+  const allLines=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const lineSel=document.getElementById("smvLine");
+  const prevL=lineSel.value;
+  lineSel.innerHTML='<option value="">全部</option>'+allLines.map(l=>`<option${l===prevL?' selected':''}>${l}</option>`).join('');
+}
+
+function renderPpoh(){
+  const dv=document.getElementById("smvDate").value;
+  const secF=document.getElementById("smvSec").value;
+  const lineF=document.getElementById("smvLine").value;
+  const normH=parseFloat(document.getElementById("ppohNormH").value)||8;
+  const otH=parseFloat(document.getElementById("ppohOtH").value)||2;
+  const tbody=document.getElementById("ppohBody");
+  if(!dv){tbody.innerHTML="";return;}
+
+  let dayRecs=DB.filter(r=>r.date===dv&&r.pieces>0);
+  if(secF) dayRecs=dayRecs.filter(r=>r.section===secF);
+  if(lineF) dayRecs=dayRecs.filter(r=>r.lineNo===lineF);
+
+  const lineMap={};
+  dayRecs.forEach(r=>{
+    const ln=r.lineNo;
+    if(!lineMap[ln]) lineMap[ln]={lineNo:ln,section:r.section,workers:0,workersOT:0,hoursOT:0,
+      pcs:0,normalPcs:0,otPcs:0,eff:0,styles:new Set()};
+    lineMap[ln].pcs+=r.pieces;
+    lineMap[ln].normalPcs+=(r.normalPcs||0);
+    lineMap[ln].otPcs+=(r.otPcs||0);
+    lineMap[ln].workers=Math.max(lineMap[ln].workers,r.workers||0);
+    lineMap[ln].workersOT=Math.max(lineMap[ln].workersOT,r.workersOT||0);
+    lineMap[ln].hoursOT=Math.max(lineMap[ln].hoursOT,r.hoursOT||0);
+    if(r.efficiency>0) lineMap[ln].eff=r.efficiency;
+    if(r.styleNo) lineMap[ln].styles.add(r.styleNo);
+  });
+
+  const lines=Object.values(lineMap).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+
+  // Helper: compute OT ratio relative to normal shift hourly rate
+  function otRatio(nPcs, oPcs, nH, oH){
+    if(!nPcs||!oPcs||!nH||!oH) return null;
+    const normRate=nPcs/nH; // pieces per hour normal
+    const otRate=oPcs/oH;   // pieces per hour OT
+    return Math.round(otRate/normRate*100);
+  }
+  function ratioColor(r){
+    if(r===null) return "#9ca3af";
+    if(r<80) return "#dc2626";   // red: OT too low
+    if(r>120) return "#d97706";  // orange: suspiciously high
+    return "#059669";             // green: normal
+  }
+  function ratioLabel(r, hasOT){
+    if(!hasOT) return `<span style="color:#9ca3af">無加班</span>`;
+    if(r===null) return `<span style="color:#9ca3af">-</span>`;
+    return `<span style="font-weight:700;color:${ratioColor(r)}">正常班的 ${r}%</span>`;
+  }
+  function ratioJudge(r, hasOT){
+    if(!hasOT) return {text:"無加班",color:"#9ca3af"};
+    if(r===null) return {text:"-",color:"#9ca3af"};
+    if(r>=80&&r<=120) return {text:"✓ 正常",color:"#059669"};
+    if(r<80) return {text:"⚠ 效率偏低",color:"#dc2626"};
+    return {text:"⚠ 異常偏高",color:"#d97706"};
+  }
+
+  // Single line detail panel
+  const singlePanel=document.getElementById("ppohSingleLine");
+  if(lineF && lines.length===1){
+    const l=lines[0];
+    const nPcs=l.normalPcs||l.pcs;
+    const oPcs=l.otPcs||0;
+    const hot=l.hoursOT||otH;
+    const hasOT=oPcs>0;
+    const normRate=(nPcs/normH).toFixed(1);
+    const otRate=hasOT?(oPcs/hot).toFixed(1):"0";
+    const ratio=otRatio(nPcs,oPcs,normH,hot);
+    const judge=ratioJudge(ratio,hasOT);
+
+    singlePanel.style.display="block";
+    singlePanel.innerHTML=`
+      <div style="background:linear-gradient(135deg,#f0f7ff,#e8f0fb);border:1px solid #bfdbfe;border-radius:10px;padding:16px">
+        <div style="font-size:14px;font-weight:700;color:#1e2640;margin-bottom:4px">${l.lineNo} · ${l.section} · ${dv}</div>
+        <div style="font-size:11px;color:#6b7a9e;margin-bottom:12px">
+          ${l.workers} 人 · 正常班 ${normH}h · 加班 ${hot}h · 款式: ${[...l.styles].join(", ")}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+          <div style="background:#fff;border-radius:8px;padding:12px;border-left:3px solid #1d4ed8">
+            <div style="font-size:10px;color:#6b7a9e;margin-bottom:4px">正常班</div>
+            <div style="font-size:24px;font-weight:700;color:#1d4ed8;font-family:monospace">${nPcs.toLocaleString()}</div>
+            <div style="font-size:11px;color:#6b7a9e">${normRate} 件/h</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:12px;border-left:3px solid #7c3aed">
+            <div style="font-size:10px;color:#6b7a9e;margin-bottom:4px">加班</div>
+            <div style="font-size:24px;font-weight:700;color:#7c3aed;font-family:monospace">${hasOT?oPcs.toLocaleString():"—"}</div>
+            <div style="font-size:11px;color:#6b7a9e">${hasOT?otRate+" 件/h":"無加班"}</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:12px">
+            <div style="font-size:10px;color:#6b7a9e;margin-bottom:4px">加班產能比</div>
+            <div style="font-size:24px;font-weight:700;color:${ratioColor(ratio)};font-family:monospace">${ratio!==null?ratio+"%":"—"}</div>
+            <div style="font-size:11px;color:#6b7a9e">相對正常班</div>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:12px">
+            <div style="font-size:10px;color:#6b7a9e;margin-bottom:4px">判定</div>
+            <div style="font-size:20px;font-weight:700;color:${judge.color}">${judge.text}</div>
+            <div style="font-size:11px;color:#6b7a9e">${hasOT?"應做 "+Math.round(parseFloat(normRate)*hot)+" 實做 "+oPcs:""}</div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    singlePanel.style.display="none";
+  }
+
+  // Table rows
+  const tPcs=lines.reduce((s,l)=>s+l.pcs,0);
+  const tNorm=lines.reduce((s,l)=>s+(l.normalPcs||l.pcs),0);
+  const tOt=lines.reduce((s,l)=>s+l.otPcs,0);
+  const tW=lines.reduce((s,l)=>s+l.workers,0);
+
+  tbody.innerHTML=(lines.map(l=>{
+    const nPcs=l.normalPcs||l.pcs;
+    const oPcs=l.otPcs||0;
+    const hot=l.hoursOT||otH;
+    const hasOT=oPcs>0;
+    const normRate=(nPcs/normH).toFixed(1);
+    const otRate=hasOT?(oPcs/hot).toFixed(1):"-";
+    const ratio=otRatio(nPcs,oPcs,normH,hot);
+    const judge=ratioJudge(ratio,hasOT);
+    return`<tr>
+      <td class="mono" style="font-weight:600">${l.lineNo}</td>
+      <td>${l.section||"-"}</td>
+      <td class="mono">${l.workers}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${nPcs.toLocaleString()}</td>
+      <td class="mono" style="color:#7c3aed;font-weight:600">${hasOT?oPcs.toLocaleString():"-"}</td>
+      <td class="mono" style="font-weight:700">${l.pcs.toLocaleString()}</td>
+      <td class="mono">${normRate}</td>
+      <td class="mono">${otRate}</td>
+      <td>${ratioLabel(ratio,hasOT)}</td>
+      <td>${l.eff>0?`<span class="b b${l.eff>=45?"ok":l.eff>=30?"wn":"bd"}">${l.eff}%</span>`:"-"}</td>
+      <td style="font-size:12px;color:${judge.color}">${judge.text}</td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="11" style="text-align:center;padding:30px;color:#8b95b8">此日無記錄</td></tr>`)
+  + (lines.length>1?`<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #e2e6f0">
+      <td>合計</td><td></td>
+      <td class="mono">${tW}</td>
+      <td class="mono" style="color:#1d4ed8">${tNorm.toLocaleString()}</td>
+      <td class="mono" style="color:#7c3aed">${tOt>0?tOt.toLocaleString():"-"}</td>
+      <td class="mono" style="font-weight:700">${tPcs.toLocaleString()}</td>
+      <td class="mono">${tW>0?(tNorm/normH).toFixed(1):"-"}</td>
+      <td class="mono">${tOt>0?(tOt/otH).toFixed(1):"-"}</td>
+      <td>${tNorm>0&&tOt>0?ratioLabel(otRatio(tNorm,tOt,normH,otH),true):""}</td>
+      <td></td><td></td>
+    </tr>`:"");
+}
+
+// ── Day navigation ────────────────────────────────────────────
+function navPpoh(dir){
+  const sel=document.getElementById("smvDate");
+  const opts=[...sel.options].map(o=>o.value);
+  const cur=sel.value;
+  const idx=opts.indexOf(cur);
+  // opts are sorted desc (newest first), so -1 = next day, +1 = prev day
+  const newIdx=idx-dir;
+  if(newIdx>=0&&newIdx<opts.length){ sel.value=opts[newIdx]; renderPpoh(); }
+}
+
+// ── Weekly/Monthly aggregate ──────────────────────────────────
+let ppohPeriod='week';
+
+function renderPpohPeriod(){
+  // Toggle buttons
+  document.getElementById("ppohBtnW").style.cssText=ppohPeriod==='week'?"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600":"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e";
+  document.getElementById("ppohBtnM").style.cssText=ppohPeriod==='month'?"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600":"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e";
+
+  const dv=document.getElementById("smvDate").value;
+  const normH=parseFloat(document.getElementById("ppohNormH").value)||8;
+  const otH=parseFloat(document.getElementById("ppohOtH").value)||2;
+  const tbody=document.getElementById("ppohPeriodBody");
+  if(!dv){tbody.innerHTML="";return;}
+
+  // Determine date range
+  let startD, endD;
+  if(ppohPeriod==='week'){
+    const dt=new Date(dv+'T00:00:00');
+    const dow=dt.getDay();
+    const mon=new Date(dt); mon.setDate(dt.getDate()-(dow===0?6:dow-1));
+    const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+    startD=mon.toISOString().slice(0,10); endD=sun.toISOString().slice(0,10);
+  } else {
+    startD=dv.slice(0,7)+"-01"; endD=dv.slice(0,7)+"-31";
+  }
+
+  const periodRecs=DB.filter(r=>r.date>=startD&&r.date<=endD&&r.pieces>0);
+  if(!periodRecs.length){tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:30px;color:#8b95b8">此期間無資料</td></tr>`;return;}
+
+  // Aggregate per line
+  const lineMap={};
+  periodRecs.forEach(r=>{
+    const ln=r.lineNo;
+    if(!lineMap[ln]) lineMap[ln]={lineNo:ln,section:r.section,pcs:0,normalPcs:0,otPcs:0,effs:[],dates:new Set()};
+    lineMap[ln].pcs+=r.pieces;
+    lineMap[ln].normalPcs+=(r.normalPcs||0);
+    lineMap[ln].otPcs+=(r.otPcs||0);
+    if(r.efficiency>0) lineMap[ln].effs.push(r.efficiency);
+    lineMap[ln].dates.add(r.date);
+  });
+
+  const lines=Object.values(lineMap).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+  const tNorm=lines.reduce((s,l)=>s+(l.normalPcs||l.pcs),0);
+  const tOt=lines.reduce((s,l)=>s+l.otPcs,0);
+  const totalDays=new Set(periodRecs.map(r=>r.date)).size;
+
+  function otR(n,o,nH,oH){if(!n||!o||!nH||!oH)return null;return Math.round((o/oH)/(n/nH)*100);}
+  function rClr(r){if(r===null)return"#9ca3af";if(r<80)return"#dc2626";if(r>120)return"#d97706";return"#059669";}
+
+  tbody.innerHTML=lines.map(l=>{
+    const nPcs=l.normalPcs||l.pcs;
+    const oPcs=l.otPcs||0;
+    const days=l.dates.size;
+    const nRate=(nPcs/(normH*days)).toFixed(1);
+    const oRate=oPcs>0?(oPcs/(otH*days)).toFixed(1):"-";
+    const ratio=otR(nPcs,oPcs,normH*days,otH*days);
+    const avgEff=l.effs.length?Math.round(l.effs.reduce((a,b)=>a+b)/l.effs.length):0;
+    return`<tr>
+      <td class="mono" style="font-weight:600">${l.lineNo}</td>
+      <td>${l.section||"-"}</td>
+      <td class="mono">${days}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${nPcs.toLocaleString()}</td>
+      <td class="mono" style="color:#7c3aed;font-weight:600">${oPcs>0?oPcs.toLocaleString():"-"}</td>
+      <td class="mono">${nRate}</td>
+      <td class="mono">${oRate}</td>
+      <td>${ratio!==null?`<span style="font-weight:700;color:${rClr(ratio)}">正常班的 ${ratio}%</span>`:`<span style="color:#9ca3af">無加班</span>`}</td>
+      <td>${avgEff>0?`<span class="b b${avgEff>=45?"ok":avgEff>=30?"wn":"bd"}">${avgEff}%</span>`:"-"}</td>
+    </tr>`;
+  }).join("")
+  +`<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #e2e6f0">
+      <td>合計 (${ppohPeriod==='week'?startD+'~'+endD:dv.slice(0,7)})</td><td></td>
+      <td class="mono">${totalDays}</td>
+      <td class="mono" style="color:#1d4ed8">${tNorm.toLocaleString()}</td>
+      <td class="mono" style="color:#7c3aed">${tOt>0?tOt.toLocaleString():"-"}</td>
+      <td class="mono">${(tNorm/(normH*totalDays)).toFixed(1)}</td>
+      <td class="mono">${tOt>0?(tOt/(otH*totalDays)).toFixed(1):"-"}</td>
+      <td>${tNorm>0&&tOt>0?`<span style="font-weight:700;color:${rClr(otR(tNorm,tOt,normH*totalDays,otH*totalDays))}">正常班的 ${otR(tNorm,tOt,normH*totalDays,otH*totalDays)}%</span>`:""}</td>
+      <td></td>
+    </tr>`;
+}
+
+// ═══════════════════════ FOLDER SCAN ════════════════════════════════════════
+// Uses File System Access API (showDirectoryPicker) — Chrome/Edge only
+// Folder handles stored in a separate IndexedDB to avoid version conflicts
+// Already-scanned files tracked by filename|size|lastModified in localStorage
+
+const _SCAN_LS   = "sewing_scanned_v1";   // localStorage key for scanned log
+const _AUTOSCAN_LS = "sewing_autoscan_v1"; // localStorage key for auto-scan pref
+let _scanFolderList = [];   // [{id, handle, label}]
+let _pendingScanKeys = [];  // file keys waiting for confirmImport
+let _afterConfirmCb  = null; // called after confirmImport succeeds
+
+// ── IndexedDB for folder handles ──────────────────────────────────────────
+function _openFolderIDB(){
+  return new Promise((res,rej)=>{
+    const req = indexedDB.open("sewing_folder_handles_v1",1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore("folders",{keyPath:"id",autoIncrement:true});
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = ()=>rej(new Error("IDB open failed"));
+  });
+}
+async function _idbGetAll(){
+  try{
+    const db = await _openFolderIDB();
+    return await new Promise(res=>{
+      const r = db.transaction("folders","readonly").objectStore("folders").getAll();
+      r.onsuccess = ()=>res(r.result||[]);
+      r.onerror = ()=>res([]);
+    });
+  }catch(e){ return []; }
+}
+async function _idbAdd(handle,label){
+  try{
+    const db = await _openFolderIDB();
+    return await new Promise((res,rej)=>{
+      const r = db.transaction("folders","readwrite").objectStore("folders").add({handle,label,ts:Date.now()});
+      r.onsuccess = ()=>res(r.result);
+      r.onerror = ()=>rej();
+    });
+  }catch(e){ return null; }
+}
+async function _idbDel(id){
+  try{
+    const db = await _openFolderIDB();
+    await new Promise((res,rej)=>{
+      const r = db.transaction("folders","readwrite").objectStore("folders").delete(id);
+      r.onsuccess = res; r.onerror = rej;
+    });
+  }catch(e){}
+}
+
+// ── Scanned log helpers ───────────────────────────────────────────────────
+function _getScanned(){ try{return new Set(JSON.parse(localStorage.getItem(_SCAN_LS)||"[]"));}catch(e){return new Set();} }
+function _addScanned(keys){ const s=_getScanned(); keys.forEach(k=>s.add(k)); try{localStorage.setItem(_SCAN_LS,JSON.stringify([...s]));}catch(e){} }
+
+function clearScannedLog(){
+  localStorage.removeItem(_SCAN_LS);
+  const m=document.getElementById("scanMsg");
+  m.style.color="#059669";
+  m.textContent="✓ 已重置掃描記錄，下次點「立即掃描」將重新匯入資料夾內全部檔案";
+}
+
+// ── Auto-scan preference ──────────────────────────────────────────────────
+function saveAutoScanPref(){
+  localStorage.setItem(_AUTOSCAN_LS, document.getElementById("chkAutoScan").checked?"1":"0");
+}
+
+// ── Render folder list UI ─────────────────────────────────────────────────
+function renderFolderList(){
+  const el  = document.getElementById("folderList");
+  const btn = document.getElementById("btnScanFolders");
+  if(!_scanFolderList.length){
+    el.innerHTML=`<div style="font-size:12px;color:#8b95b8;padding:8px 12px;background:#f7f8fc;border-radius:6px;border:1px solid #e2e6f0">尚未設定任何資料夾。點「➕ 新增資料夾」授權存取。</div>`;
+    btn.style.display="none"; return;
+  }
+  el.innerHTML=_scanFolderList.map(f=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:#f0fdf4;border-radius:6px;margin-bottom:5px;border:1px solid #bbf7d0">
+      <span>📁</span>
+      <span style="flex:1;font-size:13px;font-weight:500;color:#1e2640">${f.label}</span>
+      <span style="font-size:11px;color:#6b7a9e">ID:${f.id}</span>
+      <button onclick="removeFolderEntry(${f.id})" style="font-size:11px;padding:2px 8px;background:#fff5f5;color:#dc2626;border:1px solid #fecaca;border-radius:4px;cursor:pointer">移除</button>
+    </div>`).join("");
+  btn.style.display="inline-flex";
+}
+
+// ── Add / remove folder ───────────────────────────────────────────────────
+async function addScanFolder(){
+  if(!("showDirectoryPicker" in window)){
+    alert("此功能需要 Chrome 或 Edge 瀏覽器（v86+）\nFirefox 目前不支援資料夾存取 API");
+    return;
+  }
+  try{
+    const handle = await window.showDirectoryPicker({mode:"read", startIn:"downloads"});
+    const label  = handle.name;
+    const id     = await _idbAdd(handle, label);
+    _scanFolderList.push({id, handle, label});
+    renderFolderList();
+    const m=document.getElementById("scanMsg");
+    m.style.color="#059669";
+    m.textContent=`✓ 已新增資料夾「${label}」（共 ${_scanFolderList.length} 個）。可繼續新增或點「立即掃描」。`;
+  }catch(e){
+    if(e.name!=="AbortError"){
+      const m=document.getElementById("scanMsg");
+      m.style.color="#dc2626";
+      m.textContent="❌ 無法存取資料夾："+e.message;
+    }
+  }
+}
+
+async function removeFolderEntry(id){
+  await _idbDel(id);
+  _scanFolderList=_scanFolderList.filter(f=>f.id!==id);
+  renderFolderList();
+  const m=document.getElementById("scanMsg");
+  m.style.color="#6b7a9e"; m.textContent="已移除資料夾";
+}
+
+// ── Init (called on page load) ────────────────────────────────────────────
+async function initFolderScan(){
+  const all = await _idbGetAll();
+  // Filter to only handles we can still query
+  const valid=[];
+  for(const f of all){
+    try{
+      const p = await f.handle.queryPermission({mode:"read"});
+      if(p==="granted"||p==="prompt") valid.push(f);
+    }catch(e){}
+  }
+  _scanFolderList=valid;
+  renderFolderList();
+  // Restore auto-scan checkbox state
+  const autoOn = localStorage.getItem(_AUTOSCAN_LS)==="1";
+  const cb=document.getElementById("chkAutoScan");
+  if(cb) cb.checked=autoOn;
+  // Trigger auto-scan if enabled
+  if(autoOn && _scanFolderList.length) setTimeout(()=>scanAllFolders(true), 900);
+}
+
+// ── Main scan function ────────────────────────────────────────────────────
+async function scanAllFolders(silent=false){
+  const m=document.getElementById("scanMsg");
+  if(!_scanFolderList.length){
+    m.style.color="#dc2626"; m.textContent="❌ 尚未設定任何資料夾，請先點「➕ 新增資料夾」";
+    return;
+  }
+
+  m.style.color="#6b7a9e"; m.textContent="🔍 掃描中，請稍候...";
+
+  const scanned  = _getScanned();
+  const toImport = [];   // {file, key}
+  const skipped  = [];
+  const EXTS     = new Set(["xlsx","xls","msg","eml"]);
+
+  for(const folder of _scanFolderList){
+    let perm;
+    try{
+      perm = await folder.handle.queryPermission({mode:"read"});
+      if(perm==="prompt") perm = await folder.handle.requestPermission({mode:"read"});
+    }catch(e){ perm="denied"; }
+
+    if(perm!=="granted"){
+      m.style.color="#d97706";
+      m.textContent=`⚠️ 資料夾「${folder.label}」需重新授權 — 請移除後重新新增`;
+      continue;
+    }
+
+    try{
+      for await(const entry of folder.handle.values()){
+        if(entry.kind!=="file") continue;
+        const ext = entry.name.split(".").pop().toLowerCase();
+        if(!EXTS.has(ext)) continue;
+        const file = await entry.getFile();
+        const key  = `${file.name}|${file.size}|${file.lastModified}`;
+        if(scanned.has(key)){ skipped.push(file.name); continue; }
+        toImport.push({file, key});
+      }
+    }catch(e){
+      m.style.color="#dc2626";
+      m.textContent=`❌ 掃描「${folder.label}」出錯：${e.message}`;
+    }
+  }
+
+  // ── No new files ──
+  if(!toImport.length){
+    m.style.color="#059669";
+    m.textContent=`✓ 掃描完成 — 無新檔案${skipped.length?`（已跳過 ${skipped.length} 個已匯入）`:""}`;
+    return;
+  }
+
+  m.textContent=`找到 ${toImport.length} 個新檔案，解析中...`;
+
+  // Feed files into the existing import pipeline
+  pendingFiles = toImport.map(x=>x.file);
+  renderFileList();
+  _pendingScanKeys = toImport.map(x=>x.key);
+
+  // Register callback: triggers after user clicks "確認存入"
+  _afterConfirmCb = ()=>{
+    _addScanned(_pendingScanKeys);
+    _pendingScanKeys=[];
+    m.style.color="#059669";
+    m.textContent=`✅ 掃描匯入完成！新增 ${toImport.length} 個檔案${skipped.length?`，跳過 ${skipped.length} 個已知檔案`:""}`;
+  };
+
+  await doImport();   // Shows parse preview — user still needs to click "確認存入"
+
+  // If doImport found nothing valid, still mark files to avoid infinite re-scan
+  if(!pendingRecs.length){
+    _addScanned(_pendingScanKeys);
+    _pendingScanKeys=[]; _afterConfirmCb=null;
+    m.style.color="#d97706";
+    m.textContent=`⚠️ 掃描到 ${toImport.length} 個新檔案但無有效資料${skipped.length?`（跳過 ${skipped.length} 個）`:""}`;
+  } else {
+    // Remind user to scroll up and confirm
+    m.style.color="#0369a1";
+    m.textContent=`📋 已解析完畢，請往上滑動點「✓ 確認存入」以完成匯入（${pendingRecs.length} 筆記錄）`;
+  }
+}
+
+</script>
+<!-- ═══════════════════════════════════════════════════
+     VRT 雲端同步浮動按鈕（☁）
+     讀取：localStorage sewing_prod_v1 + sewing_eff_v1
+     寫入：同上（pull 後資料自動進 DB，重整頁面即見）
+════════════════════════════════════════════════════ -->
+<style>
+#vrtCloudBtn{
+  position:fixed;bottom:22px;right:22px;z-index:9999;
+  width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(135deg,#1a2540,#253058);
+  border:1px solid #2d3a6e;color:#93c5fd;font-size:20px;
+  cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;user-select:none;
+}
+#vrtCloudBtn:hover{transform:scale(1.08);border-color:#3b82f6;color:#60a5fa}
+#vrtCloudPanel{
+  position:fixed;bottom:76px;right:22px;z-index:9999;
+  width:230px;background:#0f1929;border:1px solid #1e3050;
+  border-radius:14px;padding:14px;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+  display:none;flex-direction:column;gap:9px;
+  font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;
+}
+#vrtCloudPanel.show{display:flex}
+.vcp-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.vcp-status{font-size:11px;color:#475569;font-family:monospace;min-height:14px;line-height:1.5}
+.vcp-status.ok{color:#4ade80}.vcp-status.warn{color:#fbbf24}.vcp-status.err{color:#f87171}
+.vcp-row{display:flex;gap:7px}
+.vcp-btn{
+  flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:700;
+  cursor:pointer;border:none;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s;
+}
+.vcp-push{background:#1c1500;border:1px solid #92400e;color:#fbbf24}
+.vcp-push:hover{background:#292000}
+.vcp-pull{background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd}
+.vcp-pull:hover{background:#0f2040}
+.vcp-btn:disabled{opacity:.4;cursor:not-allowed}
+.vcp-gasrow{display:flex;gap:5px;align-items:center}
+.vcp-gasinput{
+  flex:1;background:#0a1120;border:1px solid #1e3050;border-radius:6px;
+  color:#f1f5f9;padding:5px 8px;font-size:10px;font-family:monospace;outline:none;
+}
+.vcp-gasinput:focus{border-color:#f59e0b}
+.vcp-gassave{background:#253058;border:none;color:#cbd5e1;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}
+.vcp-log{font-size:10px;font-family:monospace;color:#475569;max-height:60px;overflow-y:auto;line-height:1.6;border-top:1px solid #1e3050;padding-top:7px}
+.vcl-ok{color:#4ade80}.vcl-err{color:#f87171}.vcl-i{color:#60a5fa}
+@keyframes vcSpin{to{transform:rotate(360deg)}}
+.vcSpin{display:inline-block;animation:vcSpin .7s linear infinite}
+</style>
+
+<!-- 浮動按鈕 -->
+<button id="vrtCloudBtn" title="☁ 雲端同步" onclick="vcToggle()">☁</button>
+
+<!-- 展開面板 -->
+<div id="vrtCloudPanel">
+  <div class="vcp-title">☁ 雲端同步 — 車縫</div>
+  <div class="vcp-status" id="vcStatus">讀取中...</div>
+  <div class="vcp-row">
+    <button class="vcp-btn vcp-push" id="vcPushBtn" onclick="vcPush()">☁ 推送</button>
+    <button class="vcp-btn vcp-pull" id="vcPullBtn" onclick="vcPull()">⬇ 拉取</button>
+  </div>
+  <div>
+    <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
+    <div class="vcp-gasrow">
+      <input class="vcp-gasinput" id="vcGasInput" placeholder="/exec 結尾的網址" />
+      <button class="vcp-gassave" onclick="vcSaveGas()">存</button>
+    </div>
+  </div>
+  <div class="vcp-log" id="vcLog"></div>
+</div>
+
+<script>
+// ─── VRT Cloud Sync Widget — Sewing ───────────────────────
+(function(){
+  const LS_GAS  = 'vrt_portal_gas_url';
+  const LS_META = 'vrt_cloud_sewing_meta';
+  let gasUrl = '';
+  let panelOpen = false;
+
+  function vcInit(){
+    gasUrl = localStorage.getItem(LS_GAS) || '';
+    document.getElementById('vcGasInput').value = gasUrl;
+    vcShowStatus();
+  }
+
+  window.vcToggle = function(){
+    panelOpen = !panelOpen;
+    document.getElementById('vrtCloudPanel').classList.toggle('show', panelOpen);
+    if (panelOpen){ vcInit(); }
+  };
+
+  window.vcSaveGas = function(){
+    gasUrl = document.getElementById('vcGasInput').value.trim();
+    if (!gasUrl) return;
+    localStorage.setItem(LS_GAS, gasUrl);
+    vcLog('GAS URL 已儲存', 'i');
+    vcShowStatus();
+  };
+
+  function vcShowStatus(){
+    const el  = document.getElementById('vcStatus');
+    const meta = JSON.parse(localStorage.getItem(LS_META) || 'null');
+    const recs = JSON.parse(localStorage.getItem('sewing_prod_v1') || '[]').length;
+    if (meta) {
+      const mins = (Date.now() - new Date(meta.ts)) / 60000;
+      const age  = mins < 60 ? `${Math.round(mins)}分前` : `${Math.round(mins/60)}小時前`;
+      el.textContent = `本機 ${recs} 筆 · 上次同步 ${age}`;
+      el.className   = 'vcp-status ' + (mins < 120 ? 'ok' : 'warn');
+    } else {
+      el.textContent = `本機 ${recs} 筆 · 尚未同步`;
+      el.className   = 'vcp-status warn';
+    }
+    if (!gasUrl) { el.textContent += ' · ⚠ 未設定 GAS URL'; el.className = 'vcp-status err'; }
+  }
+
+  window.vcPush = async function(){
+    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
+    vcSetBusy(true);
+    vcLog('推送車縫資料...', 'i');
+    try {
+      const daily = localStorage.getItem('sewing_prod_v1') || '[]';
+      const eff   = localStorage.getItem('sewing_eff_v1')  || '[]';
+      const payload = {
+        tool: 'sewing',
+        recordCount: JSON.parse(daily).length,
+        lsKeys: { sewing_prod_v1: daily, sewing_eff_v1: eff },
+        summary: buildSewingSummary(JSON.parse(daily)),
+      };
+      const r = await fetch(gasUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload), redirect:'follow',
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: payload.recordCount }));
+      vcLog(`✓ 推送完成（${payload.recordCount} 筆）`, 'ok');
+      vcShowStatus();
+    } catch(e) {
+      vcLog('✗ 推送失敗：' + e.message, 'err');
+    } finally { vcSetBusy(false); }
+  };
+
+  window.vcPull = async function(){
+    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
+    if (!confirm('拉取會覆蓋本機車縫資料，確定嗎？')) return;
+    vcSetBusy(true);
+    vcLog('拉取中...', 'i');
+    try {
+      const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      if (!d.data || !d.data.data) { vcLog('雲端尚無車縫資料', 'err'); return; }
+      const payload = d.data.data;
+      if (payload.lsKeys) {
+        Object.entries(payload.lsKeys).forEach(([k,v]) => { if (v != null) localStorage.setItem(k, v); });
+      }
+      const cnt = JSON.parse(payload.lsKeys?.sewing_prod_v1 || '[]').length;
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: cnt }));
+      vcLog(`✓ 拉取完成（${cnt} 筆），重新整理頁面即可看到`, 'ok');
+      vcShowStatus();
+      if (confirm(`已拉取 ${cnt} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
+    } catch(e) {
+      vcLog('✗ 拉取失敗：' + e.message, 'err');
+    } finally { vcSetBusy(false); }
+  };
+
+  function buildSewingSummary(recs){
+    const today = new Date().toISOString().slice(0,10);
+    const todayG = recs.filter(r => r.date === today && r.section === 'Garment');
+    const todayA = recs.filter(r => r.date === today && r.section === 'Apron');
+    function wEff(arr){
+      const tw = arr.reduce((s,r)=>s+(r.workers||0),0);
+      return tw ? Math.round(arr.reduce((s,r)=>s+(r.efficiency||0)*(r.workers||0),0)/tw) : 0;
+    }
+    return {
+      today,
+      garment:{ pieces: todayG.reduce((s,r)=>s+(r.pieces||0),0), workers: todayG.reduce((s,r)=>s+(r.workers||0),0), efficiency: wEff(todayG) },
+      apron:  { pieces: todayA.reduce((s,r)=>s+(r.pieces||0),0), workers: todayA.reduce((s,r)=>s+(r.workers||0),0), efficiency: wEff(todayA) },
+    };
+  }
+
+  function vcSetBusy(on){
+    document.getElementById('vcPushBtn').disabled = on;
+    document.getElementById('vcPullBtn').disabled = on;
+    if (on){
+      document.getElementById('vcPushBtn').innerHTML = '<span class="vcSpin">⏳</span>';
+      document.getElementById('vcPullBtn').innerHTML = '<span class="vcSpin">⏳</span>';
+    } else {
+      document.getElementById('vcPushBtn').innerHTML = '☁ 推送';
+      document.getElementById('vcPullBtn').innerHTML = '⬇ 拉取';
+    }
+  }
+
+  function vcLog(msg, type){
+    const el  = document.getElementById('vcLog');
+    const now = new Date();
+    const t   = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+    const cls = type === 'ok' ? 'vcl-ok' : type === 'err' ? 'vcl-err' : 'vcl-i';
+    el.innerHTML += `<span class="${cls}">[${t}] ${msg}</span>\n`;
+    el.scrollTop  = el.scrollHeight;
+  }
+
+  // Close panel when clicking outside
+  document.addEventListener('click', e => {
+    if (panelOpen && !e.target.closest('#vrtCloudPanel') && !e.target.closest('#vrtCloudBtn')){
+      panelOpen = false;
+      document.getElementById('vrtCloudPanel').classList.remove('show');
+    }
+  });
+
+  vcInit();
+})();
+</script>
+
+</body>
+</html>

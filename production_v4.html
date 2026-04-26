@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT 生產進度總表 v4</title>
+<style>
+:root{
+  --bg:#f0f2f7;--s1:#fff;--s2:#f7f8fc;--s3:#eef1f8;--bd:#e2e6f0;--bd2:#d0d5e8;
+  --blue:#1d6ec7;--blue2:#3b9ef5;--green:#059669;--amber:#d97706;--red:#dc2626;
+  --purple:#7c3aed;--cyan:#0369a1;--teal:#0d9488;
+  --t1:#1e2640;--t2:#6b7a9e;--muted:#8b95b8;
+  --mono:monospace;--ui:"Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh;font-size:13px}
+
+/* ── Header ── */
+.hdr{background:linear-gradient(135deg,#1a2f4a,#2d4a6e);padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{font-size:17px;font-weight:700;letter-spacing:2px;color:#fff}.logo span{color:#3b9ef5}
+.sub{font-size:10px;color:#8bb5d8;margin-top:2px}
+.hdr-r{margin-left:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.hstat{text-align:right}.hsv{font-size:15px;font-weight:700;font-family:var(--mono);color:#60b8f5}.hsl{font-size:9px;color:#8bb5d8}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;background:#6b7a9e}
+.dot.ok{background:#34d399;animation:pulse 2.5s infinite}.dot.warn{background:#fbbf24}.dot.err{background:#f87171}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.hbtn{padding:6px 12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#e0eaf7;border-radius:5px;cursor:pointer;font-size:11px;font-family:var(--ui);transition:.15s}
+.hbtn:hover{background:rgba(255,255,255,.22)}
+
+/* ── Tabs ── */
+.tbr{background:var(--s1);border-bottom:2px solid var(--bd);display:flex;padding:0 20px;overflow-x:auto;gap:0}
+.tb{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);cursor:pointer;padding:11px 15px;font-size:13px;font-family:var(--ui);font-weight:500;white-space:nowrap;transition:.15s}
+.tb:hover{color:var(--t1);background:var(--s2)}.tb.on{color:var(--blue);border-bottom-color:var(--blue2);background:var(--s2)}
+.pane{display:none;padding:16px 20px}.pane.on{display:block}
+
+/* ── KPI cards ── */
+.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:9px;margin-bottom:14px}
+.kpi{background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:12px 13px;border-top:3px solid transparent;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.kpi.bl{border-top-color:var(--blue2)}.kpi.gr{border-top-color:var(--green)}.kpi.am{border-top-color:var(--amber)}
+.kpi.re{border-top-color:var(--red)}.kpi.pu{border-top-color:var(--purple)}.kpi.te{border-top-color:var(--teal)}
+.kv{font-size:21px;font-weight:700;font-family:var(--mono);color:var(--t1)}.kl{font-size:10px;color:var(--t2);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}.ks{font-size:10px;color:var(--muted);margin-top:1px}
+
+/* ── Cards / sections ── */
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:9px;margin-bottom:13px;overflow:hidden;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.chdr{padding:9px 13px;border-bottom:1px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ctit{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t2);display:flex;align-items:center;gap:5px}
+.ctit::before{content:'';width:3px;height:10px;background:var(--blue2);border-radius:2px;flex-shrink:0}
+
+/* ── Filter bar ── */
+.fbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.fbar select,.fbar input{background:var(--s1);border:1px solid var(--bd2);color:var(--t1);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--ui)}
+.fbar select:focus,.fbar input:focus{outline:none;border-color:var(--blue2)}
+.fbtn{padding:5px 11px;border:1px solid var(--bd2);background:var(--s1);color:var(--t2);border-radius:5px;cursor:pointer;font-size:12px;font-family:var(--ui);transition:.15s}
+.fbtn:hover,.fbtn.on{border-color:var(--blue2);color:var(--blue);background:#eef5ff}
+.fbtn.pri{background:var(--blue2);border-color:var(--blue2);color:#fff}.fbtn.pri:hover{background:var(--blue)}
+
+/* ── Data table ── */
+.tw{overflow-x:auto}
+.dt{width:100%;border-collapse:collapse;font-size:12px}
+.dt th{background:var(--s2);padding:7px 9px;text-align:left;color:var(--t2);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--bd);white-space:nowrap}
+.dt td{padding:6px 9px;border-bottom:1px solid #eef0f6;color:var(--t1);white-space:nowrap;vertical-align:middle}
+.dt tr:hover td{background:#f5f8ff}
+.r{text-align:right;font-family:var(--mono)}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}
+.b-none{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
+.b-cut{background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd}
+.b-sew{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.b-done{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
+
+.chip{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.p1{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+.p2{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.p3{background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe}
+.p4{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
+
+/* ── Progress bar ── */
+.pb{height:12px;background:var(--bd);border-radius:6px;overflow:hidden;display:inline-block;vertical-align:middle;position:relative}
+.pb-c{position:absolute;top:0;left:0;height:100%;background:#7dd3fc;border-radius:6px}
+.pb-s{position:absolute;top:0;left:0;height:100%;background:#34d399;border-radius:6px}
+
+/* ── GANTT ── */
+.gout{overflow:auto;border:1px solid var(--bd);border-radius:8px;background:var(--s1);max-height:600px;box-shadow:0 1px 4px rgba(30,38,64,.06)}
+.g-sh{position:sticky;left:0;top:0;z-index:6;background:var(--s2);border-right:1px solid var(--bd);border-bottom:2px solid var(--bd);padding:7px 11px;font-size:10px;color:var(--t2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;min-width:168px;white-space:nowrap}
+.g-dh{position:sticky;top:0;z-index:5;background:var(--s2);border-bottom:2px solid var(--bd);padding:0}
+.g-sr td{background:var(--s3);padding:5px 11px;font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.6px;border-top:2px solid var(--bd);position:sticky;left:0;z-index:3}
+.g-lbl{position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--bd);border-bottom:1px solid var(--bd);padding:5px 11px;font-size:12px;font-family:var(--mono);font-weight:600;min-width:168px;vertical-align:middle}
+.g-cell{padding:0;border-bottom:1px solid var(--bd)}
+
+/* ── SMV source tags ── */
+.stag{display:inline-block;padding:1px 5px;border-radius:6px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.st-smv{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+.st-his{background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc}
+.st-avg{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb}
+
+/* ── Loading overlay ── */
+.loading{position:fixed;inset:0;background:rgba(240,242,247,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:13px}
+.spin{width:38px;height:38px;border:3px solid var(--bd);border-top-color:var(--blue2);border-radius:50%;animation:sp .65s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── Modal ── */
+.mbg{position:fixed;inset:0;background:rgba(30,38,64,.5);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--s1);border:1px solid var(--bd);border-radius:11px;max-width:700px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(30,38,64,.22)}
+.mhdr{padding:13px 17px;border-bottom:1px solid var(--bd);background:var(--s2);display:flex;justify-content:space-between;align-items:center}
+.mclose{background:none;border:none;color:var(--muted);cursor:pointer;font-size:21px}.mclose:hover{color:var(--t1)}
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div class="spin"></div>
+  <div style="color:var(--t2);font-size:13px" id="lmsg">讀取資料中…</div>
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4 · 訂單 × 裁剪 × 車縫 × SMV</div></div>
+  <div style="font-size:11px;color:#8bb5d8;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span><span class="dot" id="d-ord"></span><span id="l-ord">訂單…</span></span>
+    <span><span class="dot" id="d-cut"></span><span id="l-cut">裁剪…</span></span>
+    <span><span class="dot" id="d-sew"></span><span id="l-sew">車縫…</span></span>
+    <span><span class="dot" id="d-smv"></span><span id="l-smv">SMV…</span></span>
+  </div>
+  <div class="hdr-r">
+    <div class="hstat"><div class="hsv" id="h-styles">-</div><div class="hsl">款號</div></div>
+    <div class="hstat"><div class="hsv" id="h-ord">-</div><div class="hsl">訂單量</div></div>
+    <div class="hstat"><div class="hsv" id="h-sew">-</div><div class="hsl">車縫量</div></div>
+    <button class="hbtn" onclick="refresh()">⟳ 重新整理</button>
+    <span style="font-size:10px;color:#8bb5d8" id="updated"></span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tbr">
+  <button class="tb on" onclick="go('progress',this)">📊 進度總表</button>
+  <button class="tb" onclick="go('gantt',this)">📅 甘特排程</button>
+  <button class="tb" onclick="go('queue',this)">📋 排隊清單</button>
+  <button class="tb" onclick="go('smv',this)">📐 SMV 產能</button>
+  <button class="tb" onclick="go('info',this)">ℹ️ 連動說明</button>
+</div>
+
+<!-- ════ PROGRESS ════ -->
+<div id="pane-progress" class="pane on">
+  <div class="krow" id="krow"></div>
+  <div class="fbar">
+    <select id="f-cu" onchange="renderProgress()"><option value="">全部客戶</option></select>
+    <select id="f-st" onchange="renderProgress()">
+      <option value="">全部狀態</option>
+      <option value="none">⬜ 未開始</option>
+      <option value="cut">✂️ 裁剪中</option>
+      <option value="sew">🧵 車縫中</option>
+      <option value="done">✅ 完成</option>
+    </select>
+    <select id="f-sec" onchange="renderProgress()">
+      <option value="">全部組別</option>
+      <option value="Garment">成衣</option>
+      <option value="Apron">圍裙</option>
+    </select>
+    <select id="f-sort" onchange="renderProgress()">
+      <option value="priority">優先度</option>
+      <option value="order_date">下單日↑</option>
+      <option value="ship_date">交期↑</option>
+      <option value="balance">餘量↓</option>
+      <option value="sew_pct">完成%↑</option>
+    </select>
+    <input type="text" id="f-q" placeholder="搜尋款號 / PO…" oninput="renderProgress()" style="min-width:140px">
+    <span style="font-size:11px;color:var(--muted)" id="pcnt"></span>
+    <button class="fbtn" onclick="exportCsv()" style="margin-left:auto">⬇ CSV</button>
+  </div>
+  <div class="card">
+    <div class="chdr">
+      <span class="ctit">款號進度</span>
+      <span style="font-size:11px;color:var(--muted)">
+        <span style="display:inline-block;width:9px;height:9px;background:#7dd3fc;border-radius:2px;vertical-align:middle;margin-right:3px"></span>裁剪
+        <span style="display:inline-block;width:9px;height:9px;background:#34d399;border-radius:2px;vertical-align:middle;margin:0 3px 0 8px"></span>車縫
+      </span>
+    </div>
+    <div class="tw"><table class="dt">
+      <thead><tr>
+        <th>優先</th><th>款號</th><th>客戶</th><th>PO</th>
+        <th class="r">訂單量</th><th>下單日</th><th>交期</th>
+        <th class="r">裁剪量</th><th class="r">車縫量</th><th class="r">餘量</th>
+        <th style="min-width:120px">進度</th><th>狀態</th><th>SMV</th><th>最近活動</th><th></th>
+      </tr></thead>
+      <tbody id="ptbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════ GANTT ════ -->
+<div id="pane-gantt" class="pane">
+  <div class="fbar">
+    <select id="g-sec" onchange="renderGantt()">
+      <option value="">全部組別</option>
+      <option value="Garment">成衣組</option>
+      <option value="Apron">圍裙組</option>
+    </select>
+    <label style="font-size:12px;color:var(--t2)">顯示週數：</label>
+    <select id="g-wks" onchange="renderGantt()">
+      <option value="8">8 週</option>
+      <option value="12" selected>12 週</option>
+      <option value="16">16 週</option>
+      <option value="20">20 週</option>
+    </select>
+    <label style="font-size:12px;color:var(--t2)">色彩：</label>
+    <select id="g-color" onchange="renderGantt()">
+      <option value="customer">依客戶</option>
+      <option value="status">依狀態</option>
+    </select>
+    <label style="font-size:12px;color:var(--t2)">工作分鐘：</label>
+    <input type="number" id="g-mins" value="480" min="60" max="720" step="30" style="width:68px" onchange="rebuildAndRender()">
+    <button class="fbtn pri" onclick="rebuildAndRender()">重算排程</button>
+    <span style="font-size:11px;color:var(--muted)" id="g-meta"></span>
+  </div>
+  <div id="g-legend" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px;font-size:11px;align-items:center"></div>
+  <div id="g-wrap"></div>
+  <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+    ▶ = 進行中 &nbsp;|&nbsp; 紅框 = 急單交期 &lt; 14天 &nbsp;|&nbsp; 紅細線 = 交期日 &nbsp;|&nbsp; 深色 = SMV精確產能，淺色 = 歷史估算 &nbsp;|&nbsp; 點色塊查看詳情
+  </div>
+</div>
+
+<!-- ════ QUEUE ════ -->
+<div id="pane-queue" class="pane">
+  <div class="fbar">
+    <select id="q-sec" onchange="renderQueue()">
+      <option value="">全部</option><option value="Garment">成衣</option><option value="Apron">圍裙</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="chdr"><span class="ctit">🔄 進行中款號</span><span style="font-size:11px;color:var(--muted)" id="ip-ct"></span></div>
+    <div class="tw"><table class="dt">
+      <thead><tr><th>款號</th><th>客戶</th><th>組別</th><th class="r">訂單量</th><th class="r">車縫量</th><th class="r">餘量</th><th>產能來源</th><th class="r">日產量</th><th>預估完工</th><th>交期</th><th>狀態</th></tr></thead>
+      <tbody id="iptbody"></tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="chdr"><span class="ctit">📋 未開始排隊（建議順序）</span><span style="font-size:11px;color:var(--muted)" id="q-ct"></span></div>
+    <div class="tw"><table class="dt">
+      <thead><tr>
+        <th class="r">#</th><th>款號</th><th>客戶</th><th>組別</th>
+        <th class="r">訂單量</th><th>下單日</th><th>交期</th>
+        <th>產能來源</th><th class="r">日產量</th><th>優先依據</th>
+      </tr></thead>
+      <tbody id="qtbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════ SMV ════ -->
+<div id="pane-smv" class="pane">
+  <div class="krow" id="smv-krow"></div>
+  <div class="fbar">
+    <input type="text" id="smv-q" placeholder="搜尋款號…" oninput="renderSmv()" style="min-width:140px">
+    <select id="smv-sec" onchange="renderSmv()">
+      <option value="">全部 Section</option>
+      <option value="Garment">Garment</option>
+      <option value="Apron">Apron</option>
+      <option value="Cutting">Cutting</option>
+    </select>
+    <label style="font-size:12px;color:var(--t2)">工作分鐘：</label>
+    <input type="number" id="smv-mins" value="480" min="60" max="720" step="30" style="width:68px" oninput="renderSmv()">
+    <label style="font-size:12px;color:var(--t2)">人數：</label>
+    <input type="number" id="smv-wkr" value="15" min="1" max="100" style="width:58px" oninput="renderSmv()">
+  </div>
+  <div class="card">
+    <div class="chdr">
+      <span class="ctit">SMV 款式產能對照表</span>
+      <span style="font-size:11px;color:var(--muted)" id="smv-meta"></span>
+    </div>
+    <div class="tw"><table class="dt">
+      <thead><tr>
+        <th>款號</th><th>客戶</th><th>類型</th><th>Section</th>
+        <th class="r">Original SMV</th>
+        <th class="r">Current SMV<br><span style="font-weight:400;opacity:.7">(×65%)</span></th>
+        <th class="r">理論日產量</th>
+        <th class="r">歷史日均</th>
+        <th class="r">排程使用</th>
+        <th class="r">訂單餘量</th>
+        <th class="r">預估天數</th>
+      </tr></thead>
+      <tbody id="smv-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════ INFO ════ -->
+<div id="pane-info" class="pane">
+  <div style="max-width:820px;background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:18px;box-shadow:0 1px 4px rgba(30,38,64,.05)">
+    <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:14px">🔗 四表連動說明</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:7px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:5px">✅ 同一 Chrome 自動共用</div>
+        <div style="font-size:12px;color:var(--t2);line-height:2">五個 HTML 放同一資料夾<br>同一 Chrome 視窗開啟即自動讀取<br><b style="color:var(--t1)">不需匯入/匯出任何 JSON</b><br>按「⟳ 重新整理」讀最新資料</div>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:5px">⚠️ 注意事項</div>
+        <div style="font-size:12px;color:var(--t2);line-height:2">不同瀏覽器不共享<br>Chrome 無痕模式不共享<br>不同 Chrome 帳號不共享<br>清除瀏覽資料 = 清除所有資料</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
+        <div style="color:var(--blue);font-weight:700;font-size:12px;margin-bottom:5px">📋 訂單<br><span style="color:var(--muted);font-weight:400">orders_v3</span></div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">FactoryDB</b> v12<br>store: po_lines</div>
+      </div>
+      <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
+        <div style="color:var(--cyan);font-weight:700;font-size:12px;margin-bottom:5px">✂️ 裁剪<br><span style="color:var(--muted);font-weight:400">cutting_v3</span></div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">CuttingProd</b> v1<br>store: cutting_records</div>
+      </div>
+      <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
+        <div style="color:var(--amber);font-weight:700;font-size:12px;margin-bottom:5px">🧵 車縫<br><span style="color:var(--muted);font-weight:400">sewing_v5</span></div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">localStorage<br><b style="color:var(--t2)">sewing_prod_v1</b><br>（備份於此）</div>
+      </div>
+      <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
+        <div style="color:var(--teal);font-weight:700;font-size:12px;margin-bottom:5px">📐 SMV<br><span style="color:var(--muted);font-weight:400">smv_manager_v4</span></div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">SewingProd</b> v5<br>store: smv_snapshots</div>
+      </div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;font-size:12px;color:var(--t2);margin-bottom:9px">
+      <b style="color:var(--blue)">關聯鍵（不分大小寫）：</b>
+      訂單 <code style="background:var(--s2);padding:1px 4px;border-radius:3px">style_code</code>
+      = 裁剪 <code style="background:var(--s2);padding:1px 4px;border-radius:3px">styleNo</code>
+      = 車縫 <code style="background:var(--s2);padding:1px 4px;border-radius:3px">styleNo</code>
+      = SMV <code style="background:var(--s2);padding:1px 4px;border-radius:3px">style</code>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:6px;padding:10px;font-size:12px;color:var(--t2)">
+      <b style="color:var(--green)">📐 排程產能優先順序：</b>
+      ① SMV 理論（人數 × 工作分鐘 ÷ curSMV）
+      → ② 近 90 天歷史實際日均
+      → ③ 工廠整體平均（fallback）
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="mbg" id="mbg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="mhdr">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--t1)" id="m-title"></div>
+        <div style="font-size:11px;color:var(--t2);margin-top:2px" id="m-sub"></div>
+      </div>
+      <button class="mclose" onclick="closeModal()">×</button>
+    </div>
+    <div style="padding:16px" id="m-body"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  DATA SOURCES — 對應各系統的儲存位置
+// ══════════════════════════════════════════════════
+//  orders_v3    → IndexedDB: FactoryDB (v12)   → po_lines
+//  cutting_v3   → IndexedDB: CuttingProd (v1)  → cutting_records
+//  sewing_v5    → localStorage: sewing_prod_v1
+//  smv_manager  → IndexedDB: SewingProd (v5)   → smv_snapshots
+
+const SEW_LS   = 'sewing_prod_v1';
+const TODAY    = new Date().toISOString().slice(0,10);
+const PALETTE  = ['#1d6ec7','#059669','#d97706','#7c3aed','#0369a1','#dc2626','#db2777','#65a30d','#ea580c','#9333ea','#0d9488','#e11d48','#0891b2','#854d0e'];
+const MO       = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+
+let ORDERS=[], CUT=[], SEW=[], STYLES=[], SMV_MAP={}, SMV_INFO='';
+let CUST_CLR={}, _CI=0, SCHED=null;
+
+// ── IDB helpers ─────────────────────────────────
+function idbOpen(name, ver){
+  // If ver is undefined, opens current version (read-only safe)
+  return new Promise((res,rej)=>{
+    const r = ver===undefined ? indexedDB.open(name) : indexedDB.open(name, ver);
+    r.onupgradeneeded = e => {
+      // We never want to trigger upgrades — this file is read-only
+      // If we get here on a "no version" open, it means DB doesn't exist yet
+      if(ver===undefined){ e.target.transaction?.abort?.(); rej(new Error(name+' not initialised')); }
+      // If explicit version, ignore (don't modify)
+    };
+    r.onsuccess = e => res(e.target.result);
+    r.onerror   = ()=> rej(new Error('Cannot open '+name));
+  });
+}
+async function idbAll(db, store){
+  if(!db.objectStoreNames.contains(store)) return [];
+  return new Promise(res=>{
+    try{
+      const tx = db.transaction(store,'readonly');
+      const q  = tx.objectStore(store).getAll();
+      q.onsuccess = () => res(q.result||[]);
+      q.onerror   = () => res([]);
+    }catch{ res([]); }
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  LOAD ALL DATA
+// ══════════════════════════════════════════════════
+async function loadAll(){
+  // 1. Orders: FactoryDB (any version — currently v12)
+  setL('讀取訂單 (FactoryDB)…'); ORDERS=[];
+  try{
+    const db = await idbOpen('FactoryDB');  // no version = accept whatever exists
+    ORDERS   = await idbAll(db,'po_lines');
+    setDot('d-ord', ORDERS.length ? 'ok' : 'warn');
+    document.getElementById('l-ord').textContent = ORDERS.length ? `訂單 ${ORDERS.length} 筆` : '訂單無資料（先開 orders_v3.html 匯入）';
+  }catch(e){
+    setDot('d-ord','err');
+    document.getElementById('l-ord').textContent = '訂單 DB 離線';
+  }
+
+  // 2. Cutting: CuttingProd v1
+  setL('讀取裁剪 (CuttingProd v1)…'); CUT=[];
+  try{
+    const db = await idbOpen('CuttingProd', 1);
+    CUT      = await idbAll(db,'cutting_records');
+    setDot('d-cut', CUT.length ? 'ok' : 'warn');
+    document.getElementById('l-cut').textContent = CUT.length ? `裁剪 ${CUT.length} 筆` : '裁剪無資料（先開 cutting_v3.html 匯入）';
+  }catch(e){
+    setDot('d-cut','err');
+    document.getElementById('l-cut').textContent = '裁剪 DB 離線';
+  }
+
+  // 3. Sewing: localStorage → sewing_prod_v1
+  setL('讀取車縫 (localStorage)…'); SEW=[];
+  try{
+    const raw = localStorage.getItem(SEW_LS) || '[]';
+    SEW = JSON.parse(raw).filter(r => r?.pieces > 0);
+    setDot('d-sew', SEW.length ? 'ok' : 'warn');
+    document.getElementById('l-sew').textContent = SEW.length ? `車縫 ${SEW.length} 筆` : '車縫無資料（先開 sewing_v5.html 匯入）';
+  }catch(e){
+    setDot('d-sew','err');
+    document.getElementById('l-sew').textContent = '車縫讀取失敗';
+  }
+
+  // 4. SMV: SewingProd v5 → smv_snapshots
+  setL('讀取 SMV (SewingProd v5)…'); SMV_MAP={}; SMV_INFO='';
+  try{
+    const db    = await idbOpen('SewingProd', 5);
+    const snaps = await idbAll(db,'smv_snapshots');
+    if(snaps.length){
+      // Use the most recently imported snapshot (multiple sections → merge all)
+      snaps.sort((a,b)=> new Date(b.importDate)-new Date(a.importDate));
+      // Merge latest snapshot per section (Garment + Apron + Cutting)
+      const seen = new Set();
+      snaps.forEach(s=>{
+        if(seen.has(s.section)) return;
+        seen.add(s.section);
+        (s.items||[]).forEach(i=>{
+          if(!i.style) return;
+          const sk = i.style.toUpperCase();
+          if(!SMV_MAP[sk]) SMV_MAP[sk] = {curSMV:i.curSMV,origSMV:i.origSMV,section:s.section,cust:i.cust,type:i.type||''};
+        });
+      });
+      SMV_INFO = `最新：${snaps[0].section} ${fmtDate(snaps[0].importDate)} · 共 ${Object.keys(SMV_MAP).length} 款`;
+      setDot('d-smv','ok');
+      document.getElementById('l-smv').textContent = `SMV ${Object.keys(SMV_MAP).length} 款`;
+    }else{
+      setDot('d-smv','warn');
+      document.getElementById('l-smv').textContent = 'SMV 無資料（先開 smv_manager_v4.html 匯入）';
+    }
+  }catch(e){
+    setDot('d-smv','warn');
+    document.getElementById('l-smv').textContent = 'SMV 未匯入';
+  }
+
+  // Build aggregates & render
+  setL('計算進度…');
+  buildStyles();
+  buildCustColors();
+  SCHED = buildSchedule();
+
+  populateFilters();
+  renderKrow();
+  renderProgress();
+  renderGantt();
+  renderQueue();
+  renderSmv();
+
+  document.getElementById('updated').textContent = '更新：' + new Date().toLocaleTimeString('zh-TW');
+  hideL();
+}
+
+// ══════════════════════════════════════════════════
+//  BUILD STYLES — join 3 data sources by styleNo
+// ══════════════════════════════════════════════════
+const nsk = s => (s||'').trim().toUpperCase();
+
+function buildStyles(){
+  // Orders
+  const oM = {};
+  ORDERS.forEach(o=>{
+    const sk = nsk(o.style_code); if(!sk) return;
+    if(!oM[sk]) oM[sk]={qty:0,pos:new Set(),custs:new Set(),oDs:[],sDs:[]};
+    oM[sk].qty += parseFloat(o.qty)||0;
+    if(o.po_number) oM[sk].pos.add(o.po_number);
+    if(o.customer)  oM[sk].custs.add(o.customer);
+    const od=pd(o.order_date), sd=pd(o.ship_date)||pd(o.cancel_date);
+    if(od) oM[sk].oDs.push(od);
+    if(sd) oM[sk].sDs.push(sd);
+  });
+
+  // Cutting
+  const cM = {};
+  CUT.filter(r=>r.src!=='ref'&&r.pieces>0).forEach(r=>{
+    const sk = nsk(r.styleNo); if(!sk) return;
+    if(!cM[sk]) cM[sk]={pcs:0,dates:[],secs:new Set()};
+    cM[sk].pcs += r.pieces;
+    if(r.date)    cM[sk].dates.push(r.date);
+    if(r.section) cM[sk].secs.add(r.section);
+  });
+
+  // Sewing
+  const sM = {};
+  SEW.filter(r=>r.pieces>0).forEach(r=>{
+    const sk = nsk(r.styleNo); if(!sk) return;
+    if(!sM[sk]) sM[sk]={pcs:0,dates:[],secs:new Set(),lines:new Set()};
+    sM[sk].pcs += r.pieces;
+    if(r.date)   sM[sk].dates.push(r.date);
+    if(r.section) sM[sk].secs.add(r.section);
+    if(r.lineNo)  sM[sk].lines.add(r.lineNo);
+  });
+
+  const all = new Set([...Object.keys(oM),...Object.keys(cM),...Object.keys(sM)]);
+  STYLES = [];
+  all.forEach(sk=>{
+    const o=oM[sk]||{qty:0,pos:new Set(),custs:new Set(),oDs:[],sDs:[]};
+    const c=cM[sk]||{pcs:0,dates:[],secs:new Set()};
+    const s=sM[sk]||{pcs:0,dates:[],secs:new Set(),lines:new Set()};
+    const qty=o.qty, cutPcs=c.pcs, sewPcs=s.pcs;
+    const cutPct = qty>0 ? Math.min(100,Math.round(cutPcs/qty*100)) : (cutPcs>0?100:0);
+    const sewPct = qty>0 ? Math.min(100,Math.round(sewPcs/qty*100)) : (sewPcs>0?100:0);
+    const allSecs = new Set([...c.secs,...s.secs]);
+    const actDs = [...c.dates,...s.dates].sort();
+    STYLES.push({
+      sk, customer:[...o.custs].join(', ')||'—', custs:o.custs, pos:o.pos,
+      qty, cutPcs, sewPcs, balance:Math.max(0,qty-sewPcs),
+      cutPct, sewPct,
+      orderDate: o.oDs.sort()[0]||'', shipDate: o.sDs.sort()[0]||'',
+      status: calcSt(cutPcs,sewPcs,qty),
+      secs: allSecs, lines: s.lines,
+      latestAct: actDs[actDs.length-1]||'',
+    });
+  });
+
+  const tO = STYLES.reduce((s,r)=>s+r.qty,0);
+  const tS = STYLES.reduce((s,r)=>s+r.sewPcs,0);
+  document.getElementById('h-styles').textContent = STYLES.length.toLocaleString();
+  document.getElementById('h-ord').textContent    = fmt(tO);
+  document.getElementById('h-sew').textContent    = fmt(tS);
+}
+
+const calcSt = (c,s,q) => s>=q&&q>0?'done' : s>0?'sew' : c>0?'cut' : 'none';
+
+// ══════════════════════════════════════════════════
+//  CAPACITY — SMV first, then history, then avg
+// ══════════════════════════════════════════════════
+function histAvg(sk){
+  const cutoff = addDays(TODAY,-90);
+  const recs   = SEW.filter(r=>nsk(r.styleNo)===sk && r.pieces>0 && r.date>=cutoff);
+  if(!recs.length) return 0;
+  const days = new Set(recs.map(r=>r.date)).size;
+  return Math.round(recs.reduce((s,r)=>s+r.pieces,0)/days);
+}
+function lineWorkers(ln){
+  const cutoff = addDays(TODAY,-90);
+  const recs   = SEW.filter(r=>r.lineNo===ln && r.workers>0 && r.date>=cutoff);
+  if(!recs.length) return 15;
+  return Math.round(recs.reduce((s,r)=>s+r.workers,0)/recs.length);
+}
+function dailyCap(sk, workers, workMins){
+  const smvD = SMV_MAP[sk];
+  const hist = histAvg(sk);
+  if(smvD?.curSMV>0){
+    const smvCap = Math.floor(workers * workMins / smvD.curSMV);
+    // Use average of SMV and history when both available (more conservative)
+    const cap = hist>0 ? Math.round((smvCap+hist)/2) : smvCap;
+    return {cap, src:'smv', smvCap, hist};
+  }
+  if(hist>0) return {cap:hist, src:'hist', smvCap:0, hist};
+  return {cap:Math.max(500, Math.round(SEW.length>0 ? SEW.reduce((s,r)=>s+r.pieces,0)/Math.max(1,new Set(SEW.map(r=>r.date)).size)/Math.max(1,new Set(SEW.map(r=>r.lineNo).filter(Boolean)).size) : 800)), src:'avg', smvCap:0, hist:0};
+}
+
+// ══════════════════════════════════════════════════
+//  SCHEDULE
+// ══════════════════════════════════════════════════
+function buildSchedule(){
+  const workMins = parseInt(document.getElementById('g-mins')?.value)||480;
+  const cutoff   = addDays(TODAY,-90);
+
+  // Detect lines from sewing history
+  const lPcs={}, lDates={};
+  SEW.filter(r=>r.pieces>0&&r.date>=cutoff).forEach(r=>{
+    const ln=r.lineNo; if(!ln) return;
+    const sec=r.section||'Garment';
+    if(!lPcs[ln]) lPcs[ln]={};
+    lPcs[ln][sec] = (lPcs[ln][sec]||0)+r.pieces;
+    if(!lDates[ln]) lDates[ln]=new Set();
+    lDates[ln].add(r.date);
+  });
+
+  const lines={};
+  Object.entries(lPcs).forEach(([ln,sp])=>{
+    const dominant = Object.entries(sp).sort((a,b)=>b[1]-a[1])[0][0];
+    const days     = lDates[ln]?.size||1;
+    const wkrs     = lineWorkers(ln);
+    lines[ln] = {ln, section:dominant, workers:wkrs,
+      histAvgTotal: Math.round(Object.values(sp).reduce((s,v)=>s+v,0)/days)};
+  });
+
+  // Current in-progress style per line
+  const lLatest={};
+  SEW.filter(r=>r.pieces>0).forEach(r=>{if(!lLatest[r.lineNo]||r.date>lLatest[r.lineNo]) lLatest[r.lineNo]=r.date;});
+  const lCur={};
+  SEW.filter(r=>r.pieces>0).forEach(r=>{
+    if(r.date!==lLatest[r.lineNo]) return;
+    if(!lCur[r.lineNo]) lCur[r.lineNo]={};
+    const sk=nsk(r.styleNo||'');
+    lCur[r.lineNo][sk]=(lCur[r.lineNo][sk]||0)+r.pieces;
+  });
+
+  Object.entries(lines).forEach(([ln,ld])=>{
+    const m=lCur[ln];
+    if(m){
+      const top=Object.entries(m).sort((a,b)=>b[1]-a[1])[0][0];
+      ld.curStyle=top;
+      const {cap,src}=dailyCap(top,ld.workers,workMins);
+      ld.dailyCap=cap; ld.capSrc=src;
+      const sr=STYLES.find(s=>s.sk===top);
+      ld.curBalance=sr?Math.max(0,sr.balance):0;
+      ld.daysToFinish=cap>0?Math.ceil(ld.curBalance/cap):0;
+    }else{
+      const {cap,src}=dailyCap('',ld.workers,workMins);
+      ld.dailyCap=cap; ld.capSrc=src; ld.daysToFinish=0;
+    }
+  });
+
+  // Priority scoring
+  const custQty={};
+  STYLES.forEach(r=>[...r.custs].forEach(c=>custQty[c]=(custQty[c]||0)+r.qty));
+  const sortedCusts=Object.entries(custQty).sort((a,b)=>b[1]-a[1]);
+  const custRank={};
+  sortedCusts.forEach(([c],i)=>custRank[c]=sortedCusts.length-i);
+  const maxQty=Math.max(...STYLES.map(r=>r.qty),1);
+
+  function priScore(r){
+    let s=0;
+    if(r.shipDate){const d=daysDiff(TODAY,r.shipDate);if(d<=7)s+=12000;else if(d<=14)s+=9000;else if(d<=30)s+=5000;else if(d<=60)s+=2000;else s+=500;}
+    [...r.custs].forEach(c=>s+=(custRank[c]||0)*200);
+    s+=Math.round(r.qty/maxQty*4000);
+    if(r.orderDate){s+=Math.min(daysDiff(r.orderDate,TODAY)*8,800);}
+    return s;
+  }
+  function priLabel(r){
+    if(r.shipDate&&daysDiff(TODAY,r.shipDate)<=14) return{c:'p1',t:'急單🚨'};
+    if(r.shipDate&&daysDiff(TODAY,r.shipDate)<=30) return{c:'p1',t:'有交期'};
+    const big=sortedCusts[0]?.[0];
+    if([...r.custs].includes(big)&&r.qty>maxQty*0.3) return{c:'p2',t:'大客大單'};
+    if(r.qty>maxQty*0.5)  return{c:'p2',t:'大單'};
+    if([...r.custs].some(c=>custRank[c]>sortedCusts.length*0.6)) return{c:'p3',t:'大客戶'};
+    if(r.qty<maxQty*0.05&&r.pos.size<=2) return{c:'p4',t:'小單'};
+    return{c:'p3',t:'一般'};
+  }
+
+  // Section queues
+  const sQ={Garment:[],Apron:[]};
+  STYLES.filter(r=>r.status==='none').forEach(r=>{
+    const sec=[...r.secs][0]||guessSec(r.sk)||'Garment';
+    const q=sQ[sec]||(sQ[sec]=[]);
+    q.push({...r, pri:priScore(r), priLabel:priLabel(r), inferredSec:sec});
+  });
+  Object.values(sQ).forEach(q=>q.sort((a,b)=>b.pri-a.pri));
+
+  // Line assignments for Gantt
+  const lAsgn={}, lFree={};
+  Object.entries(lines).forEach(([ln,ld])=>{
+    lAsgn[ln]=[];
+    if(ld.curStyle){
+      const endD=addDays(TODAY, ld.daysToFinish||0);
+      const sr=STYLES.find(s=>s.sk===ld.curStyle);
+      lAsgn[ln].push({sk:ld.curStyle,start:TODAY,end:endD,inProg:true,
+        customer:sr?.customer||'',qty:ld.curBalance,shipDate:sr?.shipDate||'',
+        sewPct:sr?.sewPct||0, capSrc:ld.capSrc||'avg'});
+      lFree[ln]=addDays(endD,1);
+    }else{lFree[ln]=TODAY;}
+  });
+
+  ['Garment','Apron'].forEach(sec=>{
+    const secLines=Object.keys(lines).filter(ln=>lines[ln].section===sec);
+    if(!secLines.length) return;
+    const queue=[...(sQ[sec]||[])];
+    while(queue.length){
+      secLines.sort((a,b)=>(lFree[a]||TODAY).localeCompare(lFree[b]||TODAY));
+      const ln=secLines[0], ld=lines[ln];
+      const item=queue.shift();
+      const {cap,src}=dailyCap(item.sk, ld.workers, workMins);
+      const daysN=item.qty>0?Math.ceil(item.qty/cap):1;
+      const startD=lFree[ln]||TODAY;
+      const endD=addDays(startD,daysN);
+      lAsgn[ln].push({sk:item.sk,start:startD,end:endD,inProg:false,
+        customer:item.customer,qty:item.qty,shipDate:item.shipDate,
+        pri:item.pri, priLabel:item.priLabel, capSrc:src});
+      lFree[ln]=addDays(endD,1);
+    }
+  });
+
+  return{lines, lAsgn, sQ, custRank, maxQty, priScore, priLabel, workMins};
+}
+
+// ══════════════════════════════════════════════════
+//  CUSTOMER COLORS
+// ══════════════════════════════════════════════════
+function buildCustColors(){
+  [...new Set(ORDERS.map(o=>o.customer).filter(Boolean))].sort().forEach(c=>{
+    if(!CUST_CLR[c]) CUST_CLR[c]=PALETTE[_CI++%PALETTE.length];
+  });
+}
+function custColor(c){
+  const k=(c||'').split(',')[0].trim();
+  if(!CUST_CLR[k]) CUST_CLR[k]=PALETTE[_CI++%PALETTE.length];
+  return CUST_CLR[k];
+}
+
+// ══════════════════════════════════════════════════
+//  KPI ROW
+// ══════════════════════════════════════════════════
+function renderKrow(){
+  const none=STYLES.filter(r=>r.status==='none').length;
+  const inCut=STYLES.filter(r=>r.status==='cut').length;
+  const inSew=STYLES.filter(r=>r.status==='sew').length;
+  const done=STYLES.filter(r=>r.status==='done').length;
+  const tO=STYLES.reduce((s,r)=>s+r.qty,0);
+  const tS=STYLES.reduce((s,r)=>s+r.sewPcs,0);
+  const pct=tO>0?Math.round(tS/tO*100):0;
+  const hasDL=STYLES.filter(r=>r.shipDate).length;
+  const smvCnt=Object.keys(SMV_MAP).length;
+  document.getElementById('krow').innerHTML=[
+    {l:'款號總數',v:STYLES.length,c:'bl',s:`訂單量 ${fmt(tO)} 件`},
+    {l:'未開始',v:none,c:'pu',s:'等待排程'},
+    {l:'裁剪中',v:inCut,c:'bl',s:'已開裁'},
+    {l:'車縫中',v:inSew,c:'am',s:'進行中'},
+    {l:'完成',v:done,c:'gr',s:''},
+    {l:'有交期款',v:hasDL,c:'re',s:'需優先'},
+    {l:'整體完成率',v:pct+'%',c:'gr',s:`縫 ${fmt(tS)} 件`},
+    {l:'SMV款數',v:smvCnt,c:'te',s:smvCnt?'已連動產能':'尚未匯入'},
+  ].map(k=>`<div class="kpi ${k.c}"><div class="kv">${k.v}</div><div class="kl">${k.l}</div>${k.s?`<div class="ks">${k.s}</div>`:''}</div>`).join('');
+}
+
+// ══════════════════════════════════════════════════
+//  PROGRESS TABLE
+// ══════════════════════════════════════════════════
+function populateFilters(){
+  const custs=[...new Set(ORDERS.map(o=>o.customer).filter(Boolean))].sort();
+  document.getElementById('f-cu').innerHTML='<option value="">全部客戶</option>'+custs.map(c=>`<option>${esc(c)}</option>`).join('');
+}
+
+function filteredStyles(){
+  const fCu=document.getElementById('f-cu').value;
+  const fSt=document.getElementById('f-st').value;
+  const fSec=document.getElementById('f-sec').value;
+  const fSort=document.getElementById('f-sort').value;
+  const fQ=(document.getElementById('f-q').value||'').toLowerCase();
+  let rows=[...STYLES];
+  if(fCu)  rows=rows.filter(r=>[...r.custs].includes(fCu));
+  if(fSt)  rows=rows.filter(r=>r.status===fSt);
+  if(fSec) rows=rows.filter(r=>r.secs.has(fSec));
+  if(fQ)   rows=rows.filter(r=>r.sk.toLowerCase().includes(fQ)||r.customer.toLowerCase().includes(fQ)||[...r.pos].some(p=>p.toLowerCase().includes(fQ)));
+  const{priScore}=SCHED||{priScore:()=>0};
+  rows.sort((a,b)=>{
+    switch(fSort){
+      case'order_date':return cmpD(a.orderDate,b.orderDate);
+      case'ship_date': return cmpD(a.shipDate,b.shipDate)||cmpD(a.orderDate,b.orderDate);
+      case'balance':   return b.balance-a.balance;
+      case'sew_pct':   return a.sewPct-b.sewPct;
+      default:         return priScore(b)-priScore(a)||cmpD(a.shipDate,b.shipDate)||cmpD(a.orderDate,b.orderDate);
+    }
+  });
+  return rows;
+}
+
+function renderProgress(){
+  const rows=filteredStyles();
+  document.getElementById('pcnt').textContent=`${rows.length}/${STYLES.length} 款`;
+  const{priLabel}=SCHED||{priLabel:()=>({c:'p4',t:'—'})};
+  document.getElementById('ptbody').innerHTML=rows.map(r=>{
+    const pl=priLabel(r);
+    const smvD=SMV_MAP[r.sk];
+    const smvTag=smvD?.curSMV>0
+      ?`<span class="stag st-smv">${smvD.curSMV.toFixed(3)}</span>`
+      :`<span class="stag st-avg">—</span>`;
+    return`<tr>
+      <td><span class="chip ${pl.c}">${pl.t}</span></td>
+      <td style="font-weight:700;font-family:var(--mono)">${r.sk}</td>
+      <td style="font-size:11px;color:var(--t2);max-width:130px;overflow:hidden;text-overflow:ellipsis">${esc(r.customer.split(',')[0])}</td>
+      <td style="font-size:11px;color:var(--muted)">${r.pos.size?r.pos.size+' PO':'—'}</td>
+      <td class="r">${r.qty?fmt(r.qty):'<span style="color:var(--muted)">—</span>'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--t2)">${r.orderDate||'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:${r.shipDate?'var(--amber)':'var(--muted)'}">${r.shipDate||'—'}</td>
+      <td class="r" style="color:var(--cyan)">${r.cutPcs?fmt(r.cutPcs):'—'}</td>
+      <td class="r" style="color:var(--green)">${r.sewPcs?fmt(r.sewPcs):'—'}</td>
+      <td class="r" style="color:${r.balance>0?'var(--amber)':'var(--muted)'}">${r.qty?fmt(r.balance):'—'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="pb" style="width:88px">
+            <div class="pb-c" style="width:${Math.min(100,r.cutPct)}%"></div>
+            <div class="pb-s" style="width:${Math.min(100,r.sewPct)}%"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--t2);min-width:26px">${r.sewPct}%</span>
+        </div>
+      </td>
+      <td>${stBadge(r)}</td>
+      <td>${smvTag}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--muted)">${r.latestAct||'—'}</td>
+      <td><button onclick="showDetail('${r.sk}')" style="background:#eef5ff;border:1px solid #bfdbfe;color:var(--blue);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;font-family:var(--ui)">詳情</button></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--muted)">無符合條件的款號</td></tr>`;
+}
+
+// ══════════════════════════════════════════════════
+//  GANTT
+// ══════════════════════════════════════════════════
+function renderGantt(){
+  if(!SCHED) return;
+  const{lines,lAsgn}=SCHED;
+  const fSec=document.getElementById('g-sec').value;
+  const wks=parseInt(document.getElementById('g-wks').value)||12;
+  const colorBy=document.getElementById('g-color').value;
+  const DAYS=wks*7, DW=22, ROW_H=38, CW=DAYS*DW;
+
+  let lineList=Object.keys(lines);
+  if(fSec) lineList=lineList.filter(ln=>lines[ln].section===fSec);
+  lineList.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  document.getElementById('g-meta').textContent=`${lineList.length} 條線 · ${wks} 週`;
+
+  // Legend
+  const legends=[];
+  if(colorBy==='customer'){
+    Object.entries(CUST_CLR).forEach(([c,col])=>legends.push({label:c.split(' ')[0],color:col}));
+  }else{
+    legends.push({label:'進行中',color:'#059669'},{label:'待排',color:'#1d6ec7'},{label:'急單',color:'#dc2626'});
+  }
+  document.getElementById('g-legend').innerHTML=legends.map(l=>`
+    <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t2)">
+      <span style="width:12px;height:10px;border-radius:2px;background:${l.color};display:inline-block"></span>${esc(l.label)}
+    </span>`).join('');
+
+  const blockColor=a=>{
+    if(colorBy==='status') return a.inProg?'#059669' : a.shipDate&&daysDiff(TODAY,a.shipDate)<=14?'#dc2626':'#1d6ec7';
+    return custColor(a.customer||'');
+  };
+
+  // Date ticks (Mondays)
+  const ticks=[];
+  for(let i=0;i<DAYS;i++){const d=addDays(TODAY,i);if(new Date(d+'T00:00:00').getDay()===1||i===0)ticks.push({i,d});}
+
+  let html=`<div class="gout"><table style="border-collapse:collapse;min-width:${168+CW}px;background:var(--s1)">`;
+
+  // Header row
+  html+=`<thead><tr>
+    <th class="g-sh">組別 / 線別</th>
+    <th class="g-dh" style="padding:0">
+      <div style="position:relative;width:${CW}px;height:30px">`;
+  ticks.forEach(({i,d})=>{
+    html+=`<div style="position:absolute;left:${i*DW}px;top:0;height:100%;border-left:1px solid var(--bd)">
+      <span style="font-size:9px;color:var(--muted);padding-left:3px;line-height:30px;white-space:nowrap">${d.slice(5)}</span>
+    </div>`;
+  });
+  html+=`<div style="position:absolute;left:0;top:0;width:2px;height:100%;background:var(--blue2)">
+    <span style="font-size:9px;font-weight:700;color:var(--blue);padding-left:3px;line-height:30px">今日</span>
+  </div>`;
+  html+=`</div></th></tr></thead><tbody>`;
+
+  // Section groups
+  ['Garment','Apron'].forEach(sec=>{
+    const secLines=lineList.filter(ln=>lines[ln].section===sec);
+    if(!secLines.length) return;
+    html+=`<tr class="g-sr"><td colspan="2">${sec==='Garment'?'🧵 成衣組 (Garment)':'👔 圍裙組 (Apron)'} <span style="font-size:10px;color:var(--muted);font-weight:400">${secLines.length} 條生產線</span></td></tr>`;
+
+    secLines.forEach(ln=>{
+      const ld=lines[ln];
+      const asgns=lAsgn[ln]||[];
+      html+=`<tr>
+        <td class="g-lbl">
+          ${esc(ln)}
+          <span style="font-size:10px;color:var(--muted);font-weight:400;display:block;margin-top:1px">${ld.workers} 人・${fmt(ld.dailyCap||ld.histAvgTotal||0)}/天</span>
+        </td>
+        <td class="g-cell">
+          <div style="position:relative;width:${CW}px;height:${ROW_H}px">`;
+
+      // Weekly grid lines
+      for(let i=0;i<DAYS;i+=7) html+=`<div style="position:absolute;left:${i*DW}px;top:0;width:1px;height:100%;background:var(--bd)"></div>`;
+      // Today line
+      html+=`<div style="position:absolute;left:0;top:0;width:2px;height:100%;background:rgba(59,158,245,.3)"></div>`;
+
+      asgns.forEach(a=>{
+        const s0=daysDiff(TODAY,a.start), s1=daysDiff(TODAY,a.end);
+        if(s1<0||s0>=DAYS) return;
+        const left=Math.max(0,s0)*DW;
+        const right=Math.min(s1,DAYS)*DW;
+        const w=Math.max(2,right-left)-2;
+        const col=blockColor(a);
+        const isUrg=a.shipDate&&daysDiff(TODAY,a.shipDate)<=14;
+        const alpha=a.inProg?1 : a.capSrc==='smv'?0.72:0.55;
+        html+=`<div
+          onclick="showDetail('${a.sk}')"
+          title="${esc(a.sk)} | ${esc((a.customer||'').split(',')[0])} | ${a.start}→${a.end}${a.shipDate?' | 交期:'+a.shipDate:''} | 產能:${a.capSrc||'—'}"
+          style="position:absolute;left:${left}px;top:4px;width:${w}px;height:${ROW_H-8}px;
+            background:${col};opacity:${alpha};border-radius:5px;cursor:pointer;overflow:hidden;
+            border:${isUrg?'2px solid #dc2626':'1px solid rgba(0,0,0,.08)'};
+            box-shadow:0 1px 3px rgba(0,0,0,.12);transition:opacity .15s"
+          onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='${alpha}'">`;
+
+        if(a.inProg&&a.sewPct>0) html+=`<div style="position:absolute;top:0;left:0;width:${a.sewPct}%;height:100%;background:rgba(255,255,255,.3)"></div>`;
+        if(w>40) html+=`<span style="position:absolute;left:5px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;max-width:${w-10}px;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,.4)">${a.sk}${a.inProg?' ▶':''}</span>`;
+        if(isUrg) html+=`<div style="position:absolute;right:4px;top:4px;width:6px;height:6px;background:#dc2626;border-radius:50%;border:1px solid #fff"></div>`;
+        if(a.shipDate){
+          const sl=daysDiff(TODAY,a.shipDate)*DW-left;
+          if(sl>0&&sl<w) html+=`<div style="position:absolute;left:${sl}px;top:0;width:2px;height:100%;background:rgba(220,38,38,.8)"></div>`;
+        }
+        html+=`</div>`;
+      });
+      html+=`</div></td></tr>`;
+    });
+  });
+
+  html+=`</tbody></table></div>`;
+
+  if(!lineList.length) html=`<div style="text-align:center;padding:50px;color:var(--muted)">
+    <div style="font-size:30px;margin-bottom:10px">📊</div>
+    <div>尚無生產線資料</div>
+    <div style="font-size:12px;margin-top:6px">請先在 sewing_v5.html 匯入日報，系統自動偵測各生產線</div>
+  </div>`;
+
+  document.getElementById('g-wrap').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════
+//  QUEUE
+// ══════════════════════════════════════════════════
+function renderQueue(){
+  if(!SCHED) return;
+  const{sQ, priLabel, lines, workMins}=SCHED;
+  const fSec=document.getElementById('q-sec').value;
+  const wm=parseInt(document.getElementById('g-mins')?.value)||480;
+
+  // In-progress
+  let inProg=STYLES.filter(r=>r.status==='sew'||r.status==='cut');
+  if(fSec) inProg=inProg.filter(r=>r.secs.has(fSec));
+  inProg.sort((a,b)=>cmpD(a.shipDate,b.shipDate)||b.balance-a.balance);
+  document.getElementById('ip-ct').textContent=`${inProg.length} 款`;
+
+  document.getElementById('iptbody').innerHTML=inProg.map(r=>{
+    const allLines=[...r.lines];
+    const avgW=allLines.length ? Math.round(allLines.reduce((s,ln)=>s+(lines[ln]?.workers||15),0)/allLines.length) : 15;
+    const {cap,src}=dailyCap(r.sk,avgW,wm);
+    const days=cap>0?Math.ceil(r.balance/cap):0;
+    const srcTag=srcBadge(src);
+    return`<tr>
+      <td style="font-weight:700;font-family:var(--mono)">${r.sk}</td>
+      <td style="font-size:11px;color:var(--t2)">${esc(r.customer.split(',')[0])}</td>
+      <td style="font-size:11px;color:var(--muted)">${[...r.secs].join('/')||'—'}</td>
+      <td class="r">${fmt(r.qty)}</td>
+      <td class="r" style="color:var(--green)">${fmt(r.sewPcs)}</td>
+      <td class="r" style="color:var(--amber)">${fmt(r.balance)}</td>
+      <td>${srcTag}</td>
+      <td class="r">${fmt(cap)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--cyan)">${days?`約 ${days} 天 → ${addDays(TODAY,days)}`:'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:${r.shipDate?'var(--amber)':'var(--muted)'}">${r.shipDate||'—'}</td>
+      <td>${stBadge(r)}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--muted)">無進行中款號</td></tr>`;
+
+  // Queue
+  let queue=fSec?[...(sQ[fSec]||[])]:[...(sQ.Garment||[]),...(sQ.Apron||[])].sort((a,b)=>b.pri-a.pri);
+  document.getElementById('q-ct').textContent=`${queue.length} 款等待`;
+
+  document.getElementById('qtbody').innerHTML=queue.map((r,i)=>{
+    const pl=priLabel(r);
+    const sec=r.inferredSec||[...r.secs][0]||'—';
+    const{cap,src}=dailyCap(r.sk,15,wm);
+    return`<tr style="background:${i<3?'#f0f7ff':''}">
+      <td class="r" style="font-weight:700;color:${i<3?'var(--blue)':'var(--muted)'}">${i+1}</td>
+      <td style="font-weight:700;font-family:var(--mono)">${r.sk}</td>
+      <td style="font-size:11px;color:var(--t2)">${esc(r.customer.split(',')[0])}</td>
+      <td style="font-size:11px;color:var(--muted)">${sec}</td>
+      <td class="r">${r.qty?fmt(r.qty):'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--t2)">${r.orderDate||'—'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:${r.shipDate?'var(--amber)':'var(--muted)'}">${r.shipDate||'—'}</td>
+      <td>${srcBadge(src)}</td>
+      <td class="r">${fmt(cap)}</td>
+      <td><span class="chip ${pl.c}">${pl.t}</span></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted)">所有款號已開始生產</td></tr>`;
+}
+
+// ══════════════════════════════════════════════════
+//  SMV TAB
+// ══════════════════════════════════════════════════
+function renderSmv(){
+  const q=(document.getElementById('smv-q').value||'').toUpperCase();
+  const fSec=document.getElementById('smv-sec').value;
+  const wm=parseInt(document.getElementById('smv-mins').value)||480;
+  const wkr=parseInt(document.getElementById('smv-wkr').value)||15;
+
+  document.getElementById('smv-meta').textContent=SMV_INFO||'無 SMV 資料';
+
+  // Build SMV rows (join SMV_MAP with STYLES)
+  const allSKs=new Set([...Object.keys(SMV_MAP),...STYLES.map(s=>s.sk)]);
+  let rows=[...allSKs].map(sk=>{
+    const smv=SMV_MAP[sk];
+    const st=STYLES.find(s=>s.sk===sk);
+    if(!smv) return null; // only show styles with SMV
+    const smvCap=smv.curSMV>0?Math.floor(wkr*wm/smv.curSMV):0;
+    const hist=histAvg(sk);
+    const {cap,src}=dailyCap(sk,wkr,wm);
+    return{sk,cust:smv.cust||'',type:smv.type||'',section:smv.section||'',
+      origSMV:smv.origSMV,curSMV:smv.curSMV,smvCap,hist,cap,src,
+      balance:st?.balance||0, status:st?.status||'none'};
+  }).filter(Boolean);
+
+  if(q)    rows=rows.filter(r=>r.sk.includes(q)||r.cust.toUpperCase().includes(q));
+  if(fSec) rows=rows.filter(r=>r.section===fSec);
+  rows.sort((a,b)=>a.sk.localeCompare(b.sk));
+
+  // KPI
+  const withSmv=rows.filter(r=>r.curSMV>0).length;
+  const avgCurSmv=withSmv?rows.filter(r=>r.curSMV>0).reduce((s,r)=>s+r.curSMV,0)/withSmv:0;
+  document.getElementById('smv-krow').innerHTML=[
+    {l:'SMV款數',v:Object.keys(SMV_MAP).length,c:'te',s:'已匯入'},
+    {l:'有SMV款',v:withSmv,c:'gr',s:'精確產能'},
+    {l:'平均curSMV',v:avgCurSmv.toFixed(3),c:'bl',s:'分鐘/件'},
+    {l:'理論日產量',v:avgCurSmv>0?fmt(Math.floor(wkr*wm/avgCurSmv)):'—',c:'am',s:`${wkr}人 ${wm}分鐘`},
+  ].map(k=>`<div class="kpi ${k.c}"><div class="kv" style="font-size:18px">${k.v}</div><div class="kl">${k.l}</div><div class="ks">${k.s}</div></div>`).join('');
+
+  document.getElementById('smv-tbody').innerHTML=rows.map(r=>{
+    const days=r.cap>0&&r.balance>0?Math.ceil(r.balance/r.cap):0;
+    return`<tr>
+      <td style="font-weight:700;font-family:var(--mono)">${r.sk}</td>
+      <td style="font-size:11px;color:var(--t2)">${esc(r.cust)}</td>
+      <td style="font-size:11px;color:var(--muted)">${r.type}</td>
+      <td style="font-size:11px;color:var(--muted)">${r.section}</td>
+      <td class="r" style="color:var(--muted)">${r.origSMV!=null?r.origSMV.toFixed(4):'—'}</td>
+      <td class="r" style="font-weight:700;color:var(--blue)">${r.curSMV!=null?r.curSMV.toFixed(4):'—'}</td>
+      <td class="r" style="color:var(--green)">${r.smvCap?fmt(r.smvCap):'—'}</td>
+      <td class="r" style="color:var(--cyan)">${r.hist?fmt(r.hist):'—'}</td>
+      <td class="r"><span class="stag st-${r.src==='smv'?'smv':r.src==='hist'?'his':'avg'}" style="font-size:11px">${fmt(r.cap)}</span></td>
+      <td class="r" style="color:${r.balance>0?'var(--amber)':'var(--muted)'}">${r.balance?fmt(r.balance):'—'}</td>
+      <td class="r" style="color:var(--cyan)">${days?days+'天':'—'}</td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="11" style="text-align:center;padding:25px;color:var(--muted)">無 SMV 資料，請先在 smv_manager_v4.html 匯入</td></tr>`;
+}
+
+// ══════════════════════════════════════════════════
+//  STYLE DETAIL MODAL
+// ══════════════════════════════════════════════════
+function showDetail(sk){
+  const r=STYLES.find(x=>x.sk===sk); if(!r) return;
+  const{priLabel}=SCHED||{priLabel:()=>({c:'p4',t:'—'})};
+  const pl=priLabel(r);
+  const smvD=SMV_MAP[sk];
+  const wm=parseInt(document.getElementById('g-mins')?.value)||480;
+  const avgW=[...r.lines].length ? Math.round([...r.lines].reduce((s,ln)=>s+(SCHED?.lines?.[ln]?.workers||15),0)/[...r.lines].length) : 15;
+  const {cap,src}=dailyCap(sk,avgW,wm);
+
+  document.getElementById('m-title').textContent=sk;
+  document.getElementById('m-sub').textContent=`${r.customer} · ${r.pos.size} PO · ${[...r.secs].join('/')||'—'} · ${{none:'未開始',cut:'裁剪中',sew:'車縫中',done:'完成'}[r.status]}`;
+
+  const poLines=ORDERS.filter(o=>nsk(o.style_code)===sk);
+  const poMap={};
+  poLines.forEach(o=>{
+    const k=o.po_number||'—';
+    if(!poMap[k]) poMap[k]={po:k,cust:o.customer,qty:0,ship:pd(o.ship_date)||pd(o.cancel_date)||'',ord:pd(o.order_date)||''};
+    poMap[k].qty+=parseFloat(o.qty)||0;
+  });
+
+  const cutLines=CUT.filter(x=>nsk(x.styleNo)===sk&&x.src!=='ref'&&x.pieces>0).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const sewAgg={};
+  SEW.filter(x=>nsk(x.styleNo)===sk&&x.pieces>0).forEach(x=>{sewAgg[x.date]=(sewAgg[x.date]||0)+x.pieces;});
+  const sewDays=Object.entries(sewAgg).sort((a,b)=>b[0].localeCompare(a[0]));
+  const days=cap>0&&r.balance>0?Math.ceil(r.balance/cap):0;
+
+  document.getElementById('m-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:13px">
+      ${kSm('訂單量',fmt(r.qty),'var(--blue)')}${kSm('裁剪量',fmt(r.cutPcs),'var(--cyan)')}
+      ${kSm('車縫量',fmt(r.sewPcs),'var(--green)')}${kSm('餘量',fmt(r.balance),r.balance>0?'var(--amber)':'var(--muted)')}
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t2);margin-bottom:4px">
+        <span>進度</span>
+        <span><span style="color:var(--cyan)">裁剪 ${r.cutPct}%</span> &nbsp;<span style="color:var(--green)">車縫 ${r.sewPct}%</span></span>
+      </div>
+      <div class="pb" style="width:100%;height:14px">
+        <div class="pb-c" style="width:${r.cutPct}%"></div>
+        <div class="pb-s" style="width:${r.sewPct}%"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px;background:var(--s2);border-radius:7px;border:1px solid var(--bd)">
+      <span class="chip ${pl.c}">${pl.t}</span>
+      ${r.shipDate?`<span style="font-size:12px;color:var(--amber)">📅 交期：${r.shipDate}</span>`:''}
+      ${r.orderDate?`<span style="font-size:12px;color:var(--muted)">下單：${r.orderDate}</span>`:''}
+      <span style="margin-left:auto;font-size:12px;color:var(--t2)">
+        ${smvD?.curSMV?`<b style="color:var(--teal)">SMV ${smvD.curSMV.toFixed(4)}</b> → `:''}
+        <b style="color:var(--blue)">${fmt(cap)} 件/天</b> ${srcBadge(src)}
+        ${days?`→ 約 <b style="color:var(--amber)">${days} 天</b>完工`:''}
+      </span>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;margin-bottom:6px">PO 明細 (${Object.keys(poMap).length} 筆)</div>
+    <div class="tw" style="margin-bottom:12px">
+      <table class="dt"><thead><tr><th>PO號</th><th>客戶</th><th class="r">數量</th><th>下單日</th><th>交期</th></tr></thead>
+      <tbody>${Object.values(poMap).map(p=>`<tr>
+        <td style="font-family:var(--mono);font-size:11px">${esc(p.po)}</td>
+        <td style="font-size:11px;color:var(--t2)">${esc(p.cust||'—')}</td>
+        <td class="r">${fmt(p.qty)}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${p.ord||'—'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:${p.ship?'var(--amber)':'var(--muted)'}">${p.ship||'—'}</td>
+      </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--muted)">無訂單資料</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:5px">✂️ 裁剪記錄（最近10筆）</div>
+        <div class="tw"><table class="dt"><thead><tr><th>日期</th><th>Section</th><th class="r">件數</th></tr></thead>
+        <tbody>${cutLines.slice(0,10).map(c=>`<tr>
+          <td style="font-family:var(--mono);font-size:11px">${c.date||'—'}</td>
+          <td style="font-size:11px;color:var(--muted)">${c.section||'—'}</td>
+          <td class="r" style="color:var(--cyan)">${fmt(c.pieces)}</td>
+        </tr>`).join('')||'<tr><td colspan="3" style="text-align:center;padding:10px;color:var(--muted)">無裁剪記錄</td></tr>'}</tbody>
+        </table></div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:5px">🧵 車縫記錄（最近10天）</div>
+        <div class="tw"><table class="dt"><thead><tr><th>日期</th><th class="r">合計件數</th></tr></thead>
+        <tbody>${sewDays.slice(0,10).map(([d,p])=>`<tr>
+          <td style="font-family:var(--mono);font-size:11px">${d}</td>
+          <td class="r" style="color:var(--green)">${fmt(p)}</td>
+        </tr>`).join('')||'<tr><td colspan="2" style="text-align:center;padding:10px;color:var(--muted)">無車縫記錄</td></tr>'}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+
+  document.getElementById('mbg').style.display='flex';
+}
+
+function kSm(l,v,c){return`<div style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:700;font-family:var(--mono);color:${c}">${v}</div><div style="font-size:10px;color:var(--t2);margin-top:2px">${l}</div></div>`;}
+function closeModal(){document.getElementById('mbg').style.display='none';}
+
+// ══════════════════════════════════════════════════
+//  EXPORT CSV
+// ══════════════════════════════════════════════════
+function exportCsv(){
+  const rows=filteredStyles();
+  const wm=parseInt(document.getElementById('g-mins')?.value)||480;
+  const h=['款號','客戶','PO數','訂單量','下單日','交期','裁剪量','裁剪%','車縫量','車縫%','餘量','狀態','SMV(curSMV)','產能來源','日產量'];
+  const data=[h,...rows.map(r=>{
+    const smvD=SMV_MAP[r.sk];
+    const{cap,src}=dailyCap(r.sk,15,wm);
+    return[r.sk,`"${r.customer}"`,r.pos.size,r.qty,r.orderDate,r.shipDate,
+      r.cutPcs,r.cutPct+'%',r.sewPcs,r.sewPct+'%',r.balance,
+      {none:'未開始',cut:'裁剪中',sew:'車縫中',done:'完成'}[r.status],
+      smvD?.curSMV||'',src,cap];
+  })];
+  const blob=new Blob(['\uFEFF'+data.map(r=>r.join(',')).join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`prod_progress_${TODAY}.csv`;a.click();
+}
+
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
+function stBadge(r){
+  return{none:`<span class="badge b-none">⬜ 未開始</span>`,cut:`<span class="badge b-cut">✂️ 裁剪中</span>`,sew:`<span class="badge b-sew">🧵 車縫中</span>`,done:`<span class="badge b-done">✅ 完成</span>`}[r.status]||'';
+}
+function srcBadge(src){
+  if(src==='smv')  return`<span class="stag st-smv">SMV</span>`;
+  if(src==='hist') return`<span class="stag st-his">歷史</span>`;
+  return`<span class="stag st-avg">估算</span>`;
+}
+function guessSec(sk){return/ap[rn]|apron/i.test(sk)?'Apron':'Garment';}
+function go(name,el){
+  document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');document.getElementById('pane-'+name).classList.add('on');
+  if(name==='gantt') renderGantt();
+  if(name==='queue') renderQueue();
+  if(name==='smv')   renderSmv();
+}
+function rebuildAndRender(){SCHED=buildSchedule();renderGantt();renderQueue();}
+function setL(m){document.getElementById('loading').style.display='flex';document.getElementById('lmsg').textContent=m;}
+function hideL(){document.getElementById('loading').style.display='none';}
+function setDot(id,cls){document.getElementById(id).className='dot '+cls;}
+function fmt(n){return(n||0).toLocaleString();}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmtDate(iso){const d=new Date(iso);return`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;}
+function pd(v){
+  if(!v) return'';const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return`${m[1]}-${m[2]}-${m[3]}`;
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  m=s.match(/^(\d{2})-([A-Za-z]{3})-(\d{2,4})$/);if(m){const mo=MO[m[2].toLowerCase()];if(mo){const yr=m[3].length===2?'20'+m[3]:m[3];return`${yr}-${String(mo).padStart(2,'0')}-${m[1]}`;}}
+  m=s.match(/([A-Za-z]{3,})\s+(\d{1,2})[,.\s]+(\d{4})/);if(m){const mo=MO[m[1].toLowerCase().slice(0,3)];if(mo)return`${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
+  return'';
+}
+function addDays(ds,n){if(!ds)return'';const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function daysDiff(a,b){if(!a||!b)return 0;return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
+function cmpD(a,b){if(!a&&!b)return 0;if(!a)return 1;if(!b)return-1;return a.localeCompare(b);}
+async function refresh(){CUST_CLR={};_CI=0;await loadAll();}
+
+window.addEventListener('DOMContentLoaded',()=>loadAll());
+</script>
+</body>
+</html>

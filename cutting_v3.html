@@ -1,0 +1,2726 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>裁剪生產分析系統 v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#f0f2f7;color:#1e2640}
+.header{background:linear-gradient(135deg,#1a2f4a,#2d4a6e);padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:35px;height:35px;background:linear-gradient(135deg,#3b9ef5,#1d6ec7);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.h-title{font-size:16px;font-weight:600;color:#fff}
+.h-sub{font-size:11px;color:#8bb5d8;margin-top:1px}
+.h-badge{background:rgba(59,158,245,.2);border:1px solid rgba(59,158,245,.4);color:#7dd3fc;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:.05em}
+.h-stats{margin-left:auto;display:flex;gap:18px}
+.hstat{text-align:right}
+.hstat-v{font-size:17px;font-weight:700;color:#60b8f5;font-family:monospace}
+.hstat-l{font-size:10px;color:#8bb5d8}
+.tabs{background:#fff;border-bottom:2px solid #e2e6f0;display:flex;padding:0 20px;overflow-x:auto;gap:0}
+.tab{padding:12px 15px;font-size:13px;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:all .15s;user-select:none}
+.tab:hover{color:#1e2640;background:#f7f8fc}
+.tab.on{color:#1d6ec7;border-bottom-color:#3b9ef5;background:#f0f7ff}
+.sec{display:none;padding:18px 20px}
+.sec.on{display:block}
+.card{background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.ct::before{content:'';width:3px;height:11px;background:#3b9ef5;border-radius:2px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid #e2e6f0;border-radius:8px;padding:11px;text-align:center;box-shadow:0 1px 3px rgba(30,38,64,.04)}
+.kpi-n{font-size:26px;font-weight:700;font-family:monospace;line-height:1;color:#1e2640}
+.kpi-l{font-size:10px;color:#6b7a9e;margin-top:4px}
+/* Drop zone - identical to sewing_v5 */
+.drop{border:2px dashed #c5c9d8;border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:#fafbfc}
+.drop:hover,.drop.drag{border-color:#3b9ef5;background:#f0f7ff}
+.drop.done{border-color:#10b981;border-style:solid;background:#f0fdf8}
+.drop input{display:none}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.btn-b{background:#3b9ef5;color:#fff}.btn-b:hover{background:#1d6ec7}
+.btn-y{background:#f59e0b;color:#1c1200}.btn-y:hover{background:#d97706}
+.btn-y:disabled{background:#e2e6f0;color:#a0aabf;cursor:not-allowed}
+.btn-g{background:#fff;color:#4a5578;border:1px solid #d0d5e8}.btn-g:hover{background:#f7f8fc}
+.btn-r{background:#fff5f5;color:#dc2626;border:1px solid #fecaca}
+.btn-sm{padding:5px 12px;font-size:12px}
+/* Table */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 11px;color:#6b7a9e;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e6f0;background:#f7f8fc;white-space:nowrap}
+th.r{text-align:right}
+td{padding:8px 11px;border-bottom:1px solid #eef0f6;color:#2d3a5e;white-space:nowrap}
+td.r{text-align:right;font-family:monospace}
+tr:hover td{background:#fafbfc}
+.mono{font-family:monospace}
+.b{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;font-family:monospace}
+.bok{background:#d1fae5;color:#065f46}.bwn{background:#fef3c7;color:#92400e}.bbd{background:#fee2e2;color:#991b1b}.bbl{background:#dbeafe;color:#1e40af}
+.al{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#e0f2fe;border:1px solid #7dd3fc;color:#0369a1}
+/* Preview */
+.preview-file{background:#f7f8fc;border:1px solid #e2e6f0;border-radius:8px;padding:12px;margin-bottom:10px}
+.preview-lines{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.preview-line{background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:11px;font-family:monospace;font-weight:600}
+/* Filter row */
+.frow{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.frow label{font-size:13px;color:#6b7a9e}
+select,input[type=date],input[type=month],input[type=text]{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;border-radius:6px;font-size:13px;font-family:inherit}
+/* WIP */
+.nc{color:#3b9ef5}.gc{color:#059669}.rc{color:#dc2626}.oc{color:#d97706}
+.link-box{background:linear-gradient(135deg,#f0f7ff,#e8f0fb);border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin-bottom:14px}
+.link-flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin-top:10px}
+.link-step{background:#fff;border:1px solid #e2e6f0;border-radius:8px;padding:10px 12px;font-size:12px;flex:1;min-width:120px}
+.link-arrow{color:#94a3b8;font-size:22px;display:flex;align-items:center}
+.link-step-title{font-weight:700;color:#1e2640;margin-bottom:4px;font-size:13px}
+.link-step-sub{color:#6b7a9e;font-size:11px;line-height:1.7}
+.conn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+.conn-live{background:#10b981;animation:p2 2s infinite}
+.conn-off{background:#9ca3af}
+@keyframes p2{0%,100%{opacity:1}50%{opacity:.3}}
+.dual-bar{height:8px;background:#e2e6f0;border-radius:4px;overflow:hidden;margin:3px 0;position:relative}
+.dual-sew{position:absolute;top:0;left:0;height:100%;background:#059669;border-radius:4px;opacity:.7}
+.sew-status{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;font-size:13px;color:#065f46;margin-bottom:10px;display:none}
+.sew-status.warn{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+@media(max-width:600px){
+  .g3{grid-template-columns:1fr}
+  .h-stats .hstat:nth-child(n+3){display:none}
+  .sec{padding:12px 12px}
+  .link-flow{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">✂️</div>
+  <div>
+    <div class="h-title">裁剪生產分析系統</div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.2 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+  </div>
+  <div class="h-stats">
+    <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
+    <div class="hstat"><div class="hstat-v" id="hStyles">0</div><div class="hstat-l">款號數</div></div>
+    <div class="hstat"><div class="hstat-v" id="hSewRecs">0</div><div class="hstat-l">車縫記錄</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="goTab('upload',this)">📥 匯入裁剪報表</div>
+  <div class="tab" onclick="goTab('daily',this)">📊 每日報告</div>
+  <div class="tab" onclick="goTab('weekly',this)">📅 週統計</div>
+  <div class="tab" onclick="goTab('monthly',this)">📆 月年趨勢</div>
+  <div class="tab" onclick="goTab('wip',this)">🔗 裁縫連動 WIP</div>
+  <div class="tab" onclick="goTab('query',this)">🔎 款式 / 布料查詢</div>
+  <div class="tab" onclick="goTab('records',this)">📋 所有記錄</div>
+</div>
+
+<!-- ══ UPLOAD ══ -->
+<div class="sec on" id="sec-upload">
+  <div class="card">
+    <div class="ct">✂️ 拖入裁剪日報郵件或 Excel（Daily Output Day Shift-A&B）</div>
+    <div class="g3" style="margin-bottom:14px">
+      <div style="background:#f0fdf4;border-radius:8px;padding:12px;border:1px solid #bbf7d0">
+        <div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:6px">✅ 最推薦：.eml 郵件</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          <b>Gmail：</b>打開郵件 → 右上角「⋮ 更多」→「下載郵件」→ 拖 .eml 進來<br>
+          <b>Outlook：</b>選中郵件 → 「檔案」→「另存新檔」→ 選 .eml 格式<br>
+          <span style="color:#059669;font-size:11px">✓ 100% 穩定，自動提取所有 Excel 附件</span>
+        </div>
+      </div>
+      <div style="background:#f0f9ff;border-radius:8px;padding:12px;border:1px solid #bae6fd">
+        <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px">📊 直接拖 Excel（最快）</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          從 Outlook 把 .xlsx 附件直接拖出<br>
+          或從 Gmail 下載列直接拖進來<br>
+          <b>Garment + Apron 兩個一起拖</b><br>
+          <span style="color:#0369a1;font-size:11px">✓ 自動合併同一天</span>
+        </div>
+      </div>
+      <div style="background:#fefce8;border-radius:8px;padding:12px;border:1px solid #fde68a">
+        <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">⚠️ .msg 格式（限制多）</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          Outlook 的 .msg 是加密格式<br>
+          無法保證能正確提取附件<br>
+          <b>建議改存為 .eml 再拖入</b><br>
+          <span style="color:#92400e;font-size:11px">✓ 同格式，另存一下就好</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="dz" class="drop" ondragover="dzOver(event)" ondragleave="dzOut()" ondrop="dzDrop(event)" onclick="document.getElementById('dzInput').click()" style="padding:40px 20px;border-width:3px;cursor:pointer">
+      <div style="font-size:36px;margin-bottom:10px">📥</div>
+      <div style="font-size:16px;font-weight:600;color:#1e2640;margin-bottom:4px">拖放郵件或 Excel 到這裡，或點擊選擇檔案</div>
+      <div style="font-size:12px;color:#6b7a9e">.eml / .msg 郵件自動提取附件 · .xlsx 直接解析 · 多個檔案可同時拖入</div>
+    </div>
+    <input type="file" id="dzInput" multiple accept=".xlsx,.xls,.csv,.eml,.msg,.json" style="display:none" onchange="dzSelect(event)">
+    <div id="fileList" style="margin-top:10px"></div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-y" id="btnImport" onclick="doImport()" disabled>🔍 解析預覽</button>
+      <span id="importMsg" style="font-size:13px"></span>
+    </div>
+  </div>
+
+  <!-- Parse preview -->
+  <div id="previewArea" style="display:none">
+    <div class="card">
+      <div class="ct">解析預覽</div>
+      <div id="previewContent"></div>
+      <div style="margin-top:12px;display:flex;gap:10px">
+        <button class="btn btn-y" onclick="confirmImport()">✓ 確認存入</button>
+        <button class="btn btn-g" onclick="cancelImport()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connection + tools -->
+  <div class="card">
+    <div class="ct">🔗 裁縫連動說明</div>
+    <div class="link-flow">
+      <div class="link-step">
+        <div class="link-step-title">✂️ 裁剪報表</div>
+        <div class="link-step-sub">本系統匯入<br>款號＋裁量<br>→ cutting_records</div>
+      </div>
+      <div class="link-arrow">→</div>
+      <div class="link-step" style="background:#f0fdf4;border-color:#86efac">
+        <div class="link-step-title">🗄 共用 IndexedDB</div>
+        <div class="link-step-sub">資料庫：<b>SewingProd</b><br>同一瀏覽器自動共享<br>無需匯出匯入</div>
+      </div>
+      <div class="link-arrow">→</div>
+      <div class="link-step" style="background:#fffbeb;border-color:#fde68a">
+        <div class="link-step-title">🏭 車縫系統</div>
+        <div class="link-step-sub">sewing_v5.html<br>款號＋車縫量<br>→ records store</div>
+      </div>
+      <div class="link-arrow">→</div>
+      <div class="link-step" style="background:#f0f7ff;border-color:#93c5fd">
+        <div class="link-step-title">📊 WIP 在製品</div>
+        <div class="link-step-sub"><b>裁量 − 縫量</b><br>= 待縫庫存<br>按款號即時計算</div>
+      </div>
+    </div>
+    <div id="sewConn" class="sew-status" style="margin-top:10px">偵測中...</div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="refreshSew()">🔄 重新讀取車縫</button>
+      <label class="btn btn-g btn-sm" style="cursor:pointer">📂 匯入車縫備份 JSON
+        <input type="file" accept=".json" style="display:none" onchange="impSewJSON(event)">
+      </label>
+      <button class="btn btn-g btn-sm" onclick="backup()">💾 備份裁剪資料</button>
+      <label class="btn btn-g btn-sm" style="cursor:pointer">📂 還原裁剪資料 (JSON)
+        <input type="file" accept=".json" style="display:none" onchange="restoreCutJSON(event)">
+      </label>
+      <button class="btn btn-r btn-sm" onclick="clearAll()">🗑 清除裁剪資料</button>
+    </div>
+  </div>
+
+  <!-- DB status -->
+  <div id="dbCard" class="card" style="display:none">
+    <div class="ct">已儲存裁剪資料狀況</div>
+    <div id="dbInfo"></div>
+  </div>
+
+  <!-- Cross-check panel: daily vs weekly/monthly -->
+  <div id="xchkCard" class="card" style="display:none">
+    <div class="ct">🔍 日報 vs 週/月報 數量比對</div>
+    <div style="font-size:11px;color:#6b7a9e;margin-bottom:10px">以日報資料為準，顯示週報/月報中款式數量的差異</div>
+    <div id="xchkBody"></div>
+  </div>
+
+  <!-- Folder Scan Card -->
+  <div class="card" id="folderScanCard">
+    <div class="ct">📂 掃描 Outlook 下載資料夾（自動批次匯入）</div>
+    <div style="font-size:12px;color:#6b7a9e;margin-bottom:10px;line-height:1.8">
+      授權一次後，每次點「掃描」自動找出 .xlsx/.xls/.eml/.msg 並批次解析。<br>
+      支援多個資料夾。已匯入過的檔案自動跳過。<br>
+      <span style="color:#d97706;font-size:11px">⚠️ 需要 Chrome 或 Edge，重新開啟頁面後需再點「允許」一次。</span>
+    </div>
+    <div id="folderList" style="margin-bottom:10px">
+      <div style="font-size:12px;color:#8b95b8;padding:8px 12px;background:#f7f8fc;border-radius:6px;border:1px solid #e2e6f0">尚未設定任何資料夾。</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <button class="btn btn-g" onclick="addScanFolder()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">➕ 新增資料夾</button>
+      <button class="btn btn-b" id="btnScanFolders" onclick="scanAllFolders()" style="display:none">🔍 立即掃描所有資料夾</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#6b7a9e;cursor:pointer;user-select:none">
+        <input type="checkbox" id="chkAutoScan" onchange="saveAutoScanPref()"> 開啟時自動掃描
+      </label>
+      <button onclick="clearScannedLog()" style="font-size:11px;padding:3px 10px;background:#fff5f5;color:#dc2626;border:1px solid #fecaca;border-radius:4px;cursor:pointer">🗑 重置掃描記錄</button>
+    </div>
+    <div id="scanMsg" style="font-size:13px;min-height:18px"></div>
+  </div>
+
+  <!-- Format guide -->
+  <div class="card">
+    <div class="ct">📋 支援的 Excel 格式</div>
+    <div class="g3">
+      <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
+        <div style="font-size:11px;font-weight:700;color:#3b9ef5;margin-bottom:8px">VRT 裁剪日報（自動識別）</div>
+        <div style="font-size:12px;color:#6b7a9e;line-height:1.9">
+          工作表名：<b>Daily Output</b> 或 <b>Daily Output1</b><br>
+          • Col C：Line 別<br>
+          • Col F：款號 · Col P：件數<br>
+          ✓ 自動讀取 Section / 日期
+        </div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
+        <div style="font-size:11px;font-weight:700;color:#3b9ef5;margin-bottom:8px">Weekly Output Report（自動識別）</div>
+        <div style="font-size:12px;color:#6b7a9e;line-height:1.9">
+          工作表名含「Weekly Output Report」<br>
+          • 橫向日期欄位<br>
+          • Total Output / Man Power / Eff<br>
+          ✓ 拖入自動拆解為每日記錄
+        </div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
+        <div style="font-size:11px;font-weight:700;color:#3b9ef5;margin-bottom:8px">標準格式（手動整理）</div>
+        <div style="font-size:12px;color:#6b7a9e;line-height:1.9">
+          • 標題行：日期｜部門｜線別｜款號｜件數｜人數｜效率<br>
+          ✓ 中英文標題皆可識別
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DAILY ══ -->
+<div class="sec" id="sec-daily">
+  <div class="frow">
+    <label>日期</label><input type="date" id="dDate" onchange="renderDaily()">
+    <label>Section</label>
+    <select id="dSec" onchange="renderDaily()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
+    <button class="btn btn-g btn-sm" onclick="shiftDay(-1)">◀ 前日</button>
+    <button class="btn btn-g btn-sm" onclick="shiftDay(1)">後日 ▶</button>
+    <button class="btn btn-g btn-sm" onclick="xls('daily')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+  <div id="dKpi" class="kpi-strip"></div>
+  <div class="card" id="dCard" style="display:none">
+    <div class="ct">裁剪明細</div>
+    <div class="tw"><table>
+      <thead><tr><th>Section</th><th>線別</th><th>PO</th><th>款號</th><th>尺寸</th><th>顏色</th><th>品號</th><th class="r">Yds/Pcs</th><th class="r">總用量(Yds)</th><th class="r">裁量（件）</th><th class="r">人數</th><th class="r">效率%</th></tr></thead>
+      <tbody id="dBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ WEEKLY ══ -->
+<div class="sec" id="sec-weekly">
+  <div class="frow">
+    <label>週含日期</label><input type="date" id="wDate" onchange="renderWeekly()">
+    <label>Section</label>
+    <select id="wSec" onchange="renderWeekly()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
+    <button class="btn btn-g btn-sm" onclick="shiftWeek(-1)">◀ 上週</button>
+    <button class="btn btn-g btn-sm" onclick="shiftWeek(1)">下週 ▶</button>
+    <button class="btn btn-g btn-sm" onclick="xls('weekly')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+  <div id="wKpi" class="kpi-strip"></div>
+  <div id="wMeta" style="font-size:12px;color:#8b95b8;margin-bottom:10px"></div>
+  <div class="card"><div class="ct">週別線別彙整</div>
+    <div class="tw"><table>
+      <thead><tr><th>Section</th><th>線別</th><th class="r">週裁量</th><th class="r">平均人數</th><th class="r">平均效率</th><th class="r">工作天</th></tr></thead>
+      <tbody id="wBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ MONTHLY ══ -->
+<div class="sec" id="sec-monthly">
+  <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+    <button class="btn btn-sm" id="mBtnMo" onclick="mView='mo';renderMonthly()" style="background:#3b9ef5;color:#fff;border:none">📅 月報</button>
+    <button class="btn btn-g btn-sm" id="mBtnYr" onclick="mView='yr';renderMonthly()">📊 年報</button>
+  </div>
+  <div class="frow">
+    <label id="mYrLbl">年份</label>
+    <select id="mYear" onchange="renderMonthly()" style="width:90px"></select>
+    <label id="mMoLbl">月份</label>
+    <input type="month" id="mMonth" onchange="renderMonthly()">
+    <label>Section</label>
+    <select id="mSec" onchange="renderMonthly()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
+    <button class="btn btn-g btn-sm" id="mPrev" onclick="shiftMonth(-1)">◀ 上月</button>
+    <button class="btn btn-g btn-sm" id="mNext" onclick="shiftMonth(1)">下月 ▶</button>
+    <button class="btn btn-g btn-sm" onclick="xls('monthly')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+  <div id="mKpi" class="kpi-strip"></div>
+  <div class="card"><div class="ct" id="mChartTitle">年度月別走勢</div>
+    <div id="mChart" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:80px"></div>
+    <div id="mLbl" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:3px;font-size:9px;color:#9ca3af;text-align:center"></div>
+  </div>
+  <div class="card"><div class="ct" id="mTableTitle">月別線別彙整</div>
+    <div class="tw"><table>
+      <thead id="mThead"><tr><th>Section</th><th>線別</th><th class="r">月裁量</th><th class="r">平均效率</th><th class="r">款號數</th></tr></thead>
+      <tbody id="mBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ WIP ══ -->
+<div class="sec" id="sec-wip">
+  <div class="frow">
+    <label>年份</label>
+    <select id="wipYear" onchange="renderWIP()"></select>
+    <label>月份</label>
+    <select id="wipMonth" onchange="renderWIP()">
+      <option value="">全年</option>
+      <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+      <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+      <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+      <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+    </select>
+    <label>Section</label>
+    <select id="wipSec" onchange="renderWIP()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
+    <button class="btn btn-g btn-sm" onclick="refreshSew().then(renderWIP)">🔄 重整</button>
+    <button class="btn btn-g btn-sm" onclick="xls('wip')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+
+  <!-- Summary KPIs -->
+  <div id="wipKpi" class="kpi-strip"></div>
+
+  <!-- Monthly bar chart: cutting vs sewing -->
+  <div class="card" id="wipChartCard">
+    <div class="ct">裁剪 vs 車縫 月度走勢</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;background:#3b9ef5;border-radius:2px;display:inline-block"></span>裁剪量</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;background:#10b981;border-radius:2px;display:inline-block"></span>車縫量</span>
+    </div>
+    <div id="wipChart" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:100px"></div>
+    <div id="wipChartLbl" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:4px;font-size:9px;color:#9ca3af;text-align:center"></div>
+  </div>
+
+  <!-- Monthly detail table -->
+  <div class="card">
+    <div class="ct">月度裁縫總量比對</div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th>月份</th><th>Section</th>
+        <th class="r">裁剪總量</th>
+        <th class="r">車縫總量</th>
+        <th class="r">差額（裁－縫）</th>
+        <th class="r">車縫 / 裁剪</th>
+        <th>狀態</th>
+      </tr></thead>
+      <tbody id="wipMonthBody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- Section summary -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="wipSecCards"></div>
+</div>
+
+<!-- ══ QUERY ══ -->
+<div class="sec" id="sec-query">
+  <!-- View toggle + filters -->
+  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <button class="btn btn-sm" id="qBtnSty" onclick="qV='sty';renderQuery()" style="background:#3b9ef5;color:#fff;border:none">👕 按款號</button>
+    <button class="btn btn-g btn-sm" id="qBtnFab" onclick="qV='fab';renderQuery()">📦 按布料</button>
+    <button class="btn btn-g btn-sm" id="qBtnMo" onclick="qV='mo';renderQuery()">📅 按月份</button>
+  </div>
+  <div class="frow">
+    <input type="text" id="qSearch" placeholder="款號 / PO / 顏色 / 品號..." oninput="renderQuery()" style="width:200px">
+    <label>Section</label>
+    <select id="qSec" onchange="renderQuery()"><option value="">全部</option><option>Apron</option><option>Garment</option><option>Napkin</option></select>
+    <label>月份</label>
+    <select id="qMo" onchange="renderQuery()" style="width:110px"><option value="">全部月份</option></select>
+    <button class="btn btn-g btn-sm" onclick="xls('query')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+
+  <!-- KPI summary strip -->
+  <div id="qKpi" class="kpi-strip" style="margin:10px 0 14px"></div>
+
+  <!-- Style view -->
+  <div id="qStyCard">
+    <div class="card">
+      <div class="ct">👕 款號彙整</div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>款號</th><th>PO</th><th>顏色</th><th>尺寸</th><th>品號</th>
+          <th class="r">總裁量（件）</th><th class="r">總用量（Yds）</th>
+          <th class="r">Yds/Pcs</th><th class="r">工作天</th><th>Section</th>
+        </tr></thead>
+        <tbody id="qStyBody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Fabric view -->
+  <div id="qFabCard" style="display:none">
+    <div class="card">
+      <div class="ct">📦 布料品號彙整</div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>品號 (Item)</th><th>布規格</th>
+          <th class="r">總裁量（件）</th><th class="r">總用量（Yds）</th>
+          <th class="r">平均 Yds/Pcs</th><th class="r">款號數</th><th>Section</th>
+        </tr></thead>
+        <tbody id="qFabBody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Monthly view -->
+  <div id="qMoCard" style="display:none">
+    <div class="card">
+      <div class="ct">📅 月份裁剪 vs 車縫 比對</div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>月份</th><th>Section</th>
+          <th class="r">總裁量（件）</th><th class="r">總用量（Yds）</th>
+          <th class="r">款號數</th><th class="r">PO 數</th>
+          <th class="r">車縫量</th><th class="r">差額</th><th class="r">消化率</th>
+        </tr></thead>
+        <tbody id="qMoBody"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RECORDS ══ -->
+<div class="sec" id="sec-records">
+  <div class="frow">
+    <input type="text" id="recQ" placeholder="搜尋款號 / 線別..." oninput="renderRecs()" style="width:180px">
+    <select id="recSec" onchange="renderRecs()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
+    <label>從</label><input type="date" id="recFrom" onchange="renderRecs()">
+    <label>到</label><input type="date" id="recTo" onchange="renderRecs()">
+    <span id="recCnt" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g btn-sm" onclick="xls('all')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+  <div class="card"><div class="tw"><table>
+    <thead><tr><th>日期</th><th>Section</th><th>線別</th><th>款號</th><th>品號</th><th>布規格</th><th>顏色</th><th class="r">Yds/Pcs</th><th class="r">裁量</th><th class="r">人數</th><th class="r">效率%</th><th></th></tr></thead>
+    <tbody id="recBody"></tbody>
+  </table></div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// IndexedDB: same "SewingProd" as sewing_v5
+//   cutting_records → this system writes
+//   records         → sewing_v5 writes, we read-only
+// ═══════════════════════════════════════════════════════════
+let CUT=[], SEW=[], STYLES=[], _idb=null, wipV="style", qV="sty", styGrouped=false, mView="mo";
+let pendingFiles=[], pendingRecs=[];
+// ★ Cutting system uses its OWN IndexedDB "CuttingProd" — no shared DB with sewing_v5
+// Sewing data comes ONLY from JSON import (impSewJSON), not from shared DB
+const TODAY=new Date().toISOString().slice(0,10);
+const THIS_MONTH=TODAY.slice(0,7);
+const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+const LRE=/^(LINE|Line)\s+[A-Z]?\d+$/;
+const isDailyRec=r=>r.src!=='ref'&&r.src!=='summary'&&r.lineNo!=='Weekly Report'&&r.lineNo!=='Monthly Summary'&&r.lineNo!=='Summary'&&r.pieces>0;
+
+// ── IDB: CuttingProd (cutting_v2 only) ────────────────────
+function openIDB(){return new Promise((res,rej)=>{
+  if(_idb){res(_idb);return;}
+  const req=indexedDB.open("CuttingProd",1);
+  req.onupgradeneeded=e=>{
+    const db=e.target.result;
+    if(!db.objectStoreNames.contains("cutting_records"))db.createObjectStore("cutting_records",{keyPath:"id"});
+    if(!db.objectStoreNames.contains("sewing_cache"))db.createObjectStore("sewing_cache",{keyPath:"id"});
+  };
+  req.onsuccess=e=>{_idb=e.target.result;res(_idb);};
+  req.onerror=e=>rej(e.target.error);
+});}
+const CUT_ST="cutting_records";
+function idbAll(st){return new Promise((r,j)=>{const q=st.getAll();q.onsuccess=e=>r(e.target.result);q.onerror=j;});}
+function idbClr(st){return new Promise((r,j)=>{const q=st.clear();q.onsuccess=r;q.onerror=j;});}
+function idbPut(st,r){return new Promise((res,j)=>{const q=st.put(r);q.onsuccess=res;q.onerror=j;});}
+
+async function loadCut(){try{if(!_idb)await openIDB();const tx=_idb.transaction(CUT_ST,"readonly");CUT=await idbAll(tx.objectStore(CUT_ST));}catch(e){CUT=[];}}
+async function saveCut(){
+  if(!_idb)await openIDB();
+  const tx=_idb.transaction(CUT_ST,"readwrite");const st=tx.objectStore(CUT_ST);
+  await idbClr(st);await Promise.all(CUT.map(r=>idbPut(st,r)));
+  await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+}
+async function loadSew(){
+  // 1. Try localStorage (sewing v5+ writes here)
+  try{
+    const raw=localStorage.getItem("sewing_prod_v1");
+    if(raw){const p=JSON.parse(raw);if(Array.isArray(p)&&p.length){SEW=p;await saveSew();return true;}}
+  }catch(e){}
+  // 2. Fallback: sewing_cache IDB (from previous JSON import)
+  try{
+    if(!_idb)await openIDB();
+    const tx=_idb.transaction("sewing_cache","readonly");
+    SEW=await idbAll(tx.objectStore("sewing_cache"));
+    return SEW.length>0;
+  }catch(e){SEW=[];return false;}
+}
+async function saveSew(){
+  if(!_idb)await openIDB();
+  const tx=_idb.transaction("sewing_cache","readwrite");const st=tx.objectStore("sewing_cache");
+  await idbClr(st);await Promise.all(SEW.map(r=>idbPut(st,r)));
+  await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+}
+async function loadStyles(){STYLES=[];}
+async function saveStyles(){/* no-op */}
+
+// ── Utilities (identical to sewing_v5) ─────────────────────
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+function fmt(n,d=0){if(n===undefined||n===null||isNaN(n))return"-";return Number(n).toFixed(d).replace(/\B(?=(\d{3})+(?!\d))/g,",");}
+function normLineNo(s){const m=String(s||"").trim().match(/^(?:LINE|Line)\s+([A-Z]?)(\d+)$/i);if(!m)return String(s||"").trim();const[,p,ns]=m,n=parseInt(ns);if(p)return"Line "+p+n;if(ns.startsWith("0")||n>=9)return"LINE "+ns;return"Line "+n;}
+function parseDt(str){if(!str)return"";const m=String(str).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);if(m)return`${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;return"";}
+function wb2(d){const dt=new Date(d),dy=dt.getDay();const mn=new Date(dt);mn.setDate(dt.getDate()-(dy===0?6:dy-1));const sn=new Date(mn);sn.setDate(mn.getDate()+6);return[mn.toISOString().slice(0,10),sn.toISOString().slice(0,10)];}
+function bounds(pd,bd){const d=bd||TODAY;if(pd==="all")return["0000-01-01","9999-12-31"];if(pd==="week")return wb2(d);if(pd==="month")return[d.slice(0,7)+"-01",d.slice(0,7)+"-31"];if(pd==="year")return[d.slice(0,4)+"-01-01",d.slice(0,4)+"-12-31"];return["0000-01-01","9999-12-31"];}
+function eb(e){if(!e)return`<span class="b" style="background:#f1f5f9;color:#94a3b8">-</span>`;const c=e>=50?"bok":e>=30?"bwn":"bbd";return`<span class="b ${c}">${e}%</span>`;}
+function secBadge(s){return s==="Apron"?`<span style="background:#f3e8ff;color:#7c3aed;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px">Apron</span>`:`<span style="background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px">Garment</span>`;}
+
+function updateHdr(){
+  document.getElementById("hRecs").textContent=fmt(CUT.length);
+  document.getElementById("hStyles").textContent=[...new Set(CUT.map(r=>r.styleNo).filter(Boolean))].length;
+  document.getElementById("hSewRecs").textContent=fmt(SEW.length);
+}
+function renderDBCard(){
+  const card=document.getElementById("dbCard");
+  if(!CUT.length){card.style.display="none";document.getElementById("xchkCard").style.display="none";return;}
+  card.style.display="block";
+  const dailyRecs=CUT.filter(isDailyRec);
+  const dates=[...new Set(dailyRecs.map(r=>r.date))].sort().reverse();
+  const styles=[...new Set(dailyRecs.map(r=>r.styleNo).filter(Boolean))];
+  document.getElementById("dbInfo").innerHTML=`
+    <div class="kpi-strip" style="margin-bottom:8px">
+      ${[{v:dailyRecs.length,l:"日報記錄筆數"},{v:dates.length,l:"工作天數"},{v:styles.length,l:"款號數"}]
+        .map(k=>`<div class="kpi"><div class="kpi-n">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("")}
+    </div>
+    <div style="font-size:12px;color:#6b7a9e">最近記錄：${dates.slice(0,5).join("、")}</div>`;
+  renderXChk();
+}
+
+function renderXChk(){
+  // Compare daily records vs ref (weekly/monthly) records per date range
+  const refRecs=CUT.filter(r=>r.src==='ref'&&r.pieces>0);
+  if(!refRecs.length){document.getElementById("xchkCard").style.display="none";return;}
+
+  // Group ref records by week range (use date to find the week Mon-Sun)
+  const weekMap={}; // weekKey → {dates, refStyles, dailyStyles, refPcs, dailyPcs}
+  refRecs.forEach(r=>{
+    const dt=new Date(r.date+'T00:00:00');
+    const day=dt.getDay();
+    const mon=new Date(dt);mon.setDate(dt.getDate()-(day===0?6:day-1));
+    const wk=mon.toISOString().slice(0,10);
+    if(!weekMap[wk])weekMap[wk]={wk,refStyles:new Set(),dailyStyles:new Set(),refPcs:0,dailyPcs:0,dates:[]};
+    weekMap[wk].refStyles.add(r.styleNo||'');
+    weekMap[wk].refPcs+=r.pieces;
+    if(!weekMap[wk].dates.includes(r.date))weekMap[wk].dates.push(r.date);
+  });
+
+  // Fill in daily data for same date ranges
+  Object.values(weekMap).forEach(wk=>{
+    const sun=new Date(wk.wk+'T00:00:00');sun.setDate(sun.getDate()+6);
+    const sunStr=sun.toISOString().slice(0,10);
+    CUT.filter(r=>isDailyRec(r)&&r.date>=wk.wk&&r.date<=sunStr).forEach(r=>{
+      wk.dailyStyles.add(r.styleNo||'');
+      wk.dailyPcs+=r.pieces;
+    });
+  });
+
+  const weeks=Object.values(weekMap).sort((a,b)=>b.wk.localeCompare(a.wk));
+  const el=document.getElementById("xchkCard");
+  el.style.display="block";
+
+  let html='';
+  weeks.forEach(wk=>{
+    const diffPcs=wk.dailyPcs-wk.refPcs;
+    const refSt=[...wk.refStyles].filter(Boolean);
+    const dailySt=[...wk.dailyStyles].filter(Boolean);
+    const missingInDaily=refSt.filter(s=>!wk.dailyStyles.has(s));
+    const extraInDaily=dailySt.filter(s=>!wk.refStyles.has(s));
+    const sun=new Date(wk.wk+'T00:00:00');sun.setDate(sun.getDate()+6);
+    const sunStr=sun.toISOString().slice(0,10);
+    const rangeLabel=`${wk.wk.slice(5)} ～ ${sunStr.slice(5)}`;
+
+    const pcsColor=Math.abs(diffPcs)<100?'#059669':diffPcs>0?'#d97706':'#dc2626';
+    const pcsNote=diffPcs===0?'✅ 件數吻合':`${diffPcs>0?'日報多':'日報少'} ${Math.abs(diffPcs).toLocaleString()} 件`;
+    const styleNote=missingInDaily.length||extraInDaily.length?
+      `${missingInDaily.length?`<span style="color:#dc2626">週報有但日報缺：${missingInDaily.slice(0,5).join('、')}${missingInDaily.length>5?`…等${missingInDaily.length}款`:''}</span>`:''}
+       ${extraInDaily.length?`<span style="color:#d97706">日報多出：${extraInDaily.slice(0,5).join('、')}${extraInDaily.length>5?`…等${extraInDaily.length}款`:''}</span>`:''}`:
+      '<span style="color:#059669">✅ 款式吻合</span>';
+
+    html+=`<div style="border:1px solid #e2e6f0;border-radius:8px;padding:12px;margin-bottom:10px;background:#fafbff">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#1e2640">📅 ${rangeLabel}</span>
+        <span style="font-size:11px;padding:2px 8px;background:#e0f2fe;border-radius:4px;color:#0369a1">週報 ${refSt.length} 款 ${wk.refPcs.toLocaleString()} 件</span>
+        <span style="font-size:11px;padding:2px 8px;background:#f0fdf4;border-radius:4px;color:#059669">日報 ${dailySt.length} 款 ${wk.dailyPcs.toLocaleString()} 件</span>
+        <span style="font-size:12px;font-weight:600;color:${pcsColor}">${pcsNote}</span>
+      </div>
+      <div style="font-size:12px;line-height:1.8">${styleNote}</div>
+    </div>`;
+  });
+  document.getElementById("xchkBody").innerHTML=html||'<div style="color:#6b7a9e;font-size:12px">無比對資料</div>';
+}
+
+// ── Sewing connection ───────────────────────────────────────
+async function refreshSew(){
+  await loadSew();
+  const el=document.getElementById("sewConn"),badge=document.getElementById("connBadge");
+  if(SEW.length){
+    el.className="sew-status";el.style.display="block";
+    const dates=[...new Set(SEW.map(r=>r.date))].sort().reverse();
+    const sewSecs=[...new Set(SEW.map(r=>r.section))].join('/');
+    const stN=[...new Set(SEW.map(r=>r.styleNo).filter(Boolean))].length;
+    el.innerHTML=`<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b> — ${fmt(SEW.length)} 筆 · ${sewSecs} · 款號 ${stN} 款 · 最新 ${dates[0]||"-"}`;
+    badge.innerHTML="⚡ 已連線車縫 DB";badge.style.cssText="background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7";
+  }else{
+    el.className="sew-status warn";el.style.display="block";
+    el.innerHTML=`<span class="conn-dot conn-off"></span>⚠️ 尚未讀取到車縫資料。請在同一瀏覽器開啟車縫系統，或匯入備份 JSON。`;
+    badge.innerHTML="⚠ 車縫未連線";badge.style.cssText="background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);color:#fcd34d";
+  }
+  updateHdr();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// EMAIL / EXCEL PARSERS — identical engine to sewing_v5
+// Only difference: section defaults to Apron/Garment (not "Sewing")
+// ══════════════════════════════════════════════════════════════════════
+
+// ── EML extractor (exact copy from sewing_v5) ─────────────────────────
+async function extractFromEML(file){
+  const text=await file.text();
+  const results=[];
+  function decodeRFC2047(s){
+    return s.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi,(_,charset,enc,encoded)=>{
+      try{
+        if(enc.toUpperCase()==='B'){const bin=atob(encoded);return new TextDecoder(charset).decode(new Uint8Array([...bin].map(c=>c.charCodeAt(0))));}
+        else return decodeURIComponent(encoded.replace(/_/g,' ').replace(/=([0-9A-F]{2})/gi,(_,h)=>'%'+h));
+      }catch(e){return encoded;}
+    });
+  }
+  const boundaryRe=/boundary=["']?([^"'\r\n;\s]+)["']?/gi;
+  const boundaries=[];let bm;
+  while((bm=boundaryRe.exec(text))!==null)boundaries.push(bm[1]);
+  for(const boundary of [...new Set(boundaries)]){
+    const parts=text.split('--'+boundary);
+    for(const part of parts){
+      const isXls=/filename\s*=\s*["']?[^"'\r\n]*\.xlsx?["']?/i.test(part)||
+                  /content-type:[^\r\n]*(spreadsheet|excel|openxml)/i.test(part)||
+                  /name\s*=\s*["']?[^"'\r\n]*\.xlsx?["']?/i.test(part);
+      if(!isXls)continue;
+      let fname='attachment.xlsx';
+      const fnMatch=part.match(/filename\*?(?:=|\*0\*=)\s*(?:[A-Za-z0-9-]+'')?["']?([^"'\r\n;]+\.xlsx?)["']?/i)
+                 ||part.match(/\bname\s*=\s*["']?([^"'\r\n;]+\.xlsx?)["']?/i);
+      if(fnMatch)fname=decodeRFC2047(fnMatch[1].trim());
+      const bodyMatch=part.match(/\r?\n\r?\n([\s\S]+?)(?:--|$)/);
+      if(!bodyMatch)continue;
+      const b64=bodyMatch[1].replace(/[\r\n\s]/g,'');
+      if(b64.length<100)continue;
+      try{
+        const binary=atob(b64);const bytes=new Uint8Array(binary.length);
+        for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+        if(bytes[0]===0x50&&bytes[1]===0x4B)results.push({name:fname.split(/[/\\]/).pop(),data:bytes});
+      }catch(e){}
+    }
+  }
+  return results;
+}
+
+// ── MSG extractor (exact copy from sewing_v5) ─────────────────────────
+async function extractFromMSG(file){
+  const buf=await file.arrayBuffer();
+  const all=new Uint8Array(buf);
+  const results=[];
+  const r16=(b,o)=>b[o]|(b[o+1]<<8);
+  let searchFrom=0;
+  while(searchFrom<all.length-4){
+    let pkPos=-1;
+    for(let i=searchFrom;i<all.length-3;i++){
+      if(all[i]===0x50&&all[i+1]===0x4B&&all[i+2]===0x03&&all[i+3]===0x04){pkPos=i;break;}
+    }
+    if(pkPos===-1)break;
+    let end=-1;
+    const limit=Math.min(pkPos+128*1024*1024,all.length-21);
+    for(let j=pkPos+22;j<limit;j++){
+      if(all[j]===0x50&&all[j+1]===0x4B&&all[j+2]===0x05&&all[j+3]===0x06){
+        const commentLen=r16(all,j+20);end=j+22+commentLen;break;
+      }
+    }
+    if(end>pkPos+50){
+      const zipData=all.slice(pkPos,end);
+      try{
+        const wb=XLSX.read(zipData,{type:"array",cellDates:true});
+        if(wb.SheetNames.length>0&&Object.keys(wb.Sheets).length>0){
+          let fname=`attachment_${results.length}.xlsx`;
+          const lookback=Math.max(0,pkPos-4000);
+          outer:for(let k=pkPos-8;k>lookback;k--){
+            if(all[k]===0x2E&&all[k+1]===0x00&&all[k+2]===0x78&&all[k+3]===0x00&&
+               all[k+4]===0x6C&&all[k+5]===0x00&&all[k+6]===0x73&&all[k+7]===0x00){
+              let ns=k-2;
+              while(ns>lookback){const c=all[ns],h=all[ns+1];if(h===0x00&&c>=0x20&&c<0x7F)ns-=2;else break;}
+              ns+=2;let fn='';
+              for(let n=ns;n<=k+9&&n<all.length-1;n+=2)if(all[n]>=0x20&&all[n]<0x7F)fn+=String.fromCharCode(all[n]);
+              if(fn.length>3&&fn.length<200){fname=fn;break outer;}
+            }
+          }
+          results.push({name:fname,data:zipData,wb});
+          searchFrom=end;continue;
+        }
+      }catch(e){}
+    }
+    searchFrom=pkPos+4;
+  }
+  return results;
+}
+
+// ── VRT Daily Output parser — with adaptive column detection ───────────
+// Handles: "Daily Output", "Daily Output (Day Shift-A&B)", "Daily Output (Day Shift-B)"
+// and any variant. Auto-detects column positions instead of hardcoding.
+function parseVRT(wb,fname){
+  const sheetName=
+    wb.SheetNames.find(n=>n.trim()==="Daily Output")||
+    wb.SheetNames.find(n=>n.trim()==="Daily Output1")||
+    wb.SheetNames.find(n=>/^daily output/i.test(n.trim()))||
+    wb.SheetNames.find(n=>/daily.*output/i.test(n))||
+    wb.SheetNames.find(n=>/cutting.*output/i.test(n))||
+    wb.SheetNames.find(n=>/daily.*cutting/i.test(n))||
+    wb.SheetNames.find(n=>/daily production/i.test(n));
+  if(!sheetName)return null;
+
+  const isDayShift=/day.?shift|a&b/i.test(sheetName);
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:null});
+  if(rows.length<3)return null;
+
+  // ── 1. Detect section + date (scan all rows, not just first 6) ──────────
+  let section="Garment",date=TODAY,foundDate=false;
+  const fnL=(fname||"").toLowerCase();
+  if(fnL.includes("apron"))section="Apron";
+  for(let i=0;i<Math.min(10,rows.length);i++){
+    (rows[i]||[]).forEach(cell=>{
+      if(!cell)return;
+      const cl=String(cell).toLowerCase();
+      if(cl.includes("apron")&&!cl.includes("summary")&&!cl.includes("total")&&!cl.includes("line"))section="Apron";
+      else if(cl.includes("garment")&&!cl.includes("summary"))section="Garment";
+      if(typeof cell!=="string")return;
+      const asOf=/as of\s+([A-Za-z]{3,})\s+(\d{1,2})[,.\-]?\s*(\d{4})/i.exec(cell);
+      if(asOf&&!foundDate){const mo=MONTHS[asOf[1].toLowerCase().slice(0,3)];if(mo){date=`${asOf[3]}-${String(mo).padStart(2,"0")}-${String(asOf[2]).padStart(2,"0")}`;foundDate=true;}}
+      if(!foundDate){const m=cell.match(/([A-Za-z]{3,})\s+(\d{1,2})[,.\-]?\s*(\d{4})/);if(m){const mo=MONTHS[m[1].toLowerCase().slice(0,3)];if(mo)date=`${m[3]}-${String(mo).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;}}
+    });
+  }
+
+  // ── 2. Auto-detect column layout by scanning for a header row ───────────
+  // Look for a row that has recognizable column headers
+  let colLine=-1,colStyle=-1,colPcs=-1,colCtn=-1,colEff=-1,colWorkers=-1;
+  let headerRow=-1;
+
+  const HDR_LINE  =["line","線別","line no","lineno"];
+  const HDR_STYLE =["style","款號","style no","item","style#","fabric","款式"];
+  const HDR_PCS   =["total output","output","pcs","pieces","qty","cut qty","total pcs","total cut","件數","裁量","total","output qty"];
+  const HDR_CTN   =["ctn","carton","箱","cartons","box"];
+  const HDR_EFF   =["eff%","eff %","efficiency","achieve eff","效率","eff"];
+  const HDR_WKR   =["sewer","workers","headcount","man power","manpower","staff","人數","cutter","operators"];
+
+  function matchHdr(s,terms){return terms.some(t=>s.includes(t));}
+
+  for(let i=0;i<Math.min(20,rows.length);i++){
+    const r=rows[i]||[];
+    const matched={};
+    r.forEach((c,ci)=>{
+      if(!c&&c!==0)return;
+      const s=String(c).trim().toLowerCase();
+      if(!s)return;
+      if(colLine===-1&&matchHdr(s,HDR_LINE))matched.line=ci;
+      if(colStyle===-1&&matchHdr(s,HDR_STYLE))matched.style=ci;
+      if(colPcs===-1&&matchHdr(s,HDR_PCS))matched.pcs=ci;
+      if(colCtn===-1&&matchHdr(s,HDR_CTN))matched.ctn=ci;
+      if(colEff===-1&&matchHdr(s,HDR_EFF))matched.eff=ci;
+      if(colWorkers===-1&&matchHdr(s,HDR_WKR))matched.wkr=ci;
+    });
+    // Need at least line + pcs detected to accept this as header
+    if(matched.line!==undefined&&matched.pcs!==undefined){
+      colLine=matched.line; colStyle=matched.style??-1; colPcs=matched.pcs;
+      colCtn=matched.ctn??-1; colEff=matched.eff??-1; colWorkers=matched.wkr??-1;
+      headerRow=i;
+      break;
+    }
+  }
+
+  // ── 3. Body scan: two modes ─────────────────────────────────────────────
+  const lm={};let cur=null,curWorkers=0,curEff=0;
+
+  if(headerRow>=0){
+    // Mode A: header-guided scan
+    for(let i=headerRow+1;i<rows.length;i++){
+      const r=rows[i]||[];
+      const allEmpty=r.every(c=>c===null||c===undefined||c==="");
+      if(allEmpty)continue;
+      const r10=r.slice(0,Math.min(12,r.length)).map(c=>String(c||"").toLowerCase()).join(" ");
+      if(r10.includes("summary shift")||r10.includes("grand total")||r10.includes("total:"))break;
+      const lineTxt=String(r[colLine]||"").trim();
+      if(lineTxt&&LRE.test(lineTxt)){
+        cur=lineTxt;
+        if(!lm[cur])lm[cur]={pcs:0,ctn:0,styles:{},workers:0,eff:0};
+        if(colWorkers>=0){const w=parseFloat(r[colWorkers]);if(!isNaN(w)&&w>0)lm[cur].workers=w;}
+        if(colEff>=0){const e=parseFloat(r[colEff]);if(!isNaN(e)&&e>0)lm[cur].eff=e>1?Math.round(e):Math.round(e*100);}
+      }
+      if(!cur)continue;
+      const st=colStyle>=0?String(r[colStyle]||"").trim():"";
+      const pcs=parseFloat(r[colPcs]);
+      const ctn=colCtn>=0?parseFloat(r[colCtn]):NaN;
+      if(!isNaN(pcs)&&pcs>0){
+        lm[cur].pcs+=pcs;
+        if(st)lm[cur].styles[st]=(lm[cur].styles[st]||0)+pcs;
+      }
+      if(!isNaN(ctn)&&ctn>0)lm[cur].ctn+=ctn;
+    }
+  } else {
+    // Mode B: fixed-column scan (original VRT format)
+    for(let i=4;i<rows.length;i++){
+      const r=rows[i]||[];
+      const r10=r.slice(0,12).map(c=>String(c||"").toLowerCase()).join(" ");
+      if(r10.includes("summary shift")||r10.includes("total:"))break;
+      const c2=String(r[2]||"").trim();
+      if(c2&&LRE.test(c2)){cur=c2;if(!lm[cur])lm[cur]={pcs:0,ctn:0,styles:{},workers:0,eff:0};}
+      if(!cur)continue;
+      const st=String(r[5]||"").trim();
+      const pcs=parseFloat(r[15]),ctn=parseFloat(r[16]);
+      if(st&&!isNaN(pcs)&&pcs>0){lm[cur].pcs+=pcs;lm[cur].styles[st]=(lm[cur].styles[st]||0)+pcs;}
+      if(!isNaN(ctn)&&ctn>0)lm[cur].ctn+=ctn;
+    }
+  }
+
+  Object.keys(lm).forEach(k=>{if(lm[k].pcs===0)delete lm[k];});
+
+  // ── 4. If still nothing, do a full adaptive scan ────────────────────────
+  // Scan every row for line number patterns + adjacent numeric values
+  if(!Object.keys(lm).length){
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i]||[];
+      for(let ci=0;ci<r.length;ci++){
+        const v=String(r[ci]||"").trim();
+        if(!LRE.test(v))continue;
+        // Found a line name. Try to get a style and pcs from same row.
+        const lineNo=v;
+        if(!lm[lineNo])lm[lineNo]={pcs:0,ctn:0,styles:{},workers:0,eff:0};
+        // Scan adjacent cells for style (non-numeric text) and pcs (number)
+        for(let cj=ci+1;cj<Math.min(ci+20,r.length);cj++){
+          const val=r[cj];
+          if(val===null||val===undefined||val==="")continue;
+          const n=parseFloat(val);
+          if(!isNaN(n)&&n>0&&n<1000000){lm[lineNo].pcs+=n;break;}
+        }
+        // Style: look for non-empty non-numeric text nearby
+        for(let cj=ci+1;cj<Math.min(ci+10,r.length);cj++){
+          const val=String(r[cj]||"").trim();
+          if(!val||!isNaN(parseFloat(val)))continue;
+          if(val.length>2&&val.length<30){lm[lineNo].styles[val]=(lm[lineNo].styles[val]||0)+lm[lineNo].pcs;break;}
+        }
+        break; // only one line per row
+      }
+    }
+    Object.keys(lm).forEach(k=>{if(lm[k].pcs===0)delete lm[k];});
+    if(!Object.keys(lm).length)return null;
+  }
+
+  // ── 5. Summary section: read workers + efficiency ───────────────────────
+  // (same as original, extended to also look for "number of cutter/operator")
+  const lmNorm={};Object.keys(lm).forEach(k=>lmNorm[k.toUpperCase()]=k);
+  function normLine(s){return s.toUpperCase().replace(/\s+/g,'').replace(/(\D)0+(\d)/g,'$1$2');}
+  const lmFuzzy={};Object.keys(lm).forEach(k=>lmFuzzy[normLine(k)]=k);
+  function lineNameAt(v){if(!v)return null;const s=String(v).trim();if(!s)return null;
+    if(/^(LINE|Line)\s+[A-Z]?\d+$/.test(s))return lmNorm[s.toUpperCase()]||lmFuzzy[normLine(s)]||null;
+    return lmFuzzy[normLine(s)]||null;}
+  const workers={},eff={};
+  // Pass 1: summary header row approach
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i]||[];const b=String(r[1]||r[0]||'').trim().toLowerCase();
+    if(!b.startsWith('summary'))continue;
+    const colMap={};r.forEach((c,ci)=>{const ln=lineNameAt(c);if(ln)colMap[ci]=ln;});
+    if(!Object.keys(colMap).length)continue;
+    for(let j=i+1;j<Math.min(i+25,rows.length);j++){
+      const jr=rows[j]||[];const lbl=String(jr[1]||jr[0]||'').trim().toLowerCase();
+      const isW=(lbl.includes('number of sewer')||lbl.includes('number of cutter')||lbl.includes('operator'))&&!lbl.includes('(ot)');
+      const isE=lbl.includes('achieve eff')||lbl.includes('eff%')||(lbl.includes('efficiency')&&!lbl.includes('target'));
+      if(isW)Object.entries(colMap).forEach(([ci,ln])=>{const val=parseFloat(jr[ci]);if(!isNaN(val)&&val>0&&!workers[ln])workers[ln]=val;});
+      if(isE)Object.entries(colMap).forEach(([ci,ln])=>{const val=parseFloat(jr[ci]);if(!isNaN(val)&&val>0&&!eff[ln])eff[ln]=val>1?Math.round(val):Math.round(val*100);});
+    }
+  }
+  // Pass 2: fallback label scan
+  if(!Object.keys(workers).length){
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i]||[];const lbls=r.slice(0,10).map(c=>String(c||'').trim().toLowerCase()).filter(s=>s.length>2);
+      const hasW=lbls.some(s=>(s.includes('number of sewer')||s.includes('number of cutter')||s.includes('operator'))&&!s.includes('(ot)'));
+      const hasE=lbls.some(s=>s.includes('achieve eff')||s.includes('eff%'));
+      if(!hasW&&!hasE)continue;
+      let entries=[];
+      for(let d=1;d<=25&&!entries.length;d++){
+        if(i-d>=0)entries=(rows[i-d]||[]).map((c,ci)=>{const ln=lineNameAt(c);return ln?[ln,ci]:null;}).filter(Boolean);
+        if(!entries.length&&i+d<rows.length)entries=(rows[i+d]||[]).map((c,ci)=>{const ln=lineNameAt(c);return ln?[ln,ci]:null;}).filter(Boolean);
+      }
+      if(!entries.length)continue;
+      entries.forEach(([ln,ci])=>{const val=parseFloat((rows[i]||[])[ci]);if(isNaN(val)||val<=0)return;if(hasW&&!workers[ln])workers[ln]=val;if(hasE&&!eff[ln])eff[ln]=val>1?Math.round(val):Math.round(val*100);});
+    }
+  }
+  // Pass 3: use per-line workers/eff captured in header-guided scan
+  Object.entries(lm).forEach(([k,v])=>{if(v.workers>0&&!workers[k])workers[k]=v.workers;if(v.eff>0&&!eff[k])eff[k]=v.eff;});
+
+  const wU={},eU={};
+  Object.entries(workers).forEach(([k,v])=>wU[k.toUpperCase()]=v);
+  Object.entries(eff).forEach(([k,v])=>eU[k.toUpperCase()]=v);
+  const recs=[];
+  Object.entries(lm).forEach(([lineNo,data])=>{
+    const normLN=normLineNo(lineNo);
+    const w=wU[normLN.toUpperCase()]||wU[lineNo.toUpperCase()]||0,e=eU[normLN.toUpperCase()]||eU[lineNo.toUpperCase()]||0;
+    const stList=Object.entries(data.styles).sort((a,b)=>b[1]-a[1]);
+    if(stList.length>0){
+      stList.forEach(([styleNo,pcs],idx)=>{
+        recs.push({id:uid(),date,section,lineNo:normLineNo(lineNo),styleNo,pieces:Math.round(pcs),workers:idx===0?w:0,efficiency:e,cartons:idx===0?Math.round(data.ctn*10)/10:0});
+      });
+    }else{
+      recs.push({id:uid(),date,section,lineNo:normLineNo(lineNo),styleNo:"",pieces:Math.round(data.pcs),workers:w,efficiency:e,cartons:Math.round(data.ctn*10)/10});
+    }
+  });
+  if(!recs.length)return null;
+  return{recs,summary:{date,section,lines:Object.keys(lm).length,totalPcs:Math.round(Object.values(lm).reduce((s,d)=>s+d.pcs,0)),lineNames:Object.keys(lm),_sheet:sheetName,_mode:headerRow>=0?"header":"fixed"}};
+}
+
+// ── Weekly Output Report parser ────────────────────────────
+function parseWeeklyReport(wb,fname){
+  const ws=wb.Sheets[wb.SheetNames.find(n=>/weekly output report/i.test(n))];
+  if(!ws)return null;
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  let section="Garment";
+  const fnL=(fname||"").toLowerCase();
+  if(fnL.includes("apron"))section="Apron";
+  for(let i=0;i<Math.min(4,rows.length);i++){
+    const txt=(rows[i]||[]).map(c=>String(c||"").toLowerCase()).join(" ");
+    if(txt.includes("apron"))section="Apron";
+    else if(txt.includes("garment"))section="Garment";
+  }
+  const header=rows[3]||[];const dateCols={};
+  for(let ci=3;ci<12;ci++){
+    const v=header[ci];let dateStr=null;
+    if(v instanceof Date||(v&&typeof v==="object"&&v.getTime)){const d=v;dateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+    else if(typeof v==="string"&&v.match(/\d{4}-\d{2}-\d{2}/))dateStr=v.slice(0,10);
+    if(dateStr){const dow=new Date(dateStr+"T00:00:00").getDay();if(dow!==0)dateCols[ci]=dateStr;}
+  }
+  if(!Object.keys(dateCols).length)return null;
+  const LRE2=/^(LINE|Line)\s+[A-Z]?\d+$/;
+  const lineData={};let cur=null;
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i]||[];const c0=String(r[0]||"").trim(),c1=String(r[1]||"").trim().toLowerCase();
+    if(LRE2.test(c0)){cur=c0;if(!lineData[cur])lineData[cur]={};Object.values(dateCols).forEach(d=>{if(!lineData[cur][d])lineData[cur][d]={pcs:0,workers:0,eff:0};});}
+    if(!cur)continue;
+    if(c1==="total output")Object.entries(dateCols).forEach(([ci,date])=>{const v=parseFloat(r[ci]);if(v>0)lineData[cur][date].pcs=Math.round(v);});
+    if(c1==="man power")Object.entries(dateCols).forEach(([ci,date])=>{const v=parseFloat(r[ci]);if(v>0)lineData[cur][date].workers=Math.round(v*2)/2;});
+    if(c1.includes("daily eff%")&&c1.includes("current"))Object.entries(dateCols).forEach(([ci,date])=>{const v=parseFloat(r[ci]);if(v>0)lineData[cur][date].eff=v<=1?Math.round(v*100):Math.round(v);});
+  }
+  const recs=[];
+  Object.entries(lineData).forEach(([lineNo,dates])=>{
+    Object.entries(dates).forEach(([date,d])=>{if(d.pcs>0)recs.push({id:uid(),date,section,lineNo:normLineNo(lineNo),styleNo:"",pieces:d.pcs,workers:d.workers,efficiency:d.eff,cartons:0});});
+  });
+  if(!recs.length)return null;
+  const lineDates=[...new Set(recs.map(r=>r.date))].sort(),lineNames=[...new Set(recs.map(r=>r.lineNo))];
+  return{recs,summary:{date:`${lineDates[0]}～${lineDates[lineDates.length-1]}`,section,lines:lineNames.length,totalPcs:recs.reduce((s,r)=>s+r.pieces,0),lineNames}};
+}
+
+// ── Standard format parser (flexible header) ───────────────
+function parseStd(wb,fname){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+  if(rows.length<2)return null;
+  const H={};
+  const HM={date:["日期","date"],section:["section","部門"],lineNo:["line","線別","線","組"],styleNo:["款號","款式","style","style no"],
+    pieces:["件數","pcs","pieces","數量","裁量"],workers:["人數","workers","staff"],efficiency:["效率","eff"],cartons:["箱數","箱","ctn"]};
+  let hi=0;
+  for(let i=0;i<Math.min(5,rows.length);i++){
+    rows[i].forEach((c,ci)=>{
+      const s=String(c||"").trim().toLowerCase();
+      Object.entries(HM).forEach(([f,ks])=>{if(ks.some(k=>s.includes(k))&&H[f]===undefined)H[f]=ci;});
+    });
+    if(Object.keys(H).length>=3){hi=i;break;}
+  }
+  if(H.pieces===undefined)return null;
+  const recs=[];let lastDate="",lastSection="Garment";
+  const fnL=(fname||"").toLowerCase();
+  if(fnL.includes("apron"))lastSection="Apron";
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i];if(!r||r.every(c=>c===""||c===null))continue;
+    let ds=H.date!==undefined?parseDt(String(r[H.date]||"")):""  ;
+    if(!ds)ds=lastDate;else lastDate=ds;
+    if(!ds)continue;
+    const pcs=parseFloat(r[H.pieces])||0;if(pcs<=0)continue;
+    let sec=H.section!==undefined?String(r[H.section]||"").trim():lastSection;
+    if(sec.toLowerCase().includes("apron"))sec="Apron";
+    else if(sec.toLowerCase().includes("garment"))sec="Garment";
+    else if(!sec)sec=lastSection;
+    const eff=parseFloat(r[H.efficiency])||0;
+    recs.push({id:uid(),date:ds,section:sec,lineNo:H.lineNo!==undefined?normLineNo(String(r[H.lineNo]||"").trim()):"",
+      styleNo:H.styleNo!==undefined?String(r[H.styleNo]||"").trim():"",pieces:pcs,
+      workers:H.workers!==undefined?parseFloat(r[H.workers])||0:0,
+      efficiency:eff>1?Math.round(eff):eff>0?Math.round(eff*100):0,
+      cartons:H.cartons!==undefined?parseFloat(r[H.cartons])||0:0});
+  }
+  if(!recs.length)return null;
+  const lines=[...new Set(recs.map(r=>r.lineNo))];
+  return{recs,summary:{date:recs[0].date,section:recs[0].section,lines:lines.length,totalPcs:recs.reduce((s,r)=>s+r.pieces,0),lineNames:lines}};
+}
+
+// ── Cutting Weekly Output Report parser ───────────────────────────────
+// Sheet: "Weekly Output Report"
+// Row 2: header with dates in cols 4-10
+// Data: col0=section marker, col2=style, cols4-10=daily pcs, col11=weekly total
+// Summary: row ~154 "Man Power", rows ~166-168 "Daily Eff% (Section)"
+function parseCuttingWeekly(wb, fname, parentFname) {
+  const sheetName = wb.SheetNames.find(n => /weekly output report/i.test(n));
+  if (!sheetName) return null;
+
+  // Read BOTH raw (for numbers/dates) and text (for labels/styles)
+  const ws = wb.Sheets[sheetName];
+  const rowsRaw  = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+  const rowsTxt  = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+  if (rowsRaw.length < 10) return null;
+
+  const hdr = rowsTxt[2] || [];
+  const hdrTxt = hdr.map(c=>String(c||'')).join(' ').toLowerCase();
+  if (!hdrTxt.includes('style') && !hdrTxt.includes('po')) return null;
+  if (/^(LINE|Line)\s+\d/.test(String(rowsRaw[0]?.[0]||''))) return null;
+
+  // Robust date converter: handles JS Date, serial numbers, ISO/US strings
+  function toDate(v) {
+    if (!v && v !== 0) return '';
+    if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+    const s = String(v).trim();
+    let m = s.match(/(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    const n=parseFloat(s); if(!isNaN(n)&&n>40000&&n<60000){const d=new Date(Math.round((n-25569)*86400000));return`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;}
+    return '';
+  }
+
+  // Extract date columns (cols 4-10 in header row 2)
+  const dateCols = {};
+  for (let ci = 4; ci <= 10; ci++) {
+    const ds = toDate(rowsRaw[2]?.[ci]) || toDate(rowsTxt[2]?.[ci]);
+    if (ds && new Date(ds+'T00:00:00').getDay() !== 0) dateCols[ci] = ds;
+  }
+
+  // Fallback: derive week dates from parent filename ("March 09-14 2026")
+  if (!Object.keys(dateCols).length && parentFname) {
+    const pf = parentFname.replace(/_/g,' ');
+    const mr = pf.match(/([A-Za-z]{3,})\s+(\d{1,2})[-_](\d{1,2})[,.\s]+(\d{4})/i);
+    if (mr) {
+      const mo=MONTHS[mr[1].toLowerCase().slice(0,3)], yr=mr[4];
+      const s=parseInt(mr[2]), e=parseInt(mr[3]);
+      if (mo) for(let d=s;d<=e;d++){const ds=`${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;if(new Date(ds+'T00:00:00').getDay()!==0)dateCols[d-s+4]=ds;}
+    }
+  }
+  if (!Object.keys(dateCols).length) return null;
+
+  // Scan rows for section + style + daily pcs
+  const byDSS = {}; // `date|section|style` → pcs
+  let curSection = 'Garment';
+
+  for (let i = 3; i < rowsTxt.length; i++) {
+    const r  = rowsTxt[i] || [];
+    const rr = rowsRaw[i]  || [];
+    const c0 = String(r[0]||'').trim().toLowerCase();
+    const c1 = String(r[1]||'').trim().toLowerCase();
+    const c2 = String(r[2]||'').trim();
+
+    if (c0==='napkin') curSection='Napkin';
+    else if (c0==='apron') curSection='Apron';
+    else if (c0==='garment') curSection='Garment';
+
+    if (c1.includes('sub total output')||c1.includes('grand total output')||c1==='man power '||c1==='man power') break;
+    if (!c2||c2.length<2) continue;
+
+    for (const [ci,ds] of Object.entries(dateCols)) {
+      const pcs = parseFloat(rr[ci]);
+      if (!isNaN(pcs)&&pcs>0) { const k=`${ds}|${curSection}|${c2}`; byDSS[k]=(byDSS[k]||0)+pcs; }
+    }
+  }
+
+  // Workers + per-section efficiency from summary rows
+  const workers={}, effBySec={};
+  for (let i=0;i<rowsTxt.length;i++) {
+    const r=rowsTxt[i]||[], rr=rowsRaw[i]||[];
+    const lbl=String(r[1]||'').trim().toLowerCase();
+    if(lbl.includes('man power')&&!lbl.includes('ot')&&!lbl.includes('total'))
+      for(const[ci,ds]of Object.entries(dateCols)){const v=parseFloat(rr[ci]);if(!isNaN(v)&&v>0&&!workers[ds])workers[ds]=v;}
+    if(lbl.includes('daily eff%')||lbl.includes('daily eff %')){
+      const sec=lbl.includes('napkin')?'Napkin':lbl.includes('apron')?'Apron':'Garment';
+      for(const[ci,ds]of Object.entries(dateCols)){const v=parseFloat(rr[ci]);if(!isNaN(v)&&v>0)effBySec[`${sec}|${ds}`]=v<=1?Math.round(v*100):Math.round(v);}
+    }
+  }
+
+  const recs=[];
+  for(const[k,pcs]of Object.entries(byDSS)){
+    const[ds,sec,styleNo]=k.split('|');
+    recs.push({id:uid(),date:ds,section:sec,lineNo:'Weekly Report',styleNo,pieces:Math.round(pcs),workers:workers[ds]||0,efficiency:effBySec[`${sec}|${ds}`]||0,cartons:0,src:'ref'});
+  }
+  if(!recs.length)return null;
+  recs.sort((a,b)=>a.date.localeCompare(b.date));
+  const dates=Object.values(dateCols).sort();
+  return{recs,summary:{date:`${dates[0]}～${dates[dates.length-1]}`,section:'Garment/Apron/Napkin',lines:Object.keys(dateCols).length,totalPcs:recs.reduce((s,r)=>s+r.pieces,0),lineNames:dates,_sheet:sheetName,_mode:'cutting-weekly'}};
+}
+
+// ── Cutting Monthly Efficiency Report parser ───────────────────────────
+// Sheet: "Cutting Shift-A+B" — efficiency summaries only, no piece counts
+function parseCuttingMonthly(wb, fname, parentFname) {
+  const sheetName =
+    wb.SheetNames.find(n => /cutting.*shift.*a.*b/i.test(n) || /cutting.*a\+b/i.test(n)) ||
+    wb.SheetNames.find(n => /cutting.*shift/i.test(n));
+  if (!sheetName) return null;
+
+  const rowsRaw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:null, raw:true});
+  const rowsTxt = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:null, raw:false});
+  if (rowsTxt.length < 8) return null;
+
+  // Dynamically find: header row with "Weekly", week label row, Pro.Min row
+  let weeklyRow=-1, weekLblRow=-1, proMinRow=-1, dataSectionRow=-1;
+  for (let i = 0; i < Math.min(15, rowsTxt.length); i++) {
+    const txt = (rowsTxt[i]||[]).map(c=>String(c||'')).join(' ').toLowerCase();
+    if (txt.includes('weekly') && txt.includes('week') && weeklyRow===-1) weeklyRow=i;
+    if (txt.includes('feb') || txt.includes('jan') || txt.includes('mar') || txt.includes('apr') ||
+        txt.includes('may') || txt.includes('jun') || txt.includes('jul') || txt.includes('aug') ||
+        txt.includes('sep') || txt.includes('oct') || txt.includes('nov') || txt.includes('dec')) {
+      if (weeklyRow>=0 && weekLblRow===-1) weekLblRow=i;
+    }
+    if (txt.includes('pro.min') && proMinRow===-1) proMinRow=i;
+    if ((txt.includes('napkin') || txt.includes('garment') || txt.includes('apron')) && proMinRow>=0 && dataSectionRow===-1) dataSectionRow=i;
+  }
+  // Fallback to hardcoded positions if dynamic detection fails
+  if (weeklyRow===-1) weeklyRow=4;
+  if (weekLblRow===-1) weekLblRow=5;
+  if (proMinRow===-1) proMinRow=6;
+  if (dataSectionRow===-1) dataSectionRow=7;
+
+  // Extract year from parent filename first, then attachment name, then today
+  const yr = (parentFname||'').match(/20\d\d/)?.[0] ||
+             (fname||'').match(/20\d\d/)?.[0] ||
+             TODAY.slice(0,4);
+
+  // Extract week date columns from week label row
+  const weekLabels = [];
+  const hdrRow = rowsTxt[weekLblRow] || [];
+  for (let ci = 2; ci <= 14; ci += 2) {
+    const v = String(hdrRow[ci]||'').trim();
+    if (!v) continue;
+    const m = v.match(/([A-Za-z]{3})\s+(\d{1,2})[_\-](\d{1,2})/);
+    if (m) {
+      const mo = MONTHS[m[1].toLowerCase().slice(0,3)];
+      if (mo) weekLabels.push({ci, label:v, date:`${yr}-${String(mo).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`});
+    }
+  }
+  if (!weekLabels.length) return null;
+
+  // Find section rows: scan for Napkin/Apron/Garment after proMinRow
+  const secRowMap = {};
+  for (let i = dataSectionRow; i < Math.min(dataSectionRow+6, rowsTxt.length); i++) {
+    const r = rowsTxt[i]||[];
+    const c1 = String(r[1]||'').trim().toLowerCase();
+    const c1raw = rowsRaw[i]?.[1];
+    if (/napkin/i.test(c1)) secRowMap['Napkin'] = i;
+    else if (/apron/i.test(c1)) secRowMap['Apron'] = i;
+    else if (/garment/i.test(c1)) secRowMap['Garment'] = i;
+  }
+  if (!Object.keys(secRowMap).length) return null;
+
+  // Build efficiency records
+  const recs = [];
+  for (const [sec, rowIdx] of Object.entries(secRowMap)) {
+    const rr = rowsRaw[rowIdx] || [];
+    for (const {ci, date} of weekLabels) {
+      const proMin = parseFloat(rr[ci]);
+      const attMin = parseFloat(rr[ci+1]);
+      if (isNaN(proMin) || isNaN(attMin) || attMin <= 0) continue;
+      const eff = Math.round(proMin / attMin * 100);
+      recs.push({id:uid(), date, section:sec, lineNo:'Monthly Summary', styleNo:'', pieces:0, workers:0, efficiency:eff, cartons:0, src:'ref'});
+    }
+  }
+  if (!recs.length) return null;
+
+  return {
+    recs,
+    summary: {
+      date: weekLabels[0]?.date || TODAY,
+      section: 'Monthly Summary',
+      lines: weekLabels.length,
+      totalPcs: 0,
+      lineNames: weekLabels.map(w=>w.label),
+      _sheet: sheetName,
+      _mode: 'cutting-monthly',
+      _note: '📊 月報僅含效率資料（無件數）'
+    }
+  };
+}
+
+function parseWorkbook(wb,fname,parentFname){
+  let r=parseCuttingDayShift(wb,fname,parentFname);
+  if(!r)r=parseCuttingWeekly(wb,fname,parentFname);
+  if(!r)r=parseCuttingMonthly(wb,fname,parentFname);
+  if(!r)r=parseWeeklyReport(wb,fname);  // sewing format fallback
+  if(!r)r=parseVRT(wb,fname);
+  if(!r)r=parseStd(wb,fname);
+  return r;
+}
+// Sheet: "Daily Output (Day Shift-A&B)"
+// Col1=Table, Col2=Item, Col3=Fabric Type, Col4=Yds/Pcs, Col5=Total Yds
+// Col7=Style, Col9=Color, Col10=Color Code, Col12=Pcs
+function parseCuttingDayShift(wb, fname, parentFname) {
+  const sheetName =
+    wb.SheetNames.find(n => /day.?shift.*a.*b/i.test(n) || /a.*b.*day.?shift/i.test(n)) ||
+    wb.SheetNames.find(n => /daily.*output.*day.*shift/i.test(n)) ||
+    wb.SheetNames.find(n => /day.*shift/i.test(n) && /daily.*output/i.test(n));
+  if (!sheetName) return null;
+
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:null, raw:false});
+  if (rows.length < 5) return null;
+
+  const hRow = rows[3] || [];
+  const hasTableNum = hRow.some(c => /table.?number/i.test(String(c||'')));
+  const hasActualCut = hRow.some(c => /actual.?qty.?cut|qty.?cut/i.test(String(c||'')));
+  if (!hasTableNum || !hasActualCut) return null;
+
+  // Detect column positions from header row
+  let colTable=1, colItem=2, colFabric=3, colYdsPcs=4, colTotalYds=5, colPO=6, colStyle=7, colColor=9, colColorCode=10, colSize=11, colPcs=12;
+  hRow.forEach((c, ci) => {
+    const s = String(c||'').toLowerCase();
+    if (/table.?number|table.?no/i.test(s)) colTable=ci;
+    if (/^item$|item\s*\(|item\s*-/i.test(s.trim())) colItem=ci;
+    if (/type of fabric|织物类型/i.test(s)) colFabric=ci;
+    if (/actual\s*yd.?pcs|yd.?pcs/i.test(s)) colYdsPcs=ci;
+    if (/total actual yards|total.*yards.*day|total\s*yds/i.test(s)) colTotalYds=ci;
+    if (/^po\s*[-–]|^po$|订购/i.test(s.trim())) colPO=ci;
+    if (/style.*样式|style\s*$|style\s*-/i.test(s)) colStyle=ci;
+    if (/^color\s*[-–]|^color$|颜色/i.test(s.trim()) && !s.includes('code') && !s.includes('标')) colColor=ci;
+    if (/color.?code|色标/i.test(s)) colColorCode=ci;
+    if (/^size\s*[-–]|^size$|尺寸/i.test(s.trim())) colSize=ci;
+    if (/actual.?qty.?cut|qty.?cut/i.test(s)) colPcs=ci;
+  });
+
+  // Extract date — NEVER fall back to TODAY (avoid polluting current date)
+  let date = null;
+  for (let i = 0; i < Math.min(6, rows.length); i++) {
+    (rows[i]||[]).forEach(cell => {
+      if (!cell || date) return;
+      const s = String(cell);
+      const asOf = /as\s+of\s+([A-Za-z]{3,})\s+(\d{1,2})[,.\s]+(\d{4})/i.exec(s);
+      if (asOf) {
+        const mo = MONTHS[asOf[1].toLowerCase().slice(0,3)];
+        if (mo) date = `${asOf[3]}-${String(mo).padStart(2,'0')}-${String(asOf[2]).padStart(2,'0')}`;
+      }
+      if (!date) {
+        const m = s.match(/([A-Za-z]{3,})\s+(\d{1,2})[,.\s]+(\d{4})/);
+        if (m) { const mo=MONTHS[m[1].toLowerCase().slice(0,3)]; if(mo) date=`${m[3]}-${String(mo).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; }
+      }
+    });
+  }
+  // Fallback: try extracting date from parent filename (e.g. "Daily_Cutting...as_of_March_14_2026.msg")
+  if (!date && parentFname) {
+    const pf = (parentFname||'').replace(/_/g,' ');
+    const mf = pf.match(/as\s+of\s+([A-Za-z]{3,})\s+(\d{1,2})[,.\s]+(\d{4})/i);
+    if (mf) { const mo=MONTHS[mf[1].toLowerCase().slice(0,3)]; if(mo) date=`${mf[3]}-${String(mo).padStart(2,'0')}-${String(mf[2]).padStart(2,'0')}`; }
+    // Handle range "March_09-14_2026" → use end date (second number)
+    if (!date) { const mr=pf.match(/([A-Za-z]{3,})\s+(\d{1,2})[-_](\d{1,2})[,.\s]+(\d{4})/i); if(mr){const mo=MONTHS[mr[1].toLowerCase().slice(0,3)];if(mo)date=`${mr[4]}-${String(mo).padStart(2,'0')}-${String(mr[3]).padStart(2,'0')}`;} }
+  }
+  if (!date) return null; // Still no date — refuse to avoid wrong date pollution
+
+  let defaultSection = 'Garment';
+  if ((fname||'').toLowerCase().includes('apron')) defaultSection = 'Apron';
+  let curSection = defaultSection;
+
+  // Scan data rows: aggregate pcs + capture fabric info per table+style
+  const byKey = {}; // `table|style` → {table, style, section, pcs, fabricItem, fabricType, ydsPerPcs, totalYds}
+
+  for (let i = 4; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const c0 = String(r[0]||'').trim();
+    if (c0) {
+      if (/garment/i.test(c0)) curSection = 'Garment';
+      else if (/apron/i.test(c0)) curSection = 'Apron';
+      else if (/napkin|towel/i.test(c0)) curSection = 'Napkin';
+      if (!(colTable < r.length && r[colTable])) continue; // pure section header row
+    }
+    // Stop at final summary
+    const c6 = String(r[6]||'').toLowerCase();
+    const c2txt = String(r[2]||'').toLowerCase();
+    if (/number of workers|type of product.*产品/.test(c6) || /type of product.*产品/.test(c2txt)) break;
+
+    const tableNo = String(r[colTable]||'').trim();
+    const styleNo = String(r[colStyle]||'').trim();
+    const pcs = parseFloat(r[colPcs]);
+    if (!tableNo || !styleNo || isNaN(pcs) || pcs <= 0) continue;
+
+    const key = `${tableNo}|${styleNo}`;
+    if (!byKey[key]) {
+      byKey[key] = {
+        table: tableNo, style: styleNo, section: curSection, pcs: 0,
+        fabricItem: String(r[colItem]||'').trim(),
+        fabricType: String(r[colFabric]||'').trim(),
+        po: String(r[colPO]||'').trim(),
+        color: String(r[colColor]||'').trim(),
+        colorCode: String(r[colColorCode]||'').trim(),
+        size: String(r[colSize]||'').trim(),
+        ydsPerPcs: parseFloat(r[colYdsPcs])||0,
+        totalYds: 0
+      };
+    }
+    byKey[key].pcs += pcs;
+    byKey[key].totalYds += parseFloat(r[colTotalYds])||0;
+  }
+  if (!Object.keys(byKey).length) return null;
+
+  // ── Per-section efficiency: col9=Napkin, col10=Apron, col11=Garment ────────
+  // Find header row with "Napkin (Pcs)" and "Apron (Pcs)" to confirm col mapping
+  let colNapkin=9, colApron=10, colGarment=11;
+  const effBySection = {}; // section → eff%
+  let totalWorkers = 0;
+
+  for (let i = Math.floor(rows.length * 0.6); i < rows.length; i++) {
+    const r = rows[i] || [];
+    const c6 = String(r[6]||'').trim().toLowerCase();
+
+    // Find the summary header row to confirm column positions
+    const rowTxt = r.map(c=>String(c||'')).join(' ');
+    if (/napkin.*apron.*garment/i.test(rowTxt)) {
+      r.forEach((c, ci) => {
+        const s = String(c||'').toLowerCase();
+        if (/napkin/i.test(s)) colNapkin = ci;
+        else if (/apron/i.test(s)) colApron = ci;
+        else if (/garment|服装/i.test(s)) colGarment = ci;
+      });
+    }
+
+    // Workers (regular, not OT)
+    if (/number of workers/.test(c6) && !/\(ot\)/.test(c6)) {
+      const v = parseFloat(r[colGarment]||r[12]||0);
+      if (!isNaN(v) && v > 0) totalWorkers = v;
+    }
+
+    // Per-section daily efficiency
+    if (/daily achieve efficiency/i.test(c6)) {
+      const getEff = ci => { const v=parseFloat(r[ci]); return isNaN(v)?0:v<=1?Math.round(v*100):Math.round(v); };
+      effBySection['Napkin']  = getEff(colNapkin);
+      effBySection['Apron']   = getEff(colApron);
+      effBySection['Garment'] = getEff(colGarment);
+    }
+  }
+
+  // Build records
+  const recs = [];
+  Object.values(byKey).forEach(({table, style, section, pcs, fabricItem, fabricType, po, color, colorCode, size, ydsPerPcs, totalYds}, idx) => {
+    recs.push({
+      id: uid(), date, section,
+      lineNo: table,
+      styleNo: style,
+      po,
+      pieces: Math.round(pcs),
+      workers: idx === 0 ? totalWorkers : 0,
+      efficiency: effBySection[section] || 0,
+      cartons: 0,
+      fabricItem,
+      fabricType,
+      color,
+      colorCode,
+      size,
+      ydsPerPcs: Math.round(ydsPerPcs * 1000) / 1000,
+      totalYds: Math.round(totalYds * 10) / 10
+    });
+  });
+
+  // ── Supplement from Summary (A&B) sheet ─────────────────────────────────
+  // Only supplement sections that have ZERO detail rows (e.g. Apron not filled in detail)
+  const sumSheet = wb.SheetNames.find(n => /summary.*a.*b|a.*b.*summary/i.test(n));
+  if (sumSheet) {
+    const sumRows = XLSX.utils.sheet_to_json(wb.Sheets[sumSheet], {header:1, defval:null, raw:false});
+    // Find section+style table header
+    let sumHdrRow = -1;
+    for (let i = 0; i < Math.min(55, sumRows.length); i++) {
+      const r = sumRows[i] || [];
+      const txt = r.map(c=>String(c||'')).join(' ').toLowerCase();
+      if (txt.includes('type') && txt.includes('style') && txt.includes('qty')) {
+        sumHdrRow = i; break;
+      }
+    }
+    if (sumHdrRow >= 0) {
+      // Which sections have 0 pcs in detail?
+      const detailPcsBySec = {};
+      recs.forEach(r => { detailPcsBySec[r.section]=(detailPcsBySec[r.section]||0)+r.pieces; });
+      const SECS = {apron:'Apron', garment:'Garment', napkin:'Napkin', top:'Napkin', bottom:'Garment', bag:'Napkin'};
+      // Track styles added from summary to avoid re-adding
+      const sumStyles = new Set();
+      for (let i = sumHdrRow + 1; i < sumRows.length; i++) {
+        const r = sumRows[i] || [];
+        const c1 = String(r[1]||'').trim();
+        const c2 = String(r[2]||'').trim();
+        const c3 = parseFloat(r[3]);
+        if (!c2 || isNaN(c3) || c3 <= 0) continue;
+        if (/^total$/i.test(c2) || /^-$/.test(c2)) break;
+        const sec = SECS[c1.toLowerCase()] || 'Garment';
+        // Only add for sections missing from detail AND not already added from summary
+        if (!(detailPcsBySec[sec] > 0) && !sumStyles.has(c2)) {
+          recs.push({
+            id: uid(), date, section: sec,
+            lineNo: 'Summary', styleNo: c2, po: '', color: '', size: '',
+            pieces: Math.round(c3), workers: 0,
+            efficiency: effBySection[sec] || 0,
+            cartons: 0, src: 'summary'
+          });
+          sumStyles.add(c2);
+        }
+      }
+    }
+  }
+
+  if (!recs.length) return null;
+  const tables = [...new Set(recs.map(r=>r.lineNo))];
+  return {
+    recs,
+    summary: {
+      date, section: defaultSection,
+      lines: tables.length,
+      totalPcs: recs.reduce((s,r)=>s+r.pieces, 0),
+      lineNames: tables.slice(0,10),
+      _sheet: sheetName,
+      _mode: 'dayshift'
+    }
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// FILE LIST + IMPORT FLOW (identical UX to sewing_v5)
+// ══════════════════════════════════════════════════════════════
+// Prevent browser from opening files dropped outside the drop zone
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  // Only handle if user is on the upload tab
+  if(document.getElementById('sec-upload')?.classList.contains('on')){
+    addFiles(e.dataTransfer.files);
+  }
+});
+
+function dzOver(e){e.preventDefault();document.getElementById("dz").classList.add("drag");}
+function dzOut(){document.getElementById("dz").classList.remove("drag");}
+function dzDrop(e){e.preventDefault();dzOut();addFiles(e.dataTransfer.files);}
+function dzSelect(e){addFiles(e.target.files);e.target.value="";}
+
+function addFiles(fs){
+  Array.from(fs).forEach(f=>{if(!pendingFiles.find(x=>x.name===f.name&&x.size===f.size))pendingFiles.push(f);});
+  renderFileList();
+  document.getElementById("btnImport").disabled=pendingFiles.length===0;
+}
+function removeFile(i){pendingFiles.splice(i,1);renderFileList();document.getElementById("btnImport").disabled=pendingFiles.length===0;}
+
+function renderFileList(){
+  const el=document.getElementById("fileList");
+  if(!pendingFiles.length){el.innerHTML="";document.getElementById("dz").classList.remove("done");return;}
+  document.getElementById("dz").classList.add("done");
+  el.innerHTML=pendingFiles.map((f,i)=>{
+    const isEmail=/\.(eml|msg)$/i.test(f.name);
+    const icon=isEmail?"📧":"📊",color=isEmail?"#7c3aed":"#059669",hint=isEmail?" (自動提取附件)":"";
+    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eef0f6;font-size:13px">
+      <span style="color:${color}">${icon} ${f.name}<span style="color:#8b95b8;font-size:11px">${hint}</span></span>
+      <button onclick="removeFile(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:18px">×</button>
+    </div>`;
+  }).join("");
+}
+
+async function doImport(){
+  const btn=document.getElementById("btnImport"),msg=document.getElementById("importMsg");
+  btn.disabled=true;msg.textContent="解析中...";msg.style.color="#6b7a9e";
+  pendingRecs=[];
+  const previews=[],errors=[];
+
+  for(const f of pendingFiles){
+    const ext=f.name.split('.').pop().toLowerCase();
+    try{
+      if(ext==='eml'){
+        msg.textContent=`📧 從 ${f.name} 提取附件...`;
+        const atts=await extractFromEML(f);
+        if(!atts.length){errors.push(`${f.name}：未找到 Excel 附件`);continue;}
+        for(const att of atts){
+          try{
+            const wb=XLSX.read(att.data,{type:"array",cellDates:true});
+            // Pass parent email filename so parsers can extract date from it
+            const result=parseWorkbook(wb,att.name,f.name);
+            if(!result){errors.push(`${att.name}：未能識別格式（工作表：${wb.SheetNames.join(', ')}）`);continue;}
+            pendingRecs.push(...result.recs);
+            const info=result.summary._sheet?` [${result.summary._sheet}]`:'';
+            previews.push({fname:`📧 ${f.name} → ${att.name}${info}`,...result.summary});
+          }catch(e){errors.push(`${att.name}：${e.message}`);}
+        }
+      }else if(ext==='msg'){
+        msg.textContent=`📧 從 ${f.name} 提取附件...`;
+        const atts=await extractFromMSG(f);
+        if(!atts.length){errors.push(`${f.name}：找不到 Excel 附件（.msg 格式限制，請改用 .eml）`);continue;}
+        let foundAny=false;
+        for(const att of atts){
+          try{
+            const wb=att.wb||XLSX.read(att.data,{type:"array",cellDates:true});
+            // Pass parent .msg filename as date source; use att.name OR parent name for parsing
+            // Note: monthly report attachments are often named "Factory_xls" (no extension)
+            // so we try att.name first, then pass parent fname for date + format hints
+            const result=parseWorkbook(wb,att.name,f.name)||parseWorkbook(wb,f.name,f.name);
+            if(!result){
+              // Show sheet names only if truly unrecognized (not just monthly with 0 recs)
+              errors.push(`${att.name}（${f.name}）：格式不符（工作表：${wb.SheetNames.join(', ')}）`);
+              continue;
+            }
+            pendingRecs.push(...result.recs);
+            const info=result.summary._sheet?` [${result.summary._sheet}]`:'';
+            previews.push({fname:`📧 ${f.name}${info}`,...result.summary});
+            foundAny=true;
+          }catch(e){errors.push(`${f.name}：${e.message}`);}
+        }
+        if(!foundAny)errors.push(`${f.name}：附件無法識別，建議改存 .eml 再匯入`);
+      }else if(ext==='json'){
+        // Sewing backup JSON
+        const text=await f.text();
+        const bk=JSON.parse(text);
+        // Support both old (section=Sewing) and new (section=Apron/Garment) backup formats
+        const allDaily=bk.daily||[];
+        const sewRecs=allDaily.filter(r=>{const s=r.section||"";return !s||s==="Sewing"||s==="Apron"||s==="Garment";});
+        const cutRecs=(bk.cutting||[]);  // cutting_v2 backup only
+        if(sewRecs.length){
+          if(!_idb)await openIDB();
+          const exK=new Set(SEW.map(r=>`${r.date}|${r.lineNo}|${r.styleNo}|${r.color||""}|${r.size||""}`));
+          let added=0;
+          for(const r of sewRecs){const k=`${r.date}|${r.lineNo}|${r.styleNo}|${r.color||""}|${r.size||""}`;if(!exK.has(k)){SEW.push({...r,id:r.id||uid()});exK.add(k);added++;}}
+          await saveSew();await refreshSew();
+        }
+        if(cutRecs.length){pendingRecs.push(...cutRecs.map(r=>({...r,id:r.id||uid()})));previews.push({fname:`📄 ${f.name}`,date:"backup",section:"mixed",lines:0,totalPcs:cutRecs.reduce((s,r)=>s+r.pieces,0),lineNames:[]});}
+        if(!sewRecs.length&&!cutRecs.length)errors.push(`${f.name}：無可用裁剪資料`);
+      }else{
+        const buf=await f.arrayBuffer();
+        const wb=XLSX.read(new Uint8Array(buf),{type:"array",cellDates:true});
+        const result=parseWorkbook(wb,f.name);
+        if(!result){errors.push(`${f.name}：未能識別格式（工作表：${wb.SheetNames.join(', ')}）`);continue;}
+        pendingRecs.push(...result.recs);
+        const info=result.summary._sheet?` [${result.summary._sheet}]`:'';
+        previews.push({fname:`${f.name}${info}`,...result.summary});
+      }
+    }catch(err){errors.push(`${f.name}：${err.message}`);}
+  }
+
+  btn.disabled=false;
+  if(!pendingRecs.length&&!previews.length){
+    msg.textContent=errors.join(" · ")||"無法解析";msg.style.color="#dc2626";return;
+  }
+
+  // Show preview
+  const pa=document.getElementById("previewArea");pa.style.display="block";
+  document.getElementById("previewContent").innerHTML=previews.map(p=>`
+    <div class="preview-file">
+      <div style="font-size:13px;font-weight:600;color:#1e2640;margin-bottom:4px">${p.fname}</div>
+      <div style="font-size:12px;color:#6b7a9e">日期：${p.date} ｜ ${p.section} ｜ ${p.lines} ${p._mode==='cutting-weekly'?'天':p._mode==='cutting-monthly'?'週':p._mode==='dayshift'?'台':'條線'} ｜ ${p.totalPcs>0?p.totalPcs?.toLocaleString?.()+'件':'效率資料'}</div>
+      ${p._note?`<div style="color:#92400e;font-size:11px;margin-top:4px">${p._note}</div>`:''}
+      ${p.lineNames?.length?`<div class="preview-lines">${p.lineNames.slice(0,8).map(l=>`<span class="preview-line">${l}</span>`).join("")}</div>`:""}    </div>`).join("")
+    +(errors.length?`<div class="al al-w">⚠️ 部分檔案問題：<br>${errors.join("<br>")}</div>`:"");
+  msg.textContent=`解析完成，共 ${pendingRecs.length} 筆，請確認後存入`;msg.style.color="#059669";
+}
+
+async function confirmImport(){
+  if(!pendingRecs.length)return;
+  const msgEl=document.getElementById("importMsg");
+  msgEl.textContent="存入中...";msgEl.style.color="#6b7a9e";
+  try{
+    const importDates=new Set(pendingRecs.map(r=>r.date));
+    CUT=CUT.filter(r=>!importDates.has(r.date));
+    const map=new Map();
+    pendingRecs.forEach(r=>map.set(`${r.date}|${r.section}|${r.lineNo}|${r.styleNo}`,r));
+    CUT=[...CUT,...map.values()];
+    CUT.sort((a,b)=>b.date.localeCompare(a.date));
+    await saveCut();updateHdr();renderDBCard();
+    pendingFiles=[];pendingRecs=[];renderFileList();
+    document.getElementById("previewArea").style.display="none";
+    msgEl.textContent=`✓ 已儲存 ${CUT.length} 筆記錄`;msgEl.style.color="#059669";
+    if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
+  }catch(err){
+    msgEl.textContent=`❌ 存入失敗：${err.message}（請重新整理頁面後再試）`;msgEl.style.color="#dc2626";
+    console.error("confirmImport error:",err);
+  }
+}
+function cancelImport(){pendingRecs=[];document.getElementById("previewArea").style.display="none";document.getElementById("importMsg").textContent="";}
+
+// ── Sewing JSON import (manual) ────────────────────────────
+async function impSewJSON(event){
+  const file=event.target.files[0];if(!file)return;
+  try{
+    const text=await file.text();const bk=JSON.parse(text);
+    // New sewing system: section is Apron/Garment
+    // Old sewing system: section is "Sewing" or empty
+    const daily=bk.daily||[];
+    const sewRecs=daily.filter(r=>{
+      const s=r.section||"";
+      return !s||s==="Sewing"||s==="Apron"||s==="Garment";
+    });
+    if(!_idb)await openIDB();
+    if(sewRecs.length){
+      if(!_idb)await openIDB();
+      const exK=new Set(SEW.map(r=>`${r.date}|${r.lineNo}|${r.styleNo}|${r.color||""}|${r.size||""}`));
+      let added=0;
+      for(const r of sewRecs){
+        const k=`${r.date}|${r.lineNo}|${r.styleNo}|${r.color||""}|${r.size||""}`;
+        if(!exK.has(k)){SEW.push({...r,id:r.id||uid()});exK.add(k);added++;}
+      }
+      await saveSew();await refreshSew();
+      alert(`✅ 已匯入車縫 ${added} 筆（共 ${sewRecs.length} 筆，重複略過 ${sewRecs.length-added} 筆）`);
+    }else alert("此 JSON 無車縫資料");
+  }catch(e){alert("失敗："+e.message);}
+  event.target.value="";
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER TABS
+// ══════════════════════════════════════════════════════════════
+function goTab(n,el){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
+  document.querySelectorAll(".sec").forEach(s=>s.classList.remove("on"));
+  if(el)el.classList.add("on");document.getElementById("sec-"+n).classList.add("on");
+  if(n==="daily")renderDaily();if(n==="weekly")renderWeekly();
+  if(n==="monthly")renderMonthly();
+  if(n==="wip")refreshSew().then(renderWIP);
+  if(n==="query")renderQuery();
+  if(n==="records")renderRecs();
+}
+
+function renderDaily(){
+  const d=document.getElementById("dDate").value||TODAY;document.getElementById("dDate").value=d;
+  const sec=document.getElementById("dSec").value;
+  let rows=CUT.filter(r=>isDailyRec(r)&&r.date===d);
+  if(sec)rows=rows.filter(r=>r.section===sec);
+  rows.sort((a,b)=>a.section.localeCompare(b.section)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+  const tp=rows.reduce((s,r)=>s+r.pieces,0),ae=rows.filter(r=>r.efficiency>0).map(r=>r.efficiency);
+  const avg=ae.length?(ae.reduce((a,b)=>a+b)/ae.length).toFixed(1):"-";
+  const al=rows.filter(r=>r.efficiency>0&&r.efficiency<50).length;
+  document.getElementById("dKpi").innerHTML=[{v:d.slice(5),l:"日期",c:"#3b9ef5"},{v:fmt(tp),l:"裁剪量（件）",c:"#3b9ef5"},{v:avg+"%",l:"平均效率",c:avg<50?"#dc2626":"#059669"},{v:al,l:"效率<50%",c:al?"#dc2626":"#059669"},{v:rows.length,l:"款式筆數",c:"#6b7a9e"}].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>8?"14px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+  const card=document.getElementById("dCard");card.style.display=rows.length?"block":"none";
+  document.getElementById("dBody").innerHTML=rows.map(r=>{const ia=r.efficiency>0&&r.efficiency<50;return`<tr${ia?' style="background:#fff1f2"':''}><td>${secBadge(r.section)}</td><td class="mono" style="font-weight:700">${r.lineNo}</td><td class="mono" style="color:#6b7a9e;font-size:11px">${r.po||"-"}</td><td class="mono">${r.styleNo||"-"}</td><td class="mono" style="font-size:11px">${r.size||"-"}</td><td style="font-size:11px">${r.color||"-"}</td><td class="mono" style="color:#6b7a9e;font-size:11px" title="${r.fabricType||''}">${r.fabricItem||"-"}</td><td class="r" style="font-size:12px">${r.ydsPerPcs||"-"}</td><td class="r" style="font-size:12px">${r.totalYds||"-"}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(r.pieces)}</td><td class="r">${r.workers||"-"}</td><td class="r">${eb(r.efficiency)}</td></tr>`;}).join("")||`<tr><td colspan="12" style="text-align:center;padding:40px;color:#8b95b8">此日無裁剪資料</td></tr>`;
+}
+function shiftDay(d){const dt=new Date(document.getElementById("dDate").value||TODAY);dt.setDate(dt.getDate()+d);document.getElementById("dDate").value=dt.toISOString().slice(0,10);renderDaily();}
+
+function renderWeekly(){
+  const d=document.getElementById("wDate").value||TODAY;document.getElementById("wDate").value=d;
+  const[s,e]=wb2(d);document.getElementById("wMeta").textContent=s+" ～ "+e;
+  const sec=document.getElementById("wSec").value;
+  let rows=CUT.filter(r=>isDailyRec(r)&&r.date>=s&&r.date<=e);if(sec)rows=rows.filter(r=>r.section===sec);
+  const grp={};rows.forEach(r=>{const k=`${r.section}|${r.lineNo}`;if(!grp[k])grp[k]={section:r.section,lineNo:r.lineNo,pieces:0,effs:[],cartons:0,dates:new Set(),workers:[]};grp[k].pieces+=r.pieces;if(r.efficiency>0)grp[k].effs.push(r.efficiency);grp[k].cartons+=r.cartons||0;grp[k].dates.add(r.date);if(r.workers>0)grp[k].workers.push(r.workers);});
+  const agg=Object.values(grp).sort((a,b)=>a.section.localeCompare(b.section)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+  const tp=rows.reduce((s,r)=>s+r.pieces,0),ae=rows.filter(r=>r.efficiency>0).map(r=>r.efficiency),avg=ae.length?(ae.reduce((a,b)=>a+b)/ae.length).toFixed(1):"-";
+  document.getElementById("wKpi").innerHTML=[{v:`${s.slice(5)}~${e.slice(5)}`,l:"週期",c:"#3b9ef5"},{v:fmt(tp),l:"週裁量",c:"#3b9ef5"},{v:avg+"%",l:"平均效率",c:"#059669"},{v:agg.length,l:"線別數",c:"#6b7a9e"}].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>9?"13px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+  document.getElementById("wBody").innerHTML=agg.map(g=>{const avg=g.effs.length?(g.effs.reduce((a,b)=>a+b)/g.effs.length).toFixed(1):"-",avgW=g.workers.length?(g.workers.reduce((a,b)=>a+b)/g.workers.length).toFixed(1):"-";return`<tr><td>${secBadge(g.section)}</td><td class="mono" style="font-weight:700">${g.lineNo}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(g.pieces)}</td><td class="r">${avgW}</td><td class="r">${eb(parseFloat(avg))}</td><td class="r">${g.dates.size}</td></tr>`;}).join("")||`<tr><td colspan="6" style="text-align:center;padding:40px;color:#8b95b8">本週無資料</td></tr>`;
+}
+function shiftWeek(d){const dt=new Date(document.getElementById("wDate").value||TODAY);dt.setDate(dt.getDate()+d*7);document.getElementById("wDate").value=dt.toISOString().slice(0,10);renderWeekly();}
+
+function renderMonthly(){
+  const sec=document.getElementById("mSec").value;
+  const ML=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+
+  // Populate year selector
+  const allYears=[...new Set(CUT.filter(isDailyRec).map(r=>r.date.slice(0,4)))].sort().reverse();
+  if(!allYears.length)allYears.push(TODAY.slice(0,4));
+  const yrSel=document.getElementById("mYear");
+  const prevYr=yrSel.value;
+  yrSel.innerHTML=allYears.map(y=>`<option${y===prevYr||(!prevYr&&y===TODAY.slice(0,4))?" selected":""}>${y}</option>`).join("");
+  const yr=yrSel.value||TODAY.slice(0,4);
+
+  // Toggle button styles
+  document.getElementById("mBtnMo").style.cssText=mView==="mo"?"background:#3b9ef5;color:#fff;border:none":"";
+  document.getElementById("mBtnMo").className=mView==="mo"?"btn btn-sm":"btn btn-g btn-sm";
+  document.getElementById("mBtnYr").style.cssText=mView==="yr"?"background:#3b9ef5;color:#fff;border:none":"";
+  document.getElementById("mBtnYr").className=mView==="yr"?"btn btn-sm":"btn btn-g btn-sm";
+  // Show/hide month picker
+  const showMo=mView==="mo";
+  document.getElementById("mMoLbl").style.display=showMo?"":"none";
+  document.getElementById("mMonth").style.display=showMo?"":"none";
+  document.getElementById("mPrev").style.display=showMo?"":"none";
+  document.getElementById("mNext").style.display=showMo?"":"none";
+
+  if(mView==="mo"){
+    // ── 月報視圖 ─────────────────────────────────────────────
+    const m=document.getElementById("mMonth").value||THIS_MONTH;document.getElementById("mMonth").value=m;
+    const myr=m.slice(0,4);
+    document.getElementById("mChartTitle").textContent=`${myr} 年度月別走勢`;
+    document.getElementById("mTableTitle").textContent="月別線別彙整";
+    document.getElementById("mThead").innerHTML=`<tr><th>Section</th><th>線別</th><th class="r">月裁量</th><th class="r">平均效率</th><th class="r">款號數</th></tr>`;
+    const md=Array.from({length:12},(_,i)=>{const mm=`${myr}-${String(i+1).padStart(2,"0")}`;let r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(mm));if(sec)r=r.filter(x=>x.section===sec);return{mm,l:ML[i],p:r.reduce((s,x)=>s+x.pieces,0),cur:mm===m};});
+    const mx=Math.max(...md.map(x=>x.p),1);
+    document.getElementById("mChart").innerHTML=md.map(x=>`<div style="display:flex;align-items:flex-end;justify-content:center;height:80px"><div style="width:80%;background:${x.cur?"#3b9ef5":"#bfdbfe"};border-radius:4px 4px 0 0;height:${Math.max(x.p?2:0,Math.round(x.p/mx*80))}px" title="${x.mm}: ${fmt(x.p)}件"></div></div>`).join("");
+    document.getElementById("mLbl").innerHTML=md.map(x=>`<div>${x.l}</div>`).join("");
+    let rows=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(m));if(sec)rows=rows.filter(r=>r.section===sec);
+    const tp=rows.reduce((s,r)=>s+r.pieces,0),ae=rows.filter(r=>r.efficiency>0).map(r=>r.efficiency),avg=ae.length?(ae.reduce((a,b)=>a+b)/ae.length).toFixed(1):"-",styles=[...new Set(rows.map(r=>r.styleNo).filter(Boolean))].length;
+    document.getElementById("mKpi").innerHTML=[{v:m,l:"月份",c:"#3b9ef5"},{v:fmt(tp),l:"月裁量",c:"#3b9ef5"},{v:avg+"%",l:"平均效率",c:"#059669"},{v:styles,l:"款號數",c:"#d97706"},{v:[...new Set(rows.map(r=>r.date))].length,l:"工作天",c:"#6b7a9e"}].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>8?"14px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+    const grp={};rows.forEach(r=>{const k=`${r.section}|${r.lineNo}`;if(!grp[k])grp[k]={section:r.section,lineNo:r.lineNo,pieces:0,effs:[],styles:new Set()};grp[k].pieces+=r.pieces;if(r.efficiency>0)grp[k].effs.push(r.efficiency);if(r.styleNo)grp[k].styles.add(r.styleNo);});
+    const agg=Object.values(grp).sort((a,b)=>a.section.localeCompare(b.section)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
+    document.getElementById("mBody").innerHTML=agg.map(g=>{const avg2=g.effs.length?(g.effs.reduce((a,b)=>a+b)/g.effs.length).toFixed(1):"-";return`<tr><td>${secBadge(g.section)}</td><td class="mono" style="font-weight:700">${g.lineNo}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(g.pieces)}</td><td class="r">${eb(parseFloat(avg2))}</td><td class="r">${g.styles.size}</td></tr>`;}).join("")||`<tr><td colspan="5" style="text-align:center;padding:40px;color:#8b95b8">本月無資料</td></tr>`;
+
+  } else {
+    // ── 年報視圖 ─────────────────────────────────────────────
+    document.getElementById("mChartTitle").textContent=`${yr} 年各月走勢`;
+    document.getElementById("mTableTitle").textContent=`${yr} 年月別彙整`;
+    document.getElementById("mThead").innerHTML=`<tr><th>月份</th><th>Section</th><th class="r">月裁量</th><th class="r">平均效率</th><th class="r">款號數</th><th class="r">工作天</th></tr>`;
+    const md=Array.from({length:12},(_,i)=>{const mm=`${yr}-${String(i+1).padStart(2,"0")}`;let r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(mm));if(sec)r=r.filter(x=>x.section===sec);return{mm,l:ML[i],p:r.reduce((s,x)=>s+x.pieces,0),cur:mm===THIS_MONTH};});
+    const mx=Math.max(...md.map(x=>x.p),1);
+    document.getElementById("mChart").innerHTML=md.map(x=>`<div style="display:flex;align-items:flex-end;justify-content:center;height:80px"><div style="width:80%;background:${x.cur?"#3b9ef5":"#93c5fd"};border-radius:4px 4px 0 0;height:${Math.max(x.p?2:0,Math.round(x.p/mx*80))}px" title="${x.mm}: ${fmt(x.p)}件"></div></div>`).join("");
+    document.getElementById("mLbl").innerHTML=md.map(x=>`<div>${x.l.replace("月","")}</div>`).join("");
+    const totRows=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(yr));if(sec){const sf=sec;const tr2=totRows.filter(r=>r.section===sf);}
+    const yrRows=sec?totRows.filter(r=>r.section===sec):totRows;
+    const yrPcs=yrRows.reduce((s,r)=>s+r.pieces,0),yrAe=yrRows.filter(r=>r.efficiency>0).map(r=>r.efficiency),yrAvg=yrAe.length?(yrAe.reduce((a,b)=>a+b)/yrAe.length).toFixed(1):"-";
+    const yrStyles=[...new Set(yrRows.map(r=>r.styleNo).filter(Boolean))].length;
+    const yrDays=[...new Set(yrRows.map(r=>r.date))].length;
+    document.getElementById("mKpi").innerHTML=[{v:yr,l:"年份",c:"#3b9ef5"},{v:fmt(yrPcs),l:"年裁量",c:"#3b9ef5"},{v:yrAvg+"%",l:"平均效率",c:"#059669"},{v:yrStyles,l:"款號數",c:"#d97706"},{v:yrDays,l:"工作天",c:"#6b7a9e"}].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>8?"14px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+    // Month breakdown table
+    const rows2=[];
+    Array.from({length:12},(_,i)=>{
+      const mm=`${yr}-${String(i+1).padStart(2,"0")}`;
+      const secs=sec?[sec]:["Apron","Garment"];
+      secs.forEach(sc=>{
+        const r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(mm)&&x.section===sc);
+        const pcs=r.reduce((s,x)=>s+x.pieces,0);
+        if(!pcs)return;
+        const effs=r.filter(x=>x.efficiency>0).map(x=>x.efficiency);
+        const avg3=effs.length?(effs.reduce((a,b)=>a+b)/effs.length).toFixed(1):"-";
+        const sts=[...new Set(r.map(x=>x.styleNo).filter(Boolean))].length;
+        const days=[...new Set(r.map(x=>x.date))].length;
+        rows2.push(`<tr><td class="mono" style="font-weight:600">${mm}</td><td>${secBadge(sc)}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(pcs)}</td><td class="r">${eb(parseFloat(avg3))}</td><td class="r">${sts}</td><td class="r">${days}</td></tr>`);
+      });
+    });
+    document.getElementById("mBody").innerHTML=rows2.join("")||`<tr><td colspan="6" style="text-align:center;padding:40px;color:#8b95b8">${yr} 年無資料</td></tr>`;
+  }
+}
+function shiftMonth(d){const[y,mo]=(document.getElementById("mMonth").value||THIS_MONTH).split("-").map(Number);const dt=new Date(y,mo-1+d,1);document.getElementById("mMonth").value=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;renderMonthly();}
+
+function renderWIP(){
+  const yr=document.getElementById("wipYear").value||THIS_MONTH.slice(0,4);
+  const mo=document.getElementById("wipMonth").value; // '' = all months
+  const sec=document.getElementById("wipSec").value;
+
+  // Determine which months to show
+  const months=mo?[mo]:["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const MLBL={"01":"1月","02":"2月","03":"3月","04":"4月","05":"5月","06":"6月","07":"7月","08":"8月","09":"9月","10":"10月","11":"11月","12":"12月"};
+
+  // Aggregate by month+section
+  const mData=months.map(mm=>{
+    const prefix=`${yr}-${mm}`;
+    let cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix));
+    let sr=SEW.filter(r=>r.date.startsWith(prefix));
+    if(sec){cr=cr.filter(r=>r.section===sec);sr=sr.filter(r=>r.section===sec);}
+    const cutTotal=cr.reduce((s,r)=>s+r.pieces,0);
+    const sewTotal=sr.reduce((s,r)=>s+r.pieces,0);
+    const cutStyles=[...new Set(cr.map(r=>r.styleNo).filter(Boolean))].length;
+    const sewStyles=[...new Set(sr.map(r=>r.styleNo).filter(Boolean))].length;
+    return{mm,prefix,label:MLBL[mm],cutTotal,sewTotal,cutStyles,sewStyles};
+  }).filter(m=>m.cutTotal>0||m.sewTotal>0);
+
+  // Overall KPIs
+  const totCut=mData.reduce((s,m)=>s+m.cutTotal,0);
+  const totSew=mData.reduce((s,m)=>s+m.sewTotal,0);
+  const diff=totCut-totSew;
+  const rate=totCut>0?Math.round(totSew/totCut*100):0;
+
+  kpiEl("wipKpi",[
+    {v:fmt(totCut),l:"裁剪總量（件）",c:"#3b9ef5"},
+    {v:fmt(totSew),l:"車縫總量（件）",c:"#059669"},
+    {v:(diff>=0?"+":"")+fmt(diff),l:"差額（裁－縫）",c:diff>0?"#d97706":diff<0?"#dc2626":"#059669"},
+    {v:rate+"%",l:"車縫消化率",c:rate>=90?"#059669":rate>=70?"#d97706":"#dc2626"},
+    {v:!SEW.length?"未連線":"已連線",l:"車縫系統",c:SEW.length?"#059669":"#9ca3af"},
+  ]);
+
+  // Bar chart: 12 months side by side
+  if(mo===""){
+    // Full year view: all 12 months
+    const allMo=["01","02","03","04","05","06","07","08","09","10","11","12"];
+    const fullData=allMo.map(mm=>{
+      const prefix=`${yr}-${mm}`;
+      let cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix));
+      let sr=SEW.filter(r=>r.date.startsWith(prefix));
+      if(sec){cr=cr.filter(r=>r.section===sec);sr=sr.filter(r=>r.section===sec);}
+      return{mm,label:MLBL[mm],cut:cr.reduce((s,r)=>s+r.pieces,0),sew:sr.reduce((s,r)=>s+r.pieces,0)};
+    });
+    const mx=Math.max(...fullData.flatMap(m=>[m.cut,m.sew]),1);
+    document.getElementById("wipChart").innerHTML=fullData.map(m=>`
+      <div style="display:flex;align-items:flex-end;justify-content:center;gap:1px;height:100px">
+        <div style="width:42%;background:#3b9ef5;border-radius:3px 3px 0 0;height:${Math.max(m.cut?2:0,Math.round(m.cut/mx*100))}px" title="裁剪:${fmt(m.cut)}"></div>
+        <div style="width:42%;background:#10b981;border-radius:3px 3px 0 0;height:${Math.max(m.sew?2:0,Math.round(m.sew/mx*100))}px" title="車縫:${fmt(m.sew)}"></div>
+      </div>`).join("");
+    document.getElementById("wipChartLbl").innerHTML=fullData.map(m=>`<div>${m.label.replace("月","")}</div>`).join("");
+    document.getElementById("wipChartCard").style.display="block";
+  } else {
+    document.getElementById("wipChartCard").style.display="none";
+  }
+
+  // Monthly detail table (by month, then section)
+  const rows=[];
+  const allMo2=mo?[mo]:["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const secs=sec?[sec]:["Apron","Garment"];
+  allMo2.forEach(mm=>{
+    const prefix=`${yr}-${mm}`;
+    secs.forEach(sc=>{
+      const cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix)&&r.section===sc);
+      const sr=SEW.filter(r=>r.date.startsWith(prefix)&&r.section===sc);
+      const cut=cr.reduce((s,r)=>s+r.pieces,0);
+      const sew=sr.reduce((s,r)=>s+r.pieces,0);
+      if(cut===0&&sew===0)return;
+      const d=cut-sew,r2=cut>0?Math.round(sew/cut*100):0;
+      rows.push({mm,prefix,sec:sc,cut,sew,diff:d,rate:r2});
+    });
+  });
+
+  const tbody=document.getElementById("wipMonthBody");
+  if(!rows.length){
+    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:40px;color:#8b95b8">${SEW.length?"此期間無資料":"⚠️ 車縫系統未連線，僅顯示裁剪資料"}</td></tr>`;
+  } else {
+    tbody.innerHTML=rows.map(r=>{
+      const bw=Math.min(100,r.rate);
+      let badge;
+      if(!SEW.length)badge=`<span class="b" style="background:#f1f5f9;color:#94a3b8">車縫未連線</span>`;
+      else if(!r.sew)badge=`<span class="b bwn">車縫待更新</span>`;
+      else if(r.rate>=100)badge=`<span class="b bok">✓ 已消化</span>`;
+      else if(r.rate>=80)badge=`<span class="b bbl">消化中</span>`;
+      else badge=`<span class="b bwn">生產中</span>`;
+      return`<tr>
+        <td class="mono" style="font-weight:600">${r.prefix}</td>
+        <td>${secBadge(r.sec)}</td>
+        <td class="r" style="font-weight:700;color:#3b9ef5">${fmt(r.cut)}</td>
+        <td class="r" style="font-weight:700;color:#059669">${r.sew?fmt(r.sew):"—"}</td>
+        <td class="r" style="font-weight:700;color:${r.diff>0?"#d97706":r.diff<0?"#dc2626":"#059669"}">${r.sew?(r.diff>=0?"+":"")+fmt(r.diff):"—"}</td>
+        <td class="r">
+          ${r.sew?`<div style="min-width:80px;display:inline-block">
+            <div style="height:6px;background:#e2e6f0;border-radius:3px;overflow:hidden;margin-bottom:2px">
+              <div style="height:100%;width:${bw}%;background:#10b981;border-radius:3px"></div>
+            </div>
+            <div style="font-size:10px;color:#6b7a9e;text-align:right">${r.rate}%</div>
+          </div>`:"—"}
+        </td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Section summary cards
+  const secSummary=secs.map(sc=>{
+    const cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(yr)&&r.section===sc&&(!mo||r.date.slice(5,7)===mo));
+    const sr=SEW.filter(r=>r.date.startsWith(yr)&&r.section===sc&&(!mo||r.date.slice(5,7)===mo));
+    const cut=cr.reduce((s,r)=>s+r.pieces,0);
+    const sew=sr.reduce((s,r)=>s+r.pieces,0);
+    const rate=cut>0?Math.round(sew/cut*100):0;
+    const styles=[...new Set(cr.map(r=>r.styleNo).filter(Boolean))].length;
+    return{sc,cut,sew,diff:cut-sew,rate,styles};
+  }).filter(s=>s.cut>0||s.sew>0);
+
+  document.getElementById("wipSecCards").innerHTML=secSummary.map(s=>`
+    <div class="card" style="margin-bottom:0">
+      <div class="ct">${secBadge(s.sc)} ${s.sc} 累計匯整</div>
+      <div class="kpi-strip" style="margin-bottom:8px">
+        ${[{v:fmt(s.cut),l:"裁剪",c:"#3b9ef5"},{v:s.sew?fmt(s.sew):"—",l:"車縫",c:"#059669"},{v:s.sew?(s.diff>=0?"+":"")+fmt(s.diff):"—",l:"差額",c:s.diff>0?"#d97706":"#059669"},{v:s.sew?s.rate+"%":"—",l:"消化率",c:s.rate>=90?"#059669":"#d97706"},{v:s.styles,l:"款號數",c:"#6b7a9e"}]
+          .map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>6?"14px":"22px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("")}
+      </div>
+    </div>`).join("");
+}
+
+function kpiEl(id,items){
+  document.getElementById(id).innerHTML=items.map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>7?"14px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+}
+
+function renderQuery(){
+  const q=(document.getElementById("qSearch").value||"").toLowerCase();
+  const sec=document.getElementById("qSec").value;
+  const mo=document.getElementById("qMo").value;
+
+  // Toggle buttons
+  ['Sty','Fab','Mo'].forEach(v=>{
+    const id='qBtn'+v, val=v.toLowerCase();
+    const el=document.getElementById(id);
+    el.className=qV===val?"btn btn-sm":"btn btn-g btn-sm";
+    el.style.cssText=qV===val?"background:#3b9ef5;color:#fff;border:none":"";
+  });
+  document.getElementById("qStyCard").style.display=qV==="sty"?"block":"none";
+  document.getElementById("qFabCard").style.display=qV==="fab"?"block":"none";
+  document.getElementById("qMoCard").style.display=qV==="mo"?"block":"none";
+
+  // Populate month dropdown from available data
+  const allMonths=[...new Set(CUT.filter(isDailyRec).map(r=>r.date.slice(0,7)))].sort().reverse();
+  const moSel=document.getElementById("qMo");
+  const prevMo=moSel.value;
+  moSel.innerHTML='<option value="">全部月份</option>'+allMonths.map(m=>`<option${m===prevMo?' selected':''}>${m}</option>`).join('');
+
+  // Base filter: all daily records
+  let rows=CUT.filter(isDailyRec);
+  if(sec)rows=rows.filter(r=>r.section===sec);
+  if(mo)rows=rows.filter(r=>r.date.startsWith(mo));
+
+  // Apply text search
+  const filtered=q?rows.filter(r=>(r.styleNo+r.po+r.color+r.fabricItem+r.size).toLowerCase().includes(q)):rows;
+
+  // KPI strip (always shown)
+  const totalPcs=filtered.reduce((s,r)=>s+r.pieces,0);
+  const totalYds=filtered.reduce((s,r)=>s+(r.totalYds||0),0);
+  const styles=[...new Set(filtered.map(r=>r.styleNo).filter(Boolean))];
+  const pos=[...new Set(filtered.map(r=>r.po).filter(Boolean))];
+  const colors=[...new Set(filtered.map(r=>r.color).filter(Boolean))];
+  const days=[...new Set(filtered.map(r=>r.date))];
+  document.getElementById("qKpi").innerHTML=[
+    {v:fmt(totalPcs),l:"總裁量（件）",c:"#3b9ef5"},
+    {v:fmt(totalYds,0),l:"總用量（Yds）",c:"#d97706"},
+    {v:styles.length,l:"款號數",c:"#7c3aed"},
+    {v:pos.length,l:"PO 數",c:"#059669"},
+    {v:colors.length,l:"顏色數",c:"#f59e0b"},
+    {v:days.length,l:"工作天",c:"#6b7a9e"},
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:22px">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+
+  const noData=`<tr><td colspan="10" style="text-align:center;padding:40px;color:#8b95b8">無資料（請先匯入日報）</td></tr>`;
+
+  if(qV==="sty"){
+    const grp={};
+    filtered.forEach(r=>{
+      if(!r.styleNo)return;
+      const k=`${normalizeKey(r.styleNo)}||${normalizeKey(r.po)}||${normalizeKey(r.color)}`;
+      if(!grp[k])grp[k]={style:r.styleNo,po:r.po||"",color:r.color||"",sizes:new Set(),item:r.fabricItem||"",ydsPerPcs:r.ydsPerPcs||0,pcs:0,yds:0,sec:r.section,days:new Set(),fabrics:{},dateMap:{}};
+      grp[k].pcs+=r.pieces;
+      grp[k].yds+=r.totalYds||0;
+      if(r.size)grp[k].sizes.add(r.size);
+      grp[k].days.add(r.date);
+      if(!grp[k].item&&r.fabricItem)grp[k].item=r.fabricItem;
+      if(!grp[k].ydsPerPcs&&r.ydsPerPcs)grp[k].ydsPerPcs=r.ydsPerPcs;
+      if(r.fabricItem){
+        const fk=r.fabricItem;
+        if(!grp[k].fabrics[fk])grp[k].fabrics[fk]={item:r.fabricItem,type:r.fabricType||"",pcs:0,yds:0,ydsPerPcs:r.ydsPerPcs||0};
+        grp[k].fabrics[fk].pcs+=r.pieces;grp[k].fabrics[fk].yds+=r.totalYds||0;
+      }
+      // date breakdown
+      const dm=r.date;if(!grp[k].dateMap[dm])grp[k].dateMap[dm]=0;grp[k].dateMap[dm]+=r.pieces;
+    });
+    const aggArr=Object.values(grp).sort((a,b)=>a.style.localeCompare(b.style)||a.color.localeCompare(b.color));
+    window._styData=aggArr;
+    document.getElementById("qStyBody").innerHTML=aggArr.map((g,idx)=>{
+      return`<tr onclick="showStyleModal(${idx})" style="cursor:pointer" title="點擊查看明細">
+      <td class="mono" style="font-weight:700;color:#1d6ec7">${g.style}</td>
+      <td class="mono" style="font-size:11px;color:#6b7a9e">${g.po||"-"}</td>
+      <td style="font-size:12px">${g.color||"-"}</td>
+      <td style="font-size:11px;color:#6b7a9e">${[...g.sizes].sort().join(" / ")||"-"}</td>
+      <td class="mono" style="font-size:11px;color:#9ca3af">${g.item||"-"}</td>
+      <td class="r" style="font-weight:700;color:#1d4ed8">${fmt(g.pcs)}</td>
+      <td class="r" style="color:#d97706">${fmt(g.yds,1)}</td>
+      <td class="r" style="font-size:11px">${g.ydsPerPcs||"-"}</td>
+      <td class="r" style="font-size:11px">${g.days.size}</td>
+      <td>${secBadge(g.sec)}</td>
+    </tr>`;
+    }).join("")||noData;
+
+  } else if(qV==="fab"){
+    const grp={};
+    filtered.filter(r=>r.fabricItem).forEach(r=>{
+      const k=r.fabricItem;
+      if(!grp[k])grp[k]={item:r.fabricItem,type:r.fabricType||"",pcs:0,yds:0,ydsArr:[],styles:new Set(),sec:new Set(),details:{}};
+      grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;
+      if(r.ydsPerPcs)grp[k].ydsArr.push(r.ydsPerPcs);
+      if(r.styleNo)grp[k].styles.add(r.styleNo);
+      grp[k].sec.add(r.section);
+      if(r.styleNo){
+        const dk=`${normalizeKey(r.styleNo)}||${normalizeKey(r.po)}||${normalizeKey(r.color)}`;
+        if(!grp[k].details[dk])grp[k].details[dk]={style:r.styleNo,po:r.po||"",color:r.color||"",sec:r.section,pcs:0,yds:0};
+        grp[k].details[dk].pcs+=r.pieces;grp[k].details[dk].yds+=r.totalYds||0;
+      }
+    });
+    const aggArr=Object.values(grp).sort((a,b)=>b.yds-a.yds);
+    window._fabData=aggArr;
+    document.getElementById("qFabBody").innerHTML=aggArr.map((g,idx)=>{
+      const avg=g.ydsArr.length?(g.ydsArr.reduce((a,b)=>a+b)/g.ydsArr.length).toFixed(3):"-";
+      return`<tr onclick="showFabModal(${idx})" style="cursor:pointer" title="點擊查看款號明細">
+        <td class="mono" style="font-weight:700;color:#1d6ec7">${g.item}</td>
+        <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${g.type}">${g.type.slice(0,28)}${g.type.length>28?'…':''}</td>
+        <td class="r" style="font-weight:700;color:#1d4ed8">${fmt(g.pcs)}</td>
+        <td class="r" style="color:#d97706;font-weight:700">${fmt(g.yds,1)}</td>
+        <td class="r">${avg}</td>
+        <td class="r">${g.styles.size}</td>
+        <td>${[...g.sec].map(s=>secBadge(s)).join(" ")}</td>
+      </tr>`;
+    }).join("")||noData;
+
+  } else { // mo - monthly with sewing comparison
+    const grp={};
+    filtered.forEach(r=>{
+      const k=`${r.date.slice(0,7)}||${r.section}`;
+      if(!grp[k])grp[k]={mo:r.date.slice(0,7),sec:r.section,pcs:0,yds:0,styles:new Set(),pos:new Set(),sewPcs:0};
+      grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;
+      if(r.styleNo)grp[k].styles.add(r.styleNo);
+      if(r.po)grp[k].pos.add(r.po);
+    });
+    // Add sewing data per month+section
+    SEW.forEach(r=>{
+      if(!r.pieces||r.pieces<=0) return;
+      if(sec&&r.section!==sec) return;
+      if(mo&&!r.date.startsWith(mo)) return;
+      const k=`${r.date.slice(0,7)}||${r.section}`;
+      if(!grp[k])grp[k]={mo:r.date.slice(0,7),sec:r.section,pcs:0,yds:0,styles:new Set(),pos:new Set(),sewPcs:0};
+      grp[k].sewPcs+=r.pieces;
+    });
+    const agg=Object.values(grp).sort((a,b)=>b.mo.localeCompare(a.mo)||a.sec.localeCompare(b.sec));
+    document.getElementById("qMoBody").innerHTML=agg.map(g=>{
+      const diff=g.pcs-g.sewPcs;
+      const rate=g.pcs>0?Math.round(g.sewPcs/g.pcs*100):0;
+      return`<tr>
+      <td class="mono" style="font-weight:700">${g.mo}</td>
+      <td>${secBadge(g.sec)}</td>
+      <td class="r" style="font-weight:700;color:#1d4ed8">${fmt(g.pcs)}</td>
+      <td class="r" style="color:#d97706">${fmt(g.yds,1)}</td>
+      <td class="r">${g.styles.size}</td>
+      <td class="r">${g.pos.size}</td>
+      <td class="r" style="color:#059669;font-weight:600">${g.sewPcs?fmt(g.sewPcs):"-"}</td>
+      <td class="r" style="font-weight:600;color:${diff>=0?"#d97706":"#dc2626"}">${g.sewPcs?(diff>=0?"+":"")+fmt(diff):"-"}</td>
+      <td class="r">${g.sewPcs?`<span style="font-weight:700;color:${rate>=90?"#059669":rate>=50?"#d97706":"#dc2626"}">${rate}%</span>`:"-"}</td>
+    </tr>`;}).join("")||noData;
+  }
+}
+
+function showStyleModal(idx){
+  const g=window._styData[idx]; if(!g) return;
+  const old=document.getElementById("cutModal"); if(old) old.remove();
+  const fabArr=Object.values(g.fabrics).sort((a,b)=>b.yds-a.yds);
+  const dates=Object.entries(g.dateMap).sort((a,b)=>a[0].localeCompare(b[0]));
+  const modal=document.createElement("div");
+  modal.id="cutModal";
+  modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  modal.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;max-width:650px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div><div style="font-size:18px;font-weight:700;color:#1e2640">${g.style}</div>
+        <div style="font-size:12px;color:#6b7a9e;margin-top:2px">PO: ${g.po||"-"} · ${g.color||"-"} · ${secBadge(g.sec)} · ${g.days.size} 天</div></div>
+      <button onclick="document.getElementById('cutModal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7a9e">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1d4ed8">${fmt(g.pcs)}</div><div style="font-size:10px;color:#6b7a9e">總裁量</div></div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#d97706">${fmt(g.yds,1)}</div><div style="font-size:10px;color:#6b7a9e">總用量 Yds</div></div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#059669">${[...g.sizes].sort().join(" / ")||"-"}</div><div style="font-size:10px;color:#6b7a9e">尺寸</div></div>
+    </div>
+    ${fabArr.length?`<div style="font-size:12px;font-weight:700;color:#6b7a9e;margin-bottom:6px">🧵 使用布種（${fabArr.length}）</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">
+      <thead><tr style="background:#f7f8fc"><th style="padding:5px 8px;text-align:left">品號</th><th style="padding:5px 8px;text-align:left">布規格</th><th style="padding:5px 8px;text-align:right">裁量</th><th style="padding:5px 8px;text-align:right">用量 Yds</th><th style="padding:5px 8px;text-align:right">Yds/Pcs</th></tr></thead>
+      <tbody>${fabArr.map(f=>`<tr><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;font-family:monospace">${f.item}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;font-size:11px;color:#6b7a9e" title="${f.type}">${f.type.slice(0,40)}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;text-align:right;font-family:monospace;color:#1d4ed8">${fmt(f.pcs)}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;text-align:right;font-family:monospace;color:#d97706">${fmt(f.yds,1)}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;text-align:right;font-family:monospace">${f.ydsPerPcs||"-"}</td></tr>`).join("")}</tbody></table>`:""}
+    ${dates.length?`<div style="font-size:12px;font-weight:700;color:#6b7a9e;margin-bottom:6px">📅 每日裁量</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${dates.map(([d,p])=>`<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:4px 8px;font-size:11px"><span style="color:#6b7a9e">${d}</span> <b style="color:#1d4ed8">${fmt(p)}</b></div>`).join("")}</div>`:""}
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
+}
+
+function showFabModal(idx){
+  const g=window._fabData[idx]; if(!g) return;
+  const old=document.getElementById("cutModal"); if(old) old.remove();
+  const dArr=Object.values(g.details).sort((a,b)=>b.pcs-a.pcs);
+  const modal=document.createElement("div");
+  modal.id="cutModal";
+  modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  modal.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;max-width:650px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div><div style="font-size:18px;font-weight:700;color:#1e2640">📦 ${g.item}</div>
+        <div style="font-size:11px;color:#6b7a9e;margin-top:2px" title="${g.type}">${g.type.slice(0,60)}</div></div>
+      <button onclick="document.getElementById('cutModal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7a9e">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1d4ed8">${fmt(g.pcs)}</div><div style="font-size:10px;color:#6b7a9e">總裁量</div></div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#d97706">${fmt(g.yds,1)}</div><div style="font-size:10px;color:#6b7a9e">總用量 Yds</div></div>
+      <div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#059669">${g.styles.size}</div><div style="font-size:10px;color:#6b7a9e">款號數</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:#6b7a9e;margin-bottom:6px">👕 使用此布料的款號（${dArr.length}）</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f7f8fc"><th style="padding:5px 8px;text-align:left">款號</th><th style="padding:5px 8px;text-align:left">PO</th><th style="padding:5px 8px;text-align:left">顏色</th><th style="padding:5px 8px;text-align:right">裁量</th><th style="padding:5px 8px;text-align:right">用量 Yds</th><th style="padding:5px 8px">Section</th></tr></thead>
+      <tbody>${dArr.map(d=>`<tr><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;font-family:monospace;font-weight:600">${d.style}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;font-size:11px;color:#6b7a9e">${d.po||"-"}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;font-size:11px">${d.color||"-"}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;text-align:right;font-family:monospace;color:#1d4ed8">${fmt(d.pcs)}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6;text-align:right;font-family:monospace;color:#d97706">${fmt(d.yds,1)}</td><td style="padding:4px 8px;border-bottom:1px solid #eef0f6">${secBadge(d.sec)}</td></tr>`).join("")}</tbody></table>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
+}
+
+// ── 款式資料庫 ──────────────────────────────────────────────
+async function handleStyleFiles(files){
+  const msg=document.getElementById("styMsg");
+  msg.innerHTML='<span style="color:#6b7a9e">⏳ 解析中...</span>';
+  let added=0,skipped=0;
+  for(const f of Array.from(files)){
+    try{
+      let rows=[];
+      if(f.name.match(/\.xlsx?$/i)){
+        const buf=await f.arrayBuffer();
+        const wb=XLSX.read(new Uint8Array(buf),{type:"array",raw:false});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+      }else if(f.name.toLowerCase().endsWith(".csv")){
+        const txt=await f.text();
+        const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+        const hdrs=lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
+        rows=lines.slice(1).map(line=>{
+          const cols=line.split(",").map(c=>c.trim().replace(/^"|"$/g,""));
+          const o={};hdrs.forEach((h,i)=>o[h]=cols[i]||"");return o;
+        });
+      }
+      // Flexible header mapping
+      const r0=rows[0]||{};const keys=Object.keys(r0);
+      function findCol(terms){return keys.find(k=>terms.some(t=>k.toLowerCase().replace(/[\s_\/\-]/g,"").includes(t.toLowerCase().replace(/[\s_\/\-]/g,""))));}
+      const colSelf=findCol(["selfkey","self","自鍵","selfk"]);
+      const colPO=findCol(["po","po號","ponumber"]);
+      const colStyle=findCol(["style","款號","style#","styleno"]);
+      const colColor=findCol(["color","colour","顏色","色"]);
+      const colSize=findCol(["size","尺寸","sz"]);
+      const colPcsBox=findCol(["pcsbox","pcs/box","pcsperbox","每箱件數","pcs"]);
+      if(!colStyle&&!colPO){msg.innerHTML='<span style="color:#dc2626">❌ 找不到款號/PO欄位</span>';continue;}
+      rows.forEach(row=>{
+        const styleNo=String(row[colStyle]||"").trim();
+        const po=String(row[colPO]||"").trim();
+        if(!styleNo&&!po)return;
+        const rec={
+          id:uid(),
+          selfkey:colSelf?String(row[colSelf]||"").trim():"",
+          po,
+          styleNo,
+          color:colColor?String(row[colColor]||"").trim():"",
+          size:colSize?String(row[colSize]||"").trim():"",
+          pcsPerBox:colPcsBox?parseFloat(row[colPcsBox])||0:0
+        };
+        // Dedup: same selfkey+style+color+size
+        const k=`${rec.selfkey}|${rec.po}|${rec.styleNo}|${rec.color}|${rec.size}`;
+        if(!STYLES.some(x=>`${x.selfkey}|${x.po}|${x.styleNo}|${x.color}|${x.size}`===k)){
+          STYLES.push(rec);added++;
+        }else skipped++;
+      });
+    }catch(e){msg.innerHTML=`<span style="color:#dc2626">❌ ${e.message}</span>`;}
+  }
+  await saveStyles();
+  msg.innerHTML=`<span style="color:#059669">✅ 新增 ${added} 筆，略過重複 ${skipped} 筆</span>`;
+  renderStyles();
+}
+
+function renderStyles(){
+  const q=(document.getElementById("styQ").value||"").toLowerCase();
+  const colorF=document.getElementById("styColorSel").value;
+  const sizeF=document.getElementById("stySizeSel").value;
+
+  // Update color/size dropdowns
+  const allColors=[...new Set(STYLES.map(r=>r.color).filter(Boolean))].sort();
+  const allSizes=[...new Set(STYLES.map(r=>r.size).filter(Boolean))].sort();
+  const cs=document.getElementById("styColorSel"),ss=document.getElementById("stySizeSel");
+  const prevC=cs.value,prevS=ss.value;
+  cs.innerHTML='<option value="">全部顏色</option>'+allColors.map(c=>`<option${c===prevC?' selected':''}>${c}</option>`).join('');
+  ss.innerHTML='<option value="">全部尺寸</option>'+allSizes.map(s=>`<option${s===prevS?' selected':''}>${s}</option>`).join('');
+
+  // Filter
+  let rows=STYLES.filter(r=>{
+    if(colorF&&r.color!==colorF)return false;
+    if(sizeF&&r.size!==sizeF)return false;
+    if(q&&!(r.selfkey+r.po+r.styleNo+r.color+r.size).toLowerCase().includes(q))return false;
+    return true;
+  });
+
+  // KPI stats
+  const totalRecs=rows.length;
+  const styles=[...new Set(rows.map(r=>r.styleNo).filter(Boolean))].length;
+  const colors=[...new Set(rows.map(r=>r.color).filter(Boolean))].length;
+  const sizes=[...new Set(rows.map(r=>r.size).filter(Boolean))].length;
+  document.getElementById("styStats").innerHTML=[
+    {v:fmt(STYLES.length),l:"總記錄筆數",c:"#3b9ef5"},
+    {v:styles,l:"款號數",c:"#d97706"},
+    {v:colors,l:"顏色數",c:"#7c3aed"},
+    {v:sizes,l:"尺寸數",c:"#059669"},
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:22px">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
+
+  document.getElementById("styCnt").textContent=`${totalRecs} / ${STYLES.length} 筆`;
+
+  // Update group button style
+  const gb=document.getElementById("styGroupBtn");
+  gb.style.cssText=styGrouped?"background:#3b9ef5;color:#fff;border:none":"";
+
+  // Style summary
+  const styCard=document.getElementById("styByStyle");
+  styCard.style.display=rows.length?"block":"none";
+  const byStyle={};
+  rows.forEach(r=>{
+    const k=`${r.po}||${r.styleNo}`;
+    if(!byStyle[k])byStyle[k]={po:r.po,style:r.styleNo,colors:new Set(),sizes:new Set(),pcsArr:[],count:0};
+    if(r.color)byStyle[k].colors.add(r.color);
+    if(r.size)byStyle[k].sizes.add(r.size);
+    if(r.pcsPerBox>0)byStyle[k].pcsArr.push(r.pcsPerBox);
+    byStyle[k].count++;
+  });
+  document.getElementById("styByStyleBody").innerHTML=Object.values(byStyle).sort((a,b)=>a.style.localeCompare(b.style)).map(g=>{
+    const pcsRange=g.pcsArr.length?[...new Set(g.pcsArr)].sort((a,b)=>a-b).join(" / "):"-";
+    return`<tr>
+      <td class="mono" style="font-weight:700">${g.style||"-"}</td>
+      <td class="mono">${g.po||"-"}</td>
+      <td style="font-size:11px">${[...g.colors].join(", ")||"-"}</td>
+      <td class="r">${g.sizes.size}</td>
+      <td class="r" style="font-family:monospace">${pcsRange}</td>
+      <td class="r">${g.count}</td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="6" style="text-align:center;padding:20px;color:#8b95b8">無資料</td></tr>`;
+
+  // Detail table (optionally grouped by style)
+  const body=document.getElementById("styBody");
+  if(!rows.length){
+    body.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:40px;color:#8b95b8">尚未匯入款式資料</td></tr>`;
+    return;
+  }
+  const sorted=[...rows].sort((a,b)=>a.styleNo.localeCompare(b.styleNo)||(a.color||"").localeCompare(b.color||"")||(a.size||"").localeCompare(b.size||""));
+  body.innerHTML=sorted.map(r=>`<tr>
+    <td class="mono">${r.po||"-"}</td>
+    <td class="mono" style="font-weight:700">${r.styleNo||"-"}</td>
+    <td style="font-size:12px">${r.color||"-"}</td>
+    <td class="mono">${r.size||"-"}</td>
+    <td class="r" style="font-weight:700;color:#1d4ed8">${r.pcsPerBox||"-"}</td>
+    <td><button onclick="delStyle('${r.id}')" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:2px 6px;font-size:13px">✕</button></td>
+  </tr>`).join("");
+}
+
+function delStyle(id){
+  if(!confirm("確定刪除？"))return;
+  STYLES=STYLES.filter(r=>r.id!==id);
+  saveStyles();renderStyles();
+}
+async function clearStyles(){
+  if(!confirm("確定清除所有款式資料？"))return;
+  STYLES=[];await saveStyles();renderStyles();
+}
+
+function renderRecs(){
+  const q=(document.getElementById("recQ").value||"").toLowerCase(),sec=document.getElementById("recSec").value,frm=document.getElementById("recFrom").value,to=document.getElementById("recTo").value;
+  let rows=CUT.filter(isDailyRec);
+  if(sec)rows=rows.filter(r=>r.section===sec);
+  if(frm)rows=rows.filter(r=>r.date>=frm);if(to)rows=rows.filter(r=>r.date<=to);
+  if(q)rows=rows.filter(r=>(r.styleNo||"").toLowerCase().includes(q)||(r.lineNo||"").toLowerCase().includes(q));
+  rows.sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById("recCnt").textContent=`${rows.length} / ${CUT.length} 筆`;
+  document.getElementById("recBody").innerHTML=rows.slice(0,500).map(r=>{const ia=r.efficiency>0&&r.efficiency<50;return`<tr${ia?' style="background:#fff1f2"':''}><td class="mono">${r.date}</td><td>${secBadge(r.section)}</td><td class="mono" style="font-weight:700">${r.lineNo}</td><td class="mono">${r.styleNo||"-"}</td><td class="mono" style="color:#6b7a9e;font-size:11px">${r.fabricItem||"-"}</td><td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${r.fabricType||''}">${r.fabricType?r.fabricType.slice(0,18)+(r.fabricType.length>18?'…':''):"-"}</td><td style="font-size:11px">${r.color||"-"}</td><td class="r" style="font-size:11px">${r.ydsPerPcs||"-"}</td><td class="r" style="color:#1d4ed8;font-weight:700">${fmt(r.pieces)}</td><td class="r">${r.workers||"-"}</td><td class="r">${eb(r.efficiency)}</td><td><button onclick="delR('${r.id}')" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:2px 6px">✕</button></td></tr>`;}).join("")||`<tr><td colspan="12" style="text-align:center;padding:40px;color:#8b95b8">無符合記錄</td></tr>`;
+}
+function delR(id){if(!confirm("確定刪除？"))return;CUT=CUT.filter(r=>r.id!==id);saveCut();updateHdr();renderRecs();}
+
+// ── Excel export ────────────────────────────────────────────
+function xls(type){
+  const wb2=XLSX.utils.book_new();
+  if(type==="styles"){
+    const ws=XLSX.utils.aoa_to_sheet([
+      ["SELFKEY","PO","款號(STYLE)","顏色(COLOR)","尺寸(SIZE)","每箱件數(PCS/BOX)"],
+      ...STYLES.sort((a,b)=>a.styleNo.localeCompare(b.styleNo)).map(r=>[r.selfkey,r.po,r.styleNo,r.color,r.size,r.pcsPerBox])
+    ]);
+    ws["!cols"]=[{wch:12},{wch:10},{wch:18},{wch:14},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb2,ws,"款式資料庫");
+    XLSX.writeFile(wb2,`款式資料庫_${TODAY}.xlsx`);return;
+  }
+  if(type==="query"){
+    const sec=document.getElementById("qSec").value;
+    const frm=document.getElementById("qFrom").value,to2=document.getElementById("qTo").value;
+    let rows=CUT.filter(r=>r.fabricItem);
+    if(sec)rows=rows.filter(r=>r.section===sec);
+    if(frm)rows=rows.filter(r=>r.date>=frm);
+    if(to2)rows=rows.filter(r=>r.date<=to2);
+    if(qV==="fab"){
+      const grp={};
+      rows.filter(r=>!q||r.fabricItem.toLowerCase().includes(q)||(r.fabricType||"").toLowerCase().includes(q)).forEach(r=>{
+        const k=r.fabricItem;if(!grp[k])grp[k]={item:r.fabricItem,type:r.fabricType||"",pcs:0,yds:0,styles:new Set(),tables:new Set()};
+        grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;if(r.styleNo)grp[k].styles.add(r.styleNo);if(r.lineNo)grp[k].tables.add(r.lineNo);
+      });
+      const ws=XLSX.utils.aoa_to_sheet([["品號(Item)","布規格","總裁量(件)","總用量(Yds)","款號數","Table數"],...Object.values(grp).sort((a,b)=>b.yds-a.yds).map(g=>[g.item,g.type,g.pcs,Math.round(g.yds*10)/10,g.styles.size,g.tables.size])]);
+      ws["!cols"]=[{wch:12},{wch:40},{wch:10},{wch:12},{wch:8},{wch:8}];
+      XLSX.utils.book_append_sheet(wb2,ws,"布料品號彙整");
+    } else {
+      const grp={};
+      rows.filter(r=>r.styleNo&&(!q||r.styleNo.toLowerCase().includes(q)||(r.fabricItem||"").toLowerCase().includes(q))).forEach(r=>{
+        const k=r.styleNo;if(!grp[k])grp[k]={style:r.styleNo,item:r.fabricItem||"",type:r.fabricType||"",color:r.color||"",ydsPerPcs:r.ydsPerPcs||0,pcs:0,yds:0,tables:new Set()};
+        grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;if(r.lineNo)grp[k].tables.add(r.lineNo);
+        if(!grp[k].item&&r.fabricItem)grp[k].item=r.fabricItem;
+      });
+      const ws=XLSX.utils.aoa_to_sheet([["款號","PO","顏色","尺寸","品號(Item)","總裁量(件)","總用量(Yds)","Yds/Pcs","工作天"],...Object.values(grp).sort((a,b)=>b.pcs-a.pcs).map(g=>[g.style,g.po||"",g.color||"",[...g.sizes].sort().join("/"),g.item,g.pcs,Math.round(g.yds*10)/10,g.ydsPerPcs,g.days?.size||0])]);
+      ws["!cols"]=[{wch:18},{wch:12},{wch:40},{wch:12},{wch:8},{wch:10},{wch:12},{wch:8}];
+      XLSX.utils.book_append_sheet(wb2,ws,"款號彙整");
+    }
+    XLSX.writeFile(wb2,`裁剪${qV==="fab"?'布料':'款號'}彙整_${TODAY}.xlsx`);return;
+  }
+  if(type==="wip"){
+    const yr=document.getElementById("wipYear").value||THIS_MONTH.slice(0,4);
+    const mo=document.getElementById("wipMonth").value;
+    const sec=document.getElementById("wipSec").value;
+    const allMo=mo?[mo]:["01","02","03","04","05","06","07","08","09","10","11","12"];
+    const secs=sec?[sec]:["Apron","Garment"];
+    const header=["月份","Section","裁剪總量","車縫總量","差額（裁－縫）","車縫消化率%"];
+    const data=[header];
+    allMo.forEach(mm=>{
+      secs.forEach(sc=>{
+        const prefix=`${yr}-${mm}`;
+        const cut=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
+        const sew=SEW.filter(r=>r.date.startsWith(prefix)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
+        if(cut===0&&sew===0)return;
+        const rate=cut>0?Math.round(sew/cut*100):0;
+        data.push([prefix,sc,cut,sew||"",cut-sew,sew?rate+"%" :""]);
+      });
+    });
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"]=[{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}];
+    XLSX.utils.book_append_sheet(wb2,ws,"裁縫月度比對");
+    XLSX.writeFile(wb2,`裁縫月度比對_${yr}${mo||""}.xlsx`);return;
+  }
+  let rows=[],h=[],fn="";
+  if(type==="daily"){const d=document.getElementById("dDate").value||TODAY;rows=CUT.filter(r=>r.date===d);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪日報_${d}.xlsx`;}
+  else if(type==="weekly"){const[s,e]=wb2(document.getElementById("wDate").value||TODAY);rows=CUT.filter(r=>r.date>=s&&r.date<=e);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪週報_${s}.xlsx`;}
+  else if(type==="monthly"){const m=document.getElementById("mMonth").value||THIS_MONTH;rows=CUT.filter(r=>r.date.startsWith(m));h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪月報_${m}.xlsx`;}
+  else{rows=[...CUT].sort((a,b)=>b.date.localeCompare(a.date));h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪全記錄_${TODAY}.xlsx`;}
+  const ws=XLSX.utils.aoa_to_sheet([h,...rows.map(r=>[r.date,r.section,r.lineNo,r.styleNo,r.fabricItem||'',r.fabricType||'',r.color||'',r.ydsPerPcs||'',r.totalYds||'',r.pieces,r.workers,r.efficiency])]);
+  ws["!cols"]=[{wch:12},{wch:10},{wch:10},{wch:16},{wch:10},{wch:35},{wch:12},{wch:8},{wch:10},{wch:8},{wch:6},{wch:7}];
+  XLSX.utils.book_append_sheet(wb2,ws,"裁剪資料");XLSX.writeFile(wb2,fn);
+}
+
+function backup(){const blob=new Blob([JSON.stringify({version:2,date:new Date().toISOString(),cutting:CUT})],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`cutting_backup_${TODAY}.json`;a.click();}
+
+async function restoreCutJSON(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    let cutRecs=[];
+    if(data.cutting&&Array.isArray(data.cutting)) cutRecs=data.cutting;
+    else if(Array.isArray(data)) cutRecs=data;
+    else{ alert("JSON 格式不正確"); return; }
+    if(!cutRecs.length){ alert("JSON 中無裁剪記錄"); return; }
+    if(!confirm(`確定還原 ${cutRecs.length} 筆裁剪資料？\n\n⚠️ 將覆蓋目前所有裁剪資料`)) return;
+    CUT=cutRecs.map(r=>({...r, id:r.id||uid()}));
+    await saveCut();
+    updateHdr(); renderDBCard();
+    alert(`✅ 已還原 ${CUT.length} 筆裁剪資料`);
+  }catch(e){ alert("JSON 讀取失敗："+e.message); }
+  event.target.value="";
+}
+
+// Normalize key for matching (uppercase, alphanumeric only)
+function normalizeKey(s){
+  return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+
+async function clearAll(){if(!confirm("確定清除所有裁剪資料？"))return;CUT=[];await saveCut();updateHdr();renderDBCard();}
+
+// ── Init ───────────────────────────────────────────────────
+async function init(){
+  await loadCut();await loadSew();await loadStyles();
+  document.getElementById("dDate").value=TODAY;
+  document.getElementById("wDate").value=TODAY;
+  document.getElementById("mMonth").value=THIS_MONTH;
+  document.getElementById("recFrom").value=THIS_MONTH+"-01";
+  document.getElementById("recTo").value=TODAY;
+  // Populate year selector
+  const years=[...new Set([...CUT,...SEW].map(r=>r.date.slice(0,4)).filter(Boolean))];
+  if(!years.includes(TODAY.slice(0,4)))years.unshift(TODAY.slice(0,4));
+  years.sort().reverse();
+  const ys=document.getElementById("wipYear");
+  ys.innerHTML=years.map(y=>`<option${y===TODAY.slice(0,4)?" selected":""}>${y}</option>`).join("");
+  // Set current month in WIP
+  document.getElementById("wipMonth").value=THIS_MONTH.slice(5,7);
+  updateHdr();renderDBCard();
+  // Init folder scan
+  initFolderScan();
+  const el=document.getElementById("sewConn"),badge=document.getElementById("connBadge");
+  if(SEW.length){
+    el.className="sew-status";el.style.display="block";
+    const dates=[...new Set(SEW.map(r=>r.date))].sort().reverse();
+    el.innerHTML=`<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b> — ${fmt(SEW.length)} 筆 · 最新 ${dates[0]||"-"}`;
+    badge.innerHTML="⚡ 已連線車縫 DB";badge.style.cssText="background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7";
+  }else{
+    el.className="sew-status warn";el.style.display="block";
+    el.innerHTML=`<span class="conn-dot conn-off"></span>⚠️ 尚未讀取到車縫資料。請在同一瀏覽器開啟車縫系統，或匯入備份 JSON。`;
+    badge.innerHTML="⚠ 車縫未連線";badge.style.cssText="background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);color:#fcd34d";
+  }
+}
+init();
+// ═══════════════════════ FOLDER SCAN ════════════════════════════════════════
+const _SCAN_LS="cutting_scanned_v1", _AUTOSCAN_LS="cutting_autoscan_v1";
+let _scanFolderList=[], _pendingScanKeys=[], _afterConfirmCb=null;
+
+function _openFolderIDB(){return new Promise((res,rej)=>{const req=indexedDB.open("cutting_folder_handles_v1",1);req.onupgradeneeded=e=>e.target.result.createObjectStore("folders",{keyPath:"id",autoIncrement:true});req.onsuccess=e=>res(e.target.result);req.onerror=()=>rej();});}
+async function _idbGetAll(){try{const db=await _openFolderIDB();return await new Promise(res=>{const r=db.transaction("folders","readonly").objectStore("folders").getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([]);});}catch(e){return[];}}
+async function _idbAdd(handle,label){try{const db=await _openFolderIDB();return await new Promise((res,rej)=>{const r=db.transaction("folders","readwrite").objectStore("folders").add({handle,label,ts:Date.now()});r.onsuccess=()=>res(r.result);r.onerror=rej;});}catch(e){return null;}}
+async function _idbDel(id){try{const db=await _openFolderIDB();await new Promise((res,rej)=>{const r=db.transaction("folders","readwrite").objectStore("folders").delete(id);r.onsuccess=res;r.onerror=rej;});}catch(e){}}
+
+function _getScanned(){try{return new Set(JSON.parse(localStorage.getItem(_SCAN_LS)||"[]"));}catch(e){return new Set();}}
+function _addScanned(keys){const s=_getScanned();keys.forEach(k=>s.add(k));try{localStorage.setItem(_SCAN_LS,JSON.stringify([...s]));}catch(e){}}
+function clearScannedLog(){localStorage.removeItem(_SCAN_LS);const m=document.getElementById("scanMsg");m.style.color="#059669";m.textContent="✓ 已重置掃描記錄，下次掃描將重新匯入全部檔案";}
+function saveAutoScanPref(){localStorage.setItem(_AUTOSCAN_LS,document.getElementById("chkAutoScan").checked?"1":"0");}
+
+function renderFolderList(){
+  const el=document.getElementById("folderList"),btn=document.getElementById("btnScanFolders");
+  if(!_scanFolderList.length){el.innerHTML=`<div style="font-size:12px;color:#8b95b8;padding:8px 12px;background:#f7f8fc;border-radius:6px;border:1px solid #e2e6f0">尚未設定任何資料夾。點「➕ 新增資料夾」授權存取。</div>`;btn.style.display="none";return;}
+  el.innerHTML=_scanFolderList.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:#f0f7ff;border-radius:6px;margin-bottom:5px;border:1px solid #bfdbfe"><span>📁</span><span style="flex:1;font-size:13px;font-weight:500;color:#1e2640">${f.label}</span><button onclick="removeFolderEntry(${f.id})" style="font-size:11px;padding:2px 8px;background:#fff5f5;color:#dc2626;border:1px solid #fecaca;border-radius:4px;cursor:pointer">移除</button></div>`).join("");
+  btn.style.display="inline-flex";
+}
+async function addScanFolder(){
+  if(!("showDirectoryPicker" in window)){alert("需要 Chrome 或 Edge 瀏覽器（v86+）");return;}
+  try{const handle=await window.showDirectoryPicker({mode:"read",startIn:"downloads"});const label=handle.name;const id=await _idbAdd(handle,label);_scanFolderList.push({id,handle,label});renderFolderList();const m=document.getElementById("scanMsg");m.style.color="#059669";m.textContent=`✓ 已新增資料夾「${label}」（共 ${_scanFolderList.length} 個）`;}
+  catch(e){if(e.name!=="AbortError"){const m=document.getElementById("scanMsg");m.style.color="#dc2626";m.textContent="❌ "+e.message;}}
+}
+async function removeFolderEntry(id){await _idbDel(id);_scanFolderList=_scanFolderList.filter(f=>f.id!==id);renderFolderList();document.getElementById("scanMsg").textContent="已移除資料夾";}
+
+async function initFolderScan(){
+  const all=await _idbGetAll();const valid=[];
+  for(const f of all){try{const p=await f.handle.queryPermission({mode:"read"});if(p==="granted"||p==="prompt")valid.push(f);}catch(e){}}
+  _scanFolderList=valid;renderFolderList();
+  const autoOn=localStorage.getItem(_AUTOSCAN_LS)==="1";
+  const cb=document.getElementById("chkAutoScan");if(cb)cb.checked=autoOn;
+  if(autoOn&&_scanFolderList.length)setTimeout(()=>scanAllFolders(true),900);
+}
+
+async function scanAllFolders(silent=false){
+  const m=document.getElementById("scanMsg");
+  if(!_scanFolderList.length){m.style.color="#dc2626";m.textContent="❌ 尚未設定任何資料夾";return;}
+  m.style.color="#6b7a9e";m.textContent="🔍 掃描中...";
+  const scanned=_getScanned(),toImport=[],skipped=[],EXTS=new Set(["xlsx","xls","msg","eml"]);
+  for(const folder of _scanFolderList){
+    let perm;try{perm=await folder.handle.queryPermission({mode:"read"});if(perm==="prompt")perm=await folder.handle.requestPermission({mode:"read"});}catch(e){perm="denied";}
+    if(perm!=="granted"){m.style.color="#d97706";m.textContent=`⚠️ 資料夾「${folder.label}」需重新授權`;continue;}
+    try{for await(const entry of folder.handle.values()){if(entry.kind!=="file")continue;const ext=entry.name.split(".").pop().toLowerCase();if(!EXTS.has(ext))continue;const file=await entry.getFile();const key=`${file.name}|${file.size}|${file.lastModified}`;if(scanned.has(key)){skipped.push(file.name);continue;}toImport.push({file,key});}}
+    catch(e){m.style.color="#dc2626";m.textContent=`❌ 掃描「${folder.label}」出錯：${e.message}`;}
+  }
+  if(!toImport.length){m.style.color="#059669";m.textContent=`✓ 掃描完成 — 無新檔案${skipped.length?`（跳過 ${skipped.length} 個已匯入）`:""}`;return;}
+  m.textContent=`找到 ${toImport.length} 個新檔案，解析中...`;
+  pendingFiles=toImport.map(x=>x.file);renderFileList();
+  _pendingScanKeys=toImport.map(x=>x.key);
+  _afterConfirmCb=()=>{_addScanned(_pendingScanKeys);_pendingScanKeys=[];m.style.color="#059669";m.textContent=`✅ 完成！新增 ${toImport.length} 個檔案${skipped.length?`，跳過 ${skipped.length} 個`:""}`; };
+  await doImport();
+  if(!pendingRecs.length){_addScanned(_pendingScanKeys);_pendingScanKeys=[];_afterConfirmCb=null;m.style.color="#d97706";m.textContent=`⚠️ 找到 ${toImport.length} 個新檔案但無有效裁剪資料`;}
+  else{m.style.color="#0369a1";m.textContent=`📋 解析完畢，請往上點「✓ 確認存入」（${pendingRecs.length} 筆記錄）`;}
+}
+
+</script>
+<!-- ═══════════════════════════════════════════════════
+     VRT 雲端同步浮動按鈕（☁）
+     讀取：IndexedDB CuttingProd / cutting_records（變數 CUT）
+     寫入：同上（pull 後 idbPutAll，重整頁面即見）
+════════════════════════════════════════════════════ -->
+<style>
+#vrtCloudBtn{
+  position:fixed;bottom:22px;right:22px;z-index:9999;
+  width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(135deg,#1a2540,#253058);
+  border:1px solid #2d3a6e;color:#93c5fd;font-size:20px;
+  cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;user-select:none;
+}
+#vrtCloudBtn:hover{transform:scale(1.08);border-color:#8b5cf6;color:#a78bfa}
+#vrtCloudPanel{
+  position:fixed;bottom:76px;right:22px;z-index:9999;
+  width:230px;background:#0f1929;border:1px solid #1e3050;
+  border-radius:14px;padding:14px;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+  display:none;flex-direction:column;gap:9px;
+  font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;
+}
+#vrtCloudPanel.show{display:flex}
+.vcp-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.vcp-status{font-size:11px;color:#475569;font-family:monospace;min-height:14px;line-height:1.5}
+.vcp-status.ok{color:#4ade80}.vcp-status.warn{color:#fbbf24}.vcp-status.err{color:#f87171}
+.vcp-row{display:flex;gap:7px}
+.vcp-btn{
+  flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:700;
+  cursor:pointer;border:none;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s;
+}
+.vcp-push{background:#1c1500;border:1px solid #92400e;color:#fbbf24}
+.vcp-push:hover{background:#292000}
+.vcp-pull{background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd}
+.vcp-pull:hover{background:#0f2040}
+.vcp-btn:disabled{opacity:.4;cursor:not-allowed}
+.vcp-gasrow{display:flex;gap:5px;align-items:center}
+.vcp-gasinput{
+  flex:1;background:#0a1120;border:1px solid #1e3050;border-radius:6px;
+  color:#f1f5f9;padding:5px 8px;font-size:10px;font-family:monospace;outline:none;
+}
+.vcp-gasinput:focus{border-color:#f59e0b}
+.vcp-gassave{background:#253058;border:none;color:#cbd5e1;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}
+.vcp-log{font-size:10px;font-family:monospace;color:#475569;max-height:60px;overflow-y:auto;line-height:1.6;border-top:1px solid #1e3050;padding-top:7px}
+.vcl-ok{color:#4ade80}.vcl-err{color:#f87171}.vcl-i{color:#60a5fa}
+@keyframes vcSpin{to{transform:rotate(360deg)}}
+.vcSpin{display:inline-block;animation:vcSpin .7s linear infinite}
+</style>
+
+<button id="vrtCloudBtn" title="☁ 雲端同步" onclick="vcToggle()">☁</button>
+
+<div id="vrtCloudPanel">
+  <div class="vcp-title">☁ 雲端同步 — 裁剪</div>
+  <div class="vcp-status" id="vcStatus">讀取中...</div>
+  <div class="vcp-row">
+    <button class="vcp-btn vcp-push" id="vcPushBtn" onclick="vcPush()">☁ 推送</button>
+    <button class="vcp-btn vcp-pull" id="vcPullBtn" onclick="vcPull()">⬇ 拉取</button>
+  </div>
+  <div>
+    <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
+    <div class="vcp-gasrow">
+      <input class="vcp-gasinput" id="vcGasInput" placeholder="/exec 結尾的網址" />
+      <button class="vcp-gassave" onclick="vcSaveGas()">存</button>
+    </div>
+  </div>
+  <div class="vcp-log" id="vcLog"></div>
+</div>
+
+<script>
+// ─── VRT Cloud Sync Widget — Cutting ──────────────────────
+(function(){
+  const LS_GAS  = 'vrt_portal_gas_url';
+  const LS_META = 'vrt_cloud_cutting_meta';
+  let gasUrl = '';
+  let panelOpen = false;
+
+  function vcInit(){
+    gasUrl = localStorage.getItem(LS_GAS) || '';
+    document.getElementById('vcGasInput').value = gasUrl;
+    vcShowStatus();
+  }
+
+  window.vcToggle = function(){
+    panelOpen = !panelOpen;
+    document.getElementById('vrtCloudPanel').classList.toggle('show', panelOpen);
+    if (panelOpen) vcInit();
+  };
+
+  window.vcSaveGas = function(){
+    gasUrl = document.getElementById('vcGasInput').value.trim();
+    if (!gasUrl) return;
+    localStorage.setItem(LS_GAS, gasUrl);
+    vcLog('GAS URL 已儲存', 'i');
+    vcShowStatus();
+  };
+
+  async function vcShowStatus(){
+    const el   = document.getElementById('vcStatus');
+    const meta = JSON.parse(localStorage.getItem(LS_META) || 'null');
+    // Count from IDB
+    let cnt = 0;
+    try {
+      const recs = await vcIdbGetAll('CuttingProd', 1, 'cutting_records');
+      cnt = recs.length;
+    } catch(e){ cnt = (typeof CUT !== 'undefined' ? CUT.length : 0); }
+    if (meta) {
+      const mins = (Date.now() - new Date(meta.ts)) / 60000;
+      const age  = mins < 60 ? `${Math.round(mins)}分前` : `${Math.round(mins/60)}小時前`;
+      el.textContent = `本機 ${cnt} 筆 · 上次同步 ${age}`;
+      el.className   = 'vcp-status ' + (mins < 120 ? 'ok' : 'warn');
+    } else {
+      el.textContent = `本機 ${cnt} 筆 · 尚未同步`;
+      el.className   = 'vcp-status warn';
+    }
+    if (!gasUrl){ el.textContent += ' · ⚠ 未設定 URL'; el.className = 'vcp-status err'; }
+  }
+
+  window.vcPush = async function(){
+    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
+    vcSetBusy(true);
+    vcLog('推送裁剪資料...', 'i');
+    try {
+      // 優先用全域 CUT 變數（已在記憶體中），否則讀 IDB
+      const recs = (typeof CUT !== 'undefined' && CUT.length)
+        ? CUT
+        : await vcIdbGetAll('CuttingProd', 1, 'cutting_records');
+      const payload = {
+        tool: 'cutting',
+        recordCount: recs.length,
+        idbStore: { db:'CuttingProd', ver:1, store:'cutting_records', records: recs },
+        summary: buildCuttingSummary(recs),
+      };
+      const r = await fetch(gasUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload), redirect:'follow',
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
+      vcLog(`✓ 推送完成（${recs.length} 筆）`, 'ok');
+      vcShowStatus();
+    } catch(e) {
+      vcLog('✗ 推送失敗：' + e.message, 'err');
+    } finally { vcSetBusy(false); }
+  };
+
+  window.vcPull = async function(){
+    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
+    if (!confirm('拉取會覆蓋本機裁剪資料，確定嗎？')) return;
+    vcSetBusy(true);
+    vcLog('拉取中...', 'i');
+    try {
+      const r = await fetch(`${gasUrl}?action=pull&tool=cutting`, { redirect:'follow' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      if (!d.data || !d.data.data) { vcLog('雲端尚無裁剪資料', 'err'); return; }
+      const payload = d.data.data;
+      const recs    = payload.idbStore?.records || [];
+      await vcIdbPutAll('CuttingProd', 1, 'cutting_records', recs);
+      // 同步更新記憶體中的 CUT
+      if (typeof CUT !== 'undefined') { CUT.length = 0; recs.forEach(r => CUT.push(r)); }
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
+      vcLog(`✓ 拉取完成（${recs.length} 筆），重新整理即可看到`, 'ok');
+      vcShowStatus();
+      if (confirm(`已拉取 ${recs.length} 筆裁剪資料\n立即重新整理頁面？`)) location.reload();
+    } catch(e) {
+      vcLog('✗ 拉取失敗：' + e.message, 'err');
+    } finally { vcSetBusy(false); }
+  };
+
+  function buildCuttingSummary(recs){
+    const today = new Date().toISOString().slice(0,10);
+    const tG = recs.filter(r => r.date === today && r.section === 'Garment');
+    const tA = recs.filter(r => r.date === today && r.section === 'Apron');
+    return {
+      today,
+      garment:{ pieces: tG.reduce((s,r)=>s+(r.pieces||0),0) },
+      apron:  { pieces: tA.reduce((s,r)=>s+(r.pieces||0),0) },
+    };
+  }
+
+  // IDB helpers（cutting 的 openIDB 已在頁面定義，但這裡用獨立版避免衝突）
+  function vcIdbGetAll(dbName, ver, store){
+    return new Promise(res => {
+      const req = indexedDB.open(dbName, ver);
+      req.onerror = () => res([]);
+      req.onupgradeneeded = () => {};
+      req.onsuccess = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(store)){ res([]); return; }
+        const q = db.transaction(store,'readonly').objectStore(store).getAll();
+        q.onsuccess = () => res(q.result || []);
+        q.onerror   = () => res([]);
+      };
+    });
+  }
+
+  function vcIdbPutAll(dbName, ver, store, records){
+    return new Promise((res, rej) => {
+      const req = indexedDB.open(dbName, ver);
+      req.onerror = rej;
+      req.onsuccess = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(store)){ res(0); return; }
+        const tx = db.transaction(store, 'readwrite');
+        const os = tx.objectStore(store);
+        os.clear();
+        records.forEach(r => os.put(r));
+        tx.oncomplete = () => res(records.length);
+        tx.onerror    = rej;
+      };
+    });
+  }
+
+  function vcSetBusy(on){
+    document.getElementById('vcPushBtn').disabled = on;
+    document.getElementById('vcPullBtn').disabled = on;
+    if (on){
+      document.getElementById('vcPushBtn').innerHTML = '<span class="vcSpin">⏳</span>';
+      document.getElementById('vcPullBtn').innerHTML = '<span class="vcSpin">⏳</span>';
+    } else {
+      document.getElementById('vcPushBtn').innerHTML = '☁ 推送';
+      document.getElementById('vcPullBtn').innerHTML = '⬇ 拉取';
+    }
+  }
+
+  function vcLog(msg, type){
+    const el  = document.getElementById('vcLog');
+    const now = new Date();
+    const t   = [now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+    const cls = type==='ok'?'vcl-ok':type==='err'?'vcl-err':'vcl-i';
+    el.innerHTML += `<span class="${cls}">[${t}] ${msg}</span>\n`;
+    el.scrollTop  = el.scrollHeight;
+  }
+
+  document.addEventListener('click', e => {
+    if (panelOpen && !e.target.closest('#vrtCloudPanel') && !e.target.closest('#vrtCloudBtn')){
+      panelOpen = false;
+      document.getElementById('vrtCloudPanel').classList.remove('show');
+    }
+  });
+
+  vcInit();
+})();
+</script>
+
+</body>
+</html>

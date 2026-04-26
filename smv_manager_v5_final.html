@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMV 管理系統 v5</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f0f2f5;--card:#fff;--pri:#2563eb;--prd:#1d4ed8;
+  --red:#dc2626;--grn:#16a34a;--amb:#d97706;--mut:#6b7a9e;
+  --bdr:#e2e6f0;--alt:#f7f8fc;--hdr:#1e2640;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Microsoft JhengHei',sans-serif;background:var(--bg);color:#1e2640;font-size:13px}
+.hdr{background:linear-gradient(135deg,#1e2640,#2d3a5e);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:10px}
+.hdr-logo{width:32px;height:32px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.hdr h1{font-size:15px;font-weight:700}
+.hdr small{font-size:10px;opacity:.6;display:block;margin-top:1px}
+.hdr-stats{margin-left:auto;display:flex;gap:16px}
+.hs-v{font-size:16px;font-weight:700;color:#fbbf24;font-family:monospace}
+.hs-l{font-size:10px;color:#8b95b8;text-align:right}
+.tabs{background:#fff;border-bottom:2px solid var(--bdr);display:flex;padding:0 16px;overflow-x:auto}
+.tab{padding:10px 14px;font-size:12px;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:.15s}
+.tab:hover{color:#1e2640}.tab.on{color:#d97706;border-bottom-color:#f59e0b}
+.sec{display:none;padding:14px 16px}.sec.on{display:block}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:9px;padding:13px;margin-bottom:11px;box-shadow:0 1px 3px rgba(30,38,64,.04)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px;display:flex;align-items:center;gap:5px}
+.ct::before{content:'';width:3px;height:10px;background:#f59e0b;border-radius:2px}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:.13s}
+.btn-y{background:#f59e0b;color:#1c1200}.btn-y:hover{background:#d97706}.btn-y:disabled{background:#e2e6f0;color:#aaa;cursor:not-allowed}
+.btn-g{background:#fff;color:#4a5578;border:1px solid #d0d5e8}.btn-g:hover{background:var(--alt)}
+.btn-b{background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc}
+.btn-r{background:#fff5f5;color:var(--red);border:1px solid #fecaca}
+.btn-sm{padding:3px 9px;font-size:11px}
+/* zones */
+.zones{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:12px}
+@media(max-width:540px){.zones{grid-template-columns:1fr}}
+.zone{border:2px dashed #93c5fd;border-radius:9px;background:#eff6ff;text-align:center;padding:22px 12px;cursor:pointer;transition:.15s}
+.zone:hover,.zone.over{border-color:var(--pri);background:#dbeafe}
+.zone input{display:none}
+.zone .zi{font-size:32px;margin-bottom:5px}
+.zone .zt{font-weight:700;font-size:13px;margin-bottom:3px}
+.zone .zs{color:var(--mut);font-size:11px;line-height:1.7}
+.msg-z{background:#fffbeb;border-color:#fcd34d}.msg-z:hover,.msg-z.over{border-color:var(--amb);background:#fef3c7}
+/* alerts */
+.al{padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:9px;line-height:1.6}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#e0f2fe;border:1px solid #7dd3fc;color:#0369a1}
+/* table */
+.tw{overflow-x:auto;max-height:500px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--hdr);color:#fff;padding:6px 9px;text-align:left;position:sticky;top:0;z-index:2;white-space:nowrap;font-size:11px}
+td{padding:5px 9px;border-bottom:1px solid var(--bdr)}
+tr:nth-child(even) td{background:var(--alt)}
+tr:hover td{background:#eff6ff}
+.up td{background:#fef2f2!important}.dn td{background:#f0fdf4!important}
+.nw td{background:#eff6ff!important}.rm td{background:#fafafa!important;opacity:.65}
+.bold{font-weight:700}.mono{font-family:monospace}
+/* kpis */
+.kpis{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:11px}
+.kpi{flex:1;min-width:100px;background:var(--card);border-radius:7px;padding:10px 12px;box-shadow:0 1px 3px rgba(30,38,64,.04);border-top:4px solid}
+.kpi.bl{border-color:var(--pri)}.kpi.rd{border-color:var(--red)}.kpi.gn{border-color:var(--grn)}.kpi.am{border-color:var(--amb)}.kpi.gy{border-color:#9ca3af}
+.kpi-v{font-size:20px;font-weight:800;font-family:monospace}.kpi-l{font-size:10px;color:var(--mut);margin-top:1px}
+/* period nav */
+.pnav{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.seg{display:flex;border:1px solid var(--bdr);border-radius:6px;overflow:hidden}
+.seg button{padding:5px 12px;font-size:12px;border:none;cursor:pointer;font-weight:600;background:#fff;color:var(--mut);transition:.1s}
+.seg button.on{background:#f59e0b;color:#1c1200}
+.nbtn{padding:5px 10px;border:1px solid var(--bdr);border-radius:6px;background:#fff;cursor:pointer;font-size:14px;font-weight:700}
+.nbtn:hover{background:var(--alt)}
+#per-label{font-weight:700;font-size:14px;min-width:150px;text-align:center}
+/* filter bar */
+.fb{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+.fb label{font-size:11px;color:#6b7a9e;white-space:nowrap}
+.fb input,.fb select{padding:5px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:12px;outline:none;font-family:inherit}
+.fb input:focus,.fb select:focus{border-color:var(--pri)}
+/* snap list */
+.si{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--bdr);border-radius:7px;margin-bottom:6px;background:var(--alt);cursor:pointer;transition:.13s}
+.si:hover{background:#dbeafe;border-color:#93c5fd}.si.on{background:#dbeafe;border-color:#2563eb}
+.si-info strong{font-size:12px;color:#1e2640}.si-info small{color:var(--mut);font-size:11px}
+/* badges / tags */
+.badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700}
+.ba{background:#fef9c3;color:#92400e}.bg{background:#ede9fe;color:#5b21b6}.bc{background:#dcfce7;color:#166534}
+.tag{display:inline-block;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700}
+.tu{background:#fee2e2;color:var(--red)}.td{background:#dcfce7;color:var(--grn)}
+.tn{background:#dbeafe;color:var(--prd)}.ts{background:#f3f4f6;color:var(--mut)}.tr_{background:#fafafa;color:#9ca3af}
+/* style card */
+.style-row{border:1px solid var(--bdr);border-radius:8px;margin-bottom:7px;overflow:hidden}
+.style-hd{display:flex;align-items:center;padding:9px 13px;background:var(--alt);cursor:pointer;gap:9px}
+.style-hd:hover{background:#dbeafe}
+.style-body{display:none;padding:10px 13px;border-top:1px solid var(--bdr)}
+.smv-hist-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:12px}
+/* efficiency bar */
+.eff-bar-wrap{background:#e2e6f0;border-radius:4px;height:6px;overflow:hidden;margin-top:4px;width:100%}
+.eff-bar{height:6px;border-radius:4px;transition:width .3s}
+/* found lines */
+.found-ok{display:flex;align-items:center;gap:6px;padding:4px 9px;background:#f0fdf4;border-radius:5px;margin-bottom:3px;font-size:11px}
+.found-er{display:flex;align-items:center;gap:6px;padding:4px 9px;background:#fef2f2;border-radius:5px;margin-bottom:3px;font-size:11px;color:var(--red)}
+.prev-file{background:var(--alt);border:1px solid var(--bdr);border-radius:7px;padding:10px;margin-bottom:7px}
+/* toast */
+.toast{position:fixed;bottom:18px;right:18px;z-index:999;background:#1e2640;color:#fff;padding:9px 15px;border-radius:8px;font-size:12px;opacity:0;transition:.3s;pointer-events:none;max-width:340px;line-height:1.5}
+.toast.show{opacity:1}
+.empty{text-align:center;padding:28px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-logo">📐</div>
+  <div><h1>SMV 管理系統 v5</h1><small>Standard Minute Value · 自動比對異動 · 工時分析</small></div>
+  <div class="hdr-stats">
+    <div><div class="hs-v" id="hSnaps">0</div><div class="hs-l">版本數</div></div>
+    <div><div class="hs-v" id="hStyles">0</div><div class="hs-l">款式數</div></div>
+    <div><div class="hs-v" id="hSewing">–</div><div class="hs-l">車縫記錄</div></div>
+  </div>
+</div>
+<div class="tabs">
+  <div class="tab on"  onclick="goTab('import',this)">📥 匯入 SMV</div>
+  <div class="tab"     onclick="goTab('style',this)">👗 款式 SMV 對比</div>
+  <div class="tab"     onclick="goTab('hours',this)">⏱ 工時效率分析</div>
+  <div class="tab"     onclick="goTab('diff',this)">🔄 版本比對</div>
+  <div class="tab"     onclick="goTab('history',this)">📚 歷史記錄</div>
+</div>
+
+<!-- ══ IMPORT ══ -->
+<div class="sec on" id="sec-import">
+  <div class="card">
+    <div class="ct">📂 匯入報表 SMV（車縫 Sewing / 裁剪 Cutting）</div>
+    <div class="al al-i" style="margin-bottom:11px">
+      拖入<b> Excel .xlsx </b>或整封<b> Email .msg </b>，系統自動讀取 SMV 分頁，解析後<b>立即與前一版本比對異動</b>。<br>
+      日期從報表標題列讀取（「As of March 28, 2026」格式），不受舊分頁干擾。
+    </div>
+    <div class="zones">
+      <label class="zone" id="zone-xlsx">
+        <input type="file" id="inp-xlsx" accept=".xlsx,.xls" multiple>
+        <div class="zi">📊</div><div class="zt">Excel 檔案</div>
+        <div class="zs">另存後拖入或點選<br><span style="color:var(--pri)">可同時多個</span></div>
+      </label>
+      <label class="zone msg-z" id="zone-msg">
+        <input type="file" id="inp-msg" accept=".msg,.eml" multiple>
+        <div class="zi">📧</div><div class="zt">Email（.msg / .eml）</div>
+        <div class="zs">Outlook 直接拖出整封信<br><span style="color:var(--amb)">自動解壓 Excel 附件</span></div>
+      </label>
+    </div>
+    <div id="import-err" class="al al-e" style="display:none"></div>
+  </div>
+  <div id="preview-card" class="card" style="display:none">
+    <div class="ct">🔍 解析預覽</div>
+    <div id="preview-body"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+      <button class="btn btn-g" onclick="cancelImport()">取消</button>
+      <button class="btn btn-y" id="confirm-btn" onclick="confirmImport()">✅ 確認儲存</button>
+    </div>
+  </div>
+  <div id="auto-diff-card" class="card" style="display:none">
+    <div class="ct">⚡ 自動比對結果（與前一版本）</div>
+    <div id="auto-diff-body"></div>
+  </div>
+
+  <!-- Folder Scan Card -->
+  <div class="card" id="folderScanCard">
+    <div class="ct">📂 掃描 Outlook 下載資料夾（自動批次匯入）</div>
+    <div class="al al-i" style="margin-bottom:10px">
+      授權資料夾後，自動找出所有 .xlsx/.xls/.msg/.eml 並批次解析 SMV 分頁。<br>
+      支援多個資料夾。已匯入過的檔案自動跳過。<br>
+      <span style="color:var(--amb);font-size:11px">⚠️ 需要 Chrome 或 Edge，重新整理後需再點「允許」一次。</span>
+    </div>
+    <div id="folderList" style="margin-bottom:10px">
+      <div style="font-size:12px;color:var(--mut);padding:8px 10px;background:var(--alt);border-radius:6px">尚未設定任何資料夾。</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <button class="btn btn-g" onclick="addScanFolder()" style="font-size:12px">➕ 新增資料夾</button>
+      <button class="btn btn-y" id="btnScanFolders" onclick="scanAllFolders()" style="display:none;font-size:12px">🔍 立即掃描所有資料夾</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--mut);cursor:pointer">
+        <input type="checkbox" id="chkAutoScan" onchange="saveAutoScanPref()"> 開啟時自動掃描
+      </label>
+      <button onclick="clearScannedLog()" style="font-size:11px;padding:2px 8px;background:var(--alt);color:var(--red);border:1px solid #fecaca;border-radius:4px;cursor:pointer">🗑 重置掃描記錄</button>
+    </div>
+    <div id="scanMsg" style="font-size:12px;min-height:18px"></div>
+  </div>
+</div>
+
+<!-- ══ STYLE COMPARISON ══ -->
+<div class="sec" id="sec-style">
+  <div class="al al-i">
+    按<b>款式名稱</b>搜尋，點開任一款式可查看它在所有已匯入版本的 SMV 歷史變化，以及連結的車縫生產記錄。
+  </div>
+  <div class="fb">
+    <input type="text" id="st-q" placeholder="🔍 搜尋款式..." oninput="renderStyleTab()" style="width:160px">
+    <select id="st-sec" onchange="renderStyleTab()">
+      <option value="">全部 Section</option>
+      <option>Apron</option><option>Garment</option><option>Cutting</option>
+    </select>
+    <select id="st-filter" onchange="renderStyleTab()">
+      <option value="">全部</option>
+      <option value="changed">有異動</option>
+      <option value="missing">缺少 SMV（在車縫記錄有但 SMV 無）</option>
+    </select>
+    <span id="st-count" style="font-size:11px;color:var(--mut);margin-left:auto"></span>
+  </div>
+  <div id="style-list"></div>
+</div>
+
+<!-- ══ HOURS ANALYSIS ══ -->
+<div class="sec" id="sec-hours">
+  <div class="pnav">
+    <div class="seg">
+      <button id="pb-day"   class="on" onclick="setHP('day')"  >日</button>
+      <button id="pb-week"  onclick="setHP('week')" >週</button>
+      <button id="pb-month" onclick="setHP('month')">月</button>
+      <button id="pb-year"  onclick="setHP('year')" >年</button>
+    </div>
+    <button class="nbtn" onclick="navHP(-1)">◀</button>
+    <span id="per-label" style="font-weight:700;font-size:14px;min-width:150px;text-align:center"></span>
+    <button class="nbtn" onclick="navHP(1)">▶</button>
+    <select id="hp-sec" onchange="renderHours()">
+      <option value="">全部 Section</option>
+      <option>Garment</option><option>Apron</option>
+    </select>
+    <select id="hp-line" onchange="renderHours()"><option value="">全部線別</option></select>
+    <button class="btn btn-b btn-sm" onclick="exportHours()">⬇ 匯出</button>
+  </div>
+  <div class="al al-i" style="margin-bottom:10px">
+    <b>應有工時</b> = 正常班人數×480分鐘 + 加班人數×加班時數×60　
+    <b>實際產出工時</b> = Σ（件數 × 該款 SMV）　
+    <b>SMV真實效率</b> = 實際工時 ÷ 應有工時 × 100%<br>
+    <span style="color:#065f46">若款式找不到 SMV 會顯示 ⚠ 並用報表效率代替</span>
+  </div>
+  <div id="hp-kpis" class="kpis"></div>
+  <div class="card">
+    <div class="ct" id="hp-title">工時效率明細</div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>線別</th><th>Section</th><th>日期</th>
+          <th>正常班人數</th><th>加班人數</th>
+          <th>應有工時(分)</th><th>應有工時 OT(分)</th>
+          <th>實際產出工時(分)</th>
+          <th style="background:#059669">SMV正常班效率%</th>
+          <th style="background:#0369a1">SMV含加班效率%</th>
+          <th style="background:#374151">報表效率%</th>
+          <th>⚠缺SMV款</th>
+        </tr></thead>
+        <tbody id="hp-tbody"><tr><td colspan="12" class="empty">讀取車縫資料中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ VERSION DIFF ══ -->
+<div class="sec" id="sec-diff">
+  <div class="card">
+    <div class="ct">🔄 選擇兩個版本比對</div>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:9px;align-items:center;margin-bottom:11px">
+      <div>
+        <div style="font-size:11px;color:var(--mut);margin-bottom:3px">📌 基準版本（舊）</div>
+        <select id="sel-a" onchange="runDiff()" style="width:100%;padding:6px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:12px;font-family:inherit">
+          <option value="">── 請選擇 ──</option></select>
+      </div>
+      <div style="font-size:20px;color:var(--mut);padding-top:16px;text-align:center">→</div>
+      <div>
+        <div style="font-size:11px;color:var(--mut);margin-bottom:3px">📌 比較版本（新）</div>
+        <select id="sel-b" onchange="runDiff()" style="width:100%;padding:6px 8px;border:1.5px solid var(--bdr);border-radius:6px;font-size:12px;font-family:inherit">
+          <option value="">── 請選擇 ──</option></select>
+      </div>
+    </div>
+    <div class="fb">
+      <div class="seg" id="df-seg">
+        <button class="on" onclick="setDF('')">全部</button>
+        <button onclick="setDF('up')">▲ 上升</button>
+        <button onclick="setDF('down')">▼ 下降</button>
+        <button onclick="setDF('new')">★ 新增</button>
+        <button onclick="setDF('same')">— 不變</button>
+      </div>
+      <select id="df-type" onchange="runDiff()">
+        <option value="">全部類型</option>
+        <option>APRON</option><option>GARMENT</option><option>NAPKIN</option><option>SKIRT</option><option>TOP</option>
+      </select>
+      <input type="text" id="df-q" placeholder="搜尋款式..." oninput="runDiff()" style="width:120px">
+    </div>
+  </div>
+  <div id="diff-kpis" class="kpis"></div>
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr>
+        <th>款式</th><th>客戶</th><th>類型</th>
+        <th style="background:#374151">舊 Original(100%)</th>
+        <th style="background:#374151">舊 Current(65%)</th>
+        <th style="background:#1e40af">新 Original(100%)</th>
+        <th style="background:#1e40af">新 Current(65%)</th>
+        <th>Δ Current</th><th>變幅%</th><th>狀態</th>
+      </tr></thead>
+      <tbody id="diff-tbody"><tr><td colspan="10" class="empty">請選擇兩個版本</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ HISTORY ══ -->
+<div class="sec" id="sec-history">
+  <div class="card">
+    <div class="ct">📚 已儲存的 SMV 版本</div>
+    <div class="fb">
+      <label>年</label>
+      <select id="hy-year" onchange="renderHistory()"><option value="">全部</option></select>
+      <label>月</label>
+      <select id="hy-month" onchange="renderHistory()">
+        <option value="">全部</option>
+        <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+        <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+        <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+        <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+      </select>
+      <select id="hy-section" onchange="renderHistory()">
+        <option value="">全部</option><option>Apron</option><option>Garment</option><option>Cutting</option>
+      </select>
+    </div>
+    <div id="snap-list"><div class="empty">尚無資料</div></div>
+  </div>
+  <div id="hist-detail" class="card" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+      <div class="ct" id="hist-title" style="margin-bottom:0">款式詳情</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-b btn-sm" onclick="exportHistCSV()">⬇ CSV</button>
+        <button class="btn btn-g btn-sm" onclick="closeHist()">✕</button>
+      </div>
+    </div>
+    <div class="fb">
+      <input type="text" id="hd-q" placeholder="搜尋款式..." oninput="filterHist()" style="width:120px">
+      <select id="hd-type" onchange="filterHist()">
+        <option value="">全部類型</option>
+        <option>APRON</option><option>GARMENT</option><option>NAPKIN</option><option>SKIRT</option><option>TOP</option>
+      </select>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>款式</th><th>客戶</th><th>類型</th>
+        <th>Original SMV(100%)</th><th>Current SMV(65%)</th><th>New SMV</th><th>Pcs/Box</th><th>備註</th>
+      </tr></thead>
+      <tbody id="hd-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// OLE2 (.msg) parser
+// ══════════════════════════════════════════════════════
+function parseMsgBuffer(buf){
+  const u8=new Uint8Array(buf),dv=new DataView(buf);
+  if(![0xD0,0xCF,0x11,0xE0,0xA1,0xB1,0x1A,0xE1].every((b,i)=>u8[i]===b)) throw new Error('非OLE2');
+  const ssSz=1<<dv.getUint16(30,true),msSz=1<<dv.getUint16(32,true),msCut=dv.getUint32(56,true);
+  const dirSec=dv.getUint32(48,true),mfSec=dv.getUint32(60,true);
+  const fat=[];
+  for(let d=0;d<109;d++){const s=dv.getUint32(76+d*4,true);if(s>=0xFFFFFFFC)break;const b=512+s*ssSz;for(let i=0;i<ssSz/4;i++)fat.push(dv.getInt32(b+i*4,true));}
+  function chain(start,maxB){const ps=[];let s=start,t=0;while(s>=0&&s<fat.length){ps.push(u8.subarray(512+s*ssSz,512+s*ssSz+ssSz));t+=ssSz;if(maxB&&t>=maxB+ssSz)break;s=fat[s];}const out=new Uint8Array(maxB||t);let p=0;for(const c of ps){const take=Math.min(c.length,out.length-p);out.set(c.subarray(0,take),p);p+=take;if(p>=out.length)break;}return out;}
+  const dir=chain(dirSec),dvd=new DataView(dir.buffer);
+  const rootStart=dvd.getInt32(116,true),rootSize=dvd.getUint32(120,true),mini=chain(rootStart,rootSize);
+  let mfat=null;if(mfSec<0xFFFFFFFE){const md=chain(mfSec);mfat=new Int32Array(md.buffer,0,md.byteLength/4);}
+  function mc(start,size){if(!mfat)return new Uint8Array(0);const out=new Uint8Array(size);let p=0,s=start;while(s>=0&&s<mfat.length&&p<size){const off=s*msSz,take=Math.min(msSz,size-p);out.set(mini.subarray(off,off+take),p);p+=take;s=mfat[s];}return out;}
+  function entry(i){const o=i*128,nl=dvd.getUint16(o+64,true);let nm='';if(nl>2)for(let k=0;k<(nl-2)/2;k++)nm+=String.fromCharCode(dvd.getUint16(o+k*2,true));return{name:nm,type:dir[o+66],left:dvd.getInt32(o+68,true),right:dvd.getInt32(o+72,true),child:dvd.getInt32(o+76,true),start:dvd.getInt32(o+116,true),size:dvd.getUint32(o+120,true)};}
+  function getData(i){const e=entry(i);if(e.type!==2||e.start<0)return null;return e.size<msCut&&mfat?mc(e.start,e.size):chain(e.start,e.size);}
+  const numE=dir.byteLength/128;
+  function siblings(idx,out=[]){if(idx<0||idx>=numE)return out;const e=entry(idx);siblings(e.left,out);out.push(idx);siblings(e.right,out);return out;}
+  function children(idx){const c=entry(idx).child;return c<0?[]:siblings(c);}
+  const atts=[];
+  for(const idx of children(0)){
+    const e=entry(idx);if(!e.name.toLowerCase().startsWith('__attach'))continue;
+    let fname='',dIdx=-1;
+    for(const k of children(idx)){const n=entry(k).name.toUpperCase();
+      if(n.includes('37010102')){dIdx=k;}
+      else if(n.includes('3707001F')){const raw=getData(k);if(raw)fname=new TextDecoder('utf-16le').decode(raw).replace(/\0/g,'');}
+      else if(!fname&&n.includes('3704001F')){const raw=getData(k);if(raw)fname=new TextDecoder('utf-16le').decode(raw).replace(/\0/g,'');}
+    }
+    if(dIdx>=0&&fname){const d=getData(dIdx);if(d)atts.push({filename:fname,data:d});}
+  }
+  return atts;
+}
+
+// EML parser
+async function parseEML(file){
+  const text=await file.text(),results=[];
+  const bRe=/boundary=["']?([^"'\r\n;\s]+)["']?/gi;const bounds=[];let bm;
+  while((bm=bRe.exec(text))!==null)bounds.push(bm[1]);
+  for(const boundary of[...new Set(bounds)]){
+    const parts=text.split('--'+boundary);
+    for(const part of parts){
+      if(!/filename\s*=\s*["']?[^"'\r\n]*\.xlsx?["']?/i.test(part)&&!/content-type:[^\r\n]*(spreadsheet|excel|openxml)/i.test(part))continue;
+      let fname='attachment.xlsx';
+      const fnM=part.match(/filename\*?=\s*["']?([^"'\r\n;]+\.xlsx?)["']?/i)||part.match(/\bname\s*=\s*["']?([^"'\r\n;]+\.xlsx?)["']?/i);
+      if(fnM)fname=fnM[1].trim();
+      const bodyM=part.match(/\r?\n\r?\n([\s\S]+?)(?:--|\s*$)/);if(!bodyM)continue;
+      const b64=bodyM[1].replace(/[\r\n\s]/g,'');if(b64.length<100)continue;
+      try{const bin=atob(b64),bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);if(bytes[0]===0x50&&bytes[1]===0x4B)results.push({filename:fname.split(/[/\\]/).pop(),data:bytes});}catch(e){}
+    }
+  }
+  return results;
+}
+
+// ══════════════════════════════════════════════════════
+// DATE PARSER  — FIX: prefer exact "Daily Output" sheet, skip numeric cells, year sanity check
+// ══════════════════════════════════════════════════════
+const MONTHS_EN={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+
+function extractReportDate(wb, filename){
+  // CRITICAL FIX: prefer exact "Daily Output" over "Daily Output1" etc.
+  const allSheets=wb.SheetNames;
+  const exact=allSheets.find(n=>n.trim()==='Daily Output');
+  const dailies=allSheets.filter(n=>/daily output/i.test(n.trim()));
+  // Ordered: exact match first, then others, then non-daily sheets
+  const ordered=[
+    ...dailies.filter(n=>n.trim()==='Daily Output'),
+    ...dailies.filter(n=>n.trim()!=='Daily Output' && !/\d$/.test(n.trim())), // no suffix
+    ...dailies.filter(n=>/\d$/.test(n.trim())),  // numbered last (e.g. Daily Output1)
+    ...allSheets.filter(n=>!dailies.includes(n)).slice(0,2)
+  ];
+
+  for(const sn of ordered.slice(0,4)){
+    const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+    for(let i=0;i<Math.min(6,raw.length);i++){
+      // CRITICAL FIX: only use string cells, skip numbers (Excel date serials)
+      const rowText=(raw[i]||[]).map(c=>{
+        if(c==null) return '';
+        if(typeof c==='number') return '';   // skip Excel date serials!
+        if(c instanceof Date) return '';      // skip Date objects!
+        return String(c);
+      }).join(' ');
+      const m1=rowText.match(/as\s+of\s+([A-Za-z]{3,})\s+(\d{1,2})[,\s]+(\d{4})/i);
+      if(m1){const mo=MONTHS_EN[m1[1].toLowerCase().slice(0,3)];if(mo&&parseInt(m1[3])>=2020)return`${m1[3]}-${String(mo).padStart(2,'0')}-${String(m1[2]).padStart(2,'0')}`;}
+      const m2=rowText.match(/([A-Za-z]{3,})\s+(\d{1,2})[,\s]+(\d{4})/);
+      if(m2){const mo=MONTHS_EN[m2[1].toLowerCase().slice(0,3)];if(mo&&parseInt(m2[3])>=2020)return`${m2[3]}-${String(mo).padStart(2,'0')}-${String(m2[2]).padStart(2,'0')}`;}
+    }
+  }
+  // Fallback: parse from filename
+  const fm=filename.replace(/_+/g,' ').replace(/-/g,' ');
+  const mf=fm.match(/([A-Za-z]{3,})\s+(\d{1,2})[,\s]+(\d{4})/);
+  if(mf){const mo=MONTHS_EN[mf[1].toLowerCase().slice(0,3)];if(mo&&parseInt(mf[3])>=2020)return`${mf[3]}-${String(mo).padStart(2,'0')}-${String(mf[2]).padStart(2,'0')}`;}
+  return new Date().toISOString().slice(0,10);
+}
+
+// ══════════════════════════════════════════════════════
+// SMV SHEET PARSER
+// ══════════════════════════════════════════════════════
+function parseSMVSheet(wb,filename){
+  const sn=wb.SheetNames.find(n=>n.trim().toUpperCase()==='SMV');
+  if(!sn)return null;
+  const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+  let hRow=-1;
+  for(let i=0;i<Math.min(8,raw.length);i++){
+    if((raw[i]||[]).map(c=>String(c||'')).join('|').toUpperCase().match(/STYLE.*SMV|SMV.*STYLE/)){hRow=i;break;}
+  }
+  if(hRow<0)return null;
+  const H=(raw[hRow]||[]).map(c=>String(c||'').trim().toUpperCase());
+  const ci=pat=>H.findIndex(h=>h.includes(pat.toUpperCase()));
+  const isCutting=H.some(h=>h.includes('KIND OF PRODUCT')||h.includes('1ST ORIGINAL'));
+  const fn=filename.toUpperCase();
+  let section=fn.includes('CUTTING')||fn.includes('CUT')?'Cutting':fn.includes('GARMENT')?'Garment':'Apron';
+  let iNo,iCust,iType,iStyle,iOrigSMV,iCurSMV,iNewSMV,iPcs,iRem;
+  if(isCutting){
+    section='Cutting';iNo=0;iType=H.findIndex(h=>h.includes('KIND'));
+    iCust=ci('CUSTOMER');iStyle=ci('STYLE');
+    iCurSMV=H.findIndex(h=>h.includes('SMV')&&h.includes('VRT')&&!h.includes('OLD')&&!h.includes('ORIGINAL'));
+    iOrigSMV=H.findIndex(h=>h.includes('ORIGINAL')&&h.includes('SMV'));
+    if(iOrigSMV<0)iOrigSMV=H.findIndex(h=>h.includes('OLD SMV'));
+    iNewSMV=-1;iPcs=ci('PCS');iRem=-1;
+  }else{
+    iNo=ci('NO');iType=ci('TYPE');iCust=ci('CUSTOMER');iStyle=ci('STYLE');
+    iOrigSMV=H.findIndex(h=>h.includes('LAST')&&h.includes('SMV'));
+    iCurSMV=H.findIndex(h=>h.includes('CURRENT')&&h.includes('SMV'));
+    iNewSMV=H.findIndex(h=>h.trim()==='NEW SMV');
+    iPcs=H.findIndex(h=>h.includes('PCS'));iRem=H.findIndex(h=>h.includes('REMARK'));
+  }
+  const reportDate=extractReportDate(wb,filename);
+  const items=[];
+  for(let i=hRow+1;i<raw.length;i++){
+    const r=raw[i];if(!r)continue;
+    const style=r[iStyle]!=null?String(r[iStyle]).trim():'';
+    if(!style||style.toUpperCase().startsWith('STYLE')||style==='-')continue;
+    const origSMV=iOrigSMV>=0?parseFloat(r[iOrigSMV]):NaN;
+    const curSMV=iCurSMV>=0?parseFloat(r[iCurSMV]):NaN;
+    if(isNaN(origSMV)&&isNaN(curSMV))continue;
+    items.push({
+      no:r[iNo]!=null?String(r[iNo]).trim():'',
+      cust:r[iCust]!=null?String(r[iCust]).trim():'',
+      type:r[iType]!=null?String(r[iType]).trim().toUpperCase():'',
+      style,
+      origSMV:isNaN(origSMV)?null:+origSMV.toFixed(5),
+      curSMV:isNaN(curSMV)?null:+curSMV.toFixed(5),
+      newSMV:(iNewSMV>=0&&!isNaN(parseFloat(r[iNewSMV])))?+parseFloat(r[iNewSMV]).toFixed(5):null,
+      pcsBox:iPcs>=0?r[iPcs]:null,
+      remark:iRem>=0&&r[iRem]!=null?String(r[iRem]).trim():'',
+    });
+  }
+  if(!items.length)return null;
+  return{section,items,reportDate};
+}
+
+// ══════════════════════════════════════════════════════
+// IndexedDB (SewingProd v6)
+// ══════════════════════════════════════════════════════
+let db=null,allSnaps=[],SEW_DB=[],dbReady=false;
+
+async function openDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open('SewingProd',6);
+    req.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains('smv_snapshots')){
+        const s=d.createObjectStore('smv_snapshots',{keyPath:'id',autoIncrement:true});
+        s.createIndex('by_date','reportDate');
+      }
+    };
+    req.onsuccess=e=>{db=e.target.result;res(db);};
+    req.onerror=e=>rej(e.target.error);
+    req.onblocked=()=>rej(new Error('DB blocked'));
+  });
+}
+const idbStore=mode=>{if(!db)throw new Error('DB未就緒');return db.transaction('smv_snapshots',mode).objectStore('smv_snapshots');};
+function dbAdd(o){return new Promise((r,j)=>{const q=idbStore('readwrite').add(o);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error);});}
+function dbAll(){return new Promise((r,j)=>{const q=idbStore('readonly').getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error);});}
+function dbDel(id){return new Promise((r,j)=>{const q=idbStore('readwrite').delete(id);q.onsuccess=r;q.onerror=()=>j(q.error);});}
+
+// Load sewing data from localStorage (sewing_v5 LS key)
+function loadSewingData(){
+  try{
+    const raw=localStorage.getItem('sewing_prod_v1')||'[]';
+    SEW_DB=JSON.parse(raw);
+    document.getElementById('hSewing').textContent=SEW_DB.length.toLocaleString();
+    return SEW_DB;
+  }catch(e){SEW_DB=[];return [];}
+}
+
+// Build SMV dictionary from latest snapshot per section
+function buildSMVDict(){
+  const dict={};
+  // Sort snaps by date desc, process all to build full dict
+  const sorted=[...allSnaps].sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+  sorted.forEach(snap=>{
+    snap.items.forEach(i=>{
+      const key=i.style.toUpperCase();
+      if(!dict[key]) dict[key]={curSMV:i.curSMV,origSMV:i.origSMV,section:snap.section,reportDate:snap.reportDate};
+    });
+  });
+  return dict;
+}
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+function goTab(name,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('sec-'+name).classList.add('on');
+  if(name==='style')  renderStyleTab();
+  if(name==='hours')  {initHP();renderHours();}
+  if(name==='diff')   loadDiffSelects();
+  if(name==='history'){buildYearSel();renderHistory();}
+}
+function toast(msg,dur=3500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function showErr(m){const b=document.getElementById('import-err');b.textContent='⚠ '+m;b.style.display='block';}
+function hideErr(){document.getElementById('import-err').style.display='none';}
+const f4=v=>v==null?'–':(+v).toFixed(4);
+function fmtDt(iso){if(!iso)return'';const d=new Date(iso);return`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;}
+function fmtDtm(iso){const d=new Date(iso);return`${fmtDt(iso)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function sbadge(s){const c=s==='Garment'?'bg':s==='Cutting'?'bc':'ba';return`<span class="badge ${c}">${s}</span>`;}
+function updateHeader(){
+  document.getElementById('hSnaps').textContent=allSnaps.length;
+  document.getElementById('hStyles').textContent=new Set(allSnaps.flatMap(s=>s.items.map(i=>i.style.toUpperCase()))).size;
+  loadSewingData();
+}
+
+// ══════════════════════════════════════════════════════
+// IMPORT
+// ══════════════════════════════════════════════════════
+let pending=[];
+function setupZone(zId,iId,handler){
+  const z=document.getElementById(zId),inp=document.getElementById(iId);
+  inp.onchange=e=>{handler(e.target.files);inp.value='';};
+  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('over');});
+  z.addEventListener('dragleave',()=>z.classList.remove('over'));
+  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('over');handler(e.dataTransfer.files);});
+}
+setupZone('zone-xlsx','inp-xlsx',handleExcel);
+setupZone('zone-msg','inp-msg',handleMsg);
+
+async function handleExcel(files){
+  pending=[];hideErr();
+  const arr=Array.from(files).filter(f=>f.name.match(/\.xlsx?$/i));
+  if(!arr.length){showErr('未偵測到 .xlsx');return;}
+  showPrev('<p style="color:var(--mut)">解析中...</p>');
+  let html='';
+  for(const f of arr){
+    try{const wb=XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:'array',raw:true});const r=parseSMVSheet(wb,f.name);
+      if(!r)html+=errLn(f.name,'找不到SMV分頁');
+      else{pending.push({fileName:f.name,section:r.section,items:r.items,reportDate:r.reportDate,importedAt:new Date().toISOString()});html+=prevBlock(f.name,r);}
+    }catch(e){html+=errLn(f.name,e.message);}
+  }
+  showPrev(html);
+}
+async function handleMsg(files){
+  pending=[];hideErr();
+  const arr=Array.from(files).filter(f=>f.name.match(/\.(msg|eml)$/i));
+  if(!arr.length){showErr('未偵測到 .msg/.eml');return;}
+  showPrev('<p style="color:var(--mut)">解壓中...</p>');
+  let html='';
+  for(const f of arr){
+    html+=`<div style="font-weight:700;margin:7px 0 3px;color:#1e2640">📧 ${f.name}</div>`;
+    try{
+      const buf=await f.arrayBuffer();
+      const atts=f.name.toLowerCase().endsWith('.eml')?await parseEML(f):parseMsgBuffer(buf);
+      const xs=atts.filter(a=>a.filename.match(/\.xlsx?$/i));
+      if(!xs.length){html+=errLn('(此email)','未找到Excel附件');continue;}
+      for(const att of xs){
+        html+=`<div class="found-ok">📎 <b>${att.filename}</b> (${(att.data.length/1024).toFixed(0)}KB)</div>`;
+        try{const wb=XLSX.read(att.data,{type:'array',raw:true});const r=parseSMVSheet(wb,att.filename);
+          if(!r)html+=errLn(att.filename,'找不到SMV分頁',true);
+          else{pending.push({fileName:att.filename,section:r.section,items:r.items,reportDate:r.reportDate,importedAt:new Date().toISOString(),fromEmail:f.name});html+=prevBlock(att.filename,r,true);}
+        }catch(e){html+=errLn(att.filename,e.message,true);}
+      }
+    }catch(e){html+=errLn(f.name,'無法解讀：'+e.message);}
+  }
+  showPrev(html);
+}
+function errLn(name,msg,indent=false){return`<div class="found-er" style="margin-left:${indent?18:0}px">❌ ${name}：${msg}</div>`;}
+function prevBlock(filename,r,indent=false){
+  const types={};r.items.forEach(i=>{types[i.type]=(types[i.type]||0)+1;});
+  const tStr=Object.entries(types).map(([k,v])=>`${k}×${v}`).join('、');
+  return`<div class="prev-file" style="margin-left:${indent?18:0}px">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+      ${sbadge(r.section)} <b>${filename}</b>
+      <span style="font-size:11px;color:var(--mut)">📅 ${r.reportDate} · ${r.items.length}款 · ${tStr}</span>
+    </div>
+    <table style="font-size:11px"><thead><tr><th>款式</th><th>客戶</th><th>Original SMV</th><th>Current SMV(65%)</th></tr></thead>
+    <tbody>${r.items.slice(0,4).map(i=>`<tr><td class="bold">${i.style}</td><td>${i.cust}</td><td class="mono" style="color:var(--mut)">${f4(i.origSMV)}</td><td class="mono" style="color:var(--pri);font-weight:700">${f4(i.curSMV)}</td></tr>`).join('')}
+    ${r.items.length>4?`<tr><td colspan="4" style="text-align:center;color:var(--mut)">...還有 ${r.items.length-4} 款</td></tr>`:''}</tbody></table>
+  </div>`;
+}
+function showPrev(html){
+  document.getElementById('preview-body').innerHTML=html;
+  document.getElementById('preview-card').style.display='block';
+  document.getElementById('confirm-btn').disabled=pending.length===0;
+  document.getElementById('auto-diff-card').style.display='none';
+}
+function cancelImport(){pending=[];document.getElementById('preview-card').style.display='none';document.getElementById('auto-diff-card').style.display='none';}
+async function confirmImport(){
+  if(!dbReady){showErr('資料庫未就緒');return;}
+  if(!pending.length){showErr('無資料可儲存');return;}
+  const btn=document.getElementById('confirm-btn');btn.disabled=true;btn.textContent='儲存中...';
+  try{
+    const diffs=[];
+    for(const p of pending){
+      const prev=allSnaps.filter(s=>s.section===p.section&&s.reportDate<=p.reportDate).sort((a,b)=>b.reportDate.localeCompare(a.reportDate))[0]||null;
+      await dbAdd(p);
+      if(prev)diffs.push({snapA:prev,snapB:p,rows:computeDiff(prev.items,p.items)});
+    }
+    allSnaps=await dbAll();updateHeader();
+    toast(`✅ 已儲存 ${pending.length} 筆，共 ${pending.reduce((s,p)=>s+p.items.length,0)} 款`);
+    if(diffs.length){
+      const card=document.getElementById('auto-diff-card');card.style.display='block';
+      document.getElementById('auto-diff-body').innerHTML=diffs.map(({snapA,snapB,rows})=>renderDiffHTML(snapA,snapB,rows,true)).join('<hr style="margin:14px 0;border-color:var(--bdr)">');
+    }
+    pending=[];document.getElementById('preview-card').style.display='none';
+    if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
+  }catch(e){showErr('儲存失敗：'+e.message);}
+  finally{btn.disabled=false;btn.textContent='✅ 確認儲存';}
+}
+
+// ══════════════════════════════════════════════════════
+// DIFF LOGIC
+// ══════════════════════════════════════════════════════
+function computeDiff(itemsA,itemsB){
+  const mapA={};itemsA.forEach(i=>{mapA[i.style.toUpperCase()]=i;});
+  const allK=[...new Set([...itemsA.map(i=>i.style.toUpperCase()),...itemsB.map(i=>i.style.toUpperCase())])];
+  return allK.map(key=>{
+    const a=mapA[key],b=itemsB.find(i=>i.style.toUpperCase()===key);
+    const cA=a?.curSMV??null,cB=b?.curSMV??null;
+    let status,delta=null,pct=null;
+    if(!a&&b)status='new';
+    else if(!b&&a)status='removed';
+    else if(cA!=null&&cB!=null){delta=+(cB-cA).toFixed(5);pct=cA!==0?+((cB/cA-1)*100).toFixed(2):null;status=Math.abs(delta)<0.00001?'same':delta>0?'up':'down';}
+    else status='same';
+    return{style:b?.style||a?.style,cust:b?.cust||a?.cust||'',type:b?.type||a?.type||'',oA:a?.origSMV??null,cA,oB:b?.origSMV??null,cB,delta,pct,status};
+  });
+}
+
+function renderDiffHTML(snapA,snapB,rows,compact=false){
+  const ups=rows.filter(r=>r.status==='up'),dns=rows.filter(r=>r.status==='down'),nws=rows.filter(r=>r.status==='new'),rms=rows.filter(r=>r.status==='removed');
+  const changed=rows.filter(r=>r.status!=='same'&&r.status!=='removed');
+  return`<div style="margin-bottom:9px;font-size:12px">
+    ${sbadge(snapA.section)} <b>${snapA.fileName.slice(0,28)}</b><span style="color:var(--mut)"> (${snapA.reportDate})</span>
+    <span style="margin:0 5px;font-size:15px">→</span>
+    <b>${snapB.fileName.slice(0,28)}</b><span style="color:var(--mut)"> (${snapB.reportDate})</span>
+  </div>
+  <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:9px">
+    <div style="background:#fef2f2;border-radius:7px;padding:7px 13px;text-align:center"><div style="font-size:18px;font-weight:800;font-family:monospace;color:var(--red)">${ups.length}</div><div style="font-size:10px;color:var(--mut)">▲ SMV 上升</div></div>
+    <div style="background:#f0fdf4;border-radius:7px;padding:7px 13px;text-align:center"><div style="font-size:18px;font-weight:800;font-family:monospace;color:var(--grn)">${dns.length}</div><div style="font-size:10px;color:var(--mut)">▼ SMV 下降</div></div>
+    <div style="background:#eff6ff;border-radius:7px;padding:7px 13px;text-align:center"><div style="font-size:18px;font-weight:800;font-family:monospace;color:var(--prd)">${nws.length}</div><div style="font-size:10px;color:var(--mut)">★ 新增款</div></div>
+    ${rms.length?`<div style="background:#fafafa;border-radius:7px;padding:7px 13px;text-align:center"><div style="font-size:18px;font-weight:800;font-family:monospace;color:#9ca3af">${rms.length}</div><div style="font-size:10px;color:var(--mut)">— 移除</div></div>`:''}
+  </div>
+  ${changed.length===0?`<div class="al al-ok">✅ 此期間 SMV 無異動（共 ${rows.length} 款一致）</div>`:
+  `<div class="tw" style="max-height:${compact?280:450}px"><table>
+    <thead><tr><th>款式</th><th>客戶</th><th>類型</th>
+      <th style="background:#374151">舊 Original</th><th style="background:#374151">舊 Current</th>
+      <th style="background:#1e40af">新 Original</th><th style="background:#1e40af">新 Current</th>
+      <th>Δ Current</th><th>變幅%</th><th>狀態</th>
+    </tr></thead>
+    <tbody>${changed.map(r=>{
+      const rc=r.status==='up'?'up':r.status==='down'?'dn':r.status==='new'?'nw':'rm';
+      const dc=r.delta>0?'var(--red)':r.delta<0?'var(--grn)':'#888';
+      const oChg=r.oA!=null&&r.oB!=null&&Math.abs(r.oB-r.oA)>0.00001;
+      const tag=r.status==='up'?'<span class="tag tu">▲</span>':r.status==='down'?'<span class="tag td">▼</span>':r.status==='new'?'<span class="tag tn">★</span>':'<span class="tag tr_">—移除</span>';
+      return`<tr class="${rc}"><td class="bold">${r.style}</td><td>${r.cust}</td><td>${r.type}</td>
+        <td class="mono" style="color:var(--mut)">${f4(r.oA)}</td><td class="mono" style="color:var(--mut)">${f4(r.cA)}</td>
+        <td class="mono${oChg?';color:var(--red);font-weight:700':''}">${f4(r.oB)}${oChg?' ⚠':''}</td>
+        <td class="mono bold">${f4(r.cB)}</td>
+        <td class="mono" style="font-weight:700;color:${dc}">${r.delta!=null?(r.delta>0?'+':'')+r.delta.toFixed(4):'–'}</td>
+        <td style="font-weight:700;color:${dc}">${r.pct!=null?(r.pct>0?'+':'')+r.pct.toFixed(2)+'%':'–'}</td>
+        <td>${tag}</td></tr>`;
+    }).join('')}
+    </tbody></table></div>`}`;
+}
+
+// ══════════════════════════════════════════════════════
+// STYLE COMPARISON TAB  (by style, not by date)
+// ══════════════════════════════════════════════════════
+function renderStyleTab(){
+  const q=document.getElementById('st-q').value.trim().toUpperCase();
+  const sec=document.getElementById('st-sec').value;
+  const filt=document.getElementById('st-filter').value;
+
+  if(!allSnaps.length){document.getElementById('style-list').innerHTML='<div class="empty">尚無 SMV 資料，請先匯入</div>';return;}
+
+  // Build style → snapshots map
+  const styleMap={};
+  allSnaps.sort((a,b)=>a.reportDate.localeCompare(b.reportDate));
+  allSnaps.forEach(snap=>{
+    snap.items.forEach(i=>{
+      const key=i.style.toUpperCase();
+      if(!styleMap[key])styleMap[key]={style:i.style,cust:i.cust,type:i.type,section:snap.section,snapshots:[]};
+      styleMap[key].snapshots.push({reportDate:snap.reportDate,fileName:snap.fileName,origSMV:i.origSMV,curSMV:i.curSMV,newSMV:i.newSMV,snapId:snap.id});
+    });
+  });
+
+  // Build style → sewing production map from SEW_DB
+  const sewMap={};
+  SEW_DB.forEach(r=>{
+    if(!r.styleNo)return;
+    const key=r.styleNo.toUpperCase();
+    if(!sewMap[key])sewMap[key]={totalPcs:0,days:new Set(),lines:new Set(),smvSum:0,smvCount:0};
+    sewMap[key].totalPcs+=(r.pieces||0);
+    if(r.date)sewMap[key].days.add(r.date);
+    if(r.lineNo)sewMap[key].lines.add(r.lineNo);
+    if(r.smv>0){sewMap[key].smvSum+=r.smv;sewMap[key].smvCount++;}
+  });
+
+  // Collect all unique styles (also add ones only in sewing)
+  SEW_DB.forEach(r=>{if(r.styleNo&&!styleMap[r.styleNo.toUpperCase()])styleMap[r.styleNo.toUpperCase()]={style:r.styleNo,cust:'',type:'',section:'',snapshots:[],sewOnly:true};});
+
+  let styles=Object.values(styleMap);
+  if(sec)styles=styles.filter(s=>s.section===sec||s.snapshots.some(ss=>ss.section===sec));
+  if(q)styles=styles.filter(s=>s.style.toUpperCase().includes(q)||s.cust.toUpperCase().includes(q));
+  if(filt==='changed')styles=styles.filter(s=>{
+    const snaps=s.snapshots;if(snaps.length<2)return false;
+    for(let i=1;i<snaps.length;i++){if(snaps[i].curSMV!=null&&snaps[i-1].curSMV!=null&&Math.abs(snaps[i].curSMV-snaps[i-1].curSMV)>0.00001)return true;}
+    return false;
+  });
+  if(filt==='missing')styles=styles.filter(s=>sewMap[s.style.toUpperCase()]&&!s.snapshots.length);
+
+  styles.sort((a,b)=>a.style.localeCompare(b.style));
+  document.getElementById('st-count').textContent=`共 ${styles.length} 款`;
+
+  if(!styles.length){document.getElementById('style-list').innerHTML='<div class="empty">無符合條件的款式</div>';return;}
+
+  document.getElementById('style-list').innerHTML=styles.slice(0,300).map((s,idx)=>{
+    const snaps=s.snapshots;
+    const latestSMV=snaps.length?snaps[snaps.length-1].curSMV:null;
+    const hasDiff=snaps.length>=2&&snaps.some((ss,i)=>i>0&&snaps[i-1].curSMV!=null&&ss.curSMV!=null&&Math.abs(ss.curSMV-snaps[i-1].curSMV)>0.00001);
+    const sew=sewMap[s.style.toUpperCase()];
+    const sec2=s.section?sbadge(s.section):'';
+    const smvAvgInSew=sew&&sew.smvCount>0?(sew.smvSum/sew.smvCount).toFixed(4):'–';
+    const diffBadge=hasDiff?'<span class="tag tu" style="font-size:10px">⚡SMV有異動</span>':'';
+    const missBadge=sew&&!snaps.length?'<span class="tag ts" style="font-size:10px;background:#fef9c3;color:#92400e">⚠僅在車縫記錄</span>':'';
+    return`<div class="style-row" id="sr-${idx}">
+      <div class="style-hd" onclick="toggleStyle(${idx})">
+        <span style="font-family:monospace;font-weight:700;font-size:13px">${s.style}</span>
+        ${sec2}
+        <span style="font-size:11px;color:var(--mut)">${s.cust}</span>
+        <span style="font-size:11px;color:var(--mut)">${s.type}</span>
+        ${diffBadge}${missBadge}
+        <span style="margin-left:auto;font-size:12px;color:var(--mut)">${snaps.length} 版本</span>
+        <span style="font-family:monospace;font-weight:700;color:var(--pri);font-size:13px;min-width:70px;text-align:right">${f4(latestSMV)}</span>
+        <span style="font-size:14px;color:var(--mut);margin-left:5px">▼</span>
+      </div>
+      <div class="style-body" id="sb-${idx}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <!-- SMV history -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;margin-bottom:6px">📐 SMV 版本歷史</div>
+            ${snaps.length===0?`<div style="font-size:12px;color:var(--mut)">尚未匯入此款 SMV</div>`:
+            snaps.map((ss,i)=>{
+              const prev=i>0?snaps[i-1]:null;
+              let diffHtml='';
+              if(prev&&prev.curSMV!=null&&ss.curSMV!=null){
+                const d=+(ss.curSMV-prev.curSMV).toFixed(4);
+                const p=prev.curSMV!==0?+((ss.curSMV/prev.curSMV-1)*100).toFixed(1):0;
+                if(Math.abs(d)>0.00001){const c=d>0?'var(--red)':'var(--grn)';diffHtml=`<span style="color:${c};font-weight:700;font-family:monospace"> ${d>0?'▲+':'▼'}${d.toFixed(4)} (${p>0?'+':''}${p}%)</span>`;}
+              }
+              return`<div class="smv-hist-row">
+                <span style="font-size:11px;color:var(--mut);min-width:80px">${ss.reportDate}</span>
+                <span class="mono" style="color:var(--mut);min-width:70px">${f4(ss.origSMV)}</span>
+                <span class="mono" style="color:var(--pri);font-weight:700;min-width:70px">${f4(ss.curSMV)}</span>
+                ${diffHtml}
+                <span style="font-size:10px;color:var(--mut);margin-left:auto">${ss.fileName.slice(0,20)}</span>
+              </div>`;
+            }).join('')}
+            ${snaps.length?`<div style="margin-top:6px;font-size:11px;color:var(--mut)">
+              <span style="color:#374151">Original(100%)</span>  <span style="color:var(--pri)">Current(65%)</span>
+            </div>`:''}
+          </div>
+          <!-- Sewing production data -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;margin-bottom:6px">🏭 車縫生產記錄</div>
+            ${sew?`
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+                <div style="background:#f0f9ff;border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:800;color:var(--pri)">${sew.totalPcs.toLocaleString()}</div><div style="font-size:10px;color:var(--mut)">累計件數</div></div>
+                <div style="background:#f0fdf4;border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:800;color:var(--grn)">${sew.days.size}</div><div style="font-size:10px;color:var(--mut)">生產天數</div></div>
+              </div>
+              <div style="font-size:12px;color:#374151;margin-bottom:4px">線別：${[...sew.lines].join('、')}</div>
+              ${sew.smvCount>0?`<div style="font-size:12px;color:#374151">車縫報表平均 SMV：<b class="mono">${smvAvgInSew}</b>
+                ${latestSMV?`<span style="margin-left:6px;color:${Math.abs(parseFloat(smvAvgInSew)-(latestSMV||0))<0.01?'var(--grn)':'var(--amb)'}">
+                (最新快照 ${f4(latestSMV)} ${Math.abs(parseFloat(smvAvgInSew)-(latestSMV||0))<0.01?'✓ 一致':'⚠ 差異'})
+                </span>`:''}</div>`:''}
+            `:`<div style="font-size:12px;color:var(--mut)">無車縫生產記錄</div>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleStyle(idx){
+  const body=document.getElementById(`sb-${idx}`);
+  body.style.display=body.style.display==='block'?'none':'block';
+}
+
+// ══════════════════════════════════════════════════════
+// HOURS ANALYSIS TAB
+// ══════════════════════════════════════════════════════
+let hpPeriod='day',hpCursor=null;
+
+function setHP(p){
+  hpPeriod=p;
+  ['day','week','month','year'].forEach(x=>document.getElementById('pb-'+x).classList.toggle('on',x===p));
+  renderHours();
+}
+function initHP(){
+  if(!hpCursor){
+    const dates=SEW_DB.map(r=>r.date).filter(Boolean).sort().reverse();
+    hpCursor=dates[0]||new Date().toISOString().slice(0,10);
+  }
+}
+function navHP(dir){
+  if(!hpCursor)return;
+  const d=new Date(hpCursor+'T00:00:00');
+  if(hpPeriod==='day') d.setDate(d.getDate()+dir);
+  if(hpPeriod==='week') d.setDate(d.getDate()+dir*7);
+  if(hpPeriod==='month') d.setMonth(d.getMonth()+dir);
+  if(hpPeriod==='year') d.setFullYear(d.getFullYear()+dir);
+  hpCursor=d.toISOString().slice(0,10);
+  renderHours();
+}
+
+function getDateRange(){
+  if(!hpCursor)return{start:'',end:''};
+  const d=new Date(hpCursor+'T00:00:00');
+  let start,end;
+  if(hpPeriod==='day'){start=end=hpCursor;}
+  else if(hpPeriod==='week'){const day=d.getDay()||7;start=new Date(d);start.setDate(d.getDate()-day+1);end=new Date(start);end.setDate(start.getDate()+6);start=start.toISOString().slice(0,10);end=end.toISOString().slice(0,10);}
+  else if(hpPeriod==='month'){start=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;end=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);}
+  else{start=`${d.getFullYear()}-01-01`;end=`${d.getFullYear()}-12-31`;}
+  return{start,end};
+}
+
+function renderHours(){
+  initHP();
+  const {start,end}=getDateRange();
+  const lbl=hpPeriod==='day'?start:hpPeriod==='week'?`${start} ～ ${end}`:hpPeriod==='month'?`${start.slice(0,7)}`:start.slice(0,4)+'年';
+  document.getElementById('per-label').textContent=lbl;
+
+  const secF=document.getElementById('hp-sec').value;
+  const lineF=document.getElementById('hp-line').value;
+
+  // Filter sewing records for date range
+  let recs=SEW_DB.filter(r=>r.date>=start&&r.date<=end);
+  if(secF)recs=recs.filter(r=>r.section===secF);
+  if(lineF)recs=recs.filter(r=>r.lineNo===lineF);
+
+  // Populate line filter
+  const allLines=[...new Set(SEW_DB.filter(r=>r.date>=start&&r.date<=end&&(!secF||r.section===secF)).map(r=>r.lineNo))].filter(Boolean).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const lnSel=document.getElementById('hp-line');
+  const prevLn=lnSel.value;
+  lnSel.innerHTML='<option value="">全部線別</option>'+allLines.map(l=>`<option value="${l}"${l===prevLn?'selected':''}>${l}</option>`).join('');
+
+  const SMV_DICT=buildSMVDict();
+
+  // Aggregate per line per date (or per line for period)
+  const lineMap={};
+  recs.forEach(r=>{
+    const key=hpPeriod==='day'?r.lineNo:`${r.lineNo}|${r.date}`;
+    if(!lineMap[key])lineMap[key]={lineNo:r.lineNo,section:r.section,date:r.date,workers:0,workersOT:0,hoursOT:0,pieces:0,producedMins:0,effReport:0,missingStyles:new Set()};
+    const lm=lineMap[key];
+    if(r.workers>lm.workers)lm.workers=r.workers;
+    if((r.workersOT||0)>lm.workersOT){lm.workersOT=r.workersOT||0;lm.hoursOT=r.hoursOT||2;}
+    lm.pieces+=(r.pieces||0);
+    // SMV-based produced minutes
+    if(r.pieces>0){
+      const smvVal=r.smv>0?r.smv:(r.styleNo?SMV_DICT[r.styleNo.toUpperCase()]?.curSMV:null);
+      if(smvVal>0) lm.producedMins+=(r.pieces*smvVal);
+      else if(r.styleNo) lm.missingStyles.add(r.styleNo);
+    }
+    if(r.efficiency>lm.effReport)lm.effReport=r.efficiency;
+  });
+
+  const rows=Object.values(lineMap).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true})||(a.date||'').localeCompare(b.date||''));
+
+  // KPIs
+  const totalWorkers=rows.reduce((s,r)=>s+r.workers,0);
+  const totalAtt=rows.reduce((s,r)=>s+(r.workers*480+r.workersOT*r.hoursOT*60),0);
+  const totalProd=rows.reduce((s,r)=>s+r.producedMins,0);
+  const avgSmvEff=totalAtt>0?+(totalProd/totalAtt*100).toFixed(1):0;
+  document.getElementById('hp-kpis').innerHTML=`
+    <div class="kpi bl"><div class="kpi-v">${rows.length}</div><div class="kpi-l">線別記錄數</div></div>
+    <div class="kpi am"><div class="kpi-v">${totalWorkers}</div><div class="kpi-l">正常班人次</div></div>
+    <div class="kpi gn"><div class="kpi-v">${totalAtt.toLocaleString()}</div><div class="kpi-l">應有總工時(分)</div></div>
+    <div class="kpi bl"><div class="kpi-v">${totalProd.toLocaleString()}</div><div class="kpi-l">實際產出工時(分)</div></div>
+    <div class="kpi ${avgSmvEff>=45?'gn':avgSmvEff>=30?'am':'rd'}"><div class="kpi-v">${avgSmvEff}%</div><div class="kpi-l">SMV 加權效率</div></div>`;
+
+  const tbody=document.getElementById('hp-tbody');
+  if(!rows.length){tbody.innerHTML=`<tr><td colspan="12" class="empty">此期間無車縫記錄（${start}${start!==end?'～'+end:''}）</td></tr>`;return;}
+
+  tbody.innerHTML=rows.map(r=>{
+    const attNorm=r.workers*480;
+    const attOT=r.workersOT*r.hoursOT*60;
+    const attTotal=attNorm+attOT;
+    const effNorm=attNorm>0?+(r.producedMins/attNorm*100).toFixed(1):0;
+    const effFull=attTotal>0?+(r.producedMins/attTotal*100).toFixed(1):0;
+    const effCls=ec=>ec>=45?'var(--grn)':ec>=30?'var(--amb)':'var(--red)';
+    const mis=[...r.missingStyles];
+    return`<tr>
+      <td class="bold mono">${r.lineNo}</td>
+      <td>${r.section||'–'}</td>
+      <td class="mono" style="font-size:11px">${hpPeriod==='day'?'':r.date||''}</td>
+      <td class="mono">${r.workers||'–'}</td>
+      <td class="mono" style="color:${r.workersOT>0?'#7c3aed':'#6b7a9e'}">${r.workersOT||'–'}</td>
+      <td class="mono">${attNorm.toLocaleString()}</td>
+      <td class="mono" style="color:#7c3aed">${attOT>0?attOT.toLocaleString():'–'}</td>
+      <td class="mono" style="color:var(--pri);font-weight:700">${r.producedMins>0?r.producedMins.toLocaleString():'–'}</td>
+      <td style="font-weight:800;font-family:monospace;color:${effCls(effNorm)}">${attNorm>0?effNorm+'%':'–'}</td>
+      <td style="font-weight:800;font-family:monospace;color:${effCls(effFull)}">${attTotal>0?effFull+'%':'–'}</td>
+      <td style="font-family:monospace;color:#6b7a9e">${r.effReport>0?r.effReport+'%':'–'}</td>
+      <td style="font-size:11px;color:var(--amb)">${mis.length?'⚠ '+mis.slice(0,3).join(', ')+(mis.length>3?'...':''):''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportHours(){
+  const {start,end}=getDateRange();
+  const SMV_DICT=buildSMVDict();
+  const recs=SEW_DB.filter(r=>r.date>=start&&r.date<=end);
+  const lineMap={};
+  recs.forEach(r=>{
+    const key=`${r.lineNo}|${r.date}`;
+    if(!lineMap[key])lineMap[key]={lineNo:r.lineNo,section:r.section,date:r.date,workers:0,workersOT:0,hoursOT:0,pieces:0,producedMins:0,effReport:0};
+    const lm=lineMap[key];
+    if(r.workers>lm.workers)lm.workers=r.workers;
+    if((r.workersOT||0)>lm.workersOT){lm.workersOT=r.workersOT||0;lm.hoursOT=r.hoursOT||2;}
+    lm.pieces+=(r.pieces||0);
+    const smv=r.smv>0?r.smv:(r.styleNo?SMV_DICT[r.styleNo.toUpperCase()]?.curSMV:null);
+    if(smv>0)lm.producedMins+=(r.pieces*smv);
+    if(r.efficiency>lm.effReport)lm.effReport=r.efficiency;
+  });
+  const rows=[['日期','線別','Section','正常班人數','加班人數','應有工時(分)','加班工時(分)','實際產出工時(分)','SMV正常班效率%','SMV含加班效率%','報表效率%'],
+    ...Object.values(lineMap).sort((a,b)=>a.date.localeCompare(b.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true})).map(r=>{
+      const aN=r.workers*480,aOT=r.workersOT*r.hoursOT*60,aT=aN+aOT;
+      return[r.date,r.lineNo,r.section,r.workers,r.workersOT,aN,aOT,r.producedMins,aN>0?(r.producedMins/aN*100).toFixed(1):'',aT>0?(r.producedMins/aT*100).toFixed(1):'',r.effReport||''];
+    })];
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})),download:`工時分析_${start}_${end}.csv`});
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════
+// VERSION DIFF TAB
+// ══════════════════════════════════════════════════════
+let dfFilter='';
+function setDF(v){dfFilter=v;document.querySelectorAll('#df-seg button').forEach((b,i)=>b.classList.toggle('on',['','up','down','new','same'][i]===v));runDiff();}
+
+async function loadDiffSelects(){
+  allSnaps=await dbAll();allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));
+  ['sel-a','sel-b'].forEach(id=>{
+    const sel=document.getElementById(id),cur=sel.value;
+    sel.innerHTML='<option value="">── 請選擇 ──</option>';
+    allSnaps.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=`${s.section} | ${s.reportDate} | ${s.fileName.slice(0,28)}`;sel.appendChild(o);});
+    sel.value=cur;
+  });
+  if(!document.getElementById('sel-a').value&&allSnaps.length>=2){document.getElementById('sel-a').value=allSnaps[1].id;document.getElementById('sel-b').value=allSnaps[0].id;runDiff();}
+}
+
+function runDiff(){
+  const aId=parseInt(document.getElementById('sel-a').value),bId=parseInt(document.getElementById('sel-b').value);
+  if(!aId||!bId||aId===bId){document.getElementById('diff-kpis').innerHTML='';document.getElementById('diff-tbody').innerHTML='<tr><td colspan="10" class="empty">請選兩個不同版本</td></tr>';return;}
+  const sA=allSnaps.find(s=>s.id===aId),sB=allSnaps.find(s=>s.id===bId);if(!sA||!sB)return;
+  const typeF=document.getElementById('df-type').value.toUpperCase();
+  const q=document.getElementById('df-q').value.trim().toUpperCase();
+  let rows=computeDiff(sA.items,sB.items);
+  if(dfFilter)rows=rows.filter(r=>r.status===dfFilter);
+  if(typeF)rows=rows.filter(r=>r.type===typeF);
+  if(q)rows=rows.filter(r=>r.style.toUpperCase().includes(q)||r.cust.toUpperCase().includes(q));
+  document.getElementById('diff-kpis').innerHTML=`
+    <div class="kpi bl"><div class="kpi-v">${rows.length}</div><div class="kpi-l">比對款式</div></div>
+    <div class="kpi rd"><div class="kpi-v">${rows.filter(r=>r.status==='up').length}</div><div class="kpi-l">▲ SMV 上升</div></div>
+    <div class="kpi gn"><div class="kpi-v">${rows.filter(r=>r.status==='down').length}</div><div class="kpi-l">▼ SMV 下降</div></div>
+    <div class="kpi am"><div class="kpi-v">${rows.filter(r=>r.status==='new').length}</div><div class="kpi-l">★ 新增款</div></div>`;
+  const dc=r=>r.delta>0?'var(--red)':r.delta<0?'var(--grn)':'#888';
+  document.getElementById('diff-tbody').innerHTML=rows.length?rows.map(r=>{
+    const rc=r.status==='up'?'up':r.status==='down'?'dn':r.status==='new'?'nw':r.status==='removed'?'rm':'';
+    const tag=r.status==='up'?'<span class="tag tu">▲</span>':r.status==='down'?'<span class="tag td">▼</span>':r.status==='new'?'<span class="tag tn">★</span>':r.status==='removed'?'<span class="tag tr_">—移除</span>':'<span class="tag ts">—</span>';
+    const oC=r.oA!=null&&r.oB!=null&&Math.abs(r.oB-r.oA)>0.00001;
+    return`<tr class="${rc}"><td class="bold">${r.style}</td><td>${r.cust}</td><td>${r.type}</td>
+      <td class="mono" style="color:var(--mut)">${f4(r.oA)}</td><td class="mono" style="color:var(--mut)">${f4(r.cA)}</td>
+      <td class="mono${oC?';color:var(--red);font-weight:700':''}">${f4(r.oB)}${oC?' ⚠':''}</td>
+      <td class="mono bold">${f4(r.cB)}</td>
+      <td class="mono" style="font-weight:700;color:${dc(r)}">${r.delta!=null?(r.delta>0?'+':'')+r.delta.toFixed(4):'–'}</td>
+      <td style="font-weight:700;color:${dc(r)}">${r.pct!=null?(r.pct>0?'+':'')+r.pct.toFixed(2)+'%':'–'}</td>
+      <td>${tag}</td></tr>`;
+  }).join(''):'<tr><td colspan="10" class="empty">無符合條件的款式</td></tr>';
+}
+
+// ══════════════════════════════════════════════════════
+// HISTORY TAB
+// ══════════════════════════════════════════════════════
+let viewSnap=null;
+async function buildYearSel(){
+  allSnaps=await dbAll();allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));
+  const years=[...new Set(allSnaps.map(s=>new Date(s.reportDate).getFullYear()))].sort((a,b)=>b-a);
+  const sel=document.getElementById('hy-year'),cur=sel.value;
+  sel.innerHTML='<option value="">全部</option>';
+  years.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y+'年';sel.appendChild(o);});
+  sel.value=cur;
+}
+async function renderHistory(){
+  allSnaps=await dbAll();allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));
+  const fy=document.getElementById('hy-year').value,fm=document.getElementById('hy-month').value,fs=document.getElementById('hy-section').value;
+  const filtered=allSnaps.filter(s=>{
+    const d=new Date(s.reportDate);
+    if(fy&&d.getFullYear()!==parseInt(fy))return false;
+    if(fm&&(d.getMonth()+1)!==parseInt(fm))return false;
+    if(fs&&s.section!==fs)return false;
+    return true;
+  });
+  const el=document.getElementById('snap-list');
+  if(!filtered.length){el.innerHTML='<div class="empty">無符合條件的記錄</div>';return;}
+  el.innerHTML=filtered.map(s=>`
+    <div class="si${viewSnap?.id===s.id?' on':''}" onclick="openSnap(${s.id})">
+      <div class="si-info">
+        <strong>${sbadge(s.section)} ${s.fileName}${s.fromEmail?' 📧':''}</strong>
+        <small>📅 ${s.reportDate}　匯入：${fmtDtm(s.importedAt)}　${s.items.length} 款</small>
+      </div>
+      <div style="display:flex;gap:5px" onclick="event.stopPropagation()">
+        <button class="btn btn-g btn-sm" onclick="openSnap(${s.id})">👁</button>
+        <button class="btn btn-r btn-sm" onclick="doDelSnap(${s.id})">🗑</button>
+      </div>
+    </div>`).join('');
+}
+function openSnap(id){viewSnap=allSnaps.find(s=>s.id===id);if(!viewSnap)return;document.getElementById('hist-detail').style.display='block';document.getElementById('hist-title').textContent=`${viewSnap.section} · ${viewSnap.fileName} · ${viewSnap.reportDate}`;filterHist();document.getElementById('hist-detail').scrollIntoView({behavior:'smooth'});renderHistory();}
+function closeHist(){viewSnap=null;document.getElementById('hist-detail').style.display='none';renderHistory();}
+function filterHist(){
+  if(!viewSnap)return;
+  const q=document.getElementById('hd-q').value.trim().toUpperCase(),type=document.getElementById('hd-type').value.toUpperCase();
+  const items=viewSnap.items.filter(i=>(!type||i.type===type)&&(!q||i.style.toUpperCase().includes(q)||i.cust.toUpperCase().includes(q)));
+  document.getElementById('hd-tbody').innerHTML=items.map((i,n)=>`<tr><td>${n+1}</td><td class="bold">${i.style}</td><td>${i.cust}</td><td>${i.type}</td>
+    <td class="mono" style="color:var(--mut)">${f4(i.origSMV)}</td><td class="mono" style="color:var(--pri);font-weight:700">${f4(i.curSMV)}</td>
+    <td class="mono" style="color:var(--grn)">${f4(i.newSMV)}</td><td>${i.pcsBox??'–'}</td><td style="font-size:11px;color:var(--mut)">${i.remark||''}</td></tr>`).join('')||'<tr><td colspan="9" class="empty">無資料</td></tr>';
+}
+async function doDelSnap(id){if(!confirm('確定刪除此版本？'))return;await dbDel(id);allSnaps=await dbAll();updateHeader();if(viewSnap?.id===id)closeHist();else renderHistory();toast('🗑 已刪除');}
+function exportHistCSV(){if(!viewSnap)return;const rows=[['款式','客戶','類型','Original SMV','Current SMV(65%)','New SMV','Pcs/Box','備註'],...viewSnap.items.map(i=>[i.style,i.cust,i.type,i.origSMV,i.curSMV,i.newSMV,i.pcsBox||'',i.remark||''])];const csv=rows.map(r=>r.join(',')).join('\n');Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})),download:`SMV_${viewSnap.section}_${viewSnap.reportDate}.csv`}).click();}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+openDB().then(async()=>{
+  dbReady=true;
+  allSnaps=await dbAll();
+  allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));
+  loadSewingData();
+  updateHeader();
+  console.log('SMV v5 ready. Snaps:',allSnaps.length,' Sewing:',SEW_DB.length);
+  initFolderScan();
+}).catch(e=>{showErr('資料庫錯誤：'+e.message);console.error(e);});
+// ═══════════════════════ FOLDER SCAN ════════════════════════════════════════
+const _SCAN_LS="smv_scanned_v1", _AUTOSCAN_LS="smv_autoscan_v1";
+let _scanFolderList=[], _pendingScanKeys=[], _afterConfirmCb=null;
+
+function _openFolderIDB(){return new Promise((res,rej)=>{const req=indexedDB.open("smv_folder_handles_v1",1);req.onupgradeneeded=e=>e.target.result.createObjectStore("folders",{keyPath:"id",autoIncrement:true});req.onsuccess=e=>res(e.target.result);req.onerror=()=>rej();});}
+async function _idbGetAll(){try{const db=await _openFolderIDB();return await new Promise(res=>{const r=db.transaction("folders","readonly").objectStore("folders").getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([]);});}catch(e){return[];}}
+async function _idbAdd(handle,label){try{const db=await _openFolderIDB();return await new Promise((res,rej)=>{const r=db.transaction("folders","readwrite").objectStore("folders").add({handle,label,ts:Date.now()});r.onsuccess=()=>res(r.result);r.onerror=rej;});}catch(e){return null;}}
+async function _idbDel(id){try{const db=await _openFolderIDB();await new Promise((res,rej)=>{const r=db.transaction("folders","readwrite").objectStore("folders").delete(id);r.onsuccess=res;r.onerror=rej;});}catch(e){}}
+
+function _getScanned(){try{return new Set(JSON.parse(localStorage.getItem(_SCAN_LS)||"[]"));}catch(e){return new Set();}}
+function _addScanned(keys){const s=_getScanned();keys.forEach(k=>s.add(k));try{localStorage.setItem(_SCAN_LS,JSON.stringify([...s]));}catch(e){}}
+function clearScannedLog(){localStorage.removeItem(_SCAN_LS);const m=document.getElementById("scanMsg");m.style.color="var(--grn)";m.textContent="✓ 已重置掃描記錄，下次掃描將重新匯入全部檔案";}
+function saveAutoScanPref(){localStorage.setItem(_AUTOSCAN_LS,document.getElementById("chkAutoScan").checked?"1":"0");}
+
+function renderFolderList(){
+  const el=document.getElementById("folderList"),btn=document.getElementById("btnScanFolders");
+  if(!_scanFolderList.length){el.innerHTML=`<div style="font-size:12px;color:var(--mut);padding:8px 10px;background:var(--alt);border-radius:6px">尚未設定任何資料夾。點「➕ 新增資料夾」授權存取。</div>`;btn.style.display="none";return;}
+  el.innerHTML=_scanFolderList.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--alt);border-radius:6px;margin-bottom:4px;border:1px solid var(--bdr)"><span>📁</span><span style="flex:1;font-size:13px;font-weight:500">${f.label}</span><button onclick="removeFolderEntry(${f.id})" style="font-size:11px;padding:2px 8px;background:#fff5f5;color:var(--red);border:1px solid #fecaca;border-radius:4px;cursor:pointer">移除</button></div>`).join("");
+  btn.style.display="inline-flex";
+}
+async function addScanFolder(){
+  if(!("showDirectoryPicker" in window)){alert("需要 Chrome 或 Edge 瀏覽器（v86+）");return;}
+  try{const handle=await window.showDirectoryPicker({mode:"read",startIn:"downloads"});const label=handle.name;const id=await _idbAdd(handle,label);_scanFolderList.push({id,handle,label});renderFolderList();const m=document.getElementById("scanMsg");m.style.color="var(--grn)";m.textContent=`✓ 已新增「${label}」（共 ${_scanFolderList.length} 個）`;}
+  catch(e){if(e.name!=="AbortError"){document.getElementById("scanMsg").style.color="var(--red)";document.getElementById("scanMsg").textContent="❌ "+e.message;}}
+}
+async function removeFolderEntry(id){await _idbDel(id);_scanFolderList=_scanFolderList.filter(f=>f.id!==id);renderFolderList();}
+
+async function initFolderScan(){
+  const all=await _idbGetAll();const valid=[];
+  for(const f of all){try{const p=await f.handle.queryPermission({mode:"read"});if(p==="granted"||p==="prompt")valid.push(f);}catch(e){}}
+  _scanFolderList=valid;renderFolderList();
+  const autoOn=localStorage.getItem(_AUTOSCAN_LS)==="1";
+  const cb=document.getElementById("chkAutoScan");if(cb)cb.checked=autoOn;
+  if(autoOn&&_scanFolderList.length)setTimeout(()=>scanAllFolders(true),900);
+}
+
+async function scanAllFolders(silent=false){
+  const m=document.getElementById("scanMsg");
+  if(!_scanFolderList.length){m.style.color="var(--red)";m.textContent="❌ 尚未設定任何資料夾";return;}
+  m.style.color="var(--mut)";m.textContent="🔍 掃描中...";
+  const scanned=_getScanned(),toImport=[],skipped=[],EXTS=new Set(["xlsx","xls","msg","eml"]);
+  for(const folder of _scanFolderList){
+    let perm;try{perm=await folder.handle.queryPermission({mode:"read"});if(perm==="prompt")perm=await folder.handle.requestPermission({mode:"read"});}catch(e){perm="denied";}
+    if(perm!=="granted"){m.style.color="var(--amb)";m.textContent=`⚠️ 資料夾「${folder.label}」需重新授權`;continue;}
+    try{for await(const entry of folder.handle.values()){if(entry.kind!=="file")continue;const ext=entry.name.split(".").pop().toLowerCase();if(!EXTS.has(ext))continue;const file=await entry.getFile();const key=`${file.name}|${file.size}|${file.lastModified}`;if(scanned.has(key)){skipped.push(file.name);continue;}toImport.push({file,key});}}
+    catch(e){m.style.color="var(--red)";m.textContent=`❌ 掃描「${folder.label}」出錯：${e.message}`;}
+  }
+  if(!toImport.length){m.style.color="var(--grn)";m.textContent=`✓ 掃描完成 — 無新檔案${skipped.length?`（跳過 ${skipped.length} 個已匯入）`:""}`;return;}
+  m.textContent=`找到 ${toImport.length} 個新檔案，解析中...`;
+  _pendingScanKeys=toImport.map(x=>x.key);
+  // Route by type: xlsx first, then msg/eml
+  const xlsxFiles=toImport.filter(x=>/\.xlsx?$/i.test(x.file.name)).map(x=>x.file);
+  const msgFiles=toImport.filter(x=>/\.(msg|eml)$/i.test(x.file.name)).map(x=>x.file);
+  _afterConfirmCb=()=>{_addScanned(_pendingScanKeys);_pendingScanKeys=[];m.style.color="var(--grn)";m.textContent=`✅ 完成！新增 ${toImport.length} 個檔案${skipped.length?`，跳過 ${skipped.length} 個`:""}`; };
+  if(xlsxFiles.length){await handleExcel(xlsxFiles);}
+  else if(msgFiles.length){await handleMsg(msgFiles);}
+  if(!pending.length){_addScanned(_pendingScanKeys);_pendingScanKeys=[];_afterConfirmCb=null;m.style.color="var(--amb)";m.textContent=`⚠️ 找到 ${toImport.length} 個新檔案但無有效 SMV 資料${skipped.length?`（跳過 ${skipped.length} 個）`:""}`;return;}
+  m.style.color="var(--prd)";m.textContent=`📋 解析完畢，請往上點「✅ 確認儲存」（${pending.length} 個版本）`;
+}
+
+</script>
+</body>
+</html>
