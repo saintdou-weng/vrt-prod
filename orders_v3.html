@@ -120,7 +120,27 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
     <span style="font-size:10px;color:#6b7280" id="db-st">● DB…</span>
+    <button id="ordCloudBtn" onclick="ordCloudToggle()" title="☁ 雲端同步"
+      style="background:#1a2540;border:1px solid #2d3a6e;color:#93c5fd;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
+      ☁ 同步
+    </button>
   </div>
+</div>
+
+<!-- 訂單雲端同步面板 -->
+<div id="ordCloudPanel" style="display:none;position:fixed;top:60px;right:16px;z-index:9999;width:250px;background:#0f1929;border:1px solid #1e3050;border-radius:14px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);flex-direction:column;gap:9px;font-family:inherit">
+  <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em">☁ 雲端同步 — 訂單</div>
+  <div style="font-size:11px;font-family:monospace;color:#475569;min-height:14px" id="ordCloudStatus">讀取中...</div>
+  <div style="display:flex;gap:7px">
+    <button id="ordPushBtn" onclick="ordCloudPush()" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#1c1500;border:1px solid #92400e;color:#fbbf24;font-family:inherit">☁ 推送</button>
+    <button id="ordPullBtn" onclick="ordCloudPull()" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd;font-family:inherit">⬇ 拉取</button>
+  </div>
+  <div style="font-size:10px;color:#475569;margin-bottom:2px">GAS URL</div>
+  <div style="display:flex;gap:5px">
+    <input id="ordGasInput" style="flex:1;background:#0a1120;border:1px solid #1e3050;border-radius:6px;color:#f1f5f9;padding:5px 8px;font-size:10px;font-family:monospace;outline:none" placeholder="/exec 結尾"/>
+    <button onclick="ordSaveGas()" style="background:#253058;border:none;color:#cbd5e1;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">存</button>
+  </div>
+  <div id="ordCloudLog" style="font-size:10px;font-family:monospace;color:#475569;max-height:70px;overflow-y:auto;line-height:1.6;border-top:1px solid #1e3050;padding-top:7px"></div>
 </div>
 
 <div class="tabbar">
@@ -1808,13 +1828,37 @@ async function ordersAutoSync(){
     const d = await r.json();
     if (!d.ok || !d.data || !d.data.data) { log('☁ 雲端無訂單資料（使用本機）','warn'); return; }
     const payload = d.data.data;
-    // 寫入 localStorage
+    let restored = false;
+    // 還原 localStorage orderSetsV3
     if (payload.lsKeys && payload.lsKeys.orderSetsV3) {
       localStorage.setItem('orderSetsV3', payload.lsKeys.orderSetsV3);
-      // 重新載入
-      loadSets(); refreshAll();
-      const cnt = Object.keys(JSON.parse(payload.lsKeys.orderSetsV3).sets || {}).length;
-      log(`☁ 雲端訂單同步完成（${cnt} 張訂單）`,'ok');
+      loadSets();
+      restored = true;
+    }
+    // 還原 FactoryDB（po_lines, weekly_snapshots, order_imports）
+    if (payload.idbData) {
+      for (const [storeName, records] of Object.entries(payload.idbData)) {
+        if (!records || !records.length) continue;
+        try {
+          await new Promise((res,rej) => {
+            const tx = db.transaction(storeName,'readwrite');
+            const os = tx.objectStore(storeName);
+            os.clear();
+            records.forEach(r => os.put(r));
+            tx.oncomplete = res; tx.onerror = rej;
+          });
+          restored = true;
+        } catch(e) { log(`☁ 還原 ${storeName} 失敗: ${e.message}`,'warn'); }
+      }
+      if (restored) {
+        APP.orders = await dbAll('po_lines');
+        APP.weekly = await dbAll('weekly_snapshots');
+        APP.imports = await dbAll('order_imports');
+      }
+    }
+    if (restored) {
+      refreshAll();
+      log(`☁ 雲端訂單同步完成（${APP.orders.length} 筆 PO）`,'ok');
     } else {
       log('☁ 雲端訂單格式不符','warn');
     }
@@ -1822,6 +1866,143 @@ async function ordersAutoSync(){
     log('☁ 雲端離線，使用本機訂單資料','warn');
   }
 }
+
+// ── 訂單雲端同步面板 ──────────────────────────
+let _ordPanelOpen = false;
+function ordCloudToggle(){
+  _ordPanelOpen = !_ordPanelOpen;
+  const el = document.getElementById('ordCloudPanel');
+  el.style.display = _ordPanelOpen ? 'flex' : 'none';
+  if (_ordPanelOpen) {
+    const gasUrl = localStorage.getItem('vrt_portal_gas_url')||'';
+    document.getElementById('ordGasInput').value = gasUrl;
+    const cnt = APP.orders ? APP.orders.length : 0;
+    const wkCnt = APP.weekly ? APP.weekly.length : 0;
+    document.getElementById('ordCloudStatus').textContent = `本機 PO ${cnt} 筆，週報 ${wkCnt} 筆`;
+  }
+}
+function ordSaveGas(){
+  const url = document.getElementById('ordGasInput').value.trim();
+  if (!url) return;
+  localStorage.setItem('vrt_portal_gas_url', url);
+  ordLog('GAS URL 已儲存','i');
+}
+async function ordCloudPush(){
+  const gasUrl = (localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if (!gasUrl){ ordLog('請先填入 GAS URL','err'); return; }
+  ordSetBusy(true);
+  ordLog('讀取訂單資料...','i');
+  try {
+    // 讀取所有 FactoryDB 資料
+    const poLines   = await dbAll('po_lines');
+    const weekly    = await dbAll('weekly_snapshots');
+    const imports   = await dbAll('order_imports');
+    const setsRaw   = localStorage.getItem('orderSetsV3') || '{}';
+    ordLog(`推送 PO ${poLines.length} 筆，週報 ${weekly.length} 筆...`,'i');
+    const payload = {
+      tool:'orders',
+      recordCount: poLines.length,
+      lsKeys:{ orderSetsV3: setsRaw },
+      idbData:{
+        po_lines: poLines,
+        weekly_snapshots: weekly,
+        order_imports: imports,
+      },
+      summary:{
+        totalPOs: poLines.length,
+        weeklySnapshots: weekly.length,
+      }
+    };
+    // 分批推送 po_lines（若超過 2000 筆）
+    const CHUNK = 2000;
+    if (poLines.length > CHUNK) {
+      const chunks = Math.ceil(poLines.length / CHUNK);
+      ordLog(`PO 資料分 ${chunks} 批推送...`,'i');
+      for (let i = 0; i < chunks; i++) {
+        const isLast = i === chunks - 1;
+        const chunk = {
+          tool:'orders', chunk:i, totalChunks:chunks, recordCount:poLines.length,
+          records: poLines.slice(i*CHUNK,(i+1)*CHUNK),
+          ...(isLast ? {
+            lsKeys:{ orderSetsV3: setsRaw },
+            idbData:{ weekly_snapshots: weekly, order_imports: imports },
+            summary: payload.summary,
+          } : {})
+        };
+        const r = await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(chunk),redirect:'follow'});
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error);
+        ordLog(`第 ${i+1}/${chunks} 批完成`,'i');
+      }
+    } else {
+      const r = await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload),redirect:'follow'});
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+    }
+    ordLog(`✓ 推送完成（PO ${poLines.length} 筆）`,'ok');
+    document.getElementById('ordCloudStatus').textContent = `已同步：PO ${poLines.length} 筆`;
+  } catch(e){ ordLog('✗ 推送失敗：'+e.message,'err'); }
+  finally { ordSetBusy(false); }
+}
+async function ordCloudPull(){
+  const gasUrl = (localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if (!gasUrl){ ordLog('請先填入 GAS URL','err'); return; }
+  if (!confirm('拉取會覆蓋本機訂單資料，確定嗎？')) return;
+  ordSetBusy(true);
+  ordLog('拉取中...','i');
+  try {
+    const r = await fetch(`${gasUrl}?action=pull&tool=orders`,{redirect:'follow'});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    if (!d.data || !d.data.data){ ordLog('雲端尚無訂單資料','err'); return; }
+    const payload = d.data.data;
+    // 還原 localStorage
+    if (payload.lsKeys?.orderSetsV3) {
+      localStorage.setItem('orderSetsV3', payload.lsKeys.orderSetsV3);
+      loadSets();
+    }
+    // 還原 FactoryDB
+    if (payload.idbData) {
+      for (const [storeName, records] of Object.entries(payload.idbData)) {
+        if (!records?.length) continue;
+        await new Promise((res,rej) => {
+          const tx = db.transaction(storeName,'readwrite');
+          const os = tx.objectStore(storeName);
+          os.clear();
+          records.forEach(r => os.put(r));
+          tx.oncomplete = res; tx.onerror = rej;
+        });
+      }
+      APP.orders = await dbAll('po_lines');
+      APP.weekly = await dbAll('weekly_snapshots');
+      APP.imports = await dbAll('order_imports');
+    }
+    refreshAll();
+    ordLog(`✓ 拉取完成（${APP.orders.length} 筆 PO）`,'ok');
+    document.getElementById('ordCloudStatus').textContent = `已還原：PO ${APP.orders.length} 筆`;
+  } catch(e){ ordLog('✗ 拉取失敗：'+e.message,'err'); }
+  finally { ordSetBusy(false); }
+}
+function ordSetBusy(on){
+  document.getElementById('ordPushBtn').disabled = on;
+  document.getElementById('ordPullBtn').disabled = on;
+  if (on){ document.getElementById('ordPushBtn').innerHTML='⏳'; document.getElementById('ordPullBtn').innerHTML='⏳'; }
+  else   { document.getElementById('ordPushBtn').innerHTML='☁ 推送'; document.getElementById('ordPullBtn').innerHTML='⬇ 拉取'; }
+}
+function ordLog(msg,type){
+  const el=document.getElementById('ordCloudLog'); if(!el)return;
+  const now=new Date();
+  const t=[now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+  const cls=type==='ok'?'color:#4ade80':type==='err'?'color:#f87171':'color:#60a5fa';
+  el.innerHTML+=`<span style="${cls}">[${t}] ${msg}</span>\n`;
+  el.scrollTop=el.scrollHeight;
+  document.getElementById('ordCloudStatus').textContent=msg;
+}
+document.addEventListener('click',e=>{
+  if(_ordPanelOpen&&!e.target.closest('#ordCloudPanel')&&!e.target.closest('#ordCloudBtn')){
+    _ordPanelOpen=false; document.getElementById('ordCloudPanel').style.display='none';
+  }
+});
 init();
 </script>
 </body>
