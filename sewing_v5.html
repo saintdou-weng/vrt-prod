@@ -746,18 +746,32 @@ async function vcAutoSync(){
   if (hdr) hdr.appendChild(tip);
 
   try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
-    const d = await r.json();
-    if (!d.ok || !d.data || !d.data.data) {
-      tip.textContent = '☁ 雲端無資料（使用本機）';
-      setTimeout(() => tip.remove(), 3000);
-      return;
-    }
-    const payload = d.data.data;
+    // Step 1：取 meta
+    const mr = await fetch(`${gasUrl}?action=pull&tool=sewing&meta=1`, { redirect:'follow' });
+    const md = await mr.json();
+    if (!md.ok || !md.data) { tip.textContent = '☁ 雲端無資料（使用本機）'; tip.style.color='#f59e0b'; setTimeout(()=>tip.remove(),3000); return; }
+
     let allRecs = [];
-    if (payload.lsKeys && payload.lsKeys.sewing_prod_v1)
-      allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
-    else if (payload.records) allRecs = payload.records;
+    let metaEff = null;
+
+    if (md.data.chunked) {
+      const meta    = md.data.meta;
+      const total   = meta.totalChunks;
+      tip.textContent = `☁ 分批同步 ${total} 批...`;
+      for (let i = 0; i < total; i++) {
+        const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
+        const cd = await cr.json();
+        if (cd.ok) allRecs = allRecs.concat(cd.data.records || []);
+      }
+      metaEff = meta.eff;
+    } else {
+      const payload = md.data.data;
+      if (!payload) { tip.textContent = '☁ 雲端無資料（使用本機）'; setTimeout(()=>tip.remove(),3000); return; }
+      if (payload.lsKeys?.sewing_prod_v1) allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+      else if (payload.records) allRecs = payload.records;
+      metaEff = payload.eff;
+    }
+
     if (!allRecs.length) { tip.remove(); return; }
 
     // ★ 全量存入 IDB（無大小限制）
@@ -770,8 +784,7 @@ async function vcAutoSync(){
     try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
     // 效率資料
-    if (payload.lsKeys?.sewing_eff_v1)
-      try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
+    if (metaEff) try { localStorage.setItem(LS_EFF, JSON.stringify(metaEff)); } catch(e) {}
 
     // 更新記憶體：用全量
     DB = dedupAndNorm(allRecs);
@@ -3457,65 +3470,63 @@ async function scanAllFolders(silent=false){
     if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     if (!confirm('拉取會覆蓋本機車縫資料，確定嗎？')) return;
     vcSetBusy(true);
-    vcLog('拉取中...', 'i');
+    vcLog('查詢雲端資料...', 'i');
     try {
-      const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-      if (!d.data || !d.data.data) { vcLog('雲端尚無車縫資料', 'err'); return; }
-      const payload = d.data.data;
+      // Step 1：取得 meta（知道有幾批）
+      const mr = await fetch(`${gasUrl}?action=pull&tool=sewing&meta=1`, { redirect:'follow' });
+      const md = await mr.json();
+      if (!md.ok) throw new Error(md.error);
 
-      // 取得完整記錄
       let allRecs = [];
-      if (payload.lsKeys && payload.lsKeys.sewing_prod_v1) {
-        allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
-      } else if (payload.records) {
-        allRecs = payload.records;
-      }
+      let meta    = null;
 
-      // 嘗試寫入，若超出 quota 自動縮減天數
-      const cutoffs = [180, 90, 60, 30];
-      let saved = false;
-      let savedRecs = allRecs;
-
-      // 先試全量
-      try {
-        const testJson = JSON.stringify(allRecs);
-        localStorage.setItem('sewing_prod_v1', testJson);
-        saved = true;
-        vcLog(`✓ 全量寫入（${allRecs.length} 筆）`, 'ok');
-      } catch(e) {
-        vcLog(`全量超出容量，自動縮減...`, 'i');
-      }
-
-      // 若失敗，依天數縮減
-      if (!saved) {
-        for (const days of cutoffs) {
-          const cutDate = new Date();
-          cutDate.setDate(cutDate.getDate() - days);
-          const cutStr  = cutDate.toISOString().slice(0, 10);
-          savedRecs     = allRecs.filter(rec => (rec.date || '') >= cutStr);
-          try {
-            localStorage.setItem('sewing_prod_v1', JSON.stringify(savedRecs));
-            saved = true;
-            vcLog(`✓ 寫入近 ${days} 天資料（${savedRecs.length} 筆），較舊資料在工廠電腦查看`, 'ok');
-            break;
-          } catch(e2) {
-            vcLog(`近 ${days} 天仍超出，再縮...`, 'i');
-          }
+      if (md.data.chunked) {
+        // 分批模式：逐批 fetch
+        meta = md.data.meta;
+        const total = meta.totalChunks;
+        vcLog(`分 ${total} 批拉取（${meta.recordCount} 筆）...`, 'i');
+        for (let i = 0; i < total; i++) {
+          vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
+          const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
+          const cd = await cr.json();
+          if (!cd.ok) throw new Error(cd.error);
+          allRecs = allRecs.concat(cd.data.records || []);
         }
+      } else {
+        // 舊格式單批
+        const payload = md.data.data;
+        if (!payload) { vcLog('雲端尚無車縫資料', 'err'); return; }
+        if (payload.lsKeys?.sewing_prod_v1)
+          allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+        else if (payload.records) allRecs = payload.records;
+        meta = payload;
       }
 
-      if (!saved) { vcLog('✗ 資料量太大，無法寫入此裝置 localStorage', 'err'); return; }
+      if (!allRecs.length) { vcLog('雲端車縫資料為空', 'err'); return; }
 
-      // 寫入 eff
-      if (payload.lsKeys && payload.lsKeys.sewing_eff_v1) {
-        try { localStorage.setItem('sewing_eff_v1', payload.lsKeys.sewing_eff_v1); } catch(e) {}
-      }
+      // ★ 全量存入 SewingCloudProd IDB（無大小限制）
+      vcLog(`寫入 IDB（${allRecs.length.toLocaleString()} 筆）...`, 'i');
+      await saveToCloudIDB(allRecs);
 
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: savedRecs.length }));
+      // localStorage 存近 90 天備用
+      const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
+      const recent = allRecs.filter(r => (r.date||'') >= cutStr);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
+
+      // 效率資料
+      const effJson = meta?.eff ? JSON.stringify(meta.eff)
+                    : meta?.lsKeys_extra?.sewing_eff_v1 || null;
+      if (effJson) try { localStorage.setItem(LS_EFF, effJson); } catch(e) {}
+
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: allRecs.length }));
+
+      // 更新記憶體
+      DB = dedupAndNorm(allRecs);
+      updateHeader(); renderDBCard();
+
+      vcLog(`✓ 拉取完成（${allRecs.length.toLocaleString()} 筆）`, 'ok');
       vcShowStatus();
-      if (confirm(`已拉取 ${savedRecs.length} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
+      if (confirm(`已拉取 ${allRecs.length.toLocaleString()} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }
