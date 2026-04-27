@@ -503,7 +503,7 @@ let db=null,allSnaps=[],SEW_DB=[],dbReady=false;
 
 async function openDB(){
   return new Promise((res,rej)=>{
-    const req=indexedDB.open('SewingProd',6);
+    const req=indexedDB.open('SewingProd',7);
     req.onupgradeneeded=e=>{
       const d=e.target.result;
       if(!d.objectStoreNames.contains('smv_snapshots')){

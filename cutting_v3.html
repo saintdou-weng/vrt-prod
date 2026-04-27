@@ -2414,9 +2414,19 @@ async function init(){
     badge.innerHTML="⚠ 車縫未連線";badge.style.cssText="background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);color:#fcd34d";
   }
 }
-let _cutSyncDone = false;
-init().then(async () => {
-  if (!_cutSyncDone) { _cutSyncDone = true; await cutAutoSync(); }
+init().then(() => {
+  // 若本機無資料，顯示提示讓使用者手動拉取
+  if (!CUT.length) {
+    const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
+    if (gasUrl) {
+      const tip = document.createElement('div');
+      tip.style.cssText = 'position:fixed;top:60px;right:16px;background:#1a2540;color:#fbbf24;padding:6px 14px;border-radius:8px;font-size:12px;font-family:monospace;z-index:9998;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:pointer';
+      tip.textContent = '☁ 本機無裁剪資料 → 點此從雲端拉取';
+      tip.onclick = () => { tip.remove(); document.getElementById('vcPullBtn')?.click(); };
+      document.body.appendChild(tip);
+      setTimeout(() => tip.remove(), 8000);
+    }
+  }
 });
 
 async function cutAutoSync(){
@@ -2725,14 +2735,32 @@ async function scanAllFolders(silent=false){
       if (!d.ok) throw new Error(d.error);
       if (!d.data || !d.data.data) { vcLog('雲端尚無裁剪資料', 'err'); return; }
       const payload = d.data.data;
-      const recs    = payload.idbStore?.records || [];
-      await vcIdbPutAll('CuttingProd', 1, 'cutting_records', recs);
-      // 同步更新記憶體中的 CUT
-      if (typeof CUT !== 'undefined') { CUT.length = 0; recs.forEach(r => CUT.push(r)); }
+      const recs    = payload.idbStore?.records || payload.records || [];
+      if (!recs.length) { vcLog('雲端裁剪資料為空', 'err'); return; }
+
+      // 用主程式的 _idb（已開啟，keyPath 正確）
+      if (!_idb) await openIDB();
+      await new Promise((res, rej) => {
+        const tx = _idb.transaction('cutting_records', 'readwrite');
+        const os = tx.objectStore('cutting_records');
+        os.clear();
+        recs.forEach(r => os.put(r));
+        tx.oncomplete = () => res(recs.length);
+        tx.onerror = e => rej(e.target.error);
+      });
+
+      // 直接更新記憶體，不需 reload
+      CUT.length = 0;
+      recs.forEach(r => CUT.push(r));
+
+      // 刷新所有畫面
+      updateHdr();
+      renderDBCard();
+      if (typeof renderRecs === 'function') renderRecs();
+
       localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
-      vcLog(`✓ 拉取完成（${recs.length} 筆），重新整理即可看到`, 'ok');
+      vcLog(`✓ 拉取完成（${recs.length} 筆）`, 'ok');
       vcShowStatus();
-      if (confirm(`已拉取 ${recs.length} 筆裁剪資料\n立即重新整理頁面？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }
