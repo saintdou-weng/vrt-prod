@@ -2423,6 +2423,7 @@ async function cutAutoSync(){
   const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
   if (!gasUrl) return;
 
+  const hasCut = CUT.length > 0;
   const tip = document.createElement('div');
   tip.style.cssText = 'position:fixed;top:60px;right:16px;background:#1a2540;color:#f59e0b;padding:6px 14px;border-radius:8px;font-size:12px;font-family:monospace;z-index:9998;box-shadow:0 2px 8px rgba(0,0,0,.4)';
   tip.textContent = '☁ 同步雲端中...';
@@ -2432,14 +2433,13 @@ async function cutAutoSync(){
     const r = await fetch(`${gasUrl}?action=pull&tool=cutting`, { redirect:'follow' });
     const d = await r.json();
     if (!d.ok || !d.data || !d.data.data) {
-      tip.textContent = '☁ 雲端無資料（使用本機）';
+      tip.textContent = hasCut ? `本機 ${CUT.length.toLocaleString()} 筆` : '☁ 雲端無裁剪資料';
       setTimeout(() => tip.remove(), 3000);
       return;
     }
     const recs = d.data.data.idbStore?.records || d.data.data.records || [];
     if (!recs.length) { tip.remove(); return; }
 
-    // 寫入 IDB（正確的批次寫入方式）
     if (!_idb) await openIDB();
     await new Promise((res, rej) => {
       const tx = _idb.transaction(CUT_ST, 'readwrite');
@@ -2450,11 +2450,9 @@ async function cutAutoSync(){
       tx.onerror = e => rej(e.target.error);
     });
     CUT = recs;
-
-    // 重新整理畫面
     updateHdr(); renderDBCard();
 
-    // 也重新讀取車縫連線（從 SewingCloudProd IDB）
+    // 讀取車縫連線
     try {
       const sewRecs = await new Promise(res => {
         const req = indexedDB.open('SewingCloudProd', 1);
@@ -2477,6 +2475,7 @@ async function cutAutoSync(){
           el.innerHTML = `<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b> — ${SEW.length.toLocaleString()} 筆 · 最新 ${dates[0]||'-'}`;
           if (badge) { badge.innerHTML='⚡ 已連線車縫 DB'; badge.style.cssText='background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7'; }
         }
+        updateHdr();
       }
     } catch(e) {}
 
@@ -2484,9 +2483,14 @@ async function cutAutoSync(){
     tip.style.color = '#10b981';
     setTimeout(() => tip.remove(), 4000);
   } catch(e) {
-    tip.textContent = '☁ 雲端離線，使用本機資料';
-    tip.style.color = '#f59e0b';
-    setTimeout(() => tip.remove(), 3000);
+    // fetch 失敗：靜默使用本機，不遮蓋已有資料
+    if (hasCut) {
+      tip.textContent = `本機 ${CUT.length.toLocaleString()} 筆（雲端暫時無法連線）`;
+    } else {
+      tip.textContent = '☁ 雲端離線且本機無資料 → 請用 ☁ 按鈕手動拉取';
+      tip.style.color = '#ef4444';
+    }
+    setTimeout(() => tip.remove(), 4000);
   }
 }
 // ═══════════════════════ FOLDER SCAN ════════════════════════════════════════

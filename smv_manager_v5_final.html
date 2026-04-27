@@ -1304,32 +1304,22 @@ async function scanAllFolders(silent=false){
       if (!d.ok) throw new Error(d.error);
       if (!d.data || !d.data.data){ vsLog('雲端尚無 SMV 資料','err'); return; }
       const snaps = d.data.data.idbStore?.records || d.data.data.records || [];
-      // 寫入 SewingProd IDB smv_snapshots
+
+      // 使用主程式已開好的 db 變數（避免 store-not-found 問題）
+      if (!db) { vsLog('DB 未就緒，請重新整理頁面後再試','err'); return; }
       await new Promise((res,rej) => {
-        const req = indexedDB.open('SewingProd', 6);
-        req.onupgradeneeded = e => {
-          const d = e.target.result;
-          if (!d.objectStoreNames.contains('smv_snapshots'))
-            d.createObjectStore('smv_snapshots', {keyPath:'id', autoIncrement:true});
-        };
-        req.onsuccess = e => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains('smv_snapshots')){ res(0); return; }
-          const tx = db.transaction('smv_snapshots','readwrite');
-          const os = tx.objectStore('smv_snapshots');
-          os.clear();
-          snaps.forEach(s => os.put(s));
-          tx.oncomplete = () => res(snaps.length);
-          tx.onerror = rej;
-        };
-        req.onerror = rej;
+        const tx = db.transaction('smv_snapshots','readwrite');
+        const os = tx.objectStore('smv_snapshots');
+        os.clear();
+        snaps.forEach(s => os.put(s));
+        tx.oncomplete = () => res(snaps.length);
+        tx.onerror = e => rej(e.target.error);
       });
+
       // 重新載入畫面
-      if (db) {
-        allSnaps = await dbAll();
-        allSnaps.sort((a,b) => new Date(b.reportDate) - new Date(a.reportDate));
-        updateHeader();
-      }
+      allSnaps = await dbAll();
+      allSnaps.sort((a,b) => new Date(b.reportDate) - new Date(a.reportDate));
+      updateHeader();
       vsLog(`✓ 拉取完成（${snaps.length} 快照）`,'ok');
       if (confirm(`已拉取 ${snaps.length} 個 SMV 快照\n立即重新整理？`)) location.reload();
     } catch(e){ vsLog('✗ '+e.message,'err'); }
