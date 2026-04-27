@@ -497,7 +497,7 @@ function parseSMVSheet(wb,filename){
 }
 
 // ══════════════════════════════════════════════════════
-// IndexedDB (SewingProd v6)
+// IndexedDB (SewingProd v7)
 // ══════════════════════════════════════════════════════
 let db=null,allSnaps=[],SEW_DB=[],dbReady=false;
 
@@ -1265,7 +1265,7 @@ async function scanAllFolders(silent=false){
     try {
       // 讀取 smv_snapshots IDB
       const snaps = await new Promise((res,rej) => {
-        const req = indexedDB.open('SewingProd', 6);
+        const req = indexedDB.open('SewingProd', 7);
         req.onupgradeneeded = e => {
           const d = e.target.result;
           if (!d.objectStoreNames.contains('smv_snapshots'))
@@ -1282,7 +1282,7 @@ async function scanAllFolders(silent=false){
       });
       const payload = {
         tool:'smv', recordCount: snaps.length,
-        idbStore:{ db:'SewingProd', ver:6, store:'smv_snapshots', records: snaps },
+        idbStore:{ db:'SewingProd', ver:7, store:'smv_snapshots', records: snaps },
         summary:{ snapshotCount: snaps.length }
       };
       const r = await fetch(gasUrl,{ method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload), redirect:'follow' });
