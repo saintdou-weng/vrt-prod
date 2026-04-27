@@ -513,7 +513,11 @@ async function openDB(){
     };
     req.onsuccess=e=>{db=e.target.result;res(db);};
     req.onerror=e=>rej(e.target.error);
-    req.onblocked=()=>rej(new Error('DB blocked'));
+    req.onblocked=()=>{
+      // 提示關閉其他分頁，並在 3 秒後重試
+      showErr('資料庫升級中，請關閉其他 SMV 分頁後，重新整理本頁面');
+      setTimeout(()=>location.reload(), 4000);
+    };
   });
 }
 const idbStore=mode=>{if(!db)throw new Error('DB未就緒');return db.transaction('smv_snapshots',mode).objectStore('smv_snapshots');};
@@ -1320,8 +1324,12 @@ async function scanAllFolders(silent=false){
         };
         req.onerror = rej;
       });
-      // 重新載入
-      if (typeof loadData === 'function') await loadData();
+      // 重新載入畫面
+      if (db) {
+        allSnaps = await dbAll();
+        allSnaps.sort((a,b) => new Date(b.reportDate) - new Date(a.reportDate));
+        updateHeader();
+      }
       vsLog(`✓ 拉取完成（${snaps.length} 快照）`,'ok');
       if (confirm(`已拉取 ${snaps.length} 個 SMV 快照\n立即重新整理？`)) location.reload();
     } catch(e){ vsLog('✗ '+e.message,'err'); }

@@ -2414,9 +2414,9 @@ async function init(){
     badge.innerHTML="⚠ 車縫未連線";badge.style.cssText="background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);color:#fcd34d";
   }
 }
+let _cutSyncDone = false;
 init().then(async () => {
-  // 開啟時永遠從雲端拉取最新裁剪資料
-  await cutAutoSync();
+  if (!_cutSyncDone) { _cutSyncDone = true; await cutAutoSync(); }
 });
 
 async function cutAutoSync(){
