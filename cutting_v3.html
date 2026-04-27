@@ -2782,7 +2782,14 @@ async function scanAllFolders(silent=false){
     return new Promise(res => {
       const req = indexedDB.open(dbName, ver);
       req.onerror = () => res([]);
-      req.onupgradeneeded = () => {};
+      req.onupgradeneeded = e => {
+        // 確保 store 存在（避免空 DB 問題）
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains('cutting_records'))
+          d.createObjectStore('cutting_records', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('sewing_cache'))
+          d.createObjectStore('sewing_cache', { keyPath: 'id' });
+      };
       req.onsuccess = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains(store)){ res([]); return; }
