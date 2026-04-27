@@ -757,11 +757,32 @@ async function vcAutoSync(){
     if (md.data.chunked) {
       const meta    = md.data.meta;
       const total   = meta.totalChunks;
-      tip.textContent = `☁ 分批同步 ${total} 批...`;
+      vcLog(`分 ${total} 批拉取（共 ${meta.recordCount} 筆）...`, 'i');
+
+      // 帶重試的單批 fetch
+      async function fetchChunk(i, retry = 3) {
+        for (let t = 0; t < retry; t++) {
+          try {
+            const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
+            const cd = await cr.json();
+            if (cd.ok) return cd.data.records || [];
+          } catch(e) {
+            if (t === retry - 1) throw e;
+            vcLog(`第 ${i+1} 批失敗，重試 ${t+1}/${retry}...`, 'i');
+            await new Promise(r => setTimeout(r, 2000)); // 等2秒再試
+          }
+        }
+        return [];
+      }
+
       for (let i = 0; i < total; i++) {
-        const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
-        const cd = await cr.json();
-        if (cd.ok) allRecs = allRecs.concat(cd.data.records || []);
+        vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
+        const recs = await fetchChunk(i);
+        allRecs = allRecs.concat(recs);
+        // 每5批存一次 IDB，避免中斷後全部重來
+        if ((i+1) % 5 === 0 || i === total-1) {
+          tip && (tip.textContent = `☁ 已拉取 ${allRecs.length.toLocaleString()} 筆...`);
+        }
       }
       metaEff = meta.eff;
     } else {
@@ -3430,7 +3451,7 @@ async function scanAllFolders(silent=false){
         : JSON.parse(localStorage.getItem('sewing_eff_v1') || '[]');
 
       const total     = allRecs.length;
-      const CHUNK     = 2000;
+      const CHUNK     = 5000; // 每批5000筆，68k筆約14批
       const chunks    = Math.ceil(total / CHUNK);
       vcLog(`開始推送 ${total} 筆（共 ${chunks} 批）...`, 'i');
 
@@ -3481,16 +3502,30 @@ async function scanAllFolders(silent=false){
       let meta    = null;
 
       if (md.data.chunked) {
-        // 分批模式：逐批 fetch
+        // 分批模式：逐批 fetch（含重試）
         meta = md.data.meta;
         const total = meta.totalChunks;
         vcLog(`分 ${total} 批拉取（${meta.recordCount} 筆）...`, 'i');
+
+        async function pullChunk(i, retry=3){
+          for(let t=0;t<retry;t++){
+            try{
+              const cr=await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`,{redirect:'follow'});
+              const cd=await cr.json();
+              if(cd.ok) return cd.data.records||[];
+            }catch(e){
+              if(t===retry-1) throw new Error(`第${i+1}批失敗：`+e.message);
+              vcLog(`第${i+1}批失敗，重試${t+1}/${retry}...`,'i');
+              await new Promise(r=>setTimeout(r,2000));
+            }
+          }
+          return [];
+        }
+
         for (let i = 0; i < total; i++) {
           vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
-          const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
-          const cd = await cr.json();
-          if (!cd.ok) throw new Error(cd.error);
-          allRecs = allRecs.concat(cd.data.records || []);
+          const recs = await pullChunk(i);
+          allRecs = allRecs.concat(recs);
         }
       } else {
         // 舊格式單批
