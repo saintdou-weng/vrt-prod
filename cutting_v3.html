@@ -202,6 +202,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
     <div id="sewConn" class="sew-status" style="margin-top:10px">偵測中...</div>
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-g btn-sm" onclick="refreshSew()">🔄 重新讀取車縫</button>
+      <button class="btn btn-g btn-sm" onclick="refreshSew({cloudOnly:true})" style="background:#f0f7ff;color:#1d6ec7;border-color:#bfdbfe" title="跳過本機快取，直接從 GAS 雲端重新拉取車縫資料">☁️ 強制雲端更新</button>
       <label class="btn btn-g btn-sm" style="cursor:pointer">📂 匯入車縫備份 JSON
         <input type="file" accept=".json" style="display:none" onchange="impSewJSON(event)">
       </label>
@@ -367,6 +368,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
     <label>Section</label>
     <select id="wipSec" onchange="renderWIP()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
     <button class="btn btn-g btn-sm" onclick="refreshSew().then(renderWIP)">🔄 重整</button>
+    <button class="btn btn-g btn-sm" onclick="refreshSew({cloudOnly:true}).then(renderWIP)" style="background:#f0f7ff;color:#1d6ec7;border-color:#bfdbfe" title="跳過本機快取，直接從 GAS 雲端重新拉取車縫資料">☁️ 雲端更新</button>
     <button class="btn btn-g btn-sm" onclick="xls('wip')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
   </div>
 
@@ -527,19 +529,63 @@ async function saveCut(){
   await idbClr(st);await Promise.all(CUT.map(r=>idbPut(st,r)));
   await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
 }
-async function loadSew(){
-  // 1. Try localStorage (sewing v5+ writes here)
+async function loadSew(opts){
+  // opts.cloudOnly=true  → 跳過 1/2，強制從雲端拉取
+  // opts.silent=true     → 不更新 UI 狀態列
+  opts=opts||{};
+
+  if(!opts.cloudOnly){
+    // 1. Try localStorage (sewing v5+ writes here)
+    try{
+      const raw=localStorage.getItem("sewing_prod_v1");
+      if(raw){const p=JSON.parse(raw);if(Array.isArray(p)&&p.length){SEW=p;await saveSew();return"local";}}
+    }catch(e){}
+    // 2. Fallback: sewing_cache IDB (from previous import or cloud pull)
+    try{
+      if(!_idb)await openIDB();
+      const tx=_idb.transaction("sewing_cache","readonly");
+      SEW=await idbAll(tx.objectStore("sewing_cache"));
+      if(SEW.length>0)return"cache";
+    }catch(e){SEW=[];}
+  }
+
+  // 3. Fallback: pull sewing data from GAS cloud
+  //    讀 gasUrl 直接從 localStorage（避免依賴 IIFE 內部變數）
+  const gasUrl=localStorage.getItem("vrt_portal_gas_url")||"";
+  if(!gasUrl){SEW=SEW||[];return SEW.length>0?"cache":false;}
   try{
-    const raw=localStorage.getItem("sewing_prod_v1");
-    if(raw){const p=JSON.parse(raw);if(Array.isArray(p)&&p.length){SEW=p;await saveSew();return true;}}
-  }catch(e){}
-  // 2. Fallback: sewing_cache IDB (from previous JSON import)
-  try{
-    if(!_idb)await openIDB();
-    const tx=_idb.transaction("sewing_cache","readonly");
-    SEW=await idbAll(tx.objectStore("sewing_cache"));
-    return SEW.length>0;
-  }catch(e){SEW=[];return false;}
+    const metaR=await fetch(`${gasUrl}?action=pull&meta=1&tool=sewing`,{redirect:"follow"});
+    if(!metaR.ok)return false;
+    const metaD=await metaR.json();
+    if(!metaD.ok)return false;
+    const d=metaD.data;
+    let recs=[];
+    if(d.chunked&&d.meta&&d.meta.totalChunks){
+      // 分批拉取
+      const total=d.meta.totalChunks;
+      for(let i=0;i<total;i++){
+        if(!opts.silent){_sewPullStatus(`雲端拉取車縫中… ${i+1}/${total} 批`);}
+        const cr=await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`,{redirect:"follow"});
+        if(!cr.ok)continue;
+        const cd=await cr.json();
+        if(cd.ok&&Array.isArray(cd.data.records))recs=recs.concat(cd.data.records);
+      }
+    }else if(!d.chunked&&d.data){
+      // 單批（較舊格式）
+      const payload=d.data;
+      recs=payload.records||payload.idbStore?.records||[];
+    }
+    if(recs.length){
+      SEW=recs.map(r=>({...r,id:r.id||uid()}));
+      await saveSew();
+      return"cloud";
+    }
+  }catch(e){console.warn("[cutting] loadSew cloud pull failed:",e);}
+  return SEW.length>0?"cache":false;
+}
+// 小工具：在不影響 refreshSew 主流程的情況下更新進度文字
+function _sewPullStatus(msg){
+  try{const el=document.getElementById("sewConn");if(el)el.innerHTML=`<span class="conn-dot conn-off"></span>${msg}`;}catch(e){}
 }
 async function saveSew(){
   if(!_idb)await openIDB();
@@ -645,19 +691,25 @@ function renderXChk(){
 }
 
 // ── Sewing connection ───────────────────────────────────────
-async function refreshSew(){
-  await loadSew();
+async function refreshSew(opts){
+  // 顯示「讀取中」佔位，避免空白閃爍
   const el=document.getElementById("sewConn"),badge=document.getElementById("connBadge");
+  if(el){el.className="sew-status";el.style.display="block";el.innerHTML=`<span class="conn-dot conn-off"></span>讀取車縫資料中…`;}
+
+  const src=await loadSew(opts||{});
+
   if(SEW.length){
     el.className="sew-status";el.style.display="block";
     const dates=[...new Set(SEW.map(r=>r.date))].sort().reverse();
     const sewSecs=[...new Set(SEW.map(r=>r.section))].join('/');
     const stN=[...new Set(SEW.map(r=>r.styleNo).filter(Boolean))].length;
-    el.innerHTML=`<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b> — ${fmt(SEW.length)} 筆 · ${sewSecs} · 款號 ${stN} 款 · 最新 ${dates[0]||"-"}`;
+    const srcLabel=src==="cloud"?" ☁️ 雲端":src==="local"?" 📱 本機":src==="cache"?" 💾 快取":"";
+    el.innerHTML=`<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b>${srcLabel} — ${fmt(SEW.length)} 筆 · ${sewSecs} · 款號 ${stN} 款 · 最新 ${dates[0]||"-"}`;
     badge.innerHTML="⚡ 已連線車縫 DB";badge.style.cssText="background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7";
   }else{
+    const hasGas=!!(localStorage.getItem("vrt_portal_gas_url")||"");
     el.className="sew-status warn";el.style.display="block";
-    el.innerHTML=`<span class="conn-dot conn-off"></span>⚠️ 尚未讀取到車縫資料。請在同一瀏覽器開啟車縫系統，或匯入備份 JSON。`;
+    el.innerHTML=`<span class="conn-dot conn-off"></span>⚠️ 尚未讀取到車縫資料。${hasGas?"請確認雲端資料已由車縫系統推送，或在同一瀏覽器開啟車縫系統。":"請在同一瀏覽器開啟車縫系統，或設定 GAS URL 後點「🔄 重整」。"}`;
     badge.innerHTML="⚠ 車縫未連線";badge.style.cssText="background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);color:#fcd34d";
   }
   updateHdr();
@@ -2414,95 +2466,7 @@ async function init(){
     badge.innerHTML="⚠ 車縫未連線";badge.style.cssText="background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);color:#fcd34d";
   }
 }
-init().then(() => {
-  // 若本機無資料，顯示提示讓使用者手動拉取
-  if (!CUT.length) {
-    const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
-    if (gasUrl) {
-      const tip = document.createElement('div');
-      tip.style.cssText = 'position:fixed;top:60px;right:16px;background:#1a2540;color:#fbbf24;padding:6px 14px;border-radius:8px;font-size:12px;font-family:monospace;z-index:9998;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:pointer';
-      tip.textContent = '☁ 本機無裁剪資料 → 點此從雲端拉取';
-      tip.onclick = () => { tip.remove(); document.getElementById('vcPullBtn')?.click(); };
-      document.body.appendChild(tip);
-      setTimeout(() => tip.remove(), 8000);
-    }
-  }
-});
-
-async function cutAutoSync(){
-  const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
-  if (!gasUrl) return;
-
-  const hasCut = CUT.length > 0;
-  const tip = document.createElement('div');
-  tip.style.cssText = 'position:fixed;top:60px;right:16px;background:#1a2540;color:#f59e0b;padding:6px 14px;border-radius:8px;font-size:12px;font-family:monospace;z-index:9998;box-shadow:0 2px 8px rgba(0,0,0,.4)';
-  tip.textContent = '☁ 同步雲端中...';
-  document.body.appendChild(tip);
-
-  try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=cutting`, { redirect:'follow' });
-    const d = await r.json();
-    if (!d.ok || !d.data || !d.data.data) {
-      tip.textContent = hasCut ? `本機 ${CUT.length.toLocaleString()} 筆` : '☁ 雲端無裁剪資料';
-      setTimeout(() => tip.remove(), 3000);
-      return;
-    }
-    const recs = d.data.data.idbStore?.records || d.data.data.records || [];
-    if (!recs.length) { tip.remove(); return; }
-
-    if (!_idb) await openIDB();
-    await new Promise((res, rej) => {
-      const tx = _idb.transaction(CUT_ST, 'readwrite');
-      const os = tx.objectStore(CUT_ST);
-      os.clear();
-      recs.forEach(r => os.put(r));
-      tx.oncomplete = res;
-      tx.onerror = e => rej(e.target.error);
-    });
-    CUT = recs;
-    updateHdr(); renderDBCard();
-
-    // 讀取車縫連線
-    try {
-      const sewRecs = await new Promise(res => {
-        const req = indexedDB.open('SewingCloudProd', 1);
-        req.onsuccess = e => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
-          const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
-          q.onsuccess = () => res(q.result || []);
-          q.onerror   = () => res([]);
-        };
-        req.onerror = () => res([]);
-      });
-      if (sewRecs.length) {
-        SEW = sewRecs;
-        const el = document.getElementById('sewConn');
-        const badge = document.getElementById('connBadge');
-        if (el) {
-          el.className = 'sew-status';
-          const dates = [...new Set(SEW.map(r=>r.date))].sort().reverse();
-          el.innerHTML = `<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b> — ${SEW.length.toLocaleString()} 筆 · 最新 ${dates[0]||'-'}`;
-          if (badge) { badge.innerHTML='⚡ 已連線車縫 DB'; badge.style.cssText='background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7'; }
-        }
-        updateHdr();
-      }
-    } catch(e) {}
-
-    tip.textContent = `☁ 雲端同步完成（${recs.length.toLocaleString()} 筆）`;
-    tip.style.color = '#10b981';
-    setTimeout(() => tip.remove(), 4000);
-  } catch(e) {
-    // fetch 失敗：靜默使用本機，不遮蓋已有資料
-    if (hasCut) {
-      tip.textContent = `本機 ${CUT.length.toLocaleString()} 筆（雲端暫時無法連線）`;
-    } else {
-      tip.textContent = '☁ 雲端離線且本機無資料 → 請用 ☁ 按鈕手動拉取';
-      tip.style.color = '#ef4444';
-    }
-    setTimeout(() => tip.remove(), 4000);
-  }
-}
+init();
 // ═══════════════════════ FOLDER SCAN ════════════════════════════════════════
 const _SCAN_LS="cutting_scanned_v1", _AUTOSCAN_LS="cutting_autoscan_v1";
 let _scanFolderList=[], _pendingScanKeys=[], _afterConfirmCb=null;
@@ -2735,32 +2699,14 @@ async function scanAllFolders(silent=false){
       if (!d.ok) throw new Error(d.error);
       if (!d.data || !d.data.data) { vcLog('雲端尚無裁剪資料', 'err'); return; }
       const payload = d.data.data;
-      const recs    = payload.idbStore?.records || payload.records || [];
-      if (!recs.length) { vcLog('雲端裁剪資料為空', 'err'); return; }
-
-      // 用主程式的 _idb（已開啟，keyPath 正確）
-      if (!_idb) await openIDB();
-      await new Promise((res, rej) => {
-        const tx = _idb.transaction('cutting_records', 'readwrite');
-        const os = tx.objectStore('cutting_records');
-        os.clear();
-        recs.forEach(r => os.put(r));
-        tx.oncomplete = () => res(recs.length);
-        tx.onerror = e => rej(e.target.error);
-      });
-
-      // 直接更新記憶體，不需 reload
-      CUT.length = 0;
-      recs.forEach(r => CUT.push(r));
-
-      // 刷新所有畫面
-      updateHdr();
-      renderDBCard();
-      if (typeof renderRecs === 'function') renderRecs();
-
+      const recs    = payload.idbStore?.records || [];
+      await vcIdbPutAll('CuttingProd', 1, 'cutting_records', recs);
+      // 同步更新記憶體中的 CUT
+      if (typeof CUT !== 'undefined') { CUT.length = 0; recs.forEach(r => CUT.push(r)); }
       localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
-      vcLog(`✓ 拉取完成（${recs.length} 筆）`, 'ok');
+      vcLog(`✓ 拉取完成（${recs.length} 筆），重新整理即可看到`, 'ok');
       vcShowStatus();
+      if (confirm(`已拉取 ${recs.length} 筆裁剪資料\n立即重新整理頁面？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }
@@ -2782,14 +2728,7 @@ async function scanAllFolders(silent=false){
     return new Promise(res => {
       const req = indexedDB.open(dbName, ver);
       req.onerror = () => res([]);
-      req.onupgradeneeded = e => {
-        // 確保 store 存在（避免空 DB 問題）
-        const d = e.target.result;
-        if (!d.objectStoreNames.contains('cutting_records'))
-          d.createObjectStore('cutting_records', { keyPath: 'id' });
-        if (!d.objectStoreNames.contains('sewing_cache'))
-          d.createObjectStore('sewing_cache', { keyPath: 'id' });
-      };
+      req.onupgradeneeded = () => {};
       req.onsuccess = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains(store)){ res([]); return; }
