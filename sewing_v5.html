@@ -1050,7 +1050,15 @@ function parseVRT(wb, fname){
     const s = String(v).trim();
     if(!s) return null;
     if(/^(LINE|Line)\s+[A-Z]?\d+$/.test(s)){
-      return lmNorm[s.toUpperCase()] || lmFuzzy[normLine(s)] || null;
+      // 1. 精確大寫匹配（如 "LINE 17" → lmNorm["LINE 17"]）
+      const exact=lmNorm[s.toUpperCase()]; if(exact) return exact;
+      // 2. 模糊匹配（去空格＋去前綴零）
+      const fuzzy=lmFuzzy[normLine(s)]; if(fuzzy) return fuzzy;
+      // 3. 加 G 前綴匹配：Summary 寫 "Line 20"，body 用 "Line G20"
+      //    e.g. "Line 20" → try "Line G20"
+      const withG=lmFuzzy[normLine(s.replace(/^(LINE|Line)\s+(\d)/i,'$1 G$2'))];
+      if(withG) return withG;
+      return null;
     }
     // 直接模糊匹配（如 "Line G21" 原樣）
     const direct=lmFuzzy[normLine(s)];
@@ -1058,6 +1066,9 @@ function parseVRT(wb, fname){
     // Summary 可能省略 "Line " 前綴（如 "G21" → 試匹配 "Line G21"）
     const withPfx=lmFuzzy[normLine("LINE "+s)];
     if(withPfx) return withPfx;
+    // 無 G 前綴版本：body 用 "Line G20"，Summary 寫 "20" → try "Line 20"
+    const noG=lmFuzzy[normLine("LINE "+s.replace(/^G/i,''))];
+    if(noG) return noG;
     return null;
   }
 
