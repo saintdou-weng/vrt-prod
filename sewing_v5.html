@@ -1140,21 +1140,25 @@ function parseVRT(wb, fname){
     }
   }
 
-  // Pass 1b: 延伸 Summary 區塊（無 Summary 標籤，col B 空，但含多個已知線別名）
-  // 例: 2020 格式 r560: "" | "" | ... | "Line 13" | "Line 14" | ... 緊接著人數行
-  // 必須在 summaryStartRow 之後才掃，避免誤抓 body 區
-  for(let i=Math.max(0,summaryStartRow);i<rows.length;i++){
+  // Pass 1b: 延伸 Summary 區塊（無 Summary 標籤的 header 行，如 2020 格式的 Line 13-21 區）
+  // 判斷條件：col B 空 + col C 空（排除 body 區） + col 6+ 有 ≥2 個已知線別名
+  // 不依賴 summaryStartRow，從全表掃（body 行 col C 非空，不會誤抓）
+  for(let i=4;i<rows.length;i++){
     const r=rows[i]||[];
+    // col B 或 col C 任一有值 → 不是延伸 header（body 行 col C 有線別名；summary header col B 有標籤）
     const bCell=String(r[1]||'').trim();
-    if(bCell) continue; // col B 非空 → 是有標籤的 summary 行，Pass 1 已處理
-    // 在 col 6+ 尋找 ≥2 個已知線別名（延伸區塊的 header 行）
+    const cCell=String(r[2]||'').trim();
+    if(bCell||cCell) continue;
+    // 在 col 5+ 尋找已知線別名（延伸 header 線名通常在 col G/H 以後）
     const cm2={};
-    for(let ci=6;ci<Math.min(r.length,40);ci++){
+    for(let ci=5;ci<Math.min(r.length,40);ci++){
       const ln=lineNameAt(r[ci]);
       if(ln) cm2[ci]=ln;
     }
-    if(Object.keys(cm2).length<2) continue;
-    // 找到延伸 header 行，掃後面 20 行找人數（整數 10-200）和效率（0.1-0.95）
+    if(Object.keys(cm2).length<2) continue; // 少於 2 個 column → 不是 header
+    const cm2Lines=new Set(Object.values(cm2));
+    if(cm2Lines.size<3) continue; // 少於 3 個不同線別名 → 可能是 body 合併儲存格誤判
+    // 掃後面 20 行：找人數（整數 10-200）和效率（小數 0.05-0.99）
     for(let j=i+1;j<Math.min(i+20,rows.length);j++){
       const jr=rows[j]||[];
       const vals=Object.entries(cm2).map(([ci,ln])=>{
