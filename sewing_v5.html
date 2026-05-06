@@ -746,53 +746,18 @@ async function vcAutoSync(){
   if (hdr) hdr.appendChild(tip);
 
   try {
-    // Step 1：取 meta
-    const mr = await fetch(`${gasUrl}?action=pull&tool=sewing&meta=1`, { redirect:'follow' });
-    const md = await mr.json();
-    if (!md.ok || !md.data) { tip.textContent = '☁ 雲端無資料（使用本機）'; tip.style.color='#f59e0b'; setTimeout(()=>tip.remove(),3000); return; }
-
-    let allRecs = [];
-    let metaEff = null;
-
-    if (md.data.chunked) {
-      const meta    = md.data.meta;
-      const total   = meta.totalChunks;
-      vcLog(`分 ${total} 批拉取（共 ${meta.recordCount} 筆）...`, 'i');
-
-      // 帶重試的單批 fetch
-      async function fetchChunk(i, retry = 3) {
-        for (let t = 0; t < retry; t++) {
-          try {
-            const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
-            const cd = await cr.json();
-            if (cd.ok) return cd.data.records || [];
-          } catch(e) {
-            if (t === retry - 1) throw e;
-            vcLog(`第 ${i+1} 批失敗，重試 ${t+1}/${retry}...`, 'i');
-            await new Promise(r => setTimeout(r, 2000)); // 等2秒再試
-          }
-        }
-        return [];
-      }
-
-      for (let i = 0; i < total; i++) {
-        vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
-        const recs = await fetchChunk(i);
-        allRecs = allRecs.concat(recs);
-        // 每5批存一次 IDB，避免中斷後全部重來
-        if ((i+1) % 5 === 0 || i === total-1) {
-          tip && (tip.textContent = `☁ 已拉取 ${allRecs.length.toLocaleString()} 筆...`);
-        }
-      }
-      metaEff = meta.eff;
-    } else {
-      const payload = md.data.data;
-      if (!payload) { tip.textContent = '☁ 雲端無資料（使用本機）'; setTimeout(()=>tip.remove(),3000); return; }
-      if (payload.lsKeys?.sewing_prod_v1) allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
-      else if (payload.records) allRecs = payload.records;
-      metaEff = payload.eff;
+    const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
+    const d = await r.json();
+    if (!d.ok || !d.data || !d.data.data) {
+      tip.textContent = '☁ 雲端無資料（使用本機）';
+      setTimeout(() => tip.remove(), 3000);
+      return;
     }
-
+    const payload = d.data.data;
+    let allRecs = [];
+    if (payload.lsKeys && payload.lsKeys.sewing_prod_v1)
+      allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+    else if (payload.records) allRecs = payload.records;
     if (!allRecs.length) { tip.remove(); return; }
 
     // ★ 全量存入 IDB（無大小限制）
@@ -805,7 +770,8 @@ async function vcAutoSync(){
     try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
     // 效率資料
-    if (metaEff) try { localStorage.setItem(LS_EFF, JSON.stringify(metaEff)); } catch(e) {}
+    if (payload.lsKeys?.sewing_eff_v1)
+      try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
 
     // 更新記憶體：用全量
     DB = dedupAndNorm(allRecs);
@@ -1091,44 +1057,75 @@ function parseVRT(wb, fname){
 
   const workers={}, eff={}, workersOT={}, hoursOT={};
 
-  // Pass 1: header-anchor scan
+  // ── 統一 label 判斷函數（涵蓋新舊報表關鍵字）──────────────────────
+  function isWorkerLbl(lbl, ot){
+    // 舊格式：attendance / manpower / headcount / no. of sewer/worker
+    // 新格式：number of sewer
+    const clean=lbl.replace(/[\s\-_]+/g,'');
+    const isOTmark=lbl.includes('(ot)')||lbl.includes('ot)')||clean.includes('ot)');
+    if(ot) return isOTmark && (
+      lbl.includes('number of sewer')||lbl.includes('no.ofsewer')||clean.includes('noofsewer')||
+      lbl.includes('number of worker')||lbl.includes('no.ofworker')||clean.includes('noofworker')||
+      lbl.includes('manpower')||lbl.includes('attendance')||lbl.includes('headcount')
+    );
+    if(isOTmark) return false;
+    return (
+      lbl.includes('number of sewer')||lbl.includes('no. of sewer')||clean.includes('noofsewer')||
+      lbl.includes('number of worker')||lbl.includes('no. of worker')||clean.includes('noofworker')||
+      lbl.includes('attendance')||lbl.includes('manpower')||lbl.includes('man power')||
+      lbl.includes('headcount')||lbl.includes('head count')||
+      // 避免誤抓產量行：只有明確是人的欄位
+      (lbl.includes('sewer')&&!lbl.includes('pieces')&&!lbl.includes('pcs'))
+    );
+  }
+  function isEffLbl(lbl){
+    return lbl.includes('achieve eff')||lbl.includes('achiev')||
+      lbl.includes('eff%')||lbl.includes('eff %')||
+      lbl.includes('efficiency')||lbl.includes('daily eff')||lbl.includes('ach eff');
+  }
+  function isHOTLbl(lbl){
+    return (lbl.includes('working hours')||lbl.includes('work hour')||lbl.includes('ot hour')||lbl.includes('hours ot')
+            )&&(lbl.includes('(ot)')||lbl.includes('ot)')||lbl.includes('overtime'));
+  }
+
+  // Pass 1: header-anchor scan（新舊格式都支援）
   for(let i=0; i<rows.length; i++){
     const r = rows[i]||[];
-    // Is this a summary header row? Check col 1 (B) for "Summary" keyword
+    // Summary header 可在 col A（0）或 col B（1），且包含 summary 即可（不要求 startsWith）
+    const a = String(r[0]||'').trim().toLowerCase();
     const b = String(r[1]||'').trim().toLowerCase();
-    if(!b.startsWith('summary')) continue;
+    if(!a.includes('summary')&&!b.includes('summary')) continue;
     // Build colMap: colIndex → lineName
     const colMap = {};
-    r.forEach((c,ci)=>{ const ln=lineNameAt(c); if(ln) colMap[ci]=ln; });
+    r.forEach((cell,ci)=>{ const ln=lineNameAt(cell); if(ln) colMap[ci]=ln; });
     if(Object.keys(colMap).length === 0) continue;
 
-    // Scan rows i+1 to i+20 for worker/eff labels
-    for(let j=i+1; j<Math.min(i+20, rows.length); j++){
+    // 掃描 summary header 前後各 25 行（舊格式人數有時在 header 上方）
+    const scanFrom=Math.max(0,i-5), scanTo=Math.min(rows.length,i+25);
+    for(let j=scanFrom; j<scanTo; j++){
+      if(j===i) continue; // 跳過 header 本身
       const jr = rows[j]||[];
+      // label 可在 col A 或 col B（不同版本不一致）
       const lbl = String(jr[1]||jr[0]||'').trim().toLowerCase();
-      const isW = lbl.includes('number of sewer') && !lbl.includes('(ot)') && !lbl.includes('ot)');
-      const isWOT = lbl.includes('number of sewer') && (lbl.includes('(ot)') || lbl.includes('ot)'));
-      const isE = lbl.includes('achieve eff');
-      const isHOT = lbl.includes('working hours') && (lbl.includes('(ot)') || lbl.includes('ot)'));
-      if(isW){
+      if(isWorkerLbl(lbl,false)){
         Object.entries(colMap).forEach(([ci,ln])=>{
           const val=parseFloat(jr[ci]);
           if(!isNaN(val)&&val>0&&!workers[ln]) workers[ln]=val;
         });
       }
-      if(isWOT){
+      if(isWorkerLbl(lbl,true)){
         Object.entries(colMap).forEach(([ci,ln])=>{
           const val=parseFloat(jr[ci]);
           if(!isNaN(val)&&val>0&&!workersOT[ln]) workersOT[ln]=val;
         });
       }
-      if(isHOT){
+      if(isHOTLbl(lbl)){
         Object.entries(colMap).forEach(([ci,ln])=>{
           const val=parseFloat(jr[ci]);
           if(!isNaN(val)&&val>0&&!hoursOT[ln]) hoursOT[ln]=val;
         });
       }
-      if(isE){
+      if(isEffLbl(lbl)){
         Object.entries(colMap).forEach(([ci,ln])=>{
           const val=parseFloat(jr[ci]);
           if(!isNaN(val)&&val>0&&!eff[ln]) eff[ln]=val>1?Math.round(val):Math.round(val*100);
@@ -1137,18 +1134,18 @@ function parseVRT(wb, fname){
     }
   }
 
-  // Pass 2: fallback — label-first bidirectional (for any other layouts)
+  // Pass 2: fallback — label-first bidirectional（其他佈局的舊報表）
   if(Object.keys(workers).length === 0){
     for(let i=0; i<rows.length; i++){
       const r=rows[i]||[];
-      const lbls=r.slice(0,10).map(c=>String(c||'').trim().toLowerCase()).filter(s=>s.length>2);
-      const hasW=lbls.some(s=>s.includes('number of sewer')&&!s.includes('(ot)'));
-      const hasE=lbls.some(s=>s.includes('achieve eff'));
+      const lbls=r.slice(0,12).map(cell=>String(cell||'').trim().toLowerCase()).filter(s=>s.length>2);
+      const hasW=lbls.some(s=>isWorkerLbl(s,false));
+      const hasE=lbls.some(s=>isEffLbl(s));
       if(!hasW&&!hasE) continue;
       let entries=[];
-      for(let d=1;d<=25&&!entries.length;d++){
-        if(i-d>=0) entries=(rows[i-d]||[]).map((c,ci)=>{const ln=lineNameAt(c);return ln?[ln,ci]:null;}).filter(Boolean);
-        if(!entries.length&&i+d<rows.length) entries=(rows[i+d]||[]).map((c,ci)=>{const ln=lineNameAt(c);return ln?[ln,ci]:null;}).filter(Boolean);
+      for(let d=1;d<=30&&!entries.length;d++){
+        if(i-d>=0) entries=(rows[i-d]||[]).map((cell,ci)=>{const ln=lineNameAt(cell);return ln?[ln,ci]:null;}).filter(Boolean);
+        if(!entries.length&&i+d<rows.length) entries=(rows[i+d]||[]).map((cell,ci)=>{const ln=lineNameAt(cell);return ln?[ln,ci]:null;}).filter(Boolean);
       }
       if(!entries.length) continue;
       const vrow=rows[i]||[];
@@ -3451,7 +3448,7 @@ async function scanAllFolders(silent=false){
         : JSON.parse(localStorage.getItem('sewing_eff_v1') || '[]');
 
       const total     = allRecs.length;
-      const CHUNK     = 5000; // 每批5000筆，68k筆約14批
+      const CHUNK     = 2000;
       const chunks    = Math.ceil(total / CHUNK);
       vcLog(`開始推送 ${total} 筆（共 ${chunks} 批）...`, 'i');
 
@@ -3491,77 +3488,65 @@ async function scanAllFolders(silent=false){
     if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     if (!confirm('拉取會覆蓋本機車縫資料，確定嗎？')) return;
     vcSetBusy(true);
-    vcLog('查詢雲端資料...', 'i');
+    vcLog('拉取中...', 'i');
     try {
-      // Step 1：取得 meta（知道有幾批）
-      const mr = await fetch(`${gasUrl}?action=pull&tool=sewing&meta=1`, { redirect:'follow' });
-      const md = await mr.json();
-      if (!md.ok) throw new Error(md.error);
+      const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      if (!d.data || !d.data.data) { vcLog('雲端尚無車縫資料', 'err'); return; }
+      const payload = d.data.data;
 
+      // 取得完整記錄
       let allRecs = [];
-      let meta    = null;
-
-      if (md.data.chunked) {
-        // 分批模式：逐批 fetch（含重試）
-        meta = md.data.meta;
-        const total = meta.totalChunks;
-        vcLog(`分 ${total} 批拉取（${meta.recordCount} 筆）...`, 'i');
-
-        async function pullChunk(i, retry=3){
-          for(let t=0;t<retry;t++){
-            try{
-              const cr=await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`,{redirect:'follow'});
-              const cd=await cr.json();
-              if(cd.ok) return cd.data.records||[];
-            }catch(e){
-              if(t===retry-1) throw new Error(`第${i+1}批失敗：`+e.message);
-              vcLog(`第${i+1}批失敗，重試${t+1}/${retry}...`,'i');
-              await new Promise(r=>setTimeout(r,2000));
-            }
-          }
-          return [];
-        }
-
-        for (let i = 0; i < total; i++) {
-          vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
-          const recs = await pullChunk(i);
-          allRecs = allRecs.concat(recs);
-        }
-      } else {
-        // 舊格式單批
-        const payload = md.data.data;
-        if (!payload) { vcLog('雲端尚無車縫資料', 'err'); return; }
-        if (payload.lsKeys?.sewing_prod_v1)
-          allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
-        else if (payload.records) allRecs = payload.records;
-        meta = payload;
+      if (payload.lsKeys && payload.lsKeys.sewing_prod_v1) {
+        allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+      } else if (payload.records) {
+        allRecs = payload.records;
       }
 
-      if (!allRecs.length) { vcLog('雲端車縫資料為空', 'err'); return; }
+      // 嘗試寫入，若超出 quota 自動縮減天數
+      const cutoffs = [180, 90, 60, 30];
+      let saved = false;
+      let savedRecs = allRecs;
 
-      // ★ 全量存入 SewingCloudProd IDB（無大小限制）
-      vcLog(`寫入 IDB（${allRecs.length.toLocaleString()} 筆）...`, 'i');
-      await saveToCloudIDB(allRecs);
+      // 先試全量
+      try {
+        const testJson = JSON.stringify(allRecs);
+        localStorage.setItem('sewing_prod_v1', testJson);
+        saved = true;
+        vcLog(`✓ 全量寫入（${allRecs.length} 筆）`, 'ok');
+      } catch(e) {
+        vcLog(`全量超出容量，自動縮減...`, 'i');
+      }
 
-      // localStorage 存近 90 天備用
-      const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
-      const recent = allRecs.filter(r => (r.date||'') >= cutStr);
-      try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
+      // 若失敗，依天數縮減
+      if (!saved) {
+        for (const days of cutoffs) {
+          const cutDate = new Date();
+          cutDate.setDate(cutDate.getDate() - days);
+          const cutStr  = cutDate.toISOString().slice(0, 10);
+          savedRecs     = allRecs.filter(rec => (rec.date || '') >= cutStr);
+          try {
+            localStorage.setItem('sewing_prod_v1', JSON.stringify(savedRecs));
+            saved = true;
+            vcLog(`✓ 寫入近 ${days} 天資料（${savedRecs.length} 筆），較舊資料在工廠電腦查看`, 'ok');
+            break;
+          } catch(e2) {
+            vcLog(`近 ${days} 天仍超出，再縮...`, 'i');
+          }
+        }
+      }
 
-      // 效率資料
-      const effJson = meta?.eff ? JSON.stringify(meta.eff)
-                    : meta?.lsKeys_extra?.sewing_eff_v1 || null;
-      if (effJson) try { localStorage.setItem(LS_EFF, effJson); } catch(e) {}
+      if (!saved) { vcLog('✗ 資料量太大，無法寫入此裝置 localStorage', 'err'); return; }
 
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: allRecs.length }));
+      // 寫入 eff
+      if (payload.lsKeys && payload.lsKeys.sewing_eff_v1) {
+        try { localStorage.setItem('sewing_eff_v1', payload.lsKeys.sewing_eff_v1); } catch(e) {}
+      }
 
-      // 更新記憶體
-      DB = dedupAndNorm(allRecs);
-      updateHeader(); renderDBCard();
-
-      vcLog(`✓ 拉取完成（${allRecs.length.toLocaleString()} 筆）`, 'ok');
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: savedRecs.length }));
       vcShowStatus();
-      if (confirm(`已拉取 ${allRecs.length.toLocaleString()} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
+      if (confirm(`已拉取 ${savedRecs.length} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }
