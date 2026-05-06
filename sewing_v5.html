@@ -1052,7 +1052,13 @@ function parseVRT(wb, fname){
     if(/^(LINE|Line)\s+[A-Z]?\d+$/.test(s)){
       return lmNorm[s.toUpperCase()] || lmFuzzy[normLine(s)] || null;
     }
-    return lmFuzzy[normLine(s)] || null;
+    // 直接模糊匹配（如 "Line G21" 原樣）
+    const direct=lmFuzzy[normLine(s)];
+    if(direct) return direct;
+    // Summary 可能省略 "Line " 前綴（如 "G21" → 試匹配 "Line G21"）
+    const withPfx=lmFuzzy[normLine("LINE "+s)];
+    if(withPfx) return withPfx;
+    return null;
   }
 
   const workers={}, eff={}, workersOT={}, hoursOT={};
@@ -1155,6 +1161,32 @@ function parseVRT(wb, fname){
         if(hasW&&!workers[ln]) workers[ln]=val;
         if(hasE&&!eff[ln]) eff[ln]=val>1?Math.round(val):Math.round(val*100);
       });
+    }
+  }
+
+  // Pass 3: 對 Pass 1/2 仍未找到人數的線別，嘗試從 body 相鄰行找人數
+  // 某些舊格式或特殊組別不在 Summary 區，但 body 裡的款式行前方有獨立人數行
+  if(Object.keys(workers).length < Object.keys(lm).length){
+    const missingLines=new Set(Object.keys(lm).filter(ln=>!workers[ln]));
+    // 掃描整個 sheet，找 col 2 是已知線別且 col 3 是人數的 pattern
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i]||[];
+      const c2=String(r[2]||"").trim();
+      if(!c2||!LRE.test(c2)) continue;
+      const normC2=normLineNo(c2);
+      if(!missingLines.has(normC2)&&!missingLines.has(c2)) continue;
+      // 往後找 "人數" / "attendance" / "workers" 行（最多 5 行內）
+      for(let j=i+1;j<Math.min(i+6,rows.length);j++){
+        const jr=rows[j]||[];
+        const lbl2=String(jr[1]||jr[0]||"").trim().toLowerCase();
+        if(isWorkerLbl(lbl2,false)){
+          // 人數通常在 col 3 或 col 4
+          const val=parseFloat(jr[3])||parseFloat(jr[4])||0;
+          if(val>0){workers[normC2]=val; missingLines.delete(normC2); missingLines.delete(c2);}
+          break;
+        }
+      }
+      if(!missingLines.size) break;
     }
   }
 
@@ -1626,11 +1658,13 @@ function buildLineMap(recs){
   const lm={};
   recs.forEach(r=>{
     const k=r.lineNo||"(未知)";
-    if(!lm[k]) lm[k]={lineNo:k,section:r.section,workers:0,efficiency:0,totalPcs:0,cartons:0,styles:[]};
+    if(!lm[k]) lm[k]={lineNo:k,section:r.section,workers:0,efficiency:0,totalPcs:0,cartons:0,styles:[],otWorkers:0,otPcs:0};
     lm[k].totalPcs+=r.pieces;
     lm[k].cartons+=r.cartons;
+    lm[k].otPcs+=(r.otPcs||0);
     if(r.styleNo) lm[k].styles.push({styleNo:r.styleNo,pcs:r.pieces});
     if(r.workers>lm[k].workers) lm[k].workers=r.workers;
+    if((r.workersOT||0)>lm[k].otWorkers) lm[k].otWorkers=r.workersOT||0;
     if(r.efficiency>lm[k].efficiency) lm[k].efficiency=r.efficiency;
   });
   return Object.values(lm).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
@@ -1658,6 +1692,7 @@ function lineCardHTML(line){
     </div>
     ${pp?`<div class="pp"><span style="color:#0369a1">人均產量</span><span class="pp-v">${pp} 件/人</span></div>`:""}
     ${line.cartons>0?`<div class="ctn-row"><span style="color:#6b7a9e">箱數</span><span class="mono" style="font-weight:600">${Math.round(line.cartons*10)/10} Ctn</span></div>`:""}
+    ${(line.otWorkers>0||line.otPcs>0)?`<div class="ctn-row" style="border-top:1px dashed #e9d8fd;margin-top:3px;padding-top:3px"><span style="color:#7c3aed;font-size:11px">⏰ 加班</span><span class="mono" style="color:#7c3aed;font-size:12px;font-weight:700">${line.otWorkers>0?line.otWorkers+"人":""}${line.otWorkers>0&&line.otPcs>0?" · ":""}${line.otPcs>0?line.otPcs.toLocaleString()+"件":""}</span></div>`:""}
     ${line.efficiency>0?`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7a9e;margin-bottom:2px"><span>效率</span><span>目標45%</span></div><div class="capbar"><div class="capfill" style="width:${cap}%;background:${ec==="hi"?"#059669":ec==="md"?"#d97706":"#dc2626"}"></div></div></div>`:""}
     ${line.styles.length>0?`<div><div class="slist-hd">款式明細</div>${line.styles.sort((a,b)=>b.pcs-a.pcs).map(s=>`<div class="srow"><span class="sno">${s.styleNo}</span><span class="spcs">${s.pcs.toLocaleString()}件</span></div>`).join("")}</div>`:""}
   </div>`;
@@ -1733,13 +1768,19 @@ function renderDaily(){
   }
 
   // KPI
+  const otActive=active.filter(l=>l.otWorkers>0||l.otPcs>0);
+  const totOTW=otActive.reduce((s,l)=>s+l.otWorkers,0);
   document.getElementById("dKpi").innerHTML=[
     {l:"生產線數",v:active.length,u:"條",c:"#f59e0b"},
     {l:"合計人數",v:totW,u:"人",c:"#1e2640"},
     {l:"合計件數",v:totP.toLocaleString(),u:"件",c:"#1d4ed8"},
     {l:"平均效率",v:avgEff,u:"%",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626"},
-    {l:"合計箱數",v:Math.round(totC*10)/10,u:"Ctn",c:"#6b7a9e"},
+    {l:"合計箱數",v:Math.round(totC*10)/10||"-",u:"Ctn",c:"#6b7a9e"},
     {l:"人均件數",v:totW>0?(totP/totW).toFixed(1):"-",u:"件/人",c:"#0369a1"},
+    ...(otActive.length?[
+      {l:"加班組數",v:otActive.length,u:"組",c:"#7c3aed"},
+      {l:"加班人數",v:totOTW,u:"人",c:"#7c3aed"},
+    ]:[]),
   ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c}">${k.v}<span class="kpi-u">${k.u}</span></div><div class="kpi-l">${k.l}</div></div>`).join("");
 
   // Sections
@@ -1849,6 +1890,15 @@ function renderWeekly(){
   const wSunDays=wDates.filter(d=>new Date(d+"T00:00:00").getDay()===0);
   document.getElementById("wmeta").textContent=`${wWorkDays.length}工作天${wSunDays.length?" · ⚠️"+wSunDays.length+"日有週日資料":""} · ${active.length}條線`;
 
+  // ★ 加班天數 / 平均加班人數
+  const wOTDays=wDates.filter(d=>DB.filter(r=>r.date===d).some(r=>(r.workersOT||0)>0));
+  const wOTDayCount=wOTDays.length;
+  const wAvgOTW=wOTDayCount>0
+    ?Math.round(wOTDays.reduce((s,d)=>{
+        const dl=buildLineMap(DB.filter(r=>r.date===d));
+        return s+dl.reduce((ss,l)=>ss+l.otWorkers,0);
+      },0)/wOTDayCount)
+    :0;
   document.getElementById("wKpi").innerHTML=[
     {l:"工作天數",v:wWorkDays.length,u:"天",c:"#f59e0b"},
     {l:"生產線數",v:active.length,u:"條",c:"#374151"},
@@ -1856,6 +1906,11 @@ function renderWeekly(){
     {l:"合計件數",v:totP.toLocaleString(),u:"件",c:"#1d4ed8"},
     {l:"平均效率",v:avgEff,u:"%",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626"},
     {l:"人均件數",v:totW>0?(totP/totW).toFixed(1):"-",u:"件/人",c:"#0369a1"},
+    {l:"合計箱數",v:Math.round(totC*10)/10||"-",u:"Ctn",c:"#6b7a9e"},
+    ...(wOTDayCount>0?[
+      {l:"加班天數",v:wOTDayCount,u:"天",c:"#7c3aed"},
+      {l:"平均加班人數",v:wAvgOTW,u:"人/天",c:"#7c3aed"},
+    ]:[]),
   ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c}">${k.v}<span class="kpi-u">${k.u}</span></div><div class="kpi-l">${k.l}</div></div>`).join("");
 
   const wlc=document.getElementById("wLineCard");
