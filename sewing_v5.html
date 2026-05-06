@@ -1140,6 +1140,35 @@ function parseVRT(wb, fname){
     }
   }
 
+  // Pass 1b: 延伸 Summary 區塊（無 Summary 標籤，col B 空，但含多個已知線別名）
+  // 例: 2020 格式 r560: "" | "" | ... | "Line 13" | "Line 14" | ... 緊接著人數行
+  // 必須在 summaryStartRow 之後才掃，避免誤抓 body 區
+  for(let i=Math.max(0,summaryStartRow);i<rows.length;i++){
+    const r=rows[i]||[];
+    const bCell=String(r[1]||'').trim();
+    if(bCell) continue; // col B 非空 → 是有標籤的 summary 行，Pass 1 已處理
+    // 在 col 6+ 尋找 ≥2 個已知線別名（延伸區塊的 header 行）
+    const cm2={};
+    for(let ci=6;ci<Math.min(r.length,40);ci++){
+      const ln=lineNameAt(r[ci]);
+      if(ln) cm2[ci]=ln;
+    }
+    if(Object.keys(cm2).length<2) continue;
+    // 找到延伸 header 行，掃後面 20 行找人數（整數 10-200）和效率（0.1-0.95）
+    for(let j=i+1;j<Math.min(i+20,rows.length);j++){
+      const jr=rows[j]||[];
+      const vals=Object.entries(cm2).map(([ci,ln])=>{
+        const v=parseFloat(jr[ci]);
+        return isNaN(v)||v<=0?null:{ln,v};
+      }).filter(Boolean);
+      if(!vals.length) continue;
+      const wCands=vals.filter(x=>x.v>=10&&x.v<=200&&x.v===Math.round(x.v));
+      const eCands=vals.filter(x=>x.v>=0.05&&x.v<1);
+      if(wCands.length>=2) wCands.forEach(({ln,v})=>{if(!workers[ln])workers[ln]=v;});
+      if(eCands.length>=2) eCands.forEach(({ln,v})=>{if(!eff[ln])eff[ln]=Math.round(v*100);});
+    }
+  }
+
   // Pass 2: fallback — label-first bidirectional（其他佈局的舊報表）
   if(Object.keys(workers).length === 0){
     for(let i=0; i<rows.length; i++){
