@@ -268,6 +268,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     <select id="dsec" onchange="renderDaily()"><option value="">全部</option></select>
     <button class="btn btn-g" onclick="toggleDtail()" id="btnDtail" style="font-size:12px;padding:5px 10px">📋 PO明細</button>
     <span id="dmeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-g" onclick="deleteWholeDay()" title="刪除當日全部記錄" style="background:#fff0f0;color:#dc2626;border-color:#fca5a5;font-size:12px;padding:5px 12px">🗑 刪除此日</button>
     <button class="btn btn-g" onclick="exportExcel('daily')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出 Excel</button>
   </div>
   <div id="dKpi" class="kpi-strip"></div>
@@ -288,10 +289,10 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     </div>
     <div id="dSumTable" class="tw"><table><thead><tr>
       <th>線別</th><th>Section</th><th>人數</th><th>總件數</th>
-      <th>效率</th><th>目標45%</th><th>人均件數</th><th>箱數</th><th>款式數</th>
+      <th>效率</th><th>目標45%</th><th>人均件數</th><th>箱數</th><th>款式數</th><th style="width:40px"></th>
     </tr></thead><tbody id="dTbody"></tbody></table></div>
     <div id="dPOTable" class="tw" style="display:none"><table><thead><tr>
-      <th>線別</th><th>Section</th><th>款號</th><th>SELFKEY</th><th>PO</th><th>顏色</th><th>尺寸</th><th>件數</th><th>箱數</th>
+      <th>線別</th><th>Section</th><th>款號</th><th>SELFKEY</th><th>PO</th><th>顏色</th><th>尺寸</th><th>件數</th><th>箱數</th><th style="width:40px"></th>
     </tr></thead><tbody id="dPOBody"></tbody></table></div>
   </div>
 </div>
@@ -1170,6 +1171,7 @@ function parseVRT(wb, fname){
     const cm2Lines=new Set(Object.values(cm2));
     if(cm2Lines.size<3) continue; // 少於 3 個不同線別名 → 可能是 body 合併儲存格誤判
     // 掃後面 20 行：找人數（整數 10-200）和效率（小數 0.05-0.99）
+    let pass1bWSet=false;
     for(let j=i+1;j<Math.min(i+20,rows.length);j++){
       const jr=rows[j]||[];
       const vals=Object.entries(cm2).map(([ci,ln])=>{
@@ -1179,9 +1181,22 @@ function parseVRT(wb, fname){
       if(!vals.length) continue;
       const wCands=vals.filter(x=>x.v>=10&&x.v<=200&&x.v===Math.round(x.v));
       const eCands=vals.filter(x=>x.v>=0.05&&x.v<1);
-      if(wCands.length>=2) wCands.forEach(({ln,v})=>{if(!workers[ln])workers[ln]=v;});
+      // ★ 修正：第一個緊接在 header 後的數字行（j===i+1）只要有 ≥1 個整數即可視為人數
+      // 後面的行（hours、OT等）需要 ≥2 個才認，避免誤判
+      const wThresh = j===i+1 ? 1 : 2;
+      if(!pass1bWSet && wCands.length>=wThresh){
+        wCands.forEach(({ln,v})=>{
+          if(!workers[ln]) workers[ln]=v;
+          // ★ 同時對 G-prefix 反向補充：如 Summary 的 "Line 20" 映射到 "Line G20"，
+          // 也嘗試設給無 G 版本（若 body 用 "Line 20" 而 Summary 用 G20 映射）
+          const noG=ln.replace(/^(Line|LINE)\s+G(\d)/i,'$1 $2');
+          if(noG!==ln&&!workers[noG]) workers[noG]=v;
+        });
+        pass1bWSet=true; // 第一次找到人數後標記，避免後面幾行覆蓋
+      }
       if(eCands.length>=2) eCands.forEach(({ln,v})=>{if(!eff[ln])eff[ln]=Math.round(v*100);});
     }
+    console.log('[Pass1b] header r'+(i+1)+' cm2lines='+JSON.stringify([...cm2Lines])+' workers found='+JSON.stringify(Object.fromEntries(Object.entries(workers).filter(([k])=>[...cm2Lines].includes(k)))));
   }
 
   // Pass 2: fallback — label-first bidirectional（其他佈局的舊報表）
@@ -1683,6 +1698,71 @@ function renderDBCard(){
     <div style="font-size:12px;color:#6b7a9e;margin-top:3px">Sections：${secs.join("  ·  ")}</div>`;
 }
 
+// ═══════════════════════ DELETE HELPERS ══════════════════════════════════════
+// 刪除整日全部記錄（日期列的「🗑 刪除此日」按鈕）
+async function deleteWholeDay(){
+  const date=document.getElementById("dsel").value;
+  if(!date) return;
+  const cnt=DB.filter(r=>r.date===date).length;
+  if(!cnt){ _sewToast("此日無資料","info"); return; }
+  const lines=[...new Set(DB.filter(r=>r.date===date).map(r=>r.lineNo))].join("、");
+  if(!confirm(`確定刪除 ${date} 的全部資料？
+共 ${cnt} 筆，涵蓋：${lines}
+
+此操作不可復原。`)) return;
+  const ids=DB.filter(r=>r.date===date).map(r=>r.id);
+  DB=DB.filter(r=>r.date!==date);
+  try{
+    if(!_idb)await openIDB();
+    for(const id of ids){
+      const tx=_idb.transaction("sewing_records","readwrite");
+      tx.objectStore("sewing_records").delete(id);
+      await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
+    }
+  }catch(e){console.warn("IDB delete failed:",e);}
+  populateDateSel();
+  // 跳到相鄰的日期
+  const dates=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  if(dates.length) document.getElementById("dsel").value=dates[0];
+  renderDaily();
+  _sewToast(`✅ 已刪除 ${date} 共 ${cnt} 筆記錄`,"ok");
+}
+
+// 刪除某日某線所有記錄（彙整表的 🗑 按鈕）
+async function deleteLineDay(date,lineNo){
+  const cnt=DB.filter(r=>r.date===date&&r.lineNo===lineNo).length;
+  if(!cnt) return;
+  if(!confirm(`確定刪除 ${date} ${lineNo} 的全部 ${cnt} 筆記錄？\n此操作不可復原。`)) return;
+  const ids=DB.filter(r=>r.date===date&&r.lineNo===lineNo).map(r=>r.id);
+  DB=DB.filter(r=>!(r.date===date&&r.lineNo===lineNo));
+  try{
+    if(!_idb)await openIDB();
+    for(const id of ids){
+      const tx=_idb.transaction("sewing_records","readwrite");
+      tx.objectStore("sewing_records").delete(id);
+      await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
+    }
+  }catch(e){console.warn("IDB delete failed:",e);}
+  populateDateSel();renderDaily();
+  _sewToast(`✅ 已刪除 ${date} ${lineNo} 共 ${cnt} 筆記錄`,"ok");
+}
+
+// 刪除單筆記錄（PO明細的 🗑 按鈕）
+async function deleteOneRecord(id){
+  const rec=DB.find(r=>r.id===id);
+  if(!rec) return;
+  if(!confirm(`確定刪除此筆？\n${rec.date} ${rec.lineNo} ${rec.styleNo||""} ${rec.color||""} ${(rec.pieces||0)}件\n此操作不可復原。`)) return;
+  DB=DB.filter(r=>r.id!==id);
+  try{
+    if(!_idb)await openIDB();
+    const tx=_idb.transaction("sewing_records","readwrite");
+    tx.objectStore("sewing_records").delete(id);
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
+  }catch(e){console.warn("IDB delete failed:",e);}
+  populateDateSel();renderDaily();
+  _sewToast(`✅ 已刪除 1 筆記錄`,"ok");
+}
+
 // ═══════════════════════ DAILY REPORT ════════════════════════════════════════
 function populateDailySel(){
   const sel=document.getElementById("dsel");
@@ -1851,6 +1931,7 @@ function renderDaily(){
   const tc=document.getElementById("dTableCard");
   if(active.length){
     tc.style.display="block";
+    const _dDate=document.getElementById("dsel").value;
     document.getElementById("dTbody").innerHTML=active.map(l=>{
       const pp=l.workers>0?(l.totalPcs/l.workers).toFixed(1):"-";
       const diff=l.efficiency?l.efficiency-45:null;
@@ -1864,6 +1945,9 @@ function renderDaily(){
         <td class="mono" style="color:#0369a1">${pp}</td>
         <td class="mono">${l.cartons>0?Math.round(l.cartons*10)/10:"-"}</td>
         <td class="mono">${l.styles.length||"-"}</td>
+        <td><button onclick="deleteLineDay('${_dDate}','${l.lineNo}')" title="刪除 ${_dDate} ${l.lineNo} 的全部記錄"
+          style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:15px;padding:2px 4px;border-radius:4px"
+          onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'">🗑</button></td>
       </tr>`;
     }).join("");
     // PO detail table
@@ -1882,6 +1966,9 @@ function renderDaily(){
       <td class="mono">${r.size||"-"}</td>
       <td class="mono" style="color:#1d4ed8;font-weight:600">${(r.pieces||0).toLocaleString()}</td>
       <td class="mono">${r.cartons>0?Math.round(r.cartons*10)/10:"-"}</td>
+      <td><button onclick="deleteOneRecord('${r.id}')" title="刪除此筆：${r.lineNo} ${r.styleNo||''} ${r.color||''}"
+        style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:14px;padding:2px 4px;border-radius:4px"
+        onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'">🗑</button></td>
     </tr>`).join("");
   } else tc.style.display="none";
 }
