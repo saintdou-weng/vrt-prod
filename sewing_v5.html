@@ -3676,33 +3676,55 @@ async function scanAllFolders(silent=false){
     vcSetBusy(true);
     vcLog('拉取中...', 'i');
     try {
-      const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-      if (!d.data || !d.data.data) { vcLog('雲端尚無車縫資料', 'err'); return; }
-      const payload = d.data.data;
+      // ★ 修正：先用 meta=1 確認格式（分批 or 單批）
+      const metaR = await fetch(`${gasUrl}?action=pull&meta=1&tool=sewing`, { redirect:'follow' });
+      const metaD = await metaR.json();
+      if (!metaD.ok) throw new Error(metaD.error || 'GAS error');
+      const d = metaD.data;
+      if (!d || (!d.chunked && !d.data)) { vcLog('雲端尚無車縫資料', 'err'); return; }
 
-      // 取得完整記錄
+      // 取得完整記錄（支援新分批格式 + 舊單批格式）
       let allRecs = [];
-      if (payload.lsKeys && payload.lsKeys.sewing_prod_v1) {
-        allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
-      } else if (payload.records) {
-        allRecs = payload.records;
+      if (d.chunked && d.meta && d.meta.totalChunks) {
+        // 新分批格式：逐批拉取
+        const total = d.meta.totalChunks;
+        vcLog(`分批拉取，共 ${total} 批...`, 'i');
+        for (let i = 0; i < total; i++) {
+          vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
+          const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
+          const cd = await cr.json();
+          if (cd.ok && Array.isArray(cd.data.records)) allRecs = allRecs.concat(cd.data.records);
+        }
+      } else if (!d.chunked && d.data) {
+        // 舊單批格式
+        const payload = d.data;
+        if (payload.lsKeys && payload.lsKeys.sewing_prod_v1) {
+          allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+        } else if (payload.records) {
+          allRecs = payload.records;
+        }
       }
+      if (!allRecs.length){ vcLog('雲端資料為空（0筆）', 'err'); return; }
+      vcLog(`共拉取 ${allRecs.length} 筆，寫入本機...`, 'i');
 
       // 嘗試寫入，若超出 quota 自動縮減天數
       const cutoffs = [180, 90, 60, 30];
       let saved = false;
       let savedRecs = allRecs;
 
-      // 先試全量
-      try {
-        const testJson = JSON.stringify(allRecs);
-        localStorage.setItem('sewing_prod_v1', testJson);
-        saved = true;
-        vcLog(`✓ 全量寫入（${allRecs.length} 筆）`, 'ok');
-      } catch(e) {
-        vcLog(`全量超出容量，自動縮減...`, 'i');
+      // 先試全量（>4MB 的大資料跳過 localStorage，改走 IDB）
+      const fullJson = JSON.stringify(allRecs);
+      if (fullJson.length < 4 * 1024 * 1024) {
+        try {
+          localStorage.setItem('sewing_prod_v1', fullJson);
+          saved = true;
+          vcLog(`✓ 全量寫入（${allRecs.length} 筆）`, 'ok');
+        } catch(e) {
+          vcLog(`全量超出容量，自動縮減...`, 'i');
+        }
+      } else {
+        vcLog(`資料量 ${(fullJson.length/1024/1024).toFixed(1)}MB，跳過 localStorage，寫入 IDB...`, 'i');
+        saved = true; // 直接走後面 IDB 路徑
       }
 
       // 若失敗，依天數縮減
