@@ -3747,9 +3747,10 @@ async function scanAllFolders(silent=false){
 
       if (!saved) { vcLog('✗ 資料量太大，無法寫入此裝置 localStorage', 'err'); return; }
 
-      // 寫入 eff
-      if (payload.lsKeys && payload.lsKeys.sewing_eff_v1) {
-        try { localStorage.setItem('sewing_eff_v1', payload.lsKeys.sewing_eff_v1); } catch(e) {}
+      // 寫入 eff（若有附帶）
+      const effData = d.chunked ? (d.meta && d.meta.eff) : (d.data && d.data.eff);
+      if (Array.isArray(effData) && effData.length) {
+        try { localStorage.setItem('sewing_eff_v1', JSON.stringify(effData)); } catch(e) {}
       }
 
       localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: savedRecs.length }));
