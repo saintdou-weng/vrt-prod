@@ -436,6 +436,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     <select id="stYear" onchange="renderStyles()" style="font-size:12px"><option value="">所有年份</option></select>
     <select id="stMonth" onchange="renderStyles()" style="font-size:12px"><option value="">所有月份</option></select>
     <select id="stSec" onchange="renderStyles()" style="font-size:12px"><option value="">所有Section</option></select>
+    <select id="stLine" onchange="renderStyles()" style="font-size:12px"><option value="">所有線別</option></select>
     <select id="stColor" onchange="renderStyles()" style="font-size:12px"><option value="">所有顏色</option></select>
     <select id="stPO" onchange="renderStyles()" style="font-size:12px"><option value="">所有PO</option></select>
     <input id="stSearch" placeholder="款號/PO搜尋..." style="border:1px solid #d0d5e8;border-radius:6px;padding:5px 8px;font-size:12px;min-width:130px" oninput="renderStyles()">
@@ -516,7 +517,12 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
       <div style="display:flex;gap:0;border:1px solid #e2e6f0;border-radius:6px;overflow:hidden">
         <button id="ppohBtnW" onclick="ppohPeriod='week';renderPpohPeriod()" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600">本週</button>
         <button id="ppohBtnM" onclick="ppohPeriod='month';renderPpohPeriod()" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">本月</button>
+        <button id="ppohBtnY" onclick="ppohPeriod='custom';renderPpohPeriod()" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">自選</button>
       </div>
+      <span id="ppohCustomSel" style="display:none;gap:6px;align-items:center">
+        <select id="ppohSelYear" onchange="renderPpohPeriod()" style="font-size:12px"><option value="">年份</option></select>
+        <select id="ppohSelMonth" onchange="renderPpohPeriod()" style="font-size:12px"><option value="">所有月份</option></select>
+      </span>
     </div>
     <div class="tw"><table><thead><tr>
       <th>線別</th><th>Section</th><th>工作天</th>
@@ -2664,13 +2670,17 @@ function renderStyles(){
   const allPOs=[...new Set(styleRecs.map(r=>r.po).filter(Boolean))].sort();
 
   const ysel=document.getElementById("stYear"), msel=document.getElementById("stMonth");
-  const ssel=document.getElementById("stSec"), csel=document.getElementById("stColor"), psel=document.getElementById("stPO");
+  const ssel=document.getElementById("stSec"), lsel=document.getElementById("stLine");
+  const csel=document.getElementById("stColor"), psel=document.getElementById("stPO");
   const search=(document.getElementById("stSearch").value||"").toLowerCase().trim();
-  const prevY=ysel.value, prevM=msel.value, prevS=ssel.value, prevC=csel.value, prevP=psel.value;
+  const prevY=ysel.value, prevM=msel.value, prevS=ssel.value;
+  const prevL=lsel?lsel.value:"", prevC=csel.value, prevP=psel.value;
+  const allLines=[...new Set(styleRecs.map(r=>r.lineNo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
 
   ysel.innerHTML=`<option value="">所有年份</option>`+allYears.map(y=>`<option value="${y}"${y===prevY?" selected":""}>${y}</option>`).join("");
   msel.innerHTML=`<option value="">所有月份</option>`+allMonths.map(m=>`<option value="${m}"${m===prevM?" selected":""}>${m}</option>`).join("");
   ssel.innerHTML=`<option value="">所有Section</option>`+allSecs.map(s=>`<option value="${s}"${s===prevS?" selected":""}>${s}</option>`).join("");
+  if(lsel) lsel.innerHTML=`<option value="">所有線別</option>`+allLines.map(l=>`<option value="${l}"${l===prevL?" selected":""}>${l}</option>`).join("");
   csel.innerHTML=`<option value="">所有顏色</option>`+allColors.map(c=>`<option value="${c}"${c===prevC?" selected":""}>${c}</option>`).join("");
   psel.innerHTML=`<option value="">所有PO</option>`+allPOs.map(p=>`<option value="${p}"${p===prevP?" selected":""}>${p}</option>`).join("");
 
@@ -2678,6 +2688,7 @@ function renderStyles(){
   if(prevY) recs=recs.filter(r=>r.date.startsWith(prevY));
   if(prevM) recs=recs.filter(r=>r.date.startsWith(prevM));
   if(prevS) recs=recs.filter(r=>r.section===prevS);
+  if(prevL) recs=recs.filter(r=>r.lineNo===prevL);
   if(prevC) recs=recs.filter(r=>r.color===prevC);
   if(prevP) recs=recs.filter(r=>r.po===prevP);
   if(search) recs=recs.filter(r=>
@@ -3239,22 +3250,53 @@ function renderPpohPeriod(){
   document.getElementById("ppohBtnW").style.cssText=ppohPeriod==='week'?"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600":"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e";
   document.getElementById("ppohBtnM").style.cssText=ppohPeriod==='month'?"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600":"padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e";
 
+  // 自選模式：填充年月選單
+  const customSel=document.getElementById("ppohCustomSel");
+  const yearSel=document.getElementById("ppohSelYear");
+  const monSel=document.getElementById("ppohSelMonth");
+  if(ppohPeriod==='custom'){
+    customSel.style.display="flex";
+    document.getElementById("ppohBtnY").style.cssText="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600";
+    document.getElementById("ppohBtnW").style.cssText="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e";
+    document.getElementById("ppohBtnM").style.cssText="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e";
+    const allYrs=[...new Set(DB.map(r=>r.date.slice(0,4)))].sort().reverse();
+    const prevYr=yearSel.value;
+    yearSel.innerHTML=`<option value="">年份</option>`+allYrs.map(y=>`<option value="${y}"${y===prevYr?" selected":""}>${y}</option>`).join("");
+    if(prevYr){
+      const allMons=[...new Set(DB.filter(r=>r.date.startsWith(prevYr)).map(r=>r.date.slice(0,7)))].sort().reverse();
+      const prevMo=monSel.value;
+      monSel.innerHTML=`<option value="">全年</option>`+allMons.map(m=>`<option value="${m}"${m===prevMo?" selected":""}>${m.slice(5)}月</option>`).join("");
+    }
+  } else {
+    customSel.style.display="none";
+  }
+
   const dv=document.getElementById("smvDate").value;
   const normH=parseFloat(document.getElementById("ppohNormH").value)||8;
   const otH=parseFloat(document.getElementById("ppohOtH").value)||2;
   const tbody=document.getElementById("ppohPeriodBody");
-  if(!dv){tbody.innerHTML="";return;}
 
   // Determine date range
-  let startD, endD;
-  if(ppohPeriod==='week'){
-    const dt=new Date(dv+'T00:00:00');
-    const dow=dt.getDay();
-    const mon=new Date(dt); mon.setDate(dt.getDate()-(dow===0?6:dow-1));
-    const sun=new Date(mon); sun.setDate(mon.getDate()+6);
-    startD=mon.toISOString().slice(0,10); endD=sun.toISOString().slice(0,10);
+  let startD, endD, periodLabel;
+  if(ppohPeriod==='custom'){
+    const yr=yearSel?yearSel.value:"";
+    const mo=monSel?monSel.value:"";
+    if(!yr){tbody.innerHTML="";return;}
+    if(mo){startD=mo+"-01";endD=mo+"-31";periodLabel=mo;}
+    else{startD=yr+"-01-01";endD=yr+"-12-31";periodLabel=yr+"年";}
   } else {
-    startD=dv.slice(0,7)+"-01"; endD=dv.slice(0,7)+"-31";
+    if(!dv){tbody.innerHTML="";return;}
+    if(ppohPeriod==='week'){
+      const dt=new Date(dv+'T00:00:00');
+      const dow=dt.getDay();
+      const mon=new Date(dt); mon.setDate(dt.getDate()-(dow===0?6:dow-1));
+      const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+      startD=mon.toISOString().slice(0,10); endD=sun.toISOString().slice(0,10);
+      periodLabel=startD+'~'+endD;
+    } else {
+      startD=dv.slice(0,7)+"-01"; endD=dv.slice(0,7)+"-31";
+      periodLabel=dv.slice(0,7);
+    }
   }
 
   const periodRecs=DB.filter(r=>r.date>=startD&&r.date<=endD&&r.pieces>0);
@@ -3301,7 +3343,7 @@ function renderPpohPeriod(){
     </tr>`;
   }).join("")
   +`<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #e2e6f0">
-      <td>合計 (${ppohPeriod==='week'?startD+'~'+endD:dv.slice(0,7)})</td><td></td>
+      <td>合計 (${periodLabel})</td><td></td>
       <td class="mono">${totalDays}</td>
       <td class="mono" style="color:#1d4ed8">${tNorm.toLocaleString()}</td>
       <td class="mono" style="color:#7c3aed">${tOt>0?tOt.toLocaleString():"-"}</td>
