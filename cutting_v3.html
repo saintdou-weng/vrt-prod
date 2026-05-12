@@ -2754,19 +2754,36 @@ async function scanAllFolders(silent=false){
     vcSetBusy(true);
     vcLog('拉取中...', 'i');
     try {
-      const r = await fetch(`${gasUrl}?action=pull&tool=cutting`, { redirect:'follow' });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-      if (!d.data || !d.data.data) { vcLog('雲端尚無裁剪資料', 'err'); return; }
-      const payload = d.data.data;
-      const recs    = payload.idbStore?.records || [];
+      // ★ 修正：先用 meta=1 確認格式（分批 or 舊單批）
+      const metaR = await fetch(`${gasUrl}?action=pull&meta=1&tool=cutting`, { redirect:'follow' });
+      const metaD = await metaR.json();
+      if (!metaD.ok) throw new Error(metaD.error || 'GAS error');
+      const d = metaD.data;
+      if (!d || (!d.chunked && !d.data)) { vcLog('雲端尚無裁剪資料', 'err'); return; }
+
+      let recs = [];
+      if (d.chunked && d.meta && d.meta.totalChunks) {
+        const total = d.meta.totalChunks;
+        vcLog(`分批拉取，共 ${total} 批...`, 'i');
+        for (let i = 0; i < total; i++) {
+          vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
+          const cr = await fetch(`${gasUrl}?action=pull&tool=cutting&chunk=${i}`, { redirect:'follow' });
+          const cd = await cr.json();
+          if (cd.ok && Array.isArray(cd.data.records)) recs = recs.concat(cd.data.records);
+        }
+      } else if (!d.chunked && d.data) {
+        const payload = d.data;
+        recs = payload.idbStore?.records || payload.records || [];
+      }
+      if (!recs.length) { vcLog('雲端裁剪資料為空', 'err'); return; }
+
       await vcIdbPutAll('CuttingProd', 1, 'cutting_records', recs);
-      // 同步更新記憶體中的 CUT
       if (typeof CUT !== 'undefined') { CUT.length = 0; recs.forEach(r => CUT.push(r)); }
       localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
       vcLog(`✓ 拉取完成（${recs.length} 筆），重新整理即可看到`, 'ok');
       vcShowStatus();
-      if (confirm(`已拉取 ${recs.length} 筆裁剪資料\n立即重新整理頁面？`)) location.reload();
+      if (confirm(`已拉取 ${recs.length} 筆裁剪資料
+立即重新整理頁面？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }

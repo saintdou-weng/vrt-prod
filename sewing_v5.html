@@ -747,21 +747,43 @@ async function vcAutoSync(){
   if (hdr) hdr.appendChild(tip);
 
   try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=sewing`, { redirect:'follow' });
-    const d = await r.json();
-    if (!d.ok || !d.data || !d.data.data) {
+    // ★ 修正：先用 meta=1 確認格式（分批 or 舊單批）
+    const metaR = await fetch(`${gasUrl}?action=pull&meta=1&tool=sewing`, { redirect:'follow' });
+    const metaD = await metaR.json();
+    if (!metaD.ok) throw new Error(metaD.error||'GAS error');
+    const d = metaD.data;
+    if (!d || (!d.chunked && !d.data)) {
       tip.textContent = '☁ 雲端無資料（使用本機）';
       setTimeout(() => tip.remove(), 3000);
       return;
     }
-    const payload = d.data.data;
-    let allRecs = [];
-    if (payload.lsKeys && payload.lsKeys.sewing_prod_v1)
-      allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
-    else if (payload.records) allRecs = payload.records;
-    if (!allRecs.length) { tip.remove(); return; }
 
-    // ★ 全量存入 IDB（無大小限制）
+    let allRecs = [];
+    if (d.chunked && d.meta && d.meta.totalChunks) {
+      // 分批格式
+      const total = d.meta.totalChunks;
+      tip.textContent = `☁ 分批拉取（共 ${total} 批）...`;
+      for (let i = 0; i < total; i++) {
+        tip.textContent = `☁ 拉取第 ${i+1}/${total} 批...`;
+        const cr = await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`, { redirect:'follow' });
+        const cd = await cr.json();
+        if (cd.ok && Array.isArray(cd.data.records)) allRecs = allRecs.concat(cd.data.records);
+      }
+      // eff 存在 meta
+      if (d.meta.eff && d.meta.eff.length)
+        try { localStorage.setItem(LS_EFF, JSON.stringify(d.meta.eff)); } catch(e) {}
+    } else if (!d.chunked && d.data) {
+      // 舊單批格式
+      const payload = d.data;
+      if (payload.lsKeys && payload.lsKeys.sewing_prod_v1)
+        allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
+      else if (payload.records) allRecs = payload.records;
+      if (payload.lsKeys?.sewing_eff_v1)
+        try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
+    }
+    if (!allRecs.length) { tip.textContent = '☁ 雲端資料為空'; setTimeout(()=>tip.remove(),3000); return; }
+
+    // 全量存入 cloudIDB（無大小限制）
     tip.textContent = `☁ 寫入 IDB（${allRecs.length.toLocaleString()} 筆）...`;
     await saveToCloudIDB(allRecs);
 
@@ -770,11 +792,7 @@ async function vcAutoSync(){
     const recent = allRecs.filter(r => (r.date||'') >= cutStr);
     try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
-    // 效率資料
-    if (payload.lsKeys?.sewing_eff_v1)
-      try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
-
-    // 更新記憶體：用全量
+    // 更新記憶體
     DB = dedupAndNorm(allRecs);
     updateHeader(); renderDBCard();
 
@@ -788,6 +806,17 @@ async function vcAutoSync(){
     setTimeout(() => tip.remove(), 3000);
   }
 }
+
+// ★ 供 script block 2 的 vcPull 面板使用：拉完資料後更新 DB + IDB + UI
+window.vcApplyCloudRecs = async function(allRecs, effData) {
+  try { await saveToCloudIDB(allRecs); } catch(e) { console.warn('cloudIDB write failed:', e); }
+  const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
+  const recent = allRecs.filter(r => (r.date||'') >= cutStr);
+  try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
+  if (effData && effData.length) try { localStorage.setItem(LS_EFF, JSON.stringify(effData)); } catch(e) {}
+  DB = dedupAndNorm(allRecs);
+  updateHeader(); renderDBCard();
+};
 
 // ═══════════════════════ TABS ═════════════════════════════════════════════════
 function goTab(name, el){
@@ -3707,55 +3736,19 @@ async function scanAllFolders(silent=false){
       if (!allRecs.length){ vcLog('雲端資料為空（0筆）', 'err'); return; }
       vcLog(`共拉取 ${allRecs.length} 筆，寫入本機...`, 'i');
 
-      // 嘗試寫入，若超出 quota 自動縮減天數
-      const cutoffs = [180, 90, 60, 30];
-      let saved = false;
-      let savedRecs = allRecs;
-
-      // 先試全量（>4MB 的大資料跳過 localStorage，改走 IDB）
-      const fullJson = JSON.stringify(allRecs);
-      if (fullJson.length < 4 * 1024 * 1024) {
-        try {
-          localStorage.setItem('sewing_prod_v1', fullJson);
-          saved = true;
-          vcLog(`✓ 全量寫入（${allRecs.length} 筆）`, 'ok');
-        } catch(e) {
-          vcLog(`全量超出容量，自動縮減...`, 'i');
-        }
-      } else {
-        vcLog(`資料量 ${(fullJson.length/1024/1024).toFixed(1)}MB，跳過 localStorage，寫入 IDB...`, 'i');
-        saved = true; // 直接走後面 IDB 路徑
-      }
-
-      // 若失敗，依天數縮減
-      if (!saved) {
-        for (const days of cutoffs) {
-          const cutDate = new Date();
-          cutDate.setDate(cutDate.getDate() - days);
-          const cutStr  = cutDate.toISOString().slice(0, 10);
-          savedRecs     = allRecs.filter(rec => (rec.date || '') >= cutStr);
-          try {
-            localStorage.setItem('sewing_prod_v1', JSON.stringify(savedRecs));
-            saved = true;
-            vcLog(`✓ 寫入近 ${days} 天資料（${savedRecs.length} 筆），較舊資料在工廠電腦查看`, 'ok');
-            break;
-          } catch(e2) {
-            vcLog(`近 ${days} 天仍超出，再縮...`, 'i');
-          }
-        }
-      }
-
-      if (!saved) { vcLog('✗ 資料量太大，無法寫入此裝置 localStorage', 'err'); return; }
-
-      // 寫入 eff（若有附帶）
+      // ★ 透過 script block 1 暴露的 helper 寫入 cloudIDB + 更新 DB + 更新 UI
       const effData = d.chunked ? (d.meta && d.meta.eff) : (d.data && d.data.eff);
-      if (Array.isArray(effData) && effData.length) {
-        try { localStorage.setItem('sewing_eff_v1', JSON.stringify(effData)); } catch(e) {}
+      if (typeof window.vcApplyCloudRecs === 'function') {
+        await window.vcApplyCloudRecs(allRecs, Array.isArray(effData) ? effData : []);
+        vcLog(`✓ 拉取完成（${allRecs.length} 筆），資料已更新`, 'ok');
+      } else {
+        try { localStorage.setItem('sewing_prod_v1', JSON.stringify(allRecs)); } catch(e) {}
+        vcLog(`✓ 拉取完成（${allRecs.length} 筆）`, 'ok');
       }
 
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: savedRecs.length }));
+      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: allRecs.length }));
       vcShowStatus();
-      if (confirm(`已拉取 ${savedRecs.length} 筆車縫資料\n立即重新整理頁面？`)) location.reload();
+      if (confirm(`已拉取 ${allRecs.length} 筆車縫資料\n立即重新整理頁面以套用最新資料？`)) location.reload();
     } catch(e) {
       vcLog('✗ 拉取失敗：' + e.message, 'err');
     } finally { vcSetBusy(false); }
