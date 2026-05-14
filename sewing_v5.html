@@ -118,10 +118,10 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="logo">🏭</div>
   <div><div class="h-title">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.12</div></div>
   <div class="h-stats">
-    <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">總記錄</div></div>
-    <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l">天數</div></div>
-    <div class="hstat"><div class="hstat-v" id="hLines">0</div><div class="hstat-l">線別</div></div>
-    <div class="hstat"><div class="hstat-v" id="hStorage" style="font-size:12px">-</div><div class="hstat-l" id="hStorageLabel">儲存用量</div></div>
+    <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
+    <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
+    <div class="hstat"><div class="hstat-v" id="hLines">0</div><div class="hstat-l" data-zh="線別" data-en="Lines" data-km="ខ្សែ">線別</div></div>
+    <div class="hstat"><div class="hstat-v" id="hStorage" style="font-size:12px">-</div><div class="hstat-l" id="hStorageLabel" data-zh="儲存用量" data-en="Storage" data-km="ទំហំ">儲存用量</div></div>
   </div>
 </div>
 
@@ -539,6 +539,67 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 // ═══════════════════════ DB STORAGE ═════════════════════════════════════════
 // Primary: File System Access API (persists across file renames/moves, works with Google Drive sync folder)
 // Fallback: localStorage with fixed key (not filename-dependent)
+
+// ══════════════════════════════════════════════════════════
+// SEWING i18n  (中 / EN / ក)
+// ══════════════════════════════════════════════════════════
+let SEW_LANG = localStorage.getItem('sew_lang') || 'zh';
+
+const SEW_I18N = {
+  zh:{
+    uploadTab:'上傳報表', dailyTab:'每日報告', weeklyTab:'週統計', monthlyTab:'月年趨勢',
+    effTab:'效率報表', validateTab:'數據比對', stylesTab:'款式追蹤', recordsTab:'所有記錄',
+    analyticsTab:'產能分析', attcmpTab:'出勤對比',
+    totalRec:'總記錄', days:'天數', lines:'線別', storage:'儲存用量',
+  },
+  en:{
+    uploadTab:'Upload', dailyTab:'Daily Report', weeklyTab:'Weekly', monthlyTab:'Monthly',
+    effTab:'Efficiency', validateTab:'Validate', stylesTab:'Style Track', recordsTab:'Records',
+    analyticsTab:'Analytics', attcmpTab:'Att Compare',
+    totalRec:'Records', days:'Days', lines:'Lines', storage:'Storage',
+  },
+  km:{
+    uploadTab:'បញ្ចូល', dailyTab:'ប្រចាំថ្ងៃ', weeklyTab:'ប្រចាំសប្ដាហ៍', monthlyTab:'ប្រចាំខែ',
+    effTab:'ប្រសិទ្ធភាព', validateTab:'ពិនិត្យ', stylesTab:'ស្ទីល', recordsTab:'កំណត់ត្រា',
+    analyticsTab:'វិភាគ', attcmpTab:'ប្រៀបធៀប',
+    totalRec:'កំណត់ត្រា', days:'ថ្ងៃ', lines:'ខ្សែ', storage:'ទំហំ',
+  }
+};
+function ts(k){ return (SEW_I18N[SEW_LANG]||SEW_I18N.zh)[k] || SEW_I18N.zh[k] || k; }
+
+function setSewLang(l, btn) {
+  SEW_LANG = l;
+  localStorage.setItem('sew_lang', l);
+  document.querySelectorAll('.sew-lb').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  applySewLang();
+}
+
+function applySewLang() {
+  const tabMap = {
+    upload:ts('uploadTab'), daily:ts('dailyTab'), weekly:ts('weeklyTab'),
+    monthly:ts('monthlyTab'), eff:ts('effTab'), validate:ts('validateTab'),
+    styles:ts('stylesTab'), records:ts('recordsTab'), smv:ts('analyticsTab'),
+    attcmp:ts('attcmpTab'),
+  };
+  document.querySelectorAll('.tabs .tab').forEach(btn => {
+    const m = (btn.getAttribute('onclick')||'').match(/goTab\('([^']+)'/);
+    if (!m) return;
+    const key = m[1];
+    if (!tabMap[key]) return;
+    // Preserve leading emoji
+    const raw = btn.textContent.trim();
+    const emojiMatch = raw.match(/^([\p{Emoji}\p{So}]+\s*)/u);
+    const icon = emojiMatch ? emojiMatch[1].trimEnd() : '';
+    btn.textContent = (icon ? icon + ' ' : '') + tabMap[key];
+  });
+  // Header stat labels
+  document.querySelectorAll('[data-zh]').forEach(el=>{
+    const v=el.getAttribute('data-'+SEW_LANG)||el.getAttribute('data-zh');
+    if(v)el.textContent=v;
+  });
+}
+
 const LS_KEY = "sewing_prod_v1";
 const LS_EFF  = "sewing_eff_v1";
 let DB = [];
@@ -4100,10 +4161,10 @@ async function renderAttCmp() {
     const noSew = !sewHC[lid];
     return `<tr${noSew?' style="opacity:.55"':''}>
       <td style="font-weight:700;color:#1e2640;padding:7px 10px">${lid}</td>
-      <td style="text-align:right;font-weight:600;padding:7px 10px">${a||'—'}</td>
-      <td style="text-align:right;color:#0ea5e9;font-weight:600;padding:7px 10px">${s||'—'}</td>
-      <td style="text-align:right;font-weight:700;color:${dc};padding:7px 10px">${s?(d2>=0?'+':'')+d2:'—'}</td>
-      <td style="text-align:right;padding:7px 10px">${s?m2:'—'}</td>
+      <td style="text-align:right;font-weight:600;padding:7px 10px">${_sAttHas?(a||0):'—'}</td>
+      <td style="text-align:right;color:#0ea5e9;font-weight:600;padding:7px 10px">${_sSewHas?(s||0):'No Sewing'}</td>
+      <td style="text-align:right;font-weight:700;color:${dc};padding:7px 10px">${(_sAttHas&&_sSewHas)?(d2>=0?'+':'')+d2:'—'}</td>
+      <td style="text-align:right;padding:7px 10px">${(_sAttHas&&_sSewHas&&s>0)?m2:'—'}</td>
       <td style="text-align:right;color:#6b7a9e;font-size:11px;padding:7px 10px">${pcs?pcs.toLocaleString():'—'}</td>
       <td style="text-align:right;font-size:11px;color:#6b7a9e;padding:7px 10px">${days}天</td>
     </tr>`;
@@ -4255,5 +4316,17 @@ async function renderAttCmp() {
   </div>
 </div>
 
+<script>
+// Apply saved sewing language on load
+(function(){
+  const _sl = localStorage.getItem('sew_lang') || 'zh';
+  SEW_LANG = _sl;
+  document.querySelectorAll('.sew-lb').forEach((b,i)=>{
+    b.classList.toggle('on', ['zh','en','km'][i] === _sl);
+  });
+  // Delay applySewLang so tabs are rendered
+  setTimeout(applySewLang, 100);
+})();
+</script>
 </body>
 </html>
