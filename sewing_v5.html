@@ -135,6 +135,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="tab" onclick="goTab('styles',this)">🎯 款式追蹤</div>
   <div class="tab" onclick="goTab('records',this)">📋 所有記錄</div>
   <div class="tab" onclick="goTab('smv',this)">📊 產能分析</div>
+  <div class="tab" onclick="goTab('attcmp',this)">🟢 出勤對比</div>
 </div>
 
 <!-- ══ UPLOAD ══ -->
@@ -838,6 +839,7 @@ function goTab(name, el){
   if(name==="styles"){  renderStylesWithCut(); }
   if(name==="records"){ renderRecs(); }
   if(name==="smv"){ populatePpohDates(); renderPpoh(); renderPpohPeriod(); }
+  if(name==="attcmp"){ loadAttIDBData().then(()=>{initAttCmp();renderAttCmp();}); }
 }
 
 
@@ -3842,7 +3844,416 @@ async function scanAllFolders(silent=false){
 
   vcInit();
 })();
+
+// ══════════════════════════════════════════════════════════
+// SEWING × ATTENDANCE COMPARE  v2  (Att is Master)
+// ══════════════════════════════════════════════════════════
+let ATT_IDB_CACHE = null;
+let AC_MODE = 'month';     // day|week|month|year
+
+// ── Read AC_HRA_Attendance IDB ────────────────────────────
+async function loadAttIDBData(force) {
+  if (ATT_IDB_CACHE !== null && !force) return ATT_IDB_CACHE;
+  const attEl = document.getElementById('ac-status');
+  if (attEl) attEl.textContent = '讀取中…';
+  try {
+    const rows = await new Promise(res => {
+      const req = indexedDB.open('AC_HRA_Attendance');
+      req.onerror = () => res([]);
+      req.onsuccess = e => {
+        const d = e.target.result;
+        const store = d.objectStoreNames.contains('records') ? 'records' : null;
+        if (!store) { d.close(); res([]); return; }
+        const all = [];
+        const cur = d.transaction(store,'readonly').objectStore(store).openCursor();
+        cur.onsuccess = ev => {
+          if (ev.target.result) { all.push(ev.target.result.value); ev.target.result.continue(); }
+          else { d.close(); res(all); }
+        };
+        cur.onerror = () => { d.close(); res([]); };
+      };
+    });
+    const filtered = rows.filter(r => !r.isSubtotal && !r.isGrand);
+    ATT_IDB_CACHE = filtered;
+    const dates = [...new Set(filtered.map(r => r.date).filter(Boolean))];
+    if (attEl) attEl.textContent = `✅ 出勤 ${filtered.length} 筆 · ${dates.length} 天`;
+    return filtered;
+  } catch(e) {
+    ATT_IDB_CACHE = [];
+    if (attEl) attEl.textContent = '❌ IDB 讀取失敗: ' + e.message;
+    return [];
+  }
+}
+
+// ── Cloud fetch attendance from GAS ──────────────────────
+async function fetchAttFromGAS() {
+  const gasUrl = localStorage.getItem('vrt_portal_gas_url') ||
+                 localStorage.getItem('ac_hra_gas_url') || '';
+  if (!gasUrl) { alert('請先在設定頁填入 GAS URL'); return; }
+  const el = document.getElementById('ac-status');
+  if (el) el.textContent = '☁ 從雲端讀取中…';
+  try {
+    const r = await fetch(`${gasUrl}?action=pull&tool=attendance`, { redirect:'follow' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const rows = d.data || d.records || [];
+    if (!rows.length) { if (el) el.textContent = '☁ 雲端無出勤資料'; return; }
+    ATT_IDB_CACHE = rows.filter(r2 => !r2.isSubtotal && !r2.isGrand);
+    if (el) el.textContent = `☁✅ 雲端讀取 ${ATT_IDB_CACHE.length} 筆`;
+    initAttCmp(); renderAttCmp();
+  } catch(e) {
+    if (el) el.textContent = '☁❌ 雲端讀取失敗: ' + e.message;
+  }
+}
+
+// ── normalise line name ───────────────────────────────────
+function normACLine(s) {
+  const n = String(s||'').replace(/[\s_\-]+/g,'').toUpperCase();
+  let m;
+  if (m=n.match(/^(?:LINE|L)0*(\d{1,2})$/)) return 'LINE' + m[1];
+  if (m=n.match(/^[AB]0*(\d{1,2})$/))        return 'LINE' + m[1];
+  if (m=n.match(/^(?:APRON|GARMENT)0*(\d{1,2})$/)) return 'LINE' + m[1];
+  return n;
+}
+function isACLine(lid) {
+  return /^LINE\d{1,2}$/.test(lid) && +lid.replace('LINE','')>=1 && +lid.replace('LINE','')<=30;
+}
+function isAttSewLineAC(r) {
+  const s = String(r.line||r.group||r.section||r.dept||'').toLowerCase();
+  if (/qc|pack|cut|admin|wh|finish|sample|mechanic|press|marker/.test(s)) return false;
+  return isACLine(normACLine(r.line||r.group||r.section||''));
+}
+
+// ── Period key helpers ────────────────────────────────────
+function acPKey(d) {
+  if (!d) return '';
+  const s = String(d).slice(0,10);
+  if (AC_MODE==='day')   return s;
+  if (AC_MODE==='week') {
+    const dt=new Date(s), jan=new Date(dt.getFullYear(),0,1);
+    const w=Math.ceil(((dt-jan)/86400000+jan.getDay()+1)/7);
+    return `${dt.getFullYear()}-W${String(w).padStart(2,'0')}`;
+  }
+  if (AC_MODE==='month') return s.slice(0,7);
+  return s.slice(0,4);
+}
+function acPLabel(k) {
+  if (!k) return '—';
+  if (AC_MODE==='day')   return k;
+  if (AC_MODE==='week')  return k;
+  if (AC_MODE==='month') return k.slice(0,4)+'年'+k.slice(5)+'月';
+  return k + '年';
+}
+
+// ── Mode switch ───────────────────────────────────────────
+function setACMode(m, btn) {
+  AC_MODE = m;
+  ['acm-d','acm-w','acm-m','acm-y'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const active = (m==='day'&&id==='acm-d')||(m==='week'&&id==='acm-w')||
+                   (m==='month'&&id==='acm-m')||(m==='year'&&id==='acm-y');
+    el.style.background = active ? '#f0fdf8' : '#fff';
+    el.style.color      = active ? '#1e2640' : '#6b7a9e';
+    el.style.fontWeight = active ? '600' : '400';
+  });
+  acPopulateSel();
+  renderAttCmp();
+}
+
+function navAC(dir) {
+  const sel = document.getElementById('ac-psel');
+  if (!sel) return;
+  const opts = [...sel.options].map(o => o.value).filter(Boolean);
+  const i = opts.indexOf(sel.value);
+  const ni = i - dir;
+  if (ni >= 0 && ni < opts.length) { sel.value = opts[ni]; renderAttCmp(); }
+}
+
+function acPopulateSel() {
+  const att = ATT_IDB_CACHE || [];
+  const dates = [...new Set(att.map(r => String(r.date||'').slice(0,10)).filter(Boolean))];
+  const periods = [...new Set(dates.map(acPKey))].sort().reverse();
+  const sel = document.getElementById('ac-psel');
+  if (!sel) return;
+  const cur = sel.value;
+  if (!periods.length) {
+    sel.innerHTML = '<option value="">— 請先讀取出勤 —</option>';
+    return;
+  }
+  sel.innerHTML = periods.map(p => `<option value="${p}">${acPLabel(p)}</option>`).join('');
+  if (cur && periods.includes(cur)) sel.value = cur;
+}
+
+// ── Init (called when tab opens) ──────────────────────────
+function initAttCmp() {
+  acPopulateSel();
+  // Populate LINE filter from ATT data (Att = master)
+  const att = ATT_IDB_CACHE || [];
+  const lines = [...new Set(
+    att.filter(isAttSewLineAC).map(r => normACLine(r.line||r.group||r.section||''))
+       .filter(isACLine)
+  )].sort((a,b) => +a.replace('LINE','')-+b.replace('LINE',''));
+  const lSel = document.getElementById('ac-line');
+  if (lSel) {
+    lSel.innerHTML = '<option value="">— 全部 LINE —</option>' +
+      lines.map(l => `<option value="${l}">${l}</option>`).join('');
+  }
+}
+
+// ── Main render ───────────────────────────────────────────
+async function renderAttCmp() {
+  const att = await loadAttIDBData();
+  const period = document.getElementById('ac-psel')?.value || '';
+  const lineFilter = document.getElementById('ac-line')?.value || '';
+  if (!period || !att.length) {
+    // populate selector if att now loaded but selector empty
+    acPopulateSel();
+    if (!att.length) return;
+    const newP = document.getElementById('ac-psel')?.value || '';
+    if (!newP) return;
+  }
+
+  const curPeriod = document.getElementById('ac-psel')?.value || period;
+
+  // ── Dates in this period ────────────────────────────────
+  const attDates = [...new Set(att.map(r=>String(r.date||'').slice(0,10)).filter(Boolean))];
+  const periodDates = attDates.filter(d => acPKey(d) === curPeriod);
+
+  // ── Att sewing HC per line ──────────────────────────────
+  const attMap = {};  // lineId → {hcSum, days, attSum}
+  att.forEach(r => {
+    if (!periodDates.includes(String(r.date||'').slice(0,10))) return;
+    if (!isAttSewLineAC(r)) return;
+    const lid = normACLine(r.line||r.group||r.section||'');
+    if (!isACLine(lid)) return;
+    if (lineFilter && lid !== lineFilter) return;
+    if (!attMap[lid]) attMap[lid] = {hcSum:0, days:new Set(), attSum:0};
+    attMap[lid].hcSum += (r.m||0)+(r.f||0);
+    attMap[lid].days.add(String(r.date||'').slice(0,10));
+    attMap[lid].attSum += (r.att||0);
+  });
+  const attHC = {};
+  Object.entries(attMap).forEach(([lid,v]) => {
+    attHC[lid] = Math.round(v.hcSum / (v.days.size||1));
+  });
+
+  // ── Sewing system HC per line ──────────────────────────
+  const rawDB = (vcRAW||[]);
+  const sewMap = {};  // lineId → {wSum, days, pcs}
+  rawDB.forEach(r => {
+    const rd = String(r.date||'').slice(0,10);
+    if (!periodDates.includes(rd)) return;
+    const lid = normACLine(r.lineNo||r.line||'');
+    if (!isACLine(lid)) return;
+    if (lineFilter && lid !== lineFilter) return;
+    if (!sewMap[lid]) sewMap[lid] = {wSum:0, days:new Set(), pcs:0};
+    const w = +r.workers || 0;
+    if (w > 0) { sewMap[lid].wSum += w; sewMap[lid].days.add(rd); }
+    sewMap[lid].pcs += (+r.pieces || 0);
+  });
+  const sewHC = {};
+  Object.entries(sewMap).forEach(([lid,v]) => {
+    sewHC[lid] = Math.round(v.wSum / (v.days.size||1));
+  });
+
+  // ── Totals ──────────────────────────────────────────────
+  const attTot = Object.values(attHC).reduce((s,v)=>s+v,0);
+  const sewTot = Object.values(sewHC).reduce((s,v)=>s+v,0);
+  const diff = attTot - sewTot;
+  const matchPct = attTot > 0 ? (sewTot/attTot*100).toFixed(1) : null;
+  const allAttHC = att.filter(r=>periodDates.includes(String(r.date||'').slice(0,10)));
+  const totalFactHC = allAttHC.reduce((s,r)=>s+(r.m||0)+(r.f||0),0);
+  const totalAtt   = allAttHC.reduce((s,r)=>s+(r.att||0),0);
+  const attRate = totalFactHC > 0 ? (totalAtt/totalFactHC*100).toFixed(1)+'%' : '—';
+  const linesCnt = Object.keys(attHC).length;
+
+  // ── Update KPI cards ────────────────────────────────────
+  const el = id => document.getElementById(id);
+  if (el('ac-att')) el('ac-att').textContent = attTot || '—';
+  if (el('ac-sew')) el('ac-sew').textContent = sewTot || '—';
+  if (el('ac-diff')) {
+    const dText = sewTot ? (diff>=0?'+':'')+diff : '—';
+    el('ac-diff').textContent = dText;
+    el('ac-diff').style.color = diff===0?'#059669':Math.abs(diff)<5?'#f59e0b':'#ef4444';
+  }
+  if (el('ac-match')) {
+    el('ac-match').textContent = matchPct !== null ? matchPct+'%' : '—';
+    const p = +matchPct;
+    el('ac-match').style.color = p>=95?'#059669':p>=85?'#f59e0b':'#ef4444';
+  }
+  if (el('ac-att-rate')) el('ac-att-rate').textContent = attRate;
+  if (el('ac-lines-cnt')) el('ac-lines-cnt').textContent = linesCnt || '—';
+
+  // ── Detail table (Att is master for line order) ────────
+  const allLines = [...new Set([...Object.keys(attHC), ...Object.keys(sewHC)])]
+    .sort((a,b) => +a.replace('LINE','')-+b.replace('LINE',''));
+  const tblTitle = el('ac-tbl-title');
+  if (tblTitle) tblTitle.textContent = `各組別明細 ${acPLabel(curPeriod)} · ${allLines.length} 線 · ${periodDates.length} 天`;
+
+  const rows = allLines.map(lid => {
+    const a = attHC[lid]||0, s = sewHC[lid]||0, d2 = a-s;
+    const m2 = a>0 ? (s/a*100).toFixed(1)+'%' : '—';
+    const pcs = sewMap[lid]?.pcs||0;
+    const days = attMap[lid]?.days.size||0;
+    const dc = d2===0?'#059669':Math.abs(d2)<3?'#f59e0b':'#ef4444';
+    const noSew = !sewHC[lid];
+    return `<tr${noSew?' style="opacity:.55"':''}>
+      <td style="font-weight:700;color:#1e2640;padding:7px 10px">${lid}</td>
+      <td style="text-align:right;font-weight:600;padding:7px 10px">${a||'—'}</td>
+      <td style="text-align:right;color:#0ea5e9;font-weight:600;padding:7px 10px">${s||'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${dc};padding:7px 10px">${s?(d2>=0?'+':'')+d2:'—'}</td>
+      <td style="text-align:right;padding:7px 10px">${s?m2:'—'}</td>
+      <td style="text-align:right;color:#6b7a9e;font-size:11px;padding:7px 10px">${pcs?pcs.toLocaleString():'—'}</td>
+      <td style="text-align:right;font-size:11px;color:#6b7a9e;padding:7px 10px">${days}天</td>
+    </tr>`;
+  }).join('');
+
+  el('ac-table').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#1e2640;color:#fff">
+      <th style="padding:8px 10px;text-align:left">LINE</th>
+      <th style="padding:8px 10px;text-align:right">出勤HC<br><small style="font-weight:300">Att HC</small></th>
+      <th style="padding:8px 10px;text-align:right">車縫HC<br><small style="font-weight:300">Sewing</small></th>
+      <th style="padding:8px 10px;text-align:right">差異<br><small style="font-weight:300">Diff</small></th>
+      <th style="padding:8px 10px;text-align:right">匹配%<br><small style="font-weight:300">Match</small></th>
+      <th style="padding:8px 10px;text-align:right">產量<br><small style="font-weight:300">Pcs</small></th>
+      <th style="padding:8px 10px;text-align:right">天數</th>
+    </tr></thead>
+    <tbody style="background:#fff">${rows||'<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa">請先讀取出勤資料</td></tr>'}</tbody>
+  </table>`;
+
+  // ── Trend chart ─────────────────────────────────────────
+  // Show last N periods based on mode
+  const nPeriods = AC_MODE==='day'?30:AC_MODE==='week'?12:12;
+  const trendPs = [...new Set(attDates.map(acPKey))].sort().reverse().slice(0, nPeriods).reverse();
+  if (el('ac-range-lbl')) el('ac-range-lbl').textContent = `近 ${trendPs.length} 個${AC_MODE==='day'?'天':AC_MODE==='week'?'週':AC_MODE==='month'?'月':'年'}`;
+
+  const tA=[], tS=[], tMatch=[];
+  trendPs.forEach(p => {
+    const pDates = attDates.filter(d => acPKey(d)===p);
+    const aRows = att.filter(r => pDates.includes(String(r.date||'').slice(0,10)) && isAttSewLineAC(r));
+    const aDays = [...new Set(aRows.map(r=>String(r.date||'').slice(0,10)))];
+    const aHCSum = aRows.reduce((s,r)=>s+(r.m||0)+(r.f||0), 0);
+    const aAvg = aDays.length ? Math.round(aHCSum/aDays.length) : 0;
+    tA.push(aAvg);
+
+    const sRows = rawDB.filter(r => pDates.includes(String(r.date||'').slice(0,10)));
+    const sDays = [...new Set(sRows.filter(r=>r.workers>0).map(r=>String(r.date||'').slice(0,10)))];
+    const sWSum = sRows.reduce((s,r)=>s+(+r.workers||0), 0);
+    const sAvg  = sDays.length ? Math.round(sWSum/sDays.length) : 0;
+    tS.push(sAvg);
+    tMatch.push(aAvg > 0 && sAvg > 0 ? Math.round(sAvg/aAvg*100) : null);
+  });
+
+  const tLabels = trendPs.map(p =>
+    AC_MODE==='month' ? p.slice(5)+'月' :
+    AC_MODE==='year'  ? p+'年' :
+    AC_MODE==='week'  ? p.slice(5) :
+    p.slice(5)||p
+  );
+
+  const CHmap = window._attcmpCH2 || {};
+  if (CHmap['ac-chart']) { try{CHmap['ac-chart'].destroy();}catch(e){} }
+  const ctx = el('ac-chart');
+  if (ctx && typeof Chart !== 'undefined') {
+    CHmap['ac-chart'] = new Chart(ctx, {
+      type:'bar',
+      data:{
+        labels: tLabels,
+        datasets:[
+          {type:'line',label:'出勤車縫HC', data:tA,  borderColor:'#1e2640',backgroundColor:'rgba(30,38,64,.08)', fill:true,  tension:.3, pointRadius:3, yAxisID:'yHC'},
+          {type:'line',label:'車縫系統HC', data:tS,  borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.08)',fill:true,  tension:.3, pointRadius:3, yAxisID:'yHC', borderDash:[5,3]},
+          {type:'bar', label:'匹配率%',   data:tMatch,backgroundColor:'rgba(168,85,247,.25)',borderRadius:3, yAxisID:'yPct'},
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{labels:{font:{size:10}}}},
+        scales:{
+          yHC:{position:'left',  title:{display:true,text:'人數',font:{size:10}}, ticks:{font:{size:10}}, beginAtZero:false},
+          yPct:{position:'right', title:{display:true,text:'匹配%',font:{size:10}}, ticks:{font:{size:10}, callback:v=>v!=null?v+'%':''}, grid:{drawOnChartArea:false}, min:0, max:120},
+          x:{ticks:{font:{size:10}, maxRotation:45}}
+        }
+      }
+    });
+    window._attcmpCH2 = CHmap;
+  }
+}
+
 </script>
+
+
+<!-- ══════════ TAB: 出勤對比 (Att Compare) ══════════ -->
+<div class="sec" id="sec-attcmp">
+
+  <!-- ① 控制列 -->
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;background:#fff;border:1px solid #e2e6f0;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+    <!-- 日週月年 -->
+    <div style="display:flex;gap:3px">
+      <button id="acm-d" onclick="setACMode('day',this)"   style="padding:5px 9px;border:1px solid #e2e6f0;border-radius:6px;cursor:pointer;font-size:12px;background:#f0fdf8;color:#1e2640;font-weight:600">日</button>
+      <button id="acm-w" onclick="setACMode('week',this)"  style="padding:5px 9px;border:1px solid #e2e6f0;border-radius:6px;cursor:pointer;font-size:12px">週</button>
+      <button id="acm-m" onclick="setACMode('month',this)" style="padding:5px 9px;border:1px solid #e2e6f0;border-radius:6px;cursor:pointer;font-size:12px">月</button>
+      <button id="acm-y" onclick="setACMode('year',this)"  style="padding:5px 9px;border:1px solid #e2e6f0;border-radius:6px;cursor:pointer;font-size:12px">年</button>
+    </div>
+    <!-- 前後 + 期間選擇 -->
+    <button onclick="navAC(-1)" style="width:28px;height:28px;border:1px solid #d0d5e8;border-radius:6px;background:#fff;cursor:pointer">◀</button>
+    <select id="ac-psel" style="font-family:monospace;font-size:12px;border:1px solid #d0d5e8;border-radius:6px;padding:4px 8px;min-width:130px" onchange="renderAttCmp()">
+      <option>— 請先讀取出勤 —</option>
+    </select>
+    <button onclick="navAC(1)" style="width:28px;height:28px;border:1px solid #d0d5e8;border-radius:6px;background:#fff;cursor:pointer">▶</button>
+    <!-- LINE 篩選 -->
+    <select id="ac-line" style="font-size:12px;border:1px solid #d0d5e8;border-radius:6px;padding:4px 8px;min-width:90px" onchange="renderAttCmp()">
+      <option value="">— LINE —</option>
+    </select>
+    <!-- 讀取 / 雲端 -->
+    <button onclick="loadAttIDBData(true).then(()=>{initAttCmp();renderAttCmp();})" style="padding:5px 10px;border:1px solid #1e2640;border-radius:6px;background:#fff;color:#1e2640;cursor:pointer;font-size:12px">🔄 讀IDB</button>
+    <button onclick="fetchAttFromGAS()" style="padding:5px 10px;border:1px solid #059669;border-radius:6px;background:#fff;color:#059669;cursor:pointer;font-size:12px">☁⬇ 雲端讀取</button>
+    <span id="ac-status" style="font-size:11px;color:#6b7a9e;flex:1">出勤 IDB 未讀取</span>
+  </div>
+
+  <!-- ② KPI 卡片 (6 張) -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;margin-bottom:12px">
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e6f0;padding:14px;border-left:4px solid #1e2640">
+      <div style="font-size:22px;font-weight:700;color:#1e2640" id="ac-att">—</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">出勤車縫HC<br>Att Sewing HC</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e6f0;padding:14px;border-left:4px solid #0ea5e9">
+      <div style="font-size:22px;font-weight:700;color:#0ea5e9" id="ac-sew">—</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">車縫系統HC<br>Sewing Workers</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e6f0;padding:14px;border-left:4px solid #ef4444">
+      <div style="font-size:22px;font-weight:700" id="ac-diff">—</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">差異 Diff<br>Att − Sewing</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e6f0;padding:14px;border-left:4px solid #a855f7">
+      <div style="font-size:22px;font-weight:700;color:#a855f7" id="ac-match">—</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">匹配率 Match%<br>Sewing/Att</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e6f0;padding:14px;border-left:4px solid #f59e0b">
+      <div style="font-size:22px;font-weight:700;color:#f59e0b" id="ac-att-rate">—</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">出勤率<br>Attendance Rate</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e6f0;padding:14px;border-left:4px solid #10b981">
+      <div style="font-size:22px;font-weight:700;color:#10b981" id="ac-lines-cnt">—</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">車縫線數<br>Active Lines</div>
+    </div>
+  </div>
+
+  <!-- ③ 趨勢圖 -->
+  <div style="background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:14px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:#1e2640">📈 出勤 × 車縫 趨勢對比</div>
+      <div id="ac-range-lbl" style="font-size:11px;color:#6b7a9e"></div>
+    </div>
+    <div style="position:relative;height:200px"><canvas id="ac-chart"></canvas></div>
+  </div>
+
+  <!-- ④ 明細表 -->
+  <div style="background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:14px;overflow-x:auto">
+    <div style="font-size:13px;font-weight:700;color:#1e2640;margin-bottom:8px" id="ac-tbl-title">各組別明細對照</div>
+    <div id="ac-table"></div>
+  </div>
+</div>
 
 </body>
 </html>
