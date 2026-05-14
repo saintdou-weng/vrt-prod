@@ -3919,9 +3919,9 @@ function isACLine(lid) {
   return /^LINE\d{1,2}$/.test(lid) && +lid.replace('LINE','')>=1 && +lid.replace('LINE','')<=30;
 }
 function isAttSewLineAC(r) {
-  const s = String(r.line||r.group||r.section||r.dept||'').toLowerCase();
+  const s = String(r.line||r.group||r.sect||r.section||r.dept||'').toLowerCase();
   if (/qc|pack|cut|admin|wh|finish|sample|mechanic|press|marker/.test(s)) return false;
-  return isACLine(normACLine(r.line||r.group||r.section||''));
+  return isACLine(normACLine(r.line||r.group||r.sect||r.section||''));
 }
 
 // ── Period key helpers ────────────────────────────────────
@@ -3991,7 +3991,7 @@ function initAttCmp() {
   // Populate LINE filter from ATT data (Att = master)
   const att = ATT_IDB_CACHE || [];
   const lines = [...new Set(
-    att.filter(isAttSewLineAC).map(r => normACLine(r.line||r.group||r.section||''))
+    att.filter(isAttSewLineAC).map(r => normACLine(r.line||r.group||r.sect||r.section||''))
        .filter(isACLine)
   )].sort((a,b) => +a.replace('LINE','')-+b.replace('LINE',''));
   const lSel = document.getElementById('ac-line');
@@ -4025,7 +4025,7 @@ async function renderAttCmp() {
   att.forEach(r => {
     if (!periodDates.includes(String(r.date||'').slice(0,10))) return;
     if (!isAttSewLineAC(r)) return;
-    const lid = normACLine(r.line||r.group||r.section||'');
+    const lid = normACLine(r.line||r.group||r.sect||r.section||'');
     if (!isACLine(lid)) return;
     if (lineFilter && lid !== lineFilter) return;
     if (!attMap[lid]) attMap[lid] = {hcSum:0, days:new Set(), attSum:0};
