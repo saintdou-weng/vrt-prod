@@ -694,11 +694,24 @@ async function writeToFile(handle, data){
   }catch(e){ return false; }
 }
 
+// ── Date helpers for safe comparison ─────────────────────────────────────────
+function normalizeDate(d){
+  if(!d) return '';
+  const m=String(d).match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(!m) return String(d);
+  return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+}
+function getMaxDate(arr){
+  return [...new Set(
+    (arr||[]).map(r=>normalizeDate(r.date)).filter(Boolean)
+  )].sort().pop() || '';
+}
+
 function dedupAndNorm(all){
   const rawDB=(all||[]).map(r=>({...r,lineNo:normLineNo(r.lineNo||"")}));
   const dedupMap=new Map();
   rawDB.forEach(r=>{
-    const k=`${r.date}|${r.lineNo}|${r.styleNo||""}|${r.color||""}|${r.size||""}`;
+    const k=[normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||""].join("|");
     if(!dedupMap.has(k)) dedupMap.set(k,r);
     else{
       const ex=dedupMap.get(k);
@@ -720,9 +733,21 @@ async function loadDB(){
   // 2. Fallback: localStorage
   try{
     const raw=localStorage.getItem(LS_KEY)||localStorage.getItem("sew_v4")||"[]";
-    DB=dedupAndNorm(JSON.parse(raw));
+    const parsed=JSON.parse(raw);
+    DB=dedupAndNorm(parsed);
     try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){ EFF_DB=[]; }
     if(localStorage.getItem("sew_v4")){ saveDB(); localStorage.removeItem("sew_v4"); }
+    // ★ If localStorage only has partial data (write failed due to size), restore
+    // the max date so vcLoadFromCloudIDB knows not to skip the cloud data
+    const savedMaxDate=localStorage.getItem('vrt_sewing_max_date')||'';
+    const parsedMaxDate=getMaxDate(DB);
+    if(savedMaxDate > parsedMaxDate){
+      // localStorage data is truncated — inject a sentinel record to preserve max date
+      // so date comparison in vcLoadFromCloudIDB works correctly
+      console.log('[VRT] localStorage data truncated. Saved max:', savedMaxDate, 'Parsed max:', parsedMaxDate);
+      // Don't inject fake records; instead, clear DB so cloudIDB always wins
+      DB=[];
+    }
   }catch(e){ DB=[]; }
 }
 
@@ -731,9 +756,15 @@ function saveDB(){
   if(_fileHandle){
     writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
   }
-  // Always also save to localStorage as backup
+  // ★ Always write the max date marker so vcLoadFromCloudIDB can compare correctly
+  // even when the full JSON write fails due to localStorage size limits
+  const maxDate = getMaxDate(DB);
+  try { localStorage.setItem('vrt_sewing_max_date', maxDate); } catch(e) {}
+  // Try to save full JSON to localStorage as backup
   try{ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
-  catch(e){ console.warn("localStorage full"); }
+  catch(e){
+    console.warn('[VRT] localStorage full — only max date marker saved:', maxDate);
+  }
 }
 function initEffDB(){ /* EFF_DB loaded in loadDB */ }
 async function saveEffDB(){
@@ -803,9 +834,18 @@ async function vcLoadFromCloudIDB() {
   const recs = await loadFromCloudIDB();
   if (!recs.length) return;
   const merged = dedupAndNorm([...recs]);
-  if (merged.length > DB.length) {
+  const localMax = getMaxDate(DB);
+  const cloudMax = getMaxDate(merged);
+  console.log('[VRT Sync] vcLoadFromCloudIDB | LOCAL MAX DATE:', localMax,
+    '| CLOUD IDB MAX DATE:', cloudMax,
+    '| LOCAL COUNT:', DB.length, '| CLOUD IDB COUNT:', merged.length);
+  // ★ Use date comparison — length is unreliable after dedup
+  if (cloudMax > localMax) {
+    console.log('[VRT Sync] Cloud IDB is newer → updating DB');
     DB = merged;
     updateHeader(); renderDBCard();
+  } else {
+    console.log('[VRT Sync] Local data is up-to-date, keeping local');
   }
 }
 
@@ -867,9 +907,20 @@ async function vcAutoSync(){
     const recent = allRecs.filter(r => (r.date||'') >= cutStr);
     try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
-    // 更新記憶體
-    DB = dedupAndNorm(allRecs);
-    updateHeader(); renderDBCard();
+    // ★ 更新記憶體：date comparison — 只有更新時才覆蓋
+    const gasRecs = dedupAndNorm(allRecs);
+    const localMax2 = getMaxDate(DB);
+    const gasMax = getMaxDate(gasRecs);
+    console.log('[VRT Sync] vcAutoSync | LOCAL MAX DATE:', localMax2,
+      '| GAS MAX DATE:', gasMax,
+      '| LOCAL COUNT:', DB.length, '| GAS COUNT:', gasRecs.length);
+    if (gasMax >= localMax2) {
+      console.log('[VRT Sync] GAS data is newest → updating DB');
+      DB = gasRecs;
+      updateHeader(); renderDBCard();
+    } else {
+      console.log('[VRT Sync] WARNING: GAS data older than local, skipping overwrite');
+    }
 
     tip.textContent = `☁ 雲端同步完成（${allRecs.length.toLocaleString()} 筆）`;
     tip.style.color = '#10b981';
@@ -889,7 +940,15 @@ window.vcApplyCloudRecs = async function(allRecs, effData) {
   const recent = allRecs.filter(r => (r.date||'') >= cutStr);
   try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
   if (effData && effData.length) try { localStorage.setItem(LS_EFF, JSON.stringify(effData)); } catch(e) {}
-  DB = dedupAndNorm(allRecs);
+  // ★ Always write max date marker for correct comparison on next reload
+  const maxDate = getMaxDate(allRecs);
+  try { localStorage.setItem('vrt_sewing_max_date', maxDate); } catch(e) {}
+  const newRecs = dedupAndNorm(allRecs);
+  const localMax = getMaxDate(DB);
+  const newMax = getMaxDate(newRecs);
+  console.log('[VRT Sync] vcApplyCloudRecs | LOCAL MAX:', localMax, '| NEW MAX:', newMax,
+    '| LOCAL COUNT:', DB.length, '| NEW COUNT:', newRecs.length);
+  DB = newRecs; // vcApplyCloudRecs is called after explicit user pull — always apply
   updateHeader(); renderDBCard();
 };
 
