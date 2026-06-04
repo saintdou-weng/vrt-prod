@@ -905,6 +905,9 @@ async function vcAutoSync(){
     console.log('[VRT Sync] After merge:', mergedDB.length, 'records | MAX:', getMaxDate(mergedDB));
     DB = mergedDB;
     updateHeader(); renderDBCard();
+    // ★ 持久化合併結果：手機重開後不再需要重新從 GAS 拉取
+    saveToCloudIDB(DB).catch(e=>console.warn('[VRT] cloudIDB save failed:',e));
+    saveDB(); // 存 file handle + localStorage（file handle 有的話會存全量）
 
     tip.textContent = `☁ 雲端同步完成（${mergedDB.length.toLocaleString()} 筆）`;
     tip.style.color = '#10b981';
