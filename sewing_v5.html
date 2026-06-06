@@ -116,7 +116,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.12</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.12</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -125,22 +125,30 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   </div>
 </div>
 
+<div style="position:fixed;top:8px;right:12px;z-index:9999">
+  <button onclick="toggleLang()" id="langBtn"
+    style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.4);border-radius:20px;
+           padding:4px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;backdrop-filter:blur(4px);
+           transition:all .2s;font-family:inherit"
+    title="Switch Language / 切換語言">🌐 EN</button>
+</div>
 <div class="tabs">
-  <div class="tab on" onclick="goTab('upload',this)">📥 上傳報表</div>
-  <div class="tab" onclick="goTab('daily',this)">📊 每日報告</div>
-  <div class="tab" onclick="goTab('weekly',this)">📅 週統計</div>
-  <div class="tab" onclick="goTab('monthly',this)">📆 月年趨勢</div>
-  <div class="tab" onclick="goTab('eff',this)">📈 效率報表</div>
-  <div class="tab" onclick="goTab('validate',this)">🔍 數據比對</div>
-  <div class="tab" onclick="goTab('styles',this)">🎯 款式追蹤</div>
-  <div class="tab" onclick="goTab('records',this)">📋 所有記錄</div>
-  <div class="tab" onclick="goTab('smv',this)">📊 產能分析</div>
+  <div class="tab on" onclick="goTab('upload',this)" data-zh="📥 上傳報表" data-en="📥 Upload">📥 上傳報表</div>
+  <div class="tab" onclick="goTab('daily',this)" data-zh="📊 每日報告" data-en="📊 Daily">📊 每日報告</div>
+  <div class="tab" onclick="goTab('weekly',this)" data-zh="📅 週統計" data-en="📅 Weekly">📅 週統計</div>
+  <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月年趨勢" data-en="📆 Monthly">📆 月年趨勢</div>
+  <div class="tab" onclick="goTab('eff',this)" data-zh="📈 效率報表" data-en="📈 Efficiency">📈 效率報表</div>
+  <div class="tab" onclick="goTab('validate',this)" data-zh="🔍 數據比對" data-en="🔍 Validation">🔍 數據比對</div>
+  <div class="tab" onclick="goTab('styles',this)" data-zh="🎯 款式追蹤" data-en="🎯 Styles">🎯 款式追蹤</div>
+  <div class="tab" onclick="goTab('records',this)" data-zh="📋 所有記錄" data-en="📋 Records">📋 所有記錄</div>
+  <div class="tab" onclick="goTab('smv',this)" data-zh="📊 產能分析" data-en="📊 Productivity">📊 產能分析</div>
+  <div class="tab" onclick="goTab('changeover',this)" data-zh="🔄 Changeover" data-en="🔄 Changeover">🔄 Changeover</div>
 </div>
 
 <!-- ══ UPLOAD ══ -->
 <div class="sec on" id="sec-upload">
   <div class="card">
-    <div class="ct">📧 直接拖郵件或 Excel 進來</div>
+    <div class="ct" data-i18n="uploadTitle">📧 直接拖郵件或 Excel 進來</div>
     <div class="g3" style="margin-bottom:14px">
       <div style="background:#f0fdf4;border-radius:8px;padding:12px;border:1px solid #bbf7d0">
         <div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:6px">✅ 最推薦：.eml 郵件</div>
@@ -178,7 +186,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     </div>
     <div id="fileList" style="margin-top:10px"></div>
     <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <button class="btn btn-y" id="btnImport" onclick="doImport()" disabled>🔍 解析預覽</button>
+      <button class="btn btn-y" id="btnImport" onclick="doImport()" disabled data-i18n="btnParse">🔍 解析預覽</button>
       <span id="importMsg" style="font-size:13px"></span>
     </div>
   </div>
@@ -186,24 +194,46 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <!-- Parse preview -->
   <div id="previewArea" style="display:none">
     <div class="card">
-      <div class="ct">解析預覽</div>
+      <div class="ct" data-i18n="parsePreview">解析預覽</div>
       <div id="previewContent"></div>
       <div style="margin-top:12px;display:flex;gap:10px">
-        <button class="btn btn-y" onclick="confirmImport()">✓ 確認存入</button>
-        <button class="btn btn-g" onclick="cancelImport()">取消</button>
+        <button class="btn btn-y" onclick="confirmImport()" data-i18n="btnConfirm">✓ 確認存入</button>
+        <button class="btn btn-g" onclick="cancelImport()" data-i18n="btnCancel">取消</button>
       </div>
     </div>
   </div>
 
+  <!-- AI Executive Summary Card (auto-generated after import) -->
+  <div id="aiSummaryCard" class="card" style="display:none">
+    <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
+      <span data-i18n="aiSummaryTitle">📊 AI Executive Summary</span>
+      <span id="aiSummaryBadge" style="font-size:11px;color:#059669;font-weight:600"></span>
+    </div>
+    <div id="aiKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:14px"></div>
+    <div id="aiSummaryText" style="background:#f7f8fc;border-radius:8px;padding:14px;border-left:4px solid #1d4ed8;font-size:13px;line-height:1.9;color:#374151"></div>
+    <div id="aiMomRow" style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap"></div>
+    <div id="aiAlertBanner" style="margin-top:10px"></div>
+  </div>
+
   <!-- DB status -->
   <div id="dbCard" class="card" style="display:none">
-    <div class="ct">已儲存資料狀況</div>
+    <div class="ct" data-i18n="dbStatus">已儲存資料狀況</div>
     <div id="dbInfo"></div>
     <div id="fileConnectInfo" style="font-size:12px;color:#059669;margin-top:6px;display:none">📎 已連結本機資料檔案，自動同步</div>
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-g" onclick="connectDataFile()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">📎 連結本機資料檔案（可放 Google Drive）</button>
-      <button class="btn btn-r" onclick="clearAll()">🗑 清除所有資料</button>
+      <button class="btn btn-r" onclick="clearAll()" data-i18n="btnClear">🗑 清除所有資料</button>
     </div>
+  </div>
+
+  <!-- DB Health Card -->
+  <div class="card" id="dbHealthCard" style="display:none">
+    <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
+      <span data-i18n="dbHealthTitle">🗄 Database Health</span>
+      <button onclick="renderDbHealth()" style="font-size:11px;padding:3px 10px;background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;border-radius:5px;cursor:pointer">↻ Refresh</button>
+    </div>
+    <div id="dbHealthInfo" style="margin-bottom:10px"></div>
+    <div id="dbHealthCoverage"></div>
   </div>
 
   <!-- Folder Scan Card -->
@@ -220,7 +250,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-      <button class="btn btn-g" onclick="addScanFolder()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">➕ 新增資料夾</button>
+      <button class="btn btn-g" onclick="addScanFolder()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc" data-i18n="btnAddFolder">➕ 新增資料夾</button>
       <button class="btn btn-y" id="btnScanFolders" onclick="scanAllFolders()" style="display:none">🔍 立即掃描所有資料夾</button>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#6b7a9e;cursor:pointer;user-select:none">
         <input type="checkbox" id="chkAutoScan" onchange="saveAutoScanPref()"> 開啟頁面時自動掃描
@@ -232,7 +262,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
   <!-- Format guide -->
   <div class="card">
-    <div class="ct">Excel 格式說明</div>
+    <div class="ct" data-i18n="excelFmt">Excel 格式說明</div>
     <div class="g2">
       <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
         <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px">VRT Daily Output（自動識別）</div>
@@ -268,8 +298,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     <select id="dsec" onchange="renderDaily()"><option value="">全部</option></select>
     <button class="btn btn-g" onclick="toggleDtail()" id="btnDtail" style="font-size:12px;padding:5px 10px">📋 PO明細</button>
     <span id="dmeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
-    <button class="btn btn-g" onclick="deleteWholeDay()" title="刪除當日全部記錄" style="background:#fff0f0;color:#dc2626;border-color:#fca5a5;font-size:12px;padding:5px 12px">🗑 刪除此日</button>
-    <button class="btn btn-g" onclick="exportExcel('daily')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px">⬇ 匯出 Excel</button>
+    <button class="btn btn-g" onclick="deleteWholeDay()" title="刪除當日全部記錄" style="background:#fff0f0;color:#dc2626;border-color:#fca5a5;font-size:12px;padding:5px 12px" data-i18n="btnDeleteDay">🗑 刪除此日</button>
+    <button class="btn btn-g" onclick="exportExcel('daily')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc;font-size:12px;padding:5px 12px" data-i18n="btnExportExcel">⬇ 匯出 Excel</button>
   </div>
   <div id="dKpi" class="kpi-strip"></div>
   <div id="dSecs" class="ss" style="display:none"></div>
@@ -281,7 +311,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div id="dCards" class="lcards"></div>
   <div class="card" id="dTableCard" style="margin-top:14px;display:none">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <div class="ct" style="margin-bottom:0">線別彙整表</div>
+      <div class="ct" style="margin-bottom:0" data-i18n="dailyLineTable">線別彙整表</div>
       <div style="display:flex;gap:0;border:1px solid #e2e6f0;border-radius:6px;overflow:hidden">
         <button id="tabSum" onclick="switchDTab('sum')" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600">彙整</button>
         <button id="tabPO" onclick="switchDTab('po')" style="padding:4px 12px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">PO明細</button>
@@ -310,12 +340,12 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div id="wKpi" class="kpi-strip"></div>
   <!-- Per-line weekly breakdown -->
   <div class="card" id="wLineCard" style="display:none">
-    <div class="ct">本週各線別</div>
+    <div class="ct" data-i18n="weeklyLines">本週各線別</div>
     <div id="wLineCards" class="lcards"></div>
   </div>
   <!-- Daily breakdown for the week -->
   <div class="card" id="wDailyCard" style="display:none">
-    <div class="ct">本週每日明細</div>
+    <div class="ct" data-i18n="weeklyDaily">本週每日明細</div>
     <div class="tw"><table><thead><tr>
       <th>日期（星期）</th><th>線別數</th><th>合計人數</th><th>合計件數</th><th>平均效率</th><th>人均件數</th><th>箱數</th>
     </tr></thead><tbody id="wDailyBody"></tbody></table></div>
@@ -482,7 +512,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 <!-- ══ PRODUCTIVITY ANALYSIS ══ -->
 <div class="sec" id="sec-smv">
   <div class="card">
-    <div class="ct">📊 正常班 vs 加班 產能分析</div>
+    <div class="ct" data-i18n="smvTitle">📊 正常班 vs 加班 產能分析</div>
     <div class="al al-i" style="margin-bottom:12px">
       以當日正常班的「每小時產量」為基準（100%），評估加班的相對產能。<br>
       <span style="font-size:11px;color:#6b7a9e">加班產能比 = (加班時產量 ÷ 正常班時產量) × 100% · 80%~120% 為正常</span>
@@ -530,6 +560,73 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
       <th>正常班/h</th><th>加班/h</th>
       <th>加班產能比</th><th>平均報表效率</th>
     </tr></thead><tbody id="ppohPeriodBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ CHANGEOVER ══ -->
+<div class="sec" id="sec-changeover">
+  <!-- Auto Settings Display (read-only, system computed) -->
+  <div class="card" id="coAutoSettings">
+    <div class="ct">⚙️ <span data-i18n="coSettings">Auto Factory Parameters</span>
+      <span style="font-size:10px;color:#059669;font-weight:400;margin-left:8px">✓ <span data-i18n="coAutoCalc">System Auto-Calculated</span></span>
+    </div>
+    <div id="coAutoParams" style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:#374151"></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="frow">
+      <label style="font-size:12px;color:#6b7a9e" data-i18n="coFilterYear" data-i18n-key="coFilterYear">Year</label>
+      <select id="coYear" onchange="updateCoMonths();renderChangeover()" style="font-size:12px"><option value="" data-i18n-key="coAllYears">All Years</option></select>
+      <label style="font-size:12px;color:#6b7a9e" data-i18n="coFilterMonth" data-i18n-key="coFilterMonth">Month</label>
+      <select id="coMonth" onchange="renderChangeover()" style="font-size:12px"><option value="" data-i18n-key="coAllMonths">All Months</option></select>
+      <label style="font-size:12px;color:#6b7a9e" data-i18n="coFilterLine" data-i18n-key="coFilterLine">Line</label>
+      <select id="coLine" onchange="renderChangeover()" style="font-size:12px"><option value="" data-i18n-key="coAllLines">All Lines</option></select>
+      <label style="font-size:12px;color:#6b7a9e" data-i18n="coFilterSec" data-i18n-key="coFilterSec">Section</label>
+      <select id="coSec" onchange="renderChangeover()" style="font-size:12px"><option value="" data-i18n-key="coAll">All</option></select>
+      <button class="btn btn-g" onclick="exportChangeoverExcel()" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc" data-i18n="btnExportExcel">⬇ Export Excel</button>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div id="coAlerts"></div>
+
+  <!-- KPI Cards -->
+  <div id="coKpiRow" class="g3" style="margin-bottom:16px"></div>
+
+  <!-- Worst Lines -->
+  <div class="card">
+    <div class="ct" data-i18n="coWorstLines">📊 Worst Changeover Lines</div>
+    <div class="tw"><table><thead><tr>
+      <th>Line</th><th>Section</th><th>Changeovers</th>
+      <th>Lost Min</th><th>Lost Pcs</th><th>Avg Recovery Days</th><th>Lost Orders</th>
+    </tr></thead><tbody id="coWorstBody"></tbody></table></div>
+  </div>
+
+  <!-- Monthly Summary -->
+  <div class="card">
+    <div class="ct" data-i18n="coMonthlySummary">📅 Monthly Changeover Summary</div>
+    <div class="tw"><table><thead><tr>
+      <th>Month</th><th>Changeovers</th><th>Lost Min</th>
+      <th>Lost Pcs</th><th>Avg Recovery Days</th><th>Lost Orders</th>
+    </tr></thead><tbody id="coMonthBody"></tbody></table></div>
+  </div>
+
+  <!-- Heat Map -->
+  <div class="card">
+    <div class="ct" data-i18n="coHeatMap">🌡️ Lost Minutes Heat Map — Month × Line</div>
+    <div id="coHeatMap" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- Changeover Detail -->
+  <div class="card">
+    <div class="ct" data-i18n="coDetailTitle">📋 Changeover Details</div>
+    <div class="tw"><table><thead><tr>
+      <th>Date</th><th>Line</th><th>Section</th>
+      <th>Prev Style</th><th>New Style</th><th>Workers</th>
+      <th>Baseline Eff%</th><th>Actual Eff%</th><th>Eff Loss%</th>
+      <th>Lost Min</th><th>Lost Pcs</th><th>Recovery Days</th>
+    </tr></thead><tbody id="coDetailBody"></tbody></table></div>
   </div>
 </div>
 
@@ -694,6 +791,67 @@ async function writeToFile(handle, data){
   }catch(e){ return false; }
 }
 
+// ── VRT_SewingProduction — Primary IDB (replaces localStorage for DB/EFF_DB) ──
+const MAIN_IDB_NAME = 'VRT_SewingProduction';
+const MAIN_IDB_VER  = 2;
+let _mainIDB = null;
+
+function openMainIDB(){
+  if(_mainIDB) return Promise.resolve(_mainIDB);
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(MAIN_IDB_NAME,MAIN_IDB_VER);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains('daily_records'))
+        db.createObjectStore('daily_records',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('eff_records'))
+        db.createObjectStore('eff_records',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('system_meta'))
+        db.createObjectStore('system_meta',{keyPath:'key'});
+      if(!db.objectStoreNames.contains('analysis_history'))
+        db.createObjectStore('analysis_history',{keyPath:'analysisDate'});
+      if(!db.objectStoreNames.contains('analytics_monthly'))
+        db.createObjectStore('analytics_monthly',{keyPath:'yearMonth'});
+    };
+    req.onsuccess=e=>{ _mainIDB=e.target.result; res(_mainIDB); };
+    req.onerror=rej;
+  });
+}
+async function saveToMainIDB(){
+  const db=await openMainIDB();
+  // Save daily_records in one transaction
+  const tx=db.transaction('daily_records','readwrite');
+  const os=tx.objectStore('daily_records');
+  os.clear();
+  DB.forEach(r=>os.put(r));
+  await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+  // Save meta
+  const mt=db.transaction('system_meta','readwrite');
+  mt.objectStore('system_meta').put({
+    key:'summary',recordCount:DB.length,
+    maxDate:getMaxDate(DB),minDate:getMinDate(DB),
+    savedAt:new Date().toISOString()
+  });
+}
+async function loadFromMainIDB(){
+  try{
+    const db=await openMainIDB();
+    const tx=db.transaction('daily_records','readonly');
+    return await new Promise(res=>{
+      const q=tx.objectStore('daily_records').getAll();
+      q.onsuccess=()=>res(q.result||[]);
+      q.onerror=()=>res([]);
+    });
+  }catch(e){return [];}
+}
+async function clearMainIDB(){
+  const db=await openMainIDB();
+  const tx=db.transaction(['daily_records','system_meta'],'readwrite');
+  tx.objectStore('daily_records').clear();
+  tx.objectStore('system_meta').clear();
+  return new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+}
+
 // ── Date helpers ─────────────────────────────────────────────────────────────
 function normalizeDate(d){
   if(!d) return '';
@@ -705,6 +863,10 @@ function getMaxDate(arr){
   return [...new Set(
     (arr||[]).map(r=>normalizeDate(r.date)).filter(Boolean)
   )].sort().pop() || '';
+}
+function getMinDate(arr){
+  const dates=[...new Set((arr||[]).map(r=>normalizeDate(r.date)).filter(Boolean))].sort();
+  return dates[0]||'';
 }
 
 function dedupAndNorm(all){
@@ -722,33 +884,52 @@ function dedupAndNorm(all){
 }
 
 async function loadDB(){
-  // 1. Try File System Access handle
-  _fileHandle = await getFileHandle("db");
+  // ★ Priority 1: VRT_SewingProduction IDB — full history, no size limit
+  try{
+    const idbRecs=await loadFromMainIDB();
+    if(idbRecs.length>0){
+      DB=dedupAndNorm(idbRecs);
+      try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){}
+      console.log('[VRT] loadDB IDB | COUNT:',DB.length,'| MAX:',getMaxDate(DB),'| MIN:',getMinDate(DB));
+      return;
+    }
+  }catch(e){ console.warn('[VRT] mainIDB load failed:',e); }
+  // Priority 2: File System Access handle (migrate to IDB on load)
+  _fileHandle=await getFileHandle("db");
   if(_fileHandle){
     try{
       const data=await readFromFile(_fileHandle);
-      if(data?.daily){ DB=dedupAndNorm(data.daily); EFF_DB=data.eff||[]; return; }
-    }catch(e){}
+      if(data?.daily){
+        DB=dedupAndNorm(data.daily); EFF_DB=data.eff||[];
+        await saveToMainIDB();
+        console.log('[VRT] loadDB file → migrated to IDB | COUNT:',DB.length); return;
+      }
+    }catch(e){ console.warn('[VRT] file read failed',e); }
   }
-  // 2. Fallback: localStorage
+  // Priority 3: Legacy localStorage → migrate to IDB
   try{
     const raw=localStorage.getItem(LS_KEY)||localStorage.getItem("sew_v4")||"[]";
-    DB=dedupAndNorm(JSON.parse(raw));
-    try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){ EFF_DB=[]; }
-    if(localStorage.getItem("sew_v4")){ saveDB(); localStorage.removeItem("sew_v4"); }
-    console.log('[VRT] loadDB (localStorage) | COUNT:', DB.length, '| MAX DATE:', getMaxDate(DB));
+    const parsed=JSON.parse(raw);
+    if(parsed.length>0){
+      DB=dedupAndNorm(parsed);
+      try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){ EFF_DB=[]; }
+      await saveToMainIDB();
+      localStorage.removeItem(LS_KEY);
+      console.log('[VRT] loadDB localStorage → migrated to IDB | COUNT:',DB.length);
+    }
+    if(localStorage.getItem("sew_v4")) localStorage.removeItem("sew_v4");
   }catch(e){ DB=[]; }
 }
 
 function saveDB(){
+  // ★ Primary: VRT_SewingProduction IDB (async, no size limit)
+  saveToMainIDB().catch(e=>console.warn('[VRT] mainIDB save failed:',e));
+  // Secondary: file handle if connected
   if(_fileHandle){
     writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
   }
-  // ★ Always write max date marker (tiny, always fits) before attempting full JSON
-  const maxDate = getMaxDate(DB);
-  try { localStorage.setItem('vrt_sewing_max_date', maxDate); } catch(e) {}
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
-  catch(e){ console.warn('[VRT] localStorage full, only max date marker saved:', maxDate); }
+  // localStorage: ONLY markers/settings, NOT DB data
+  try{ localStorage.setItem('vrt_sewing_max_date', getMaxDate(DB)); }catch(e){}
 }
 function initEffDB(){ /* EFF_DB loaded in loadDB */ }
 async function saveEffDB(){
@@ -776,9 +957,9 @@ async function connectDataFile(){
 // Init
 loadDB().then(async ()=>{
   updateHeader(); renderDBCard(); initFolderScan();
-  // 開啟時從雲端 IDB 補充（IDB 無大小限制，可存全量）
-  await vcLoadFromCloudIDB(); // 先讀本機 cloud IDB
-  await vcAutoSync();         // 再從雲端更新
+  _lang = localStorage.getItem("vrt_lang")||"zh"; applyLang();
+  await vcLoadFromCloudIDB();
+  await vcAutoSync();
 });
 
 // ── Cloud IDB：SewingCloudProd / cloud_records ──────────────
@@ -945,6 +1126,7 @@ function goTab(name, el){
   if(name==="styles"){  renderStylesWithCut(); }
   if(name==="records"){ renderRecs(); }
   if(name==="smv"){ populatePpohDates(); renderPpoh(); renderPpohPeriod(); }
+  if(name==="changeover"){ initChangeover(); }
   if(name==="attcmp"){ loadAttIDBData().then(()=>{initAttCmp();renderAttCmp();}); }
 }
 
@@ -1790,10 +1972,11 @@ async function confirmImport(){
   saveToCloudIDB(DB).catch(e=>console.warn("[VRT] cloudIDB save failed:", e));
   pendingFiles=[]; pendingRecs=[]; renderFileList();
   document.getElementById("previewArea").style.display="none";
-  document.getElementById("importMsg").textContent=`✓ 已儲存 ${DB.length} 筆記錄（最新日期：${getMaxDate(DB)}）`;
+  document.getElementById("importMsg").textContent=`✓ ${DB.length.toLocaleString()} ${t("importedRecs")} | ${getMinDate(DB)} ~ ${getMaxDate(DB)}`;
   document.getElementById("importMsg").style.color="#059669";
-  // Folder scan callback (marks files as scanned after confirm)
   if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
+  // ★ AI Auto Analytics — zero user action required
+  setTimeout(()=>runAutoAnalytics(), 150);
 }
 
 function cancelImport(){
@@ -1834,14 +2017,784 @@ function renderDBCard(){
   const secs=[...new Set(DB.map(r=>r.section))].filter(Boolean);
   document.getElementById("dbInfo").innerHTML=`
     <div class="g3" style="margin-bottom:10px">
-      ${[{v:DB.length,l:"總記錄筆數",c:"#f59e0b"},{v:dates.length,l:"記錄天數",c:"#3b82f6"},{v:lines.length,l:"生產線數",c:"#10b981"}]
+      ${[{v:DB.length.toLocaleString(),l:"總記錄筆數",c:"#f59e0b"},{v:dates.length,l:"記錄天數",c:"#3b82f6"},{v:lines.length,l:"生產線數",c:"#10b981"}]
         .map(k=>`<div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e2e6f0">
-          <div style="font-size:24px;font-weight:700;font-family:monospace;color:${k.c}">${k.v}</div>
+          <div style="font-size:22px;font-weight:700;font-family:monospace;color:${k.c}">${k.v}</div>
           <div style="font-size:10px;color:#6b7a9e;margin-top:3px">${k.l}</div></div>`).join("")}
     </div>
-    <div style="font-size:12px;color:#6b7a9e">最近日期：${dates.slice(0,5).join("  ·  ")}</div>
+    <div style="font-size:12px;color:#6b7a9e">日期範圍：${getMinDate(DB)} ~ ${getMaxDate(DB)}</div>
+    <div style="font-size:12px;color:#6b7a9e;margin-top:3px">最近：${dates.slice(0,5).join("  ·  ")}</div>
     <div style="font-size:12px;color:#6b7a9e;margin-top:3px">Sections：${secs.join("  ·  ")}</div>`;
+  renderDbHealth();
 }
+
+function renderDbHealth(){
+  const card=document.getElementById("dbHealthCard");
+  if(!DB.length){ if(card) card.style.display="none"; return; }
+  if(!card) return;
+  card.style.display="block";
+  const dates=[...new Set(DB.map(r=>r.date))].sort();
+  const years=[...new Set(dates.map(d=>d.slice(0,4)))].sort();
+  const sizeBytes=JSON.stringify(DB).length;
+  const sizeMB=(sizeBytes/1024/1024).toFixed(1);
+  document.getElementById("dbHealthInfo").innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px">
+      ${[{v:DB.length.toLocaleString(),l:t('hcRecords'),c:'#f59e0b'},
+         {v:dates.length,l:t('hcDays'),c:'#3b82f6'},
+         {v:years.length,l:t('hcYears'),c:'#8b5cf6'},
+         {v:dates[0]||'-',l:t('hcEarliest'),c:'#059669'},
+         {v:dates[dates.length-1]||'-',l:t('hcLatest'),c:'#059669'},
+         {v:sizeMB+' MB',l:t('hcSize'),c:'#6b7a9e'}
+      ].map(k=>`<div style="background:#f7f8fc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e2e6f0">
+        <div style="font-size:16px;font-weight:700;font-family:monospace;color:${k.c}">${k.v}</div>
+        <div style="font-size:10px;color:#6b7a9e;margin-top:2px">${k.l}</div></div>`).join("")}
+    </div>`;
+  const curYear=new Date().getFullYear();
+  const chk=['2020','2021','2022','2023','2024','2025','2026','2027'].filter(y=>parseInt(y)<=curYear);
+  document.getElementById("dbHealthCoverage").innerHTML=
+    `<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px">${t('hcCoverage')}</div>
+     <div style="display:flex;flex-wrap:wrap;gap:10px">` +
+    chk.map(y=>{
+      const cnt=DB.filter(r=>(r.date||'').startsWith(y)).length;
+      return cnt>0
+        ? `<span style="font-size:12px"><span style="color:#059669">✓</span> ${y} <span style="font-size:10px;color:#6b7a9e">(${cnt.toLocaleString()})</span></span>`
+        : `<span style="font-size:12px"><span style="color:#dc2626">⚠</span> ${y} <span style="color:#dc2626;font-size:10px">Missing</span></span>`;
+    }).join("") + "</div>";
+}
+
+// ══════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE D — AI AUTO ANALYSIS ENGINE
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Auto-calculate factory parameters from historical DB ─────────────────────
+function autoCalcWorkMins(){
+  return 480; // standard; could be learned from shift patterns in future
+}
+function autoCalcSMV(){
+  const r=DB.filter(x=>x.smv&&parseFloat(x.smv)>0.5&&parseFloat(x.smv)<120);
+  if(!r.length){
+    // estimate: SMV = (workers * workMins * eff/100) / pieces
+    const est=DB.filter(x=>x.efficiency>0&&x.workers>0&&x.pieces>100)
+      .slice(0,200)
+      .map(x=>(x.workers*480*(x.efficiency/100))/(x.pieces||1))
+      .filter(v=>v>0.5&&v<80);
+    return est.length? Math.round(est.reduce((a,b)=>a+b,0)/est.length*100)/100:8;
+  }
+  const totP=r.reduce((s,x)=>s+(x.pieces||0),0);
+  return totP>0
+    ?Math.round(r.reduce((s,x)=>s+parseFloat(x.smv)*(x.pieces||0),0)/totP*100)/100
+    :Math.round(r.reduce((s,x)=>s+parseFloat(x.smv),0)/r.length*100)/100;
+}
+function autoCalcOrderSize(){
+  const po={};
+  DB.filter(x=>x.po).forEach(x=>{ po[x.po]=(po[x.po]||0)+(x.pieces||0); });
+  const vals=Object.values(po).filter(v=>v>0);
+  return vals.length?Math.round(vals.reduce((a,b)=>a+b)/vals.length):2500;
+}
+function getAutoSettings(){
+  return {workMins:autoCalcWorkMins(),factorySMV:autoCalcSMV(),orderSize:autoCalcOrderSize()};
+}
+
+// ── getCoSettings() — no more manual inputs, use auto calc ───────────────────
+function getCoSettings(){
+  return getAutoSettings();
+}
+
+// ── Update auto-params display on Changeover tab ─────────────────────────────
+function renderAutoParams(){
+  const s=getAutoSettings();
+  const el=document.getElementById("coAutoParams");
+  if(!el) return;
+  el.innerHTML=[
+    {l:t("coWorkMins"),v:`${s.workMins} min`},
+    {l:t("coAvgSMV"),v:`${s.factorySMV.toFixed(2)} min`},
+    {l:t("coOrderSize"),v:s.orderSize.toLocaleString()+' pcs'},
+  ].map(p=>`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 14px">
+    <div style="font-size:10px;color:#6b7a9e;font-weight:600">${p.l}</div>
+    <div style="font-size:18px;font-weight:700;font-family:monospace;color:#059669">${p.v}</div>
+    <div style="font-size:10px;color:#059669">✓ Auto</div></div>`).join("");
+}
+
+// ── IDB helpers for analytics stores ─────────────────────────────────────────
+async function saveAnalysisHistory(record){
+  try{const db=await openMainIDB();const tx=db.transaction('analysis_history','readwrite');
+    tx.objectStore('analysis_history').put(record);}catch(e){}
+}
+async function getAnalysisHistory(limit=24){
+  try{const db=await openMainIDB();
+    return await new Promise(res=>{
+      const tx=db.transaction('analysis_history','readonly');
+      const q=tx.objectStore('analysis_history').getAll();
+      q.onsuccess=()=>res((q.result||[]).sort((a,b)=>b.analysisDate.localeCompare(a.analysisDate)).slice(0,limit));
+      q.onerror=()=>res([]);
+    });}catch(e){return[];}
+}
+async function saveMonthlyAnalytics(record){
+  try{const db=await openMainIDB();const tx=db.transaction('analytics_monthly','readwrite');
+    tx.objectStore('analytics_monthly').put(record);}catch(e){}
+}
+async function getMonthlyAnalytics(){
+  try{const db=await openMainIDB();
+    return await new Promise(res=>{
+      const tx=db.transaction('analytics_monthly','readonly');
+      const q=tx.objectStore('analytics_monthly').getAll();
+      q.onsuccess=()=>res((q.result||[]).sort((a,b)=>a.yearMonth.localeCompare(b.yearMonth)));
+      q.onerror=()=>res([]);
+    });}catch(e){return[];}
+}
+
+// ── Core analytics computation ────────────────────────────────────────────────
+function generateChangeoverAnalysis(){
+  const {events,workMins,factorySMV,orderSize}=computeChangeovers?computeChangeovers():{events:[],workMins:480,factorySMV:8,orderSize:2500};
+  const totalLostMins=events.reduce((s,e)=>s+e.lostMins,0);
+  const totalLostPcs=events.reduce((s,e)=>s+e.lostPcs,0);
+  const avgRecov=events.length?events.reduce((s,e)=>s+e.recovDays,0)/events.length:0;
+  const lostOrders=orderSize>0?totalLostPcs/orderSize:0;
+  // Worst line
+  const byLine={};
+  events.forEach(e=>{ const l=byLine[e.lineNo]=byLine[e.lineNo]||{cnt:0,mins:0,pcs:0};
+    l.cnt++;l.mins+=e.lostMins;l.pcs+=e.lostPcs; });
+  const lineArr=Object.entries(byLine).map(([k,v])=>({line:k,...v}));
+  lineArr.sort((a,b)=>b.mins-a.mins);
+  const worstLine=lineArr[0]?.line||'-';
+  // Best line (has production but fewest changeovers / lowest loss)
+  const allLines=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))];
+  const bestLine=allLines.filter(l=>!byLine[l]||byLine[l].mins<(byLine[worstLine]?.mins||0)/4)[0]||'-';
+  return {changeoverCount:events.length,lostMinutes:Math.round(totalLostMins),lostPieces:totalLostPcs,
+    lostOrders:Math.round(lostOrders*100)/100,avgRecoveryDays:Math.round(avgRecov*10)/10,
+    worstLine,bestLine,events,orderSize,workMins,factorySMV};
+}
+
+function generateCapacityAnalysis(){
+  const {workMins}=getAutoSettings();
+  const dates=[...new Set(DB.map(r=>r.date))];
+  const totalWorkerDays=DB.reduce((s,r)=>s+(r.workers||0),0);
+  const availMins=totalWorkerDays*workMins;
+  const totalPcs=DB.reduce((s,r)=>s+(r.pieces||0),0);
+  const avgEff=DB.filter(r=>r.efficiency>0).reduce((s,r)=>s+(r.efficiency||0),0)/
+               (DB.filter(r=>r.efficiency>0).length||1);
+  return {availableMinutes:availMins,capacityUtilization:Math.round(avgEff*10)/10,
+    totalPieces:totalPcs,workingDays:dates.length};
+}
+
+// ── Executive summary in 3 languages ─────────────────────────────────────────
+function generateExecutiveSummary(ca, cap){
+  const {changeoverCount,lostMinutes,lostPieces,lostOrders,avgRecoveryDays,worstLine,bestLine}=ca;
+  const {capacityUtilization}=cap;
+  return {
+    zh:`本次分析涵蓋 <b>${DB.length.toLocaleString()}</b> 筆記錄（${getMinDate(DB)} ~ ${getMaxDate(DB)}）。`+
+       `共偵測 <b>${changeoverCount}</b> 次換款事件，`+
+       `估計損失工時 <b>${lostMinutes.toLocaleString()}</b> 分鐘，`+
+       `生產損失 <b>${lostPieces.toLocaleString()}</b> 件，`+
+       `訂單機會損失 <b>${lostOrders}</b> 張。`+
+       (worstLine!=='-'?`影響最大線別：<b>${worstLine}</b>。`:'')+
+       (bestLine!=='-'&&bestLine!==worstLine?`表現最佳線別：<b>${bestLine}</b>。`:'')+
+       `平均恢復天數：<b>${avgRecoveryDays}</b> 天，`+
+       `整體產能利用率：<b>${capacityUtilization}%</b>。`+
+       (changeoverCount>5?`<br><span style="color:#d97706">⚡ 建議：減少 ${worstLine} 的頻繁換款，有助於降低產能損失。</span>`:''),
+    en:`Analysis covers <b>${DB.length.toLocaleString()}</b> records (${getMinDate(DB)} ~ ${getMaxDate(DB)}). `+
+       `<b>${changeoverCount}</b> style changeovers detected. `+
+       `Estimated capacity loss: <b>${lostMinutes.toLocaleString()}</b> minutes. `+
+       `Production loss: <b>${lostPieces.toLocaleString()}</b> pieces. `+
+       `Order opportunity loss: <b>${lostOrders}</b> orders. `+
+       (worstLine!=='-'?`Highest impact line: <b>${worstLine}</b>. `:'')+
+       (bestLine!=='-'&&bestLine!==worstLine?`Best performing line: <b>${bestLine}</b>. `:'')+
+       `Average recovery: <b>${avgRecoveryDays}</b> days. `+
+       `Capacity utilization: <b>${capacityUtilization}%</b>.`+
+       (changeoverCount>5?`<br><span style="color:#d97706">⚡ Recommendation: Reduce frequent style changes on ${worstLine} to minimize capacity loss.</span>`:''),
+    km:`ការវិភាគគ្របដណ្ដប់ <b>${DB.length.toLocaleString()}</b> កំណត់ត្រា (${getMinDate(DB)} ~ ${getMaxDate(DB)})។ `+
+       `រកឃើញការប្តូររចនាបថ <b>${changeoverCount}</b> លើក។ `+
+       `ប្រាក់កន្លែងការផ្ដល់ <b>${lostMinutes.toLocaleString()}</b> នាទី។ `+
+       `ការបាត់បង់ផលិតកម្ម <b>${lostPieces.toLocaleString()}</b> ដុំ។ `+
+       `ការបាត់បង់ការបញ្ជាទិញ <b>${lostOrders}</b> ។ `+
+       `ការស្ដារជាមធ្យម <b>${avgRecoveryDays}</b> ថ្ងៃ។`
+  };
+}
+
+// ── Month-over-month comparison ───────────────────────────────────────────────
+async function generateMomComparison(ca){
+  const months=await getMonthlyAnalytics();
+  if(months.length<2) return null;
+  const cur=months[months.length-1];
+  const prev=months[months.length-2];
+  const pct=(a,b)=>b>0?Math.round((a-b)/b*100):0;
+  return {
+    changeovers:{cur:cur.changeoverCount,prev:prev.changeoverCount,pct:pct(cur.changeoverCount,prev.changeoverCount)},
+    lostMins:{cur:cur.lostMinutes,prev:prev.lostMinutes,pct:pct(cur.lostMinutes,prev.lostMinutes)},
+    lostPcs:{cur:cur.lostPieces,prev:prev.lostPieces,pct:pct(cur.lostPieces,prev.lostPieces)},
+    recovery:{cur:cur.avgRecoveryDays,prev:prev.avgRecoveryDays,pct:pct(cur.avgRecoveryDays,prev.avgRecoveryDays)},
+    curMonth:cur.yearMonth, prevMonth:prev.yearMonth
+  };
+}
+
+// ── Main: runAutoAnalytics() ──────────────────────────────────────────────────
+async function runAutoAnalytics(){
+  if(!DB.length) return;
+  const s=getAutoSettings();
+  // 1. Compute analytics
+  const ca=generateChangeoverAnalysis();
+  const cap=generateCapacityAnalysis();
+  const summaries=generateExecutiveSummary(ca,cap);
+  const now=new Date().toISOString();
+  const batchId='B'+Date.now();
+
+  // 2. Save to analysis_history
+  await saveAnalysisHistory({
+    analysisDate:now, importBatchId:batchId, recordCount:DB.length,
+    changeoverCount:ca.changeoverCount, lostMinutes:ca.lostMinutes,
+    lostPieces:ca.lostPieces, lostOrders:ca.lostOrders,
+    avgRecoveryDays:ca.avgRecoveryDays, worstLine:ca.worstLine, bestLine:ca.bestLine,
+    capacityUtilization:cap.capacityUtilization,
+    executiveSummary:summaries, workMins:s.workMins, factorySMV:s.factorySMV, orderSize:s.orderSize
+  });
+
+  // 3. Update analytics_monthly (aggregate by month)
+  const byMonth={};
+  ca.events.forEach(e=>{
+    const m=(e.date||'').slice(0,7);
+    const rec=byMonth[m]=byMonth[m]||{yearMonth:m,changeoverCount:0,lostMinutes:0,lostPieces:0,recovDays:0,cnt:0};
+    rec.changeoverCount++;rec.lostMinutes+=e.lostMins;rec.lostPieces+=e.lostPcs;rec.recovDays+=e.recovDays;rec.cnt++;
+  });
+  for(const [m,v] of Object.entries(byMonth)){
+    await saveMonthlyAnalytics({yearMonth:m,changeoverCount:v.changeoverCount,
+      lostMinutes:Math.round(v.lostMinutes),lostPieces:v.lostPieces,
+      lostOrders:Math.round(v.lostPieces/s.orderSize*100)/100,
+      avgRecoveryDays:v.cnt?Math.round(v.recovDays/v.cnt*10)/10:0,
+      capacityUtilization:cap.capacityUtilization});
+  }
+
+  // 4. MoM comparison
+  const mom=await generateMomComparison(ca);
+
+  // 5. Render AI Summary card
+  window._lastSummaries=summaries; window._lastCa=ca; window._lastCap=cap;
+  renderAiSummary(ca, cap, summaries, mom, batchId);
+  renderAutoParams();
+}
+
+// ── Render AI Executive Summary card ─────────────────────────────────────────
+function renderAiSummary(ca, cap, summaries, mom, batchId){
+  const card=document.getElementById("aiSummaryCard");
+  const badge=document.getElementById("aiSummaryBadge");
+  if(!card) return;
+  card.style.display="block";
+  if(badge) badge.textContent=`${t("aiAutoGenerated")} ${new Date().toLocaleTimeString()}`;
+
+  // KPI strip
+  document.getElementById("aiKpiStrip").innerHTML=[
+    {v:DB.length.toLocaleString(),l:t("hcRecords"),c:"#f59e0b"},
+    {v:ca.changeoverCount,l:t("coChangeovers"),c:"#dc2626"},
+    {v:ca.lostMinutes.toLocaleString(),l:t("coLostMins"),c:"#dc2626"},
+    {v:ca.lostPieces.toLocaleString(),l:t("coLostPcs"),c:"#7c3aed"},
+    {v:ca.lostOrders,l:t("coLostOrders"),c:"#be123c"},
+    {v:ca.avgRecoveryDays,l:t("coRecovery"),c:"#0369a1"},
+    {v:ca.worstLine,l:t("aiWorstLine"),c:"#dc2626"},
+    {v:ca.bestLine,l:t("aiBestLine"),c:"#059669"},
+    {v:cap.capacityUtilization+'%',l:t("aiCapUtil"),c:"#0369a1"},
+  ].map(k=>`<div style="background:#fff;border:1.5px solid #e2e6f0;border-radius:8px;padding:10px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+    <div style="font-size:18px;font-weight:800;font-family:monospace;color:${k.c}">${k.v}</div>
+    <div style="font-size:10px;color:#6b7a9e;margin-top:2px;font-weight:600">${k.l}</div></div>`).join("");
+
+  // Summary text (current language)
+  document.getElementById("aiSummaryText").innerHTML=summaries[_lang]||summaries.en;
+
+  // MoM row
+  const momEl=document.getElementById("aiMomRow");
+  if(mom&&momEl){
+    const arrow=(p)=>p<0?`▼ ${Math.abs(p)}%`:p>0?`▲ ${p}%`:`→ 0%`;
+    const color=(p,invert=false)=>((p<0)!==invert)?'#059669':'#dc2626';
+    momEl.innerHTML=`<div style="font-size:11px;color:#6b7a9e;font-weight:700;width:100%;margin-bottom:4px">
+      ${t("aiMom")}: ${mom.prevMonth} → ${mom.curMonth}</div>`+
+    [
+      {l:t("coChangeovers"),p:mom.changeovers.pct,inv:true},
+      {l:t("coLostMins"),p:mom.lostMins.pct,inv:true},
+      {l:t("coLostPcs"),p:mom.lostPcs.pct,inv:true},
+      {l:t("aiRecovSpeed"),p:-mom.recovery.pct,inv:false},
+    ].map(m=>`<div style="background:#f7f8fc;border:1px solid #e2e6f0;border-radius:8px;padding:8px 14px;text-align:center">
+      <div style="font-size:16px;font-weight:700;color:${color(m.p,m.inv)}">${arrow(m.p)}</div>
+      <div style="font-size:10px;color:#6b7a9e;margin-top:2px">${m.l}</div></div>`).join("");
+  }
+
+  // Alert
+  const alertEl=document.getElementById("aiAlertBanner");
+  if(alertEl&&ca.changeoverCount>5){
+    alertEl.innerHTML=`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px">
+      ⚡ <b>${t("aiRecommendation")}:</b> ${t("aiReduceChangeover")} ${ca.worstLine}</div>`;
+  } else if(alertEl){ alertEl.innerHTML=""; }
+}
+
+
+// PHASE B — CHANGEOVER ANALYSIS MODULE
+// ══════════════════════════════════════════════════════════════
+
+function initChangeover(){
+  const ys=document.getElementById("coYear");
+  const ls=document.getElementById("coLine");
+  const ss=document.getElementById("coSec");
+  const allYears=[...new Set(DB.map(r=>r.date.slice(0,4)))].sort().reverse();
+  const allLines=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const allSecs=[...new Set(DB.map(r=>r.section).filter(Boolean))].sort();
+  const pY=ys.value, pL=ls.value, pS=ss.value;
+  ys.innerHTML=`<option value="">${t('coAllYears')}</option>`+allYears.map(y=>`<option value="${y}"${y===pY?" selected":""}>${y}</option>`).join("");
+  ls.innerHTML=`<option value="">${t('coAllLines')}</option>`+allLines.map(l=>`<option value="${l}"${l===pL?" selected":""}>${l}</option>`).join("");
+  ss.innerHTML=`<option value="">${t('coAll')}</option>`+allSecs.map(s=>`<option value="${s}"${s===pS?" selected":""}>${s}</option>`).join("");
+  // Restore settings from localStorage
+  const wm=localStorage.getItem('vrt_workMins')||'480';
+  const as=localStorage.getItem('vrt_avgSMV')||'8';
+  const os=localStorage.getItem('vrt_orderSize')||'2500';
+  document.getElementById("coWorkMins").value=wm;
+  document.getElementById("coAvgSMV").value=as;
+  document.getElementById("coOrderSize").value=os;
+  renderChangeover();
+}
+
+function updateCoMonths(){
+  const yr=document.getElementById("coYear").value;
+  const ms=document.getElementById("coMonth");
+  if(!yr){ ms.innerHTML='<option value="">All Months</option>'; return; }
+  const allMonths=[...new Set(DB.filter(r=>r.date.startsWith(yr)).map(r=>r.date.slice(0,7)))].sort().reverse();
+  ms.innerHTML='<option value="">All Months</option>'+allMonths.map(m=>`<option value="${m}">${m.slice(5)}月</option>`).join("");
+  renderChangeover();
+}
+
+function getCoSettings(){
+  return {
+    workMins:parseInt(document.getElementById("coWorkMins")?.value||480),
+    factorySMV:parseFloat(document.getElementById("coAvgSMV")?.value||8),
+    orderSize:parseInt(document.getElementById("coOrderSize")?.value||2500)
+  };
+}
+
+function computeChangeovers(){
+  const yr=document.getElementById("coYear")?.value||"";
+  const mo=document.getElementById("coMonth")?.value||"";
+  const ln=document.getElementById("coLine")?.value||"";
+  const sc=document.getElementById("coSec")?.value||"";
+  const {workMins,factorySMV,orderSize}=getCoSettings();
+
+  let recs=[...DB];
+  if(yr) recs=recs.filter(r=>(r.date||"").startsWith(yr));
+  if(mo) recs=recs.filter(r=>(r.date||"").startsWith(mo));
+  if(ln) recs=recs.filter(r=>r.lineNo===ln);
+  if(sc) recs=recs.filter(r=>r.section===sc);
+
+  // Group by lineNo, sort by date
+  const byLine={};
+  recs.forEach(r=>{ (byLine[r.lineNo]=byLine[r.lineNo]||[]).push(r); });
+
+  const events=[];
+
+  Object.entries(byLine).forEach(([lineNo,lineRecs])=>{
+    const byDate={};
+    lineRecs.forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
+    const dates=Object.keys(byDate).sort();
+
+    for(let i=1;i<dates.length;i++){
+      const pd=dates[i-1], cd=dates[i];
+      const pStyles=[...new Set((byDate[pd]||[]).map(r=>r.styleNo).filter(Boolean))];
+      const cStyles=[...new Set((byDate[cd]||[]).map(r=>r.styleNo).filter(Boolean))];
+      const pStyle=pStyles[0]||""; const cStyle=cStyles[0]||"";
+      if(!pStyle||!cStyle||pStyle===cStyle) continue;
+
+      // Baseline: last 7 working days before changeover
+      const prev7=dates.slice(Math.max(0,i-7),i);
+      const prevRecs=prev7.flatMap(d=>byDate[d]||[]);
+      const baselineEff=prevRecs.length
+        ?prevRecs.reduce((s,r)=>s+(r.efficiency||0),0)/prevRecs.length:0;
+
+      const crecs=byDate[cd]||[];
+      const workers=crecs.reduce((m,r)=>Math.max(m,r.workers||0),0);
+      const section=crecs[0]?.section||"";
+      const actualEff=crecs.length?crecs.reduce((s,r)=>s+(r.efficiency||0),0)/crecs.length:0;
+      const effLoss=Math.max(0,baselineEff-actualEff);
+      const lostMins=workers*workMins*(effLoss/100);
+
+      // Weighted SMV
+      const totPcs=crecs.reduce((s,r)=>s+(r.pieces||0),0);
+      const wSMV=totPcs>0
+        ?crecs.reduce((s,r)=>s+(parseFloat(r.smv||factorySMV)||factorySMV)*(r.pieces||0),0)/totPcs
+        :factorySMV;
+      const lostPcs=wSMV>0?Math.round(lostMins/wSMV):0;
+
+      // Recovery: days until eff >= 95% of baseline
+      let recovDays=0;
+      for(let j=i+1;j<dates.length&&recovDays===0;j++){
+        const rr=byDate[dates[j]]||[];
+        const rEff=rr.length?rr.reduce((s,r)=>s+(r.efficiency||0),0)/rr.length:0;
+        if(rEff>=baselineEff*0.95) recovDays=j-i;
+      }
+
+      events.push({date:cd,lineNo,section,prevStyle:pStyle,currStyle:cStyle,
+        workers,baselineEff:Math.round(baselineEff),actualEff:Math.round(actualEff),
+        effLoss:Math.round(effLoss),lostMins:Math.round(lostMins),
+        lostPcs,wSMV:Math.round(wSMV*100)/100,recovDays});
+    }
+  });
+
+  return {events,workMins,factorySMV,orderSize};
+}
+
+function renderChangeover(){
+  const {events,workMins,factorySMV,orderSize}=computeChangeovers();
+  const totalLostMins=events.reduce((s,e)=>s+e.lostMins,0);
+  const totalLostPcs=events.reduce((s,e)=>s+e.lostPcs,0);
+  const avgRecov=events.length?events.reduce((s,e)=>s+e.recovDays,0)/events.length:0;
+  const lostOrders=orderSize>0?(totalLostPcs/orderSize):0;
+
+  // KPI Cards
+  document.getElementById("coKpiRow").innerHTML=[
+    {v:events.length,l:t("coChangeovers"),c:"#f59e0b",u:""},
+    {v:Math.round(totalLostMins).toLocaleString(),l:t("coLostMins"),c:"#dc2626",u:"min"},
+    {v:totalLostPcs.toLocaleString(),l:t("coLostPcs"),c:"#7c3aed",u:"pcs"},
+    {v:avgRecov.toFixed(1),l:t("coRecovery"),c:"#0369a1",u:_lang==="en"?"days":"天"},
+    {v:lostOrders.toFixed(1),l:t("coLostOrders"),c:"#be123c",u:_lang==="en"?"orders":"張"},
+  ].map(k=>`<div style="background:#fff;border-radius:10px;padding:14px;text-align:center;border:2px solid #e2e6f0;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+    <div style="font-size:28px;font-weight:800;font-family:monospace;color:${k.c}">${k.v}<span style="font-size:14px;color:#9ca3af;font-weight:400"> ${k.u}</span></div>
+    <div style="font-size:11px;color:#6b7a9e;margin-top:4px;font-weight:600">${k.l}</div></div>`).join("");
+
+  // Alerts
+  const alerts=[];
+  const byLine2={};
+  events.forEach(e=>{
+    (byLine2[e.lineNo]=byLine2[e.lineNo]||{cnt:0,totalMins:0,totalRecov:0,effVals:[],section:e.section});
+    byLine2[e.lineNo].cnt++;
+    byLine2[e.lineNo].totalMins+=e.lostMins;
+    byLine2[e.lineNo].totalRecov+=e.recovDays;
+    byLine2[e.lineNo].effVals.push(e.actualEff);
+  });
+  Object.entries(byLine2).forEach(([ln,d])=>{
+    const avgEff=d.effVals.reduce((s,v)=>s+v,0)/(d.effVals.length||1);
+    if(d.cnt>3&&avgEff<30) alerts.push(`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px">⚠️ <b>${ln}</b> — Frequent Changeovers Detected (${d.cnt}x, avg eff ${Math.round(avgEff)}%) — Potential Capacity Loss</div>`);
+    const avgRecov2=d.totalRecov/(d.cnt||1);
+    if(avgRecov2>2) alerts.push(`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px">⚠️ <b>${ln}</b> — Long Learning Curve (avg ${avgRecov2.toFixed(1)} days recovery) — Check IE Balancing and PPC Planning</div>`);
+  });
+  document.getElementById("coAlerts").innerHTML=alerts.join("");
+
+  // Worst Lines table
+  const lineStats=Object.entries(byLine2).map(([ln,d])=>({
+    ln,section:d.section,cnt:d.cnt,totalMins:d.totalMins,
+    totalPcs:events.filter(e=>e.lineNo===ln).reduce((s,e)=>s+e.lostPcs,0),
+    avgRecov:d.totalRecov/(d.cnt||1)
+  })).sort((a,b)=>b.totalMins-a.totalMins);
+  document.getElementById("coWorstBody").innerHTML=lineStats.map(l=>`<tr>
+    <td class="mono" style="font-weight:600">${l.ln}</td>
+    <td>${l.section}</td>
+    <td class="mono" style="color:#f59e0b;font-weight:700">${l.cnt}</td>
+    <td class="mono" style="color:#dc2626">${Math.round(l.totalMins).toLocaleString()}</td>
+    <td class="mono" style="color:#7c3aed">${l.totalPcs.toLocaleString()}</td>
+    <td class="mono">${l.avgRecov.toFixed(1)}</td>
+    <td class="mono" style="color:#be123c">${orderSize>0?(l.totalPcs/orderSize).toFixed(1):"-"}</td>
+  </tr>`).join("");
+
+  // Monthly Summary
+  const byMonth={};
+  events.forEach(e=>{
+    const mo=(e.date||"").slice(0,7);
+    const m=byMonth[mo]=byMonth[mo]||{cnt:0,mins:0,pcs:0,recov:0};
+    m.cnt++; m.mins+=e.lostMins; m.pcs+=e.lostPcs; m.recov+=e.recovDays;
+  });
+  document.getElementById("coMonthBody").innerHTML=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([mo,m])=>`<tr>
+    <td class="mono" style="font-weight:600">${mo}</td>
+    <td class="mono" style="color:#f59e0b;font-weight:700">${m.cnt}</td>
+    <td class="mono" style="color:#dc2626">${Math.round(m.mins).toLocaleString()}</td>
+    <td class="mono" style="color:#7c3aed">${m.pcs.toLocaleString()}</td>
+    <td class="mono">${m.cnt>0?(m.recov/m.cnt).toFixed(1):"-"}</td>
+    <td class="mono" style="color:#be123c">${orderSize>0?(m.pcs/orderSize).toFixed(1):"-"}</td>
+  </tr>`).join("");
+
+  // Heat Map
+  const allMonths=[...new Set(events.map(e=>(e.date||"").slice(0,7)))].sort();
+  const allLines=[...new Set(events.map(e=>e.lineNo))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  if(allMonths.length&&allLines.length){
+    const minsMax=Math.max(...events.map(e=>e.lostMins),1);
+    const getCellColor=v=>{
+      if(v===0) return "#f0fdf4";
+      const ratio=v/minsMax;
+      if(ratio<0.33) return "#fef9c3";
+      if(ratio<0.66) return "#fed7aa";
+      return "#fecaca";
+    };
+    let html=`<table style="border-collapse:collapse;font-size:11px"><thead><tr><th style="padding:4px 8px;border:1px solid #e2e6f0;background:#f7f8fc">Line↓ Month→</th>`;
+    allMonths.forEach(m=>{ html+=`<th style="padding:4px 6px;border:1px solid #e2e6f0;background:#f7f8fc;white-space:nowrap">${m.slice(5)}</th>`; });
+    html+="</tr></thead><tbody>";
+    allLines.forEach(ln=>{
+      html+=`<tr><td style="padding:4px 8px;border:1px solid #e2e6f0;font-weight:700">${ln}</td>`;
+      allMonths.forEach(m=>{
+        const val=events.filter(e=>e.lineNo===ln&&(e.date||"").startsWith(m)).reduce((s,e)=>s+e.lostMins,0);
+        const bg=getCellColor(val);
+        html+=`<td style="padding:4px 6px;border:1px solid #e2e6f0;background:${bg};text-align:center;font-family:monospace">${val>0?Math.round(val):""}</td>`;
+      });
+      html+="</tr>";
+    });
+    html+="</tbody></table>";
+    document.getElementById("coHeatMap").innerHTML=html;
+  } else {
+    document.getElementById("coHeatMap").innerHTML='<div style="padding:20px;text-align:center;color:#6b7a9e;font-size:13px">No changeover data for the selected period</div>';
+  }
+
+  // Detail table
+  document.getElementById("coDetailBody").innerHTML=events.sort((a,b)=>b.lostMins-a.lostMins).map(e=>`<tr>
+    <td class="mono">${e.date}</td>
+    <td class="mono" style="font-weight:600">${e.lineNo}</td>
+    <td>${e.section}</td>
+    <td class="mono" style="color:#6b7a9e">${e.prevStyle}</td>
+    <td class="mono" style="color:#1d4ed8;font-weight:600">${e.currStyle}</td>
+    <td class="mono">${e.workers||"-"}</td>
+    <td class="mono">${e.baselineEff}%</td>
+    <td class="mono">${e.actualEff}%</td>
+    <td class="mono" style="color:#dc2626">${e.effLoss}%</td>
+    <td class="mono" style="color:#dc2626;font-weight:600">${Math.round(e.lostMins).toLocaleString()}</td>
+    <td class="mono" style="color:#7c3aed">${e.lostPcs.toLocaleString()}</td>
+    <td class="mono">${e.recovDays||"-"}</td>
+  </tr>`).join("");
+}
+
+function exportChangeoverExcel(){
+  const {events,orderSize}=computeChangeovers();
+  if(!events.length){ alert("No changeover data to export"); return; }
+  const ws_data=[
+    ["Date","Line","Section","Prev Style","New Style","Workers","Baseline Eff%","Actual Eff%","Eff Loss%","Lost Min","Lost Pcs","Recovery Days","Lost Orders"],
+    ...events.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>[
+      e.date,e.lineNo,e.section,e.prevStyle,e.currStyle,e.workers,
+      e.baselineEff,e.actualEff,e.effLoss,Math.round(e.lostMins),
+      e.lostPcs,e.recovDays,orderSize>0?+(e.lostPcs/orderSize).toFixed(2):0
+    ])
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(ws_data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Changeover Analysis");
+  XLSX.writeFile(wb,"Changeover_Analysis_"+new Date().toISOString().slice(0,10)+".xlsx");
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// i18n — Bilingual Support (中文 / English)
+// ════════════════════════════════════════════════════════════════════════════
+let _lang = localStorage.getItem('vrt_lang') || 'zh';
+
+const I18N = {
+  zh:{
+    sysTitle:'車縫生產分析系統', sysSub:'車縫生產 · v6.1',
+    hRecs:'總記錄', hDays:'天數', hLines:'線別', hStorage:'儲存',
+    // Tabs
+    tabUpload:'📥 上傳報表', tabDaily:'📊 每日報告', tabWeekly:'📅 週統計',
+    tabMonthly:'📆 月年趨勢', tabEff:'📈 效率報表', tabValidate:'🔍 數據比對',
+    tabStyles:'🎯 款式追蹤', tabRecords:'📋 所有記錄', tabSmv:'📊 產能分析',
+    tabChangeover:'🔄 換款分析', tabAiSummary:'📊 AI 總結',
+    // Upload
+    uploadTitle:'📧 直接拖郵件或 Excel 進來', parsePreview:'解析預覽',
+    btnParse:'🔍 解析預覽', btnConfirm:'✓ 確認存入', btnCancel:'取消',
+    dbStatus:'資料庫狀況', btnLink:'📎 連結本機資料檔案',
+    btnClear:'🗑 清除所有資料', btnBackup:'💾 備份資料', btnRestore:'📥 還原備份',
+    dbHealthTitle:'🗄 資料庫健康', dbHealthRefresh:'↻ 重整',
+    folderScan:'📂 掃描 Outlook 下載資料夾', btnAddFolder:'➕ 新增資料夾',
+    btnScan:'🔍 立即掃描', autoScan:'開啟頁面時自動掃描', btnResetScan:'🗑 重置掃描',
+    excelFmt:'Excel 格式說明', importedRecs:'筆記錄已儲存',
+    // AI Summary
+    aiSummaryTitle:'📊 AI 執行摘要', aiAutoGenerated:'✓ 自動生成',
+    aiWorstLine:'最差線別', aiBestLine:'最佳線別', aiCapUtil:'產能利用率',
+    aiMom:'月度對比', aiRecovSpeed:'恢復速度',
+    aiRecommendation:'建議', aiReduceChangeover:'建議減少頻繁換款於',
+    // DB Health
+    hcRecords:'記錄筆數', hcDays:'記錄天數', hcYears:'年份數',
+    hcEarliest:'最早日期', hcLatest:'最新日期', hcSize:'資料大小',
+    hcCoverage:'📅 歷史資料覆蓋',
+    // Daily
+    dailyDate:'日期', dailySection:'Section', dailyLineTable:'線別彙整表',
+    lineNo:'線別', workers:'人數', totalPcs:'總件數', eff:'效率',
+    target45:'目標45%', pcsPerPerson:'人均件數', cartons:'箱數', styles:'款式數',
+    btnDeleteDay:'🗑 刪除此日', btnExportExcel:'⬇ 匯出 Excel',
+    // Weekly
+    weeklyLines:'本週各線別', weeklyDaily:'本週每日明細',
+    days:'天數', totalPersons:'合計人數', avgEff:'平均效率', date:'日期',
+    // Changeover
+    coSettings:'自動工廠參數', coAutoCalc:'系統自動計算',
+    coWorkMins:'工作分鐘/天', coAvgSMV:'工廠平均SMV', coOrderSize:'平均訂單量',
+    coChangeovers:'換款次數', coLostMins:'損失工時(分)', coLostPcs:'損失件數',
+    coRecovery:'平均恢復天數', coLostOrders:'損失訂單',
+    coWorstLines:'📊 換款損失最高線別', coMonthlySummary:'📅 每月換款統計',
+    coHeatMap:'🌡️ 損失工時熱圖 — 月份 × 線別', coDetailTitle:'📋 換款明細',
+    coLine:'線別', coSection:'部門', coPrevStyle:'前款號', coNewStyle:'新款號',
+    coBaselineEff:'基準效率%', coActualEff:'實際效率%', coEffLoss:'效率損失%',
+    coLostMin:'損失分鐘', coRecovDays:'恢復天數', coLostOrders2:'損失訂單',
+    coFilterYear:'年份', coFilterMonth:'月份', coFilterLine:'線別', coFilterSec:'部門',
+    coAllYears:'所有年份', coAllMonths:'所有月份', coAllLines:'所有線別', coAll:'全部',
+    // Styles/Records
+    stylesTitle:'款式/PO 追蹤', allYears:'所有年份', allMonths:'所有月份',
+    allSections:'所有Section', allLines:'所有線別', allColors:'所有顏色', allPO:'所有PO',
+    recordsTitle:'所有記錄', allDates:'所有日期',
+    // SMV
+    smvTitle:'正常班 vs 加班 產能分析', normH:'正常班h', otH:'加班h',
+    thisWeek:'本週', thisMonth:'本月', custom:'自選',
+  },
+  en:{
+    sysTitle:'Sewing Production Intelligence', sysSub:'SEWING · v6.1',
+    hRecs:'Records', hDays:'Days', hLines:'Lines', hStorage:'Storage',
+    tabUpload:'📥 Upload', tabDaily:'📊 Daily', tabWeekly:'📅 Weekly',
+    tabMonthly:'📆 Monthly', tabEff:'📈 Efficiency', tabValidate:'🔍 Validation',
+    tabStyles:'🎯 Styles', tabRecords:'📋 Records', tabSmv:'📊 Productivity',
+    tabChangeover:'🔄 Changeover', tabAiSummary:'📊 AI Summary',
+    uploadTitle:'📧 Drop Mail or Excel Here', parsePreview:'Parse Preview',
+    btnParse:'🔍 Parse & Preview', btnConfirm:'✓ Confirm Import', btnCancel:'Cancel',
+    dbStatus:'Database Status', btnLink:'📎 Link Local File',
+    btnClear:'🗑 Clear All Data', btnBackup:'💾 Backup', btnRestore:'📥 Restore',
+    dbHealthTitle:'🗄 Database Health', dbHealthRefresh:'↻ Refresh',
+    folderScan:'📂 Scan Outlook Download Folder', btnAddFolder:'➕ Add Folder',
+    btnScan:'🔍 Scan Now', autoScan:'Auto scan on load', btnResetScan:'🗑 Reset Log',
+    excelFmt:'Excel Format Guide', importedRecs:'records saved',
+    aiSummaryTitle:'📊 AI Executive Summary', aiAutoGenerated:'✓ Auto-Generated',
+    aiWorstLine:'Worst Line', aiBestLine:'Best Line', aiCapUtil:'Capacity Util.',
+    aiMom:'Month-over-Month', aiRecovSpeed:'Recovery Speed',
+    aiRecommendation:'Recommendation', aiReduceChangeover:'Reduce changeovers on',
+    hcRecords:'Records', hcDays:'Days', hcYears:'Years',
+    hcEarliest:'Earliest Date', hcLatest:'Latest Date', hcSize:'Database Size',
+    hcCoverage:'📅 Historical Coverage',
+    dailyDate:'Date', dailySection:'Section', dailyLineTable:'Line Summary',
+    lineNo:'Line', workers:'Workers', totalPcs:'Total Pcs', eff:'Eff%',
+    target45:'Target 45%', pcsPerPerson:'Pcs/Person', cartons:'Cartons', styles:'Styles',
+    btnDeleteDay:'🗑 Delete Day', btnExportExcel:'⬇ Export Excel',
+    weeklyLines:'This Week by Line', weeklyDaily:'Daily Detail',
+    days:'Days', totalPersons:'Total Workers', avgEff:'Avg Eff%', date:'Date',
+    coSettings:'Auto Factory Parameters', coAutoCalc:'System Auto-Calculated',
+    coWorkMins:'Working Min/Day', coAvgSMV:'Factory Avg SMV', coOrderSize:'Avg Order Size',
+    coChangeovers:'Changeovers', coLostMins:'Lost Minutes', coLostPcs:'Lost Pieces',
+    coRecovery:'Avg Recovery', coLostOrders:'Lost Orders',
+    coWorstLines:'📊 Worst Changeover Lines', coMonthlySummary:'📅 Monthly Summary',
+    coHeatMap:'🌡️ Lost Minutes Heat Map — Month × Line', coDetailTitle:'📋 Changeover Details',
+    coLine:'Line', coSection:'Section', coPrevStyle:'Prev Style', coNewStyle:'New Style',
+    coBaselineEff:'Baseline Eff%', coActualEff:'Actual Eff%', coEffLoss:'Eff Loss%',
+    coLostMin:'Lost Min', coRecovDays:'Recovery Days', coLostOrders2:'Lost Orders',
+    coFilterYear:'Year', coFilterMonth:'Month', coFilterLine:'Line', coFilterSec:'Section',
+    coAllYears:'All Years', coAllMonths:'All Months', coAllLines:'All Lines', coAll:'All',
+    stylesTitle:'Style / PO Tracking', allYears:'All Years', allMonths:'All Months',
+    allSections:'All Sections', allLines:'All Lines', allColors:'All Colors', allPO:'All PO',
+    recordsTitle:'All Records', allDates:'All Dates',
+    smvTitle:'Normal vs OT Productivity', normH:'Normal h', otH:'OT h',
+    thisWeek:'This Week', thisMonth:'This Month', custom:'Custom',
+  },
+  km:{
+    sysTitle:'ប្រព័ន្ធវិភាគផលិតកម្ម縫', sysSub:'ការផលិត · v6.1',
+    hRecs:'កំណត់ត្រា', hDays:'ថ្ងៃ', hLines:'ខ្សែ', hStorage:'ទំហំ',
+    tabUpload:'📥 បញ្ចូលឯកសារ', tabDaily:'📊 របាយការណ៍ប្រចាំថ្ងៃ',
+    tabWeekly:'📅 ស្ថិតិប្រចាំសប្ដាហ៍', tabMonthly:'📆 និន្នាការ',
+    tabEff:'📈 ប្រសិទ្ធភាព', tabValidate:'🔍 ផ្ទៀងផ្ទាត់',
+    tabStyles:'🎯 តាមដានរចនាបថ', tabRecords:'📋 កំណត់ត្រាទាំងអស់',
+    tabSmv:'📊 ការវិភាគផ្ទៃការ', tabChangeover:'🔄 ការប្ដូររចនាបថ',
+    tabAiSummary:'📊 សង្ខេប AI',
+    uploadTitle:'📧 ទម្លាក់ Mail ឬ Excel នៅទីនេះ',
+    parsePreview:'មើលជាមុន', btnParse:'🔍 ត្រួតពិនិត្យ',
+    btnConfirm:'✓ បញ្ជាក់ការបញ្ចូល', btnCancel:'បោះបង់',
+    dbStatus:'ស្ថានភាពមូលដ្ឋានទិន្នន័យ', btnLink:'📎 ភ្ជាប់ឯកសារ',
+    btnClear:'🗑 លុបទិន្នន័យទាំងអស់', btnBackup:'💾 បម្រុងទុក', btnRestore:'📥 ស្ដារ',
+    dbHealthTitle:'🗄 សុខភាព DB', dbHealthRefresh:'↻ ធ្វើបច្ចុប្បន្នភាព',
+    folderScan:'📂 ស្កេនថតឯកសារ', btnAddFolder:'➕ បន្ថែមថត',
+    btnScan:'🔍 ស្កេន', autoScan:'ស្កេនដោយស្វ័យប្រវត្តិ', btnResetScan:'🗑 កំណត់ឡើងវិញ',
+    excelFmt:'ការណែនាំអំពីទម្រង់', importedRecs:'កំណត់ត្រាបានរក្សាទុក',
+    aiSummaryTitle:'📊 សង្ខេប AI ប្រតិបត្តិ', aiAutoGenerated:'✓ បង្កើតដោយស្វ័យប្រវត្តិ',
+    aiWorstLine:'ខ្សែអ្នកខ្សោយបំផុត', aiBestLine:'ខ្សែអ្នកល្អបំផុត', aiCapUtil:'ការប្រើប្រាស់ SM',
+    aiMom:'ប្រៀបធៀបខែ', aiRecovSpeed:'ល្បឿនស្ដារ',
+    aiRecommendation:'អនុសាសន៍', aiReduceChangeover:'កាត់បន្ថយការប្ដូររចនាបថនៅ',
+    hcRecords:'កំណត់ត្រា', hcDays:'ថ្ងៃ', hcYears:'ឆ្នាំ',
+    hcEarliest:'ថ្ងៃចាស់ជាងគេ', hcLatest:'ថ្ងៃថ្មីជាងគេ', hcSize:'ទំហំ DB',
+    hcCoverage:'📅 ការគ្របដណ្ដប់ប្រវត្តិ',
+    dailyDate:'កាលបរិច្ឆេទ', dailySection:'ផ្នែក', dailyLineTable:'សង្ខេបខ្សែ',
+    lineNo:'ខ្សែ', workers:'កម្មករ', totalPcs:'ដុំសរុប', eff:'ប្រសិទ្ធភាព%',
+    target45:'គោលដៅ45%', pcsPerPerson:'ដុំ/នាក់', cartons:'ប្រអប់', styles:'រចនាបថ',
+    btnDeleteDay:'🗑 លុបថ្ងៃ', btnExportExcel:'⬇ នាំចេញ Excel',
+    weeklyLines:'ប្រចាំសប្ដាហ៍តាមខ្សែ', weeklyDaily:'លម្អិតប្រចាំថ្ងៃ',
+    days:'ថ្ងៃ', totalPersons:'កម្មករសរុប', avgEff:'ប្រសិទ្ធភាពជាមធ្យម', date:'ថ្ងៃ',
+    coSettings:'ប៉ារ៉ាម៉ែតររោងចក្រ', coAutoCalc:'គណនាដោយស្វ័យប្រវត្តិ',
+    coWorkMins:'នាទី/ថ្ងៃ', coAvgSMV:'SMV ជាមធ្យម', coOrderSize:'ការបញ្ជាទិញជាមធ្យម',
+    coChangeovers:'ការប្ដូររចនាបថ', coLostMins:'នាទីបាត់', coLostPcs:'ដុំបាត់',
+    coRecovery:'ថ្ងៃស្ដារជាមធ្យម', coLostOrders:'ការបញ្ជាទិញបាត់',
+    coWorstLines:'📊 ខ្សែការប្ដូរខ្សោយបំផុត', coMonthlySummary:'📅 សង្ខេបប្រចាំខែ',
+    coHeatMap:'🌡️ ផែនទីកំដៅ — ខែ × ខ្សែ', coDetailTitle:'📋 លម្អិតការប្ដូររចនាបថ',
+    coLine:'ខ្សែ', coSection:'ផ្នែក', coPrevStyle:'រចនាបថចាស់', coNewStyle:'រចនាបថថ្មី',
+    coBaselineEff:'ប្រសិទ្ធភាពគោល%', coActualEff:'ប្រសិទ្ធភាពពិត%', coEffLoss:'ការបាត់ប្រសិទ្ធភាព%',
+    coLostMin:'នាទីបាត់', coRecovDays:'ថ្ងៃស្ដារ', coLostOrders2:'ការបញ្ជាទិញបាត់',
+    coFilterYear:'ឆ្នាំ', coFilterMonth:'ខែ', coFilterLine:'ខ្សែ', coFilterSec:'ផ្នែក',
+    coAllYears:'ឆ្នាំទាំងអស់', coAllMonths:'ខែទាំងអស់', coAllLines:'ខ្សែទាំងអស់', coAll:'ទាំងអស់',
+    stylesTitle:'តាមដានរចនាបថ/PO', allYears:'ឆ្នាំទាំងអស់', allMonths:'ខែទាំងអស់',
+    allSections:'ផ្នែកទាំងអស់', allLines:'ខ្សែទាំងអស់', allColors:'ពណ៌ទាំងអស់', allPO:'PO ទាំងអស់',
+    recordsTitle:'កំណត់ត្រាទាំងអស់', allDates:'ថ្ងៃទាំងអស់',
+    smvTitle:'ធម្មតា vs OT', normH:'ជ.ធម្មតា', otH:'ជ.OT',
+    thisWeek:'សប្ដាហ៍នេះ', thisMonth:'ខែនេះ', custom:'ជ្រើស',
+  }
+};
+
+function t(key){ return (I18N[_lang]||I18N.zh)[key] || (I18N.zh)[key] || (I18N.en)[key] || key; }
+
+function applyLang(){
+  const isEn = _lang === 'en';
+  // Update lang button
+  const btn = document.getElementById('langBtn');
+  if(btn) btn.textContent = _lang==='zh'?'🌐 EN':_lang==='en'?'🌐 ខ្មែរ':'🌐 中文';
+  // Update h-title and h-sub
+  const ht = document.querySelector('.h-title');
+  if(ht) ht.textContent = t('sysTitle');
+  // Tabs: use data-zh / data-en
+  document.querySelectorAll('.tab[data-zh]').forEach(el=>{
+    el.textContent = isEn ? el.dataset.en : el.dataset.zh;
+  });
+  // data-zh / data-en pattern (header stats, etc.)
+  document.querySelectorAll('[data-zh][data-en]').forEach(el=>{
+    if(!el.classList.contains('tab'))
+      el.textContent = isEn ? el.dataset.en : el.dataset.zh;
+  });
+  // data-i18n pattern
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = t(el.dataset.i18n);
+  });
+  // Static elements via direct mapping
+  const map = {
+    // Upload tab
+    'btnImport'        : 'btnParse',
+    'btnConfirmImport' : 'btnConfirm',
+  };
+  Object.entries(map).forEach(([id,key])=>{
+    const el=document.getElementById(id);
+    if(el) el.textContent=t(key);
+  });
+  // Tabs: update text
+  const tabMap={upload:'tabUpload',daily:'tabDaily',weekly:'tabWeekly',monthly:'tabMonthly',
+    eff:'tabEff',validate:'tabValidate',styles:'tabStyles',records:'tabRecords',
+    smv:'tabSmv',changeover:'tabChangeover'};
+  document.querySelectorAll('.tab[onclick]').forEach(el=>{
+    const m=el.getAttribute('onclick').match(/goTab\(['"](\w+)['"]/);
+    if(m&&tabMap[m[1]]) el.textContent=t(tabMap[m[1]]);
+  });
+  // Re-render dynamic content
+  if(typeof renderDbHealth==='function') renderDbHealth();
+  if(typeof renderAutoParams==='function') renderAutoParams();
+  // Re-render changeover filters labels
+  const coLabels=document.querySelectorAll('#sec-changeover .frow label[data-i18n-key]');
+  coLabels.forEach(el=>{ el.textContent=t(el.dataset.i18nKey); });
+  // Re-render AI Summary text only (not full analytics)
+  const aiText=document.getElementById("aiSummaryText");
+  if(aiText&&window._lastSummaries) aiText.innerHTML=window._lastSummaries[_lang]||window._lastSummaries.en;
+  // Full re-render if on changeover tab
+  if(typeof renderChangeover==='function'&&document.getElementById('sec-changeover')?.classList.contains('on'))
+    renderChangeover();
+}
+
+function toggleLang(){
+  _lang = _lang==='zh' ? 'en' : _lang==='en' ? 'km' : 'zh';
+  localStorage.setItem('vrt_lang', _lang);
+  applyLang();
+}
+
+// Apply on load
+document.addEventListener('DOMContentLoaded', ()=>{
+  _lang = localStorage.getItem('vrt_lang')||'zh';
+  applyLang();
+});
+
+// Phase C: vcAutoSync save to IDB
+// (already handled in saveDB which calls saveToMainIDB)
+
 
 // ═══════════════════════ DELETE HELPERS ══════════════════════════════════════
 // 刪除整日全部記錄（日期列的「🗑 刪除此日」按鈕）
@@ -2748,11 +3701,15 @@ function exportValidateExcel(){
 
 // ═══════════════════════ BACKUP / RESTORE ════════════════════════════════════
 async function backupData(){
+  if(!DB.length){ alert("No data to backup"); return; }
+  const minD=getMinDate(DB); const maxD=getMaxDate(DB);
+  if(!confirm(`Preparing Backup\n\nRecords: ${DB.length.toLocaleString()}\nDate Range: ${minD} ~ ${maxD}\n\nProceed?`)) return;
   initEffDB();
-  const backup={version:2,date:new Date().toISOString(),daily:DB,eff:EFF_DB};
+  const backup={version:3,date:new Date().toISOString(),daily:DB,eff:EFF_DB,
+    meta:{recordCount:DB.length,minDate:minD,maxDate:maxD}};
   const blob=new Blob([JSON.stringify(backup)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download="sewing_backup_"+new Date().toISOString().slice(0,10)+".json"; a.click();
+  a.download="sewing_backup_"+maxD+".json"; a.click();
 }
 async function restoreData(event){
   const file=event.target.files[0]; if(!file) return;
@@ -2760,11 +3717,17 @@ async function restoreData(event){
     const text=await file.text();
     const backup=JSON.parse(text);
     if(!backup.daily) throw new Error("格式不符");
-    if(!confirm("確定還原？\n日報: "+backup.daily.length+" 筆\n效率: "+(backup.eff||[]).length+" 筆\n\n⚠️ 目前資料將被覆豓")) return;
-    DB=backup.daily||[]; saveDB(); updateHeader(); renderDBCard();
-    EFF_DB=backup.eff||[]; saveEffDB();
-    alert("✓ 還原成功！日報 "+DB.length+" 筆，效率 "+EFF_DB.length+" 筆");
-    renderEffTable();
+    const bk=backup.daily; const bMin=getMinDate(bk); const bMax=getMaxDate(bk);
+    if(!confirm(`Preparing Restore\n\nBackup Records: ${bk.length.toLocaleString()}\nDate Range: ${bMin} ~ ${bMax}\n\n⚠️ 目前所有資料將被覆蓋，確定還原？`)) return;
+    await clearMainIDB();
+    DB=dedupAndNorm(bk); EFF_DB=backup.eff||[];
+    await saveToMainIDB();
+    saveToCloudIDB(DB).catch(e=>{});
+    if(_fileHandle) writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
+    updateHeader(); renderDBCard(); renderDbHealth(); renderEffTable();
+    const vMin=getMinDate(DB); const vMax=getMaxDate(DB);
+    const ok=DB.length===bk.length;
+    alert(`${ok?"✓ Restore Complete":"⚠ Restore Check"}\n\nBackup Records: ${bk.length.toLocaleString()}\nRestored Records: ${DB.length.toLocaleString()}\n\nEarliest Date: ${vMin}\nLatest Date: ${vMax}\n\n${ok?"✓ All records restored successfully":"⚠ Count mismatch"}`);
   }catch(e){ alert("還原失敗: "+e.message); }
   event.target.value="";
 }
@@ -3139,7 +4102,10 @@ function renderRecs(){
   if(lv) recs=recs.filter(r=>r.lineNo===lv);
   recs.sort((a,b)=>b.date.localeCompare(a.date)||a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
   document.getElementById("rMeta").textContent=`${recs.length} 筆`;
-  const show=recs.slice(0,400);
+  const PAGE_SIZE=100;
+  const curPage=parseInt(document.getElementById("rPageNum")?.textContent||"1");
+  const show=recs.slice(0,PAGE_SIZE); // first page
+  window._recsAll=recs; window._recsPage=1;
   document.getElementById("rBody").innerHTML=show.map(r=>`
     <tr>
       <td class="mono">${r.date}</td>
@@ -3156,8 +4122,36 @@ function renderRecs(){
       <td class="mono">${r.cartons>0?r.cartons:"-"}</td>
     </tr>`).join("");
   const more=document.getElementById("rMore");
-  if(recs.length>400){ more.style.display="block"; more.textContent=`顯示前400筆，共${recs.length}筆`; }
+  if(recs.length>PAGE_SIZE){ more.style.display="flex"; more.innerHTML=`<span>顯示 1-${Math.min(PAGE_SIZE,recs.length)} / 共 ${recs.length} 筆</span><button onclick="recsNextPage()" style="padding:4px 12px;font-size:12px;border:1px solid #d0d5e8;border-radius:5px;cursor:pointer">下一頁 ▶</button>`; }
   else more.style.display="none";
+}
+
+function recsNextPage(){
+  const recs=window._recsAll||[];
+  const PAGE_SIZE=100;
+  window._recsPage=(window._recsPage||1)+1;
+  const start=(window._recsPage-1)*PAGE_SIZE;
+  const show=recs.slice(start,start+PAGE_SIZE);
+  if(!show.length){ window._recsPage--; return; }
+  const tbody=document.getElementById("rBody");
+  tbody.innerHTML+=show.map(r=>`
+    <tr>
+      <td class="mono">${r.date}</td><td>${r.section||"-"}</td>
+      <td class="mono" style="font-weight:600">${r.lineNo||"-"}</td>
+      <td class="mono" style="color:#6b7a9e">${r.selfKey||"-"}</td>
+      <td class="mono" style="color:#6b7a9e">${r.po||"-"}</td>
+      <td class="mono">${r.styleNo||"-"}</td>
+      <td style="font-size:12px">${r.color||"-"}</td>
+      <td class="mono">${r.size||"-"}</td>
+      <td class="mono" style="color:#1d4ed8;font-weight:600">${(r.pieces||0).toLocaleString()}</td>
+      <td class="mono">${r.workers||"-"}</td>
+      <td>${r.efficiency>0?`<span class="b b${r.efficiency>=45?"ok":r.efficiency>=30?"wn":"bd"}">${r.efficiency}%</span>`:"-"}</td>
+      <td class="mono">${r.cartons>0?r.cartons:"-"}</td>
+    </tr>`).join("");
+  const end=Math.min(start+PAGE_SIZE,recs.length);
+  const more=document.getElementById("rMore");
+  if(end<recs.length) more.querySelector("span").textContent=`顯示 1-${end} / 共 ${recs.length} 筆`;
+  else more.querySelector("button").style.display="none";
 }
 
 function deleteByDate(){
@@ -3173,7 +4167,12 @@ function deleteByDate(){
 
 function clearAll(){
   if(!confirm("確定清除【所有】資料？\n\n⚠️ 此操作無法復原")) return;
-  DB=[]; saveDB(); updateHeader(); renderDBCard();
+  DB=[]; EFF_DB=[];
+  clearMainIDB().catch(e=>{});
+  saveToCloudIDB([]).catch(e=>{});
+  if(_fileHandle) writeToFile(_fileHandle,{daily:[],eff:[],saved:new Date().toISOString()});
+  try{ localStorage.removeItem(LS_KEY); localStorage.removeItem("vrt_sewing_max_date"); }catch(e){}
+  updateHeader(); renderDBCard(); renderDbHealth();
   document.getElementById("dKpi").innerHTML="";
   document.getElementById("dCards").innerHTML="";
   alert("已清除所有資料");
