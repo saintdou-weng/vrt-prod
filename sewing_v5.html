@@ -133,7 +133,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     title="Switch Language / 切換語言">🌐 EN</button>
 </div>
 <div class="tabs">
-  <div class="tab on" onclick="goTab('upload',this)" data-zh="📥 上傳報表" data-en="📥 Upload">📥 上傳報表</div>
+  <div class="tab on" onclick="goTab('dashboard',this)" data-zh="📊 儀錶板" data-en="📊 Dashboard" data-i18n="tabDashboard">📊 儀錶板</div>
+  <div class="tab" onclick="goTab('upload',this)" data-zh="📥 上傳報表" data-en="📥 Upload">📥 上傳報表</div>
   <div class="tab" onclick="goTab('daily',this)" data-zh="📊 每日報告" data-en="📊 Daily">📊 每日報告</div>
   <div class="tab" onclick="goTab('weekly',this)" data-zh="📅 週統計" data-en="📅 Weekly">📅 週統計</div>
   <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月年趨勢" data-en="📆 Monthly">📆 月年趨勢</div>
@@ -145,8 +146,19 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="tab" onclick="goTab('changeover',this)" data-zh="🔄 Changeover" data-en="🔄 Changeover">🔄 Changeover</div>
 </div>
 
+<!-- ══ DASHBOARD ══ -->
+<div class="sec on" id="sec-dashboard">
+  <div class="card">
+    <div class="ct" data-i18n="tabDashboard">📊 Management Dashboard</div>
+    <div id="dashKpiGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px"></div>
+    <div id="dashCoverage" style="margin-bottom:10px"></div>
+    <div id="dashAlerts"></div>
+    <div id="dashMeta" style="font-size:11px;color:#9ca3af;text-align:right;margin-top:8px"></div>
+  </div>
+</div>
+
 <!-- ══ UPLOAD ══ -->
-<div class="sec on" id="sec-upload">
+<div class="sec" id="sec-upload">
   <div class="card">
     <div class="ct" data-i18n="uploadTitle">📧 直接拖郵件或 Excel 進來</div>
     <div class="g3" style="margin-bottom:14px">
@@ -598,8 +610,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="card">
     <div class="ct" data-i18n="coWorstLines">📊 Worst Changeover Lines</div>
     <div class="tw"><table><thead><tr>
-      <th>Line</th><th>Section</th><th>Changeovers</th>
-      <th>Lost Min</th><th>Lost Pcs</th><th>Avg Recovery Days</th><th>Lost Orders</th>
+      <th data-i18n="coLine">Line</th><th data-i18n="coSection">Section</th><th data-i18n="coChangeovers">Changeovers</th>
+      <th data-i18n="coLostMin">Lost Min</th><th data-i18n="coLostPcs">Lost Pcs</th><th data-i18n="coRecovDays">Recovery Days</th><th data-i18n="coLostOrders2">Lost Orders</th>
     </tr></thead><tbody id="coWorstBody"></tbody></table></div>
   </div>
 
@@ -607,8 +619,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="card">
     <div class="ct" data-i18n="coMonthlySummary">📅 Monthly Changeover Summary</div>
     <div class="tw"><table><thead><tr>
-      <th>Month</th><th>Changeovers</th><th>Lost Min</th>
-      <th>Lost Pcs</th><th>Avg Recovery Days</th><th>Lost Orders</th>
+      <th data-i18n="month">Month</th><th data-i18n="coChangeovers">Changeovers</th><th data-i18n="coLostMin">Lost Min</th>
+      <th data-i18n="coLostPcs">Lost Pcs</th><th data-i18n="coRecovDays">Recovery Days</th><th data-i18n="coLostOrders2">Lost Orders</th>
     </tr></thead><tbody id="coMonthBody"></tbody></table></div>
   </div>
 
@@ -622,10 +634,10 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="card">
     <div class="ct" data-i18n="coDetailTitle">📋 Changeover Details</div>
     <div class="tw"><table><thead><tr>
-      <th>Date</th><th>Line</th><th>Section</th>
-      <th>Prev Style</th><th>New Style</th><th>Workers</th>
-      <th>Baseline Eff%</th><th>Actual Eff%</th><th>Eff Loss%</th>
-      <th>Lost Min</th><th>Lost Pcs</th><th>Recovery Days</th>
+      <th data-i18n="date">Date</th><th data-i18n="coLine">Line</th><th data-i18n="coSection">Section</th>
+      <th data-i18n="coPrevStyle">Prev Style</th><th data-i18n="coNewStyle">New Style</th><th data-i18n="workers">Workers</th>
+      <th data-i18n="coBaselineEff">Baseline Eff%</th><th data-i18n="coActualEff">Actual Eff%</th><th data-i18n="coEffLoss">Eff Loss%</th>
+      <th data-i18n="coLostMin">Lost Min</th><th data-i18n="coLostPcs">Lost Pcs</th><th data-i18n="coRecovDays">Recovery Days</th>
     </tr></thead><tbody id="coDetailBody"></tbody></table></div>
   </div>
 </div>
@@ -929,7 +941,7 @@ function saveDB(){
     writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
   }
   // localStorage: ONLY markers/settings, NOT DB data
-  try{ localStorage.setItem('vrt_sewing_max_date', getMaxDate(DB)); }catch(e){}
+  try{ localStorage.setItem('vrt_sewing_max_date',getMaxDate(DB)); localStorage.setItem('vrt_sewing_record_count',String(DB.length)); }catch(e){}
 }
 function initEffDB(){ /* EFF_DB loaded in loadDB */ }
 async function saveEffDB(){
@@ -958,8 +970,10 @@ async function connectDataFile(){
 loadDB().then(async ()=>{
   updateHeader(); renderDBCard(); initFolderScan();
   _lang = localStorage.getItem("vrt_lang")||"zh"; applyLang();
+  renderDashboard(); // show dashboard immediately with whatever data is loaded
   await vcLoadFromCloudIDB();
   await vcAutoSync();
+  renderDashboard(); // refresh after sync
 });
 
 // ── Cloud IDB：SewingCloudProd / cloud_records ──────────────
@@ -1118,6 +1132,7 @@ function goTab(name, el){
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on"));
   document.getElementById("sec-"+name).classList.add("on");
   el.classList.add("on");
+  if(name==="dashboard"){ renderDashboard(); }
   if(name==="daily")  { populateDailySel(); renderDaily(); }
   if(name==="weekly") { populateWeekSel(); renderWeekly(); }
   if(name==="monthly"){ renderPeriod(); }
@@ -1974,6 +1989,7 @@ async function confirmImport(){
   document.getElementById("previewArea").style.display="none";
   document.getElementById("importMsg").textContent=`✓ ${DB.length.toLocaleString()} ${t("importedRecs")} | ${getMinDate(DB)} ~ ${getMaxDate(DB)}`;
   document.getElementById("importMsg").style.color="#059669";
+  rebuildAllSelectors();
   if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
   // ★ AI Auto Analytics — zero user action required
   setTimeout(()=>runAutoAnalytics(), 150);
@@ -2231,7 +2247,16 @@ async function generateMomComparison(ca){
 
 // ── Main: runAutoAnalytics() ──────────────────────────────────────────────────
 async function runAutoAnalytics(){
-  if(!DB.length) return;
+  if(!DB.length){ console.warn('[VRT] analytics skipped: empty DB'); return; }
+  // Bug #8: block analytics on incomplete data
+  if(window._dbIncomplete){
+    const ac=document.getElementById('aiSummaryCard');
+    if(ac){ ac.style.display='block';
+      const tx=document.getElementById('aiSummaryText');
+      if(tx) tx.innerHTML='<div style="background:#fef9c3;border:2px solid #f59e0b;border-radius:8px;padding:14px;color:#92400e">⚠ <b>Database Incomplete</b> — Re-restore backup or sync from GAS before running analytics.</div>';
+    }
+    return;
+  }
   const s=getAutoSettings();
   // 1. Compute analytics
   const ca=generateChangeoverAnalysis();
@@ -2583,7 +2608,9 @@ const I18N = {
     tabUpload:'📥 上傳報表', tabDaily:'📊 每日報告', tabWeekly:'📅 週統計',
     tabMonthly:'📆 月年趨勢', tabEff:'📈 效率報表', tabValidate:'🔍 數據比對',
     tabStyles:'🎯 款式追蹤', tabRecords:'📋 所有記錄', tabSmv:'📊 產能分析',
-    tabChangeover:'🔄 換款分析', tabAiSummary:'📊 AI 總結',
+    tabChangeover:'🔄 換款分析', changeoverTab:'🔄 換款分析', tabDashboard:'📊 儀錶板',
+    month:'月份', noData:'尚無資料', dashNoDataHint:'上傳或還原資料以開始', lastImport:'最後匯入日期', totalPcs:'總產量',
+    dbIncompleteWarn:'資料庫不完整', dbIncompleteDetail:'部分年份可能未載入', dbIncompleteAction:'請重新還原備份', tabAiSummary:'📊 AI 總結',
     // Upload
     uploadTitle:'📧 直接拖郵件或 Excel 進來', parsePreview:'解析預覽',
     btnParse:'🔍 解析預覽', btnConfirm:'✓ 確認存入', btnCancel:'取消',
@@ -2636,7 +2663,9 @@ const I18N = {
     tabUpload:'📥 Upload', tabDaily:'📊 Daily', tabWeekly:'📅 Weekly',
     tabMonthly:'📆 Monthly', tabEff:'📈 Efficiency', tabValidate:'🔍 Validation',
     tabStyles:'🎯 Styles', tabRecords:'📋 Records', tabSmv:'📊 Productivity',
-    tabChangeover:'🔄 Changeover', tabAiSummary:'📊 AI Summary',
+    tabChangeover:'🔄 Changeover', changeoverTab:'🔄 Changeover', tabDashboard:'📊 Dashboard',
+    month:'Month', noData:'No data yet', dashNoDataHint:'Upload or restore a backup to begin', lastImport:'Last Import', totalPcs:'Total Pieces',
+    dbIncompleteWarn:'Database Incomplete', dbIncompleteDetail:'Some years may not be loaded', dbIncompleteAction:'Re-restore backup or re-sync from GAS', tabAiSummary:'📊 AI Summary',
     uploadTitle:'📧 Drop Mail or Excel Here', parsePreview:'Parse Preview',
     btnParse:'🔍 Parse & Preview', btnConfirm:'✓ Confirm Import', btnCancel:'Cancel',
     dbStatus:'Database Status', btnLink:'📎 Link Local File',
@@ -2682,7 +2711,9 @@ const I18N = {
     tabWeekly:'📅 ស្ថិតិប្រចាំសប្ដាហ៍', tabMonthly:'📆 និន្នាការ',
     tabEff:'📈 ប្រសិទ្ធភាព', tabValidate:'🔍 ផ្ទៀងផ្ទាត់',
     tabStyles:'🎯 តាមដានរចនាបថ', tabRecords:'📋 កំណត់ត្រាទាំងអស់',
-    tabSmv:'📊 ការវិភាគផ្ទៃការ', tabChangeover:'🔄 ការប្ដូររចនាបថ',
+    tabSmv:'📊 ការវិភាគផ្ទៃការ', tabChangeover:'🔄 ការប្ដូររចនាបថ', changeoverTab:'🔄 វិភាគប្ដូរម៉ូដែល', tabDashboard:'📊 ផ្ទាំងគ្រប់គ្រង',
+    month:'ខែ', noData:'មិនមានទិន្នន័យ', dashNoDataHint:'សូមបញ្ចូលទិន្នន័យ', lastImport:'ការបញ្ចូលចុងក្រោយ', totalPcs:'ដុំសរុប',
+    dbIncompleteWarn:'DB មិនពេញ', dbIncompleteDetail:'ឆ្នាំខ្លះអាចមិនបាន', dbIncompleteAction:'ស្ដារបម្រុងទុក',
     tabAiSummary:'📊 សង្ខេប AI',
     uploadTitle:'📧 ទម្លាក់ Mail ឬ Excel នៅទីនេះ',
     parsePreview:'មើលជាមុន', btnParse:'🔍 ត្រួតពិនិត្យ',
@@ -2761,13 +2792,14 @@ function applyLang(){
   // Tabs: update text
   const tabMap={upload:'tabUpload',daily:'tabDaily',weekly:'tabWeekly',monthly:'tabMonthly',
     eff:'tabEff',validate:'tabValidate',styles:'tabStyles',records:'tabRecords',
-    smv:'tabSmv',changeover:'tabChangeover'};
+    smv:'tabSmv',changeover:'tabChangeover',dashboard:'tabDashboard'};
   document.querySelectorAll('.tab[onclick]').forEach(el=>{
     const m=el.getAttribute('onclick').match(/goTab\(['"](\w+)['"]/);
     if(m&&tabMap[m[1]]) el.textContent=t(tabMap[m[1]]);
   });
   // Re-render dynamic content
   if(typeof renderDbHealth==='function') renderDbHealth();
+  if(typeof renderDashboard==='function') renderDashboard();
   if(typeof renderAutoParams==='function') renderAutoParams();
   // Re-render changeover filters labels
   const coLabels=document.querySelectorAll('#sec-changeover .frow label[data-i18n-key]');
@@ -2862,6 +2894,140 @@ async function deleteOneRecord(id){
 }
 
 // ═══════════════════════ DAILY REPORT ════════════════════════════════════════
+// Alias — delete helpers call this undefined name
+function populateDateSel(){ if(typeof populateDailySel==='function') populateDailySel(); }
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD (Bug #10) — renderDashboard()
+// ═══════════════════════════════════════════════════════════════
+function renderDashboard(){
+  const grid=document.getElementById("dashKpiGrid");
+  const covEl=document.getElementById("dashCoverage");
+  const alertEl=document.getElementById("dashAlerts");
+  const metaEl=document.getElementById("dashMeta");
+  if(!grid) return;
+
+  if(!DB.length){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:60px;color:#9ca3af;font-size:14px">
+      ${t("noData")||"尚無資料"}<br>
+      <span style="font-size:12px;color:#c4c9d4">${t("dashNoDataHint")||"請先上傳或還原資料"}</span></div>`;
+    if(covEl) covEl.innerHTML=""; if(alertEl) alertEl.innerHTML=""; return;
+  }
+
+  const dates=[...new Set(DB.map(r=>r.date))].sort();
+  const years=[...new Set(dates.map(d=>d.slice(0,4)))].sort();
+  const totalPcs=DB.reduce((s,r)=>s+(r.pieces||0),0);
+  const effRecs=DB.filter(r=>r.efficiency>0);
+  const avgEff=effRecs.length?Math.round(effRecs.reduce((s,r)=>s+(r.efficiency||0),0)/effRecs.length):0;
+
+  // Use cached analytics if available
+  let coCount='-',lostMins='-',lostPcs='-',lostOrders='-',capUtil='-',worstLine='-',bestLine='-';
+  if(window._lastCa){
+    coCount=window._lastCa.changeoverCount;
+    lostMins=Math.round(window._lastCa.lostMinutes).toLocaleString();
+    lostPcs=window._lastCa.lostPieces.toLocaleString();
+    lostOrders=typeof window._lastCa.lostOrders==='number'?window._lastCa.lostOrders.toFixed(1):'-';
+    worstLine=window._lastCa.worstLine||'-';
+    bestLine=window._lastCa.bestLine||'-';
+  }
+  if(window._lastCap) capUtil=window._lastCap.capacityUtilization+'%';
+  const lastImport=localStorage.getItem('vrt_sewing_max_date')||getMaxDate(DB)||'-';
+
+  const kpis=[
+    {v:DB.length.toLocaleString(),l:t("hcRecords")||"總記錄",c:"#f59e0b",i:"📋"},
+    {v:years.length,l:t("hcYears")||"年份",c:"#8b5cf6",i:"📅"},
+    {v:`${dates[0]||"-"}`,l:t("hcEarliest")||"最早日期",c:"#059669",i:"🗓"},
+    {v:`${dates[dates.length-1]||"-"}`,l:t("hcLatest")||"最新日期",c:"#059669",i:"🗓"},
+    {v:totalPcs.toLocaleString(),l:t("totalPcs")||"總生產件數",c:"#1d4ed8",i:"🧵"},
+    {v:avgEff+"%",l:t("avgEff")||"平均效率",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626",i:"📈"},
+    {v:coCount,l:t("coChangeovers")||"換款次數",c:"#dc2626",i:"🔄"},
+    {v:lostMins,l:t("coLostMins")||"損失工時(分)",c:"#dc2626",i:"⏱"},
+    {v:lostPcs,l:t("coLostPcs")||"損失件數",c:"#7c3aed",i:"📦"},
+    {v:lostOrders,l:t("coLostOrders")||"損失訂單",c:"#be123c",i:"📉"},
+    {v:capUtil,l:t("aiCapUtil")||"產能利用率",c:"#0369a1",i:"⚡"},
+    {v:worstLine,l:t("aiWorstLine")||"最差線別",c:"#dc2626",i:"🔴"},
+    {v:bestLine,l:t("aiBestLine")||"最佳線別",c:"#059669",i:"🟢"},
+    {v:lastImport,l:t("lastImport")||"最後匯入",c:"#6b7a9e",i:"📥"},
+  ];
+
+  grid.innerHTML=kpis.map(k=>`<div style="background:#fff;border:1.5px solid #e2e6f0;border-radius:10px;padding:12px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+    <div style="font-size:18px;margin-bottom:4px">${k.i}</div>
+    <div style="font-size:${String(k.v).length>8?"13px":"17px"};font-weight:800;font-family:monospace;color:${k.c};line-height:1.2">${k.v}</div>
+    <div style="font-size:10px;color:#6b7a9e;margin-top:4px;font-weight:600">${k.l}</div></div>`).join("");
+
+  // Year Coverage (Bug #7 style display)
+  if(covEl){
+    const curYear=new Date().getFullYear();
+    const checkYears=['2020','2021','2022','2023','2024','2025','2026','2027'].filter(y=>parseInt(y)<=curYear);
+    covEl.innerHTML=`<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px">${t("hcCoverage")||"歷史資料覆蓋"}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">`+
+      checkYears.map(y=>{
+        const cnt=DB.filter(r=>(r.date||"").startsWith(y)).length;
+        return cnt>0
+          ?`<span style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:3px 14px;font-size:12px;color:#065f46;font-weight:700">✓ ${y}<span style="font-weight:400;font-size:10px"> (${cnt.toLocaleString()})</span></span>`
+          :`<span style="background:#fef2f2;border:1px solid #fca5a5;border-radius:20px;padding:3px 14px;font-size:12px;color:#991b1b;font-weight:700">⚠ ${y} Missing</span>`;
+      }).join("")+"</div>";
+  }
+
+  // Alerts
+  if(alertEl){
+    const alerts=[];
+    if(window._dbIncomplete)
+      alerts.push(`<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px">
+        ⚠ <b>${t("dbIncompleteWarn")||"資料庫不完整"}</b> — ${t("dbIncompleteAction")||"請重新還原備份"}</div>`);
+    alertEl.innerHTML=alerts.join("");
+  }
+  if(metaEl) metaEl.textContent=`${t("lastImport")||"最後匯入"}: ${lastImport} · ${DB.length.toLocaleString()} records · ${years.join(", ")}`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// rebuildAllSelectors — call after ANY data change (import/restore/scan)
+// Rebuilds EVERY filter from full DB so all years appear on all tabs
+// ─────────────────────────────────────────────────────────────
+function rebuildAllSelectors(){
+  const allDates=[...new Set(DB.map(r=>r.date))].sort().reverse();
+  const allYears=[...new Set(allDates.map(d=>d.slice(0,4)))].sort().reverse();
+  const allSecs=[...new Set(DB.map(r=>r.section).filter(Boolean))].sort();
+  const allLines=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+
+  // Daily
+  const dsel=document.getElementById("dsel");
+  if(dsel){ const p=dsel.value; dsel.innerHTML=allDates.map(d=>`<option value="${d}">${d}</option>`).join(""); if(p&&allDates.includes(p)) dsel.value=p; }
+
+  // Weekly — rebuild from all DB weeks
+  const wsel=document.getElementById("wsel");
+  if(wsel&&typeof getWeekKey==='function'){
+    const wks=[...new Set(DB.map(r=>getWeekKey(r.date)))].sort().reverse();
+    const pw=wsel.value; wsel.innerHTML=wks.map(w=>`<option value="${w}">${w}</option>`).join("");
+    if(pw&&wks.includes(pw)) wsel.value=pw;
+  }
+
+  // Records filters
+  const rD=document.getElementById("rDate");
+  if(rD){ const p=rD.value; rD.innerHTML=`<option value="">所有日期</option>`+allDates.map(d=>`<option value="${d}">${d}</option>`).join(""); if(p) rD.value=p; }
+  const rS=document.getElementById("rSec");
+  if(rS){ const p=rS.value; rS.innerHTML=`<option value="">所有Section</option>`+allSecs.map(s=>`<option value="${s}">${s}</option>`).join(""); if(p) rS.value=p; }
+  const rL=document.getElementById("rLine");
+  if(rL){ const p=rL.value; rL.innerHTML=`<option value="">所有線別</option>`+allLines.map(l=>`<option value="${l}">${l}</option>`).join(""); if(p) rL.value=p; }
+
+  // Style tracking year/month selectors
+  const stY=document.getElementById("stYear");
+  if(stY){ const p=stY.value; stY.innerHTML=`<option value="">所有年份</option>`+allYears.map(y=>`<option value="${y}">${y}</option>`).join(""); if(p) stY.value=p; }
+  const stM=document.getElementById("stMonth");
+  if(stM){ const allMons=[...new Set(DB.map(r=>r.date.slice(0,7)))].sort().reverse();
+    const p=stM.value; stM.innerHTML=`<option value="">所有月份</option>`+allMons.map(m=>`<option value="${m}">${m}</option>`).join(""); if(p) stM.value=p; }
+
+  // Changeover filters
+  if(typeof initChangeover==='function') initChangeover();
+  // SMV dates
+  if(typeof populatePpohDates==='function') populatePpohDates();
+  // DB health + Dashboard
+  if(typeof renderDbHealth==='function') renderDbHealth();
+  if(typeof renderDashboard==='function') renderDashboard();
+
+  console.log('[VRT] rebuildAllSelectors — years:',allYears.join(','),'records:',DB.length);
+}
+
 function populateDailySel(){
   const sel=document.getElementById("dsel");
   const prev=sel.value;
@@ -3725,6 +3891,7 @@ async function restoreData(event){
     saveToCloudIDB(DB).catch(e=>{});
     if(_fileHandle) writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
     updateHeader(); renderDBCard(); renderDbHealth(); renderEffTable();
+    rebuildAllSelectors();
     const vMin=getMinDate(DB); const vMax=getMaxDate(DB);
     const ok=DB.length===bk.length;
     alert(`${ok?"✓ Restore Complete":"⚠ Restore Check"}\n\nBackup Records: ${bk.length.toLocaleString()}\nRestored Records: ${DB.length.toLocaleString()}\n\nEarliest Date: ${vMin}\nLatest Date: ${vMax}\n\n${ok?"✓ All records restored successfully":"⚠ Count mismatch"}`);
@@ -4161,7 +4328,7 @@ function deleteByDate(){
   if(!count){ alert("該日期沒有資料"); return; }
   if(!confirm(`確定刪除 ${dv} 的所有資料？（共 ${count} 筆）\n\n⚠️ 此操作無法復原`)) return;
   DB = DB.filter(r=>r.date!==dv);
-  saveDB(); updateHeader(); renderDBCard(); renderRecs();
+  saveDB(); updateHeader(); renderDBCard(); rebuildAllSelectors();
   alert(`已刪除 ${dv} 的 ${count} 筆資料`);
 }
 
@@ -4171,7 +4338,7 @@ function clearAll(){
   clearMainIDB().catch(e=>{});
   saveToCloudIDB([]).catch(e=>{});
   if(_fileHandle) writeToFile(_fileHandle,{daily:[],eff:[],saved:new Date().toISOString()});
-  try{ localStorage.removeItem(LS_KEY); localStorage.removeItem("vrt_sewing_max_date"); }catch(e){}
+  try{ localStorage.removeItem(LS_KEY); localStorage.removeItem("vrt_sewing_max_date"); localStorage.removeItem("vrt_sewing_record_count"); }catch(e){}
   updateHeader(); renderDBCard(); renderDbHealth();
   document.getElementById("dKpi").innerHTML="";
   document.getElementById("dCards").innerHTML="";
