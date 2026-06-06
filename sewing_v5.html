@@ -970,10 +970,16 @@ async function connectDataFile(){
 loadDB().then(async ()=>{
   updateHeader(); renderDBCard(); initFolderScan();
   _lang = localStorage.getItem("vrt_lang")||"zh"; applyLang();
-  renderDashboard(); // show dashboard immediately with whatever data is loaded
+  renderDashboard(); // initial render with raw DB data
   await vcLoadFromCloudIDB();
   await vcAutoSync();
-  renderDashboard(); // refresh after sync
+  renderDashboard(); // refresh after cloud sync
+  // ★ Run analytics on startup so Dashboard changeover KPIs are populated
+  // without requiring a new import. Uses full DB already in memory.
+  if(DB.length > 0 && !window._dbIncomplete){
+    await runAutoAnalytics();
+    renderDashboard(); // final refresh with changeover data
+  }
 });
 
 // ── Cloud IDB：SewingCloudProd / cloud_records ──────────────
@@ -2361,7 +2367,8 @@ function initChangeover(){
   const allYears=[...new Set(DB.map(r=>r.date.slice(0,4)))].sort().reverse();
   const allLines=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   const allSecs=[...new Set(DB.map(r=>r.section).filter(Boolean))].sort();
-  const pY=ys.value, pL=ls.value, pS=ss.value;
+  // ★ Always default year to "All Years" (empty) so full history is shown
+  const pY="", pL=ls.value, pS=ss.value;
   ys.innerHTML=`<option value="">${t('coAllYears')}</option>`+allYears.map(y=>`<option value="${y}"${y===pY?" selected":""}>${y}</option>`).join("");
   ls.innerHTML=`<option value="">${t('coAllLines')}</option>`+allLines.map(l=>`<option value="${l}"${l===pL?" selected":""}>${l}</option>`).join("");
   ss.innerHTML=`<option value="">${t('coAll')}</option>`+allSecs.map(s=>`<option value="${s}"${s===pS?" selected":""}>${s}</option>`).join("");
@@ -2920,17 +2927,24 @@ function renderDashboard(){
   const effRecs=DB.filter(r=>r.efficiency>0);
   const avgEff=effRecs.length?Math.round(effRecs.reduce((s,r)=>s+(r.efficiency||0),0)/effRecs.length):0;
 
-  // Use cached analytics if available
+  // Use cached analytics; if not available, compute synchronously for dashboard
   let coCount='-',lostMins='-',lostPcs='-',lostOrders='-',capUtil='-',worstLine='-',bestLine='-';
-  if(window._lastCa){
-    coCount=window._lastCa.changeoverCount;
-    lostMins=Math.round(window._lastCa.lostMinutes).toLocaleString();
-    lostPcs=window._lastCa.lostPieces.toLocaleString();
-    lostOrders=typeof window._lastCa.lostOrders==='number'?window._lastCa.lostOrders.toFixed(1):'-';
-    worstLine=window._lastCa.worstLine||'-';
-    bestLine=window._lastCa.bestLine||'-';
+  let ca=window._lastCa, cap=window._lastCap;
+  if(!ca && DB.length>0 && typeof generateChangeoverAnalysis==='function'){
+    try{ ca=generateChangeoverAnalysis(); window._lastCa=ca; }catch(e){}
   }
-  if(window._lastCap) capUtil=window._lastCap.capacityUtilization+'%';
+  if(!cap && DB.length>0 && typeof generateCapacityAnalysis==='function'){
+    try{ cap=generateCapacityAnalysis(); window._lastCap=cap; }catch(e){}
+  }
+  if(ca){
+    coCount=ca.changeoverCount;
+    lostMins=Math.round(ca.lostMinutes).toLocaleString();
+    lostPcs=ca.lostPieces.toLocaleString();
+    lostOrders=typeof ca.lostOrders==='number'?ca.lostOrders.toFixed(1):'-';
+    worstLine=ca.worstLine||'-';
+    bestLine=ca.bestLine||'-';
+  }
+  if(cap) capUtil=cap.capacityUtilization+'%';
   const lastImport=localStorage.getItem('vrt_sewing_max_date')||getMaxDate(DB)||'-';
 
   const kpis=[
