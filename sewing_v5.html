@@ -2364,28 +2364,27 @@ function initChangeover(){
   const ys=document.getElementById("coYear");
   const ls=document.getElementById("coLine");
   const ss=document.getElementById("coSec");
+  // ★ Guard: if changeover DOM not ready, skip silently
+  if(!ys||!ls||!ss) return;
   const allYears=[...new Set(DB.map(r=>r.date.slice(0,4)))].sort().reverse();
   const allLines=[...new Set(DB.map(r=>r.lineNo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   const allSecs=[...new Set(DB.map(r=>r.section).filter(Boolean))].sort();
-  // ★ Always default year to "All Years" (empty) so full history is shown
-  const pY="", pL=ls.value, pS=ss.value;
+  // Always default to "All Years" so full history shown
+  const pY="", pL=ls.value||"", pS=ss.value||"";
   ys.innerHTML=`<option value="">${t('coAllYears')}</option>`+allYears.map(y=>`<option value="${y}"${y===pY?" selected":""}>${y}</option>`).join("");
   ls.innerHTML=`<option value="">${t('coAllLines')}</option>`+allLines.map(l=>`<option value="${l}"${l===pL?" selected":""}>${l}</option>`).join("");
   ss.innerHTML=`<option value="">${t('coAll')}</option>`+allSecs.map(s=>`<option value="${s}"${s===pS?" selected":""}>${s}</option>`).join("");
-  // Restore settings from localStorage
-  const wm=localStorage.getItem('vrt_workMins')||'480';
-  const as=localStorage.getItem('vrt_avgSMV')||'8';
-  const os=localStorage.getItem('vrt_orderSize')||'2500';
-  document.getElementById("coWorkMins").value=wm;
-  document.getElementById("coAvgSMV").value=as;
-  document.getElementById("coOrderSize").value=os;
+  // renderAutoParams handles factory settings display (inputs removed in v6.1)
+  if(typeof renderAutoParams==='function') renderAutoParams();
   renderChangeover();
 }
 
 function updateCoMonths(){
-  const yr=document.getElementById("coYear").value;
+  const coY=document.getElementById("coYear");
   const ms=document.getElementById("coMonth");
-  if(!yr){ ms.innerHTML='<option value="">All Months</option>'; return; }
+  if(!coY||!ms) return;
+  const yr=coY.value;
+  if(!yr){ ms.innerHTML=`<option value="">${t('coAllMonths')||'All Months'}</option>`; return; }
   const allMonths=[...new Set(DB.filter(r=>r.date.startsWith(yr)).map(r=>r.date.slice(0,7)))].sort().reverse();
   ms.innerHTML='<option value="">All Months</option>'+allMonths.map(m=>`<option value="${m}">${m.slice(5)}月</option>`).join("");
   renderChangeover();
@@ -3031,10 +3030,10 @@ function rebuildAllSelectors(){
   if(stM){ const allMons=[...new Set(DB.map(r=>r.date.slice(0,7)))].sort().reverse();
     const p=stM.value; stM.innerHTML=`<option value="">所有月份</option>`+allMons.map(m=>`<option value="${m}">${m}</option>`).join(""); if(p) stM.value=p; }
 
-  // Changeover filters
-  if(typeof initChangeover==='function') initChangeover();
+  // Changeover filters (guarded inside initChangeover itself)
+  try{ if(typeof initChangeover==='function') initChangeover(); }catch(e){ console.warn('[VRT] initChangeover:',e); }
   // SMV dates
-  if(typeof populatePpohDates==='function') populatePpohDates();
+  try{ if(typeof populatePpohDates==='function') populatePpohDates(); }catch(e){ console.warn('[VRT] populatePpohDates:',e); }
   // DB health + Dashboard
   if(typeof renderDbHealth==='function') renderDbHealth();
   if(typeof renderDashboard==='function') renderDashboard();
@@ -3904,8 +3903,10 @@ async function restoreData(event){
     await saveToMainIDB();
     saveToCloudIDB(DB).catch(e=>{});
     if(_fileHandle) writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
-    updateHeader(); renderDBCard(); renderDbHealth(); renderEffTable();
-    rebuildAllSelectors();
+    updateHeader(); renderDBCard(); renderDbHealth();
+    try{ renderEffTable(); }catch(e){ console.warn('[VRT] renderEffTable:',e); }
+    // rebuildAllSelectors in try-catch so render errors never break restore
+    try{ rebuildAllSelectors(); }catch(e){ console.warn('[VRT] rebuildAllSelectors:',e); }
     const vMin=getMinDate(DB); const vMax=getMaxDate(DB);
     const ok=DB.length===bk.length;
     alert(`${ok?"✓ Restore Complete":"⚠ Restore Check"}\n\nBackup Records: ${bk.length.toLocaleString()}\nRestored Records: ${DB.length.toLocaleString()}\n\nEarliest Date: ${vMin}\nLatest Date: ${vMax}\n\n${ok?"✓ All records restored successfully":"⚠ Count mismatch"}`);
