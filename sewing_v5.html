@@ -1093,22 +1093,24 @@ async function vcAutoSync(){
     const recent = allRecs.filter(r => (r.date||'') >= cutStr);
     try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
-    // ★ MERGE with local DB instead of replace
-    // GAS may only have recent data; local DB has full history from imports
+    // ★ MERGE with local DB (GAS may only have partial/recent data)
     const gasRecs = dedupAndNorm(allRecs);
     const localMax3 = getMaxDate(DB);
     const gasMax = getMaxDate(gasRecs);
-    console.log('[VRT Sync] vcAutoSync',
-      '| LOCAL MAX:', localMax3, '('+DB.length+')',
-      '| GAS MAX:', gasMax, '('+gasRecs.length+')');
-    // Merge: GAS data first (wins on conflict), then local data for dates GAS doesn't have
-    const mergedDB = dedupAndNorm([...gasRecs, ...DB]);
-    console.log('[VRT Sync] After merge:', mergedDB.length, 'records | MAX:', getMaxDate(mergedDB));
+    console.log('[VRT Sync] vcAutoSync | LOCAL:', DB.length, '(max:'+localMax3+') | GAS:', gasRecs.length, '(max:'+gasMax+')');
+    // Merge: local DB wins for dedup (preserves full history)
+    const mergedDB = dedupAndNorm([...DB, ...gasRecs]);
+    console.log('[VRT Sync] After merge:', mergedDB.length, '| MAX:', getMaxDate(mergedDB), '| MIN:', getMinDate(mergedDB));
     DB = mergedDB;
     updateHeader(); renderDBCard();
-    // ★ 持久化合併結果：手機重開後不再需要重新從 GAS 拉取
-    saveToCloudIDB(DB).catch(e=>console.warn('[VRT] cloudIDB save failed:',e));
-    saveDB(); // 存 file handle + localStorage（file handle 有的話會存全量）
+    // Persist merged result so device restarts don't lose data
+    try { await saveToMainIDB(); } catch(e) { console.warn('[VRT] mainIDB save:',e); }
+    saveToCloudIDB(DB).catch(e=>console.warn('[VRT] cloudIDB save:',e));
+    // markers only to localStorage
+    try {
+      localStorage.setItem('vrt_sewing_max_date', getMaxDate(DB));
+      localStorage.setItem('vrt_sewing_record_count', String(DB.length));
+    } catch(e) {}
 
     tip.textContent = `☁ 雲端同步完成（${mergedDB.length.toLocaleString()} 筆）`;
     tip.style.color = '#10b981';
@@ -1123,13 +1125,29 @@ async function vcAutoSync(){
 
 // ★ 供 script block 2 的 vcPull 面板使用：拉完資料後更新 DB + IDB + UI
 window.vcApplyCloudRecs = async function(allRecs, effData) {
-  try { await saveToCloudIDB(allRecs); } catch(e) { console.warn('cloudIDB write failed:', e); }
-  const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
-  const recent = allRecs.filter(r => (r.date||'') >= cutStr);
-  try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
+  // ★ MERGE cloud records with existing DB (never replace full history)
+  // GAS may only have recent/partial data; local DB may have older years
+  const gasRecs = dedupAndNorm(allRecs);
+  const localMax = getMaxDate(DB);
+  const gasMax   = getMaxDate(gasRecs);
+  console.log('[VRT] vcApplyCloudRecs | GAS:',gasRecs.length,'(max:',gasMax,') | Local:',DB.length,'(max:',localMax,')');
+  // Merge: local records first (local wins for dedup), then add GAS records
+  const merged = dedupAndNorm([...DB, ...gasRecs]);
+  DB = merged;
+  console.log('[VRT] After merge:',DB.length,'records | MAX:',getMaxDate(DB),'| MIN:',getMinDate(DB));
+
+  // Persist full merged data to VRT_SewingProduction IDB (no size limit)
+  try { await saveToMainIDB(); } catch(e) { console.warn('[VRT] mainIDB save:',e); }
+  // Also update cloudIDB with full merged set
+  try { await saveToCloudIDB(DB); } catch(e) { console.warn('[VRT] cloudIDB save:',e); }
+  // localStorage: markers only (DB is too large)
+  try {
+    localStorage.setItem('vrt_sewing_max_date', getMaxDate(DB));
+    localStorage.setItem('vrt_sewing_record_count', String(DB.length));
+  } catch(e) {}
   if (effData && effData.length) try { localStorage.setItem(LS_EFF, JSON.stringify(effData)); } catch(e) {}
-  DB = dedupAndNorm(allRecs);
-  updateHeader(); renderDBCard();
+
+  updateHeader(); renderDBCard(); renderDashboard();
 };
 
 // ═══════════════════════ TABS ═════════════════════════════════════════════════
