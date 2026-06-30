@@ -606,8 +606,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
             ✅ Northern Uniform<br>
             ✅ Dickson Industries<br>
             ✅ Magnus Textiles<br>
-            ✅ ALSCO（Singapore）<br>
-            ✅ ALS（Australian Linen Supply）<br>
+            ✅ ALSCO（Singapore SSNG / Malaysia SKUL）<br>
+            ✅ ALS（Australian Linen Supply, SORD）<br>
+            ✅ Vestis Services（Amazing Choice, 雙語）<br>
             ✅ LECHNER & Sons<br>
             ✅ Vestis / WPL（FGCL格式）<br>
             🤖 Virginia Linen / 其他 → Gemini AI<br>
@@ -1221,11 +1222,11 @@ const TEMPLATE_LIBRARY=[
 
   /* ---------- ALSCO（Alsco Pte Ltd, Singapore）— 新增 ---------- */
   {
-    id:'ALSCO',customer:'ALSCO PTE LTD',
-    detect:t=>/alsco\.com/i.test(t)||/Alsco Pte Ltd/i.test(t)||/\bSSNG\d/i.test(t),
+    id:'ALSCO',customer:'ALSCO',
+    detect:t=>/alsco\.com/i.test(t)||/Alsco Pte Ltd/i.test(t)||/Elis Workwear/i.test(t)||/Alsco Textile/i.test(t)||/\bSSNG\d/i.test(t)||/\bSKUL\d/i.test(t),
     header:{
-      customer:()=>'ALSCO PTE LTD',
-      po:t=>(t.match(/\b(SSNG\d{5,})\b/i)||[])[1]||null,
+      customer:t=>(/alsco\.com\.my/i.test(t)||/\bSKUL\d/i.test(t)||/Elis Workwear/i.test(t))?'ALSCO MALAYSIA':((/\bSSNG\d/i.test(t)||/Pte Ltd/i.test(t))?'ALSCO PTE LTD':'ALSCO'),
+      po:t=>(t.match(/\b(SSNG\d{4,}|SKUL\d{3,})\b/i)||[])[1]||null,
       vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
       orderDate:t=>(t.match(/Purchase Date:?\s*([\d]{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)||[])[1]||null,
       requiredDate:t=>(t.match(/Required Date:?\s*([\d]{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)||[])[1]||null,
@@ -1246,6 +1247,33 @@ const TEMPLATE_LIBRARY=[
         out.push({line_num:++i,itemCode:code,style:seg.slice(0,2).join('-'),color:color||null,size:size||null,
           qty:num(m[3]),unit:'Each',unitPrice:num(m[4]),amount:num(m[5]),
           description:desc.slice(0,120)});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- VESTIS SERVICES（Amazing Choice → Vestis，英西雙語）— 新增 ----------
+     版型：Line · ItemNumber · UM · Quantity · UnitCost · ExtendedCost；PO=CD……。 */
+  {
+    id:'VESTIS2',customer:'VESTIS SERVICES',
+    detect:t=>/VESTIS SERVICES/i.test(t)||/AMAZING CHOICE/i.test(t)||/ORDEN DE COMPRA/i.test(t)||/\bCD\d{8}\b/.test(t),
+    header:{
+      customer:()=>'VESTIS SERVICES',
+      po:t=>(t.match(/\b(CD\d{6,})\b/)||[])[1]||null,
+      revision:t=>(t.match(/\bCD\d{6,}\s+[\d\/]+\s+[\d\/]+\s+(\d+)\b/)||[])[1]||null,
+      orderDate:t=>(t.match(/\bCD\d{6,}\s+(\d{2}\/\d{2}\/\d{2})/)||t.match(/(\d{2}\/\d{2}\/\d{2})/)||[])[1]||null,
+      currency:t=>/DOLARES|DOLLAR/i.test(t)?'USD':null,
+      declaredTotal:t=>{const a=[...t.matchAll(/([\d,]+\.\d{2,4})/g)].map(x=>x[1]);return a.length?a[a.length-1]:null;}
+    },
+    line:(t)=>{
+      const out=[];
+      // Line  ItemNumber  UM  Quantity  UnitCost  ExtendedCost
+      const re=/(\d+)\s+([A-Z]\d{3,}|[A-Z0-9]{4,})\s+([A-Z]{2,4})\s+([\d,]+\.\d+)\s+([\d.]+)\s+([\d,]+\.\d{2,4})/g;
+      let m;
+      while((m=re.exec(t))!==null){
+        out.push({line_num:+m[1],itemCode:m[2],style:m[2],unit:m[3],
+          qty:num(m[4]),unitPrice:num(m[5]),amount:num(m[6]),
+          description:null,color:null,size:null});
       }
       return out;
     }
@@ -1402,6 +1430,7 @@ const ParserFactory=(()=>{
   function registered(){return TEMPLATE_LIBRARY.map(t=>({id:t.id,customer:t.customer}));}
   return{resolve,registered,generic};
 })();
+try{console.log('[VRT Orders] 解析引擎已載入 · '+(ParserFactory.registered().length)+' 家格式: '+ParserFactory.registered().map(x=>x.id).join(', ')+' (+GENERIC +Gemini)');}catch(e){}
 
 /* ════════════════ QUALITY CHECK（第十二部分） ════════════════ */
 const QualityCheck={
@@ -1455,8 +1484,8 @@ const MasterParser={
     let parser=ParserFactory.resolve(text);
     let res=parser.parse(text,ctx);
     // 命中 Generic 且結果薄弱、且啟用 AI → 改用 Gemini
-    if((parser.id==='GENERIC')&&(res.records.length===0)&&ctx.useAi&&ctx.apiKey){
-      if(typeof log==='function')log('未知格式 → 交給 Gemini AI','info');
+    if((res.records.length===0)&&parser.id!=='Gemini'&&ctx.useAi&&ctx.apiKey){
+      if(typeof log==='function')log(`${parser.id} 解析到 0 行 → 改用 Gemini AI`,'info');
       const g=new GeminiParser(ctx.apiKey);
       res=await g.parse(text,ctx);
       parser={id:'Gemini'};
