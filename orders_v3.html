@@ -115,7 +115,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3 · 企業級解析引擎</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
@@ -152,6 +152,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   <button class="tb" onclick="go('weekly',this)">📊 週報分析</button>
   <button class="tb" onclick="go('smv',this)">⏱ SMV分析</button>
   <button class="tb" onclick="go('carton',this)">📦 裝箱比對</button>
+  <span class="tab-sep">品質</span>
+  <button class="tb" onclick="go('qc',this)">🧪 解析品質</button>
   <span class="tab-sep">連動</span>
   <button class="tb" onclick="go('link',this)">🔗 生產連動</button>
   <button class="tb" onclick="go('settings',this)">⚙️ 設定</button>
@@ -164,12 +166,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
       <div class="dz" id="dz" onclick="document.getElementById('fi').click()"
         ondragover="dov(event)" ondragleave="dol(event)" ondrop="ddr(event)">
         <div style="font-size:28px;opacity:.6;margin-bottom:8px">📧</div>
-        <div style="font-size:13px;color:var(--tx2)">拖曳 .msg 郵件至此</div>
+        <div style="font-size:13px;color:var(--tx2)">拖曳 .msg / .pdf / .xlsx 至此</div>
         <div style="font-size:10px;color:var(--mu);margin-top:5px">
-          自動識別：ADI · Northern · Dickson · Magnus · Vestis/WPL · Virginia(AI) · 週報
+          自動識別：ADI · WPL · NU · Dickson · ALSCO · LECHNER · Magnus · Vestis · 其他→AI · 週報
         </div>
       </div>
-      <input type="file" id="fi" accept=".msg" multiple style="display:none" onchange="fsel(event)">
+      <input type="file" id="fi" accept=".msg,.pdf,.xls,.xlsx" multiple style="display:none" onchange="fsel(event)">
       <div style="margin-top:10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="font-size:10px;color:var(--tx2)">處理記錄</span>
@@ -542,6 +544,47 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   </div>
 </div>
 
+<!-- ══════════════════════ PARSE QC / 解析品質 ══════════════════════ -->
+<div id="pnl-qc" class="pnl">
+  <div class="info-box" style="margin-bottom:12px">
+    <strong>🧪 解析品質 / Parse Quality</strong>：每次匯入的 Template 命中、信心分數（0–100）、QC 檢查（總額／數量／價格／日期）與複核佇列。
+    來源＝解析審計（parse_audit）。信心 &lt;95 之明細列入複核。
+  </div>
+  <div class="krow" id="qc-kpis"></div>
+  <div class="fb">
+    <button class="btn bg2" style="font-size:10px;padding:4px 8px" onclick="expQcCsv()">⬇ 匯出QC CSV</button>
+    <button class="btn bd2" style="font-size:10px;padding:4px 8px" onclick="clearQc()">🗑 清除審計</button>
+  </div>
+  <div class="sec">
+    <div class="sh"><span class="st">解析審計（各次匯入）</span><span style="font-size:10px;color:var(--mu)" id="qc-count"></span></div>
+    <div class="tw">
+      <table class="dt">
+        <thead><tr>
+          <th>檔案</th><th>客戶</th><th>PO</th><th>Parser</th>
+          <th class="num">明細</th><th class="ctr">平均信心</th>
+          <th class="num">表頭總額</th><th class="num">明細加總</th><th class="ctr">總額一致</th>
+          <th class="num">QC問題</th><th class="num">需複核</th><th>時間</th>
+        </tr></thead>
+        <tbody id="qc-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="g2" style="margin-top:12px">
+    <div class="sec">
+      <div class="sh"><span class="st">QC 問題清單（最近匯入）</span></div>
+      <div class="sb" id="qc-issues"><div class="empty"><div class="ei">✅</div><p>尚無問題</p></div></div>
+    </div>
+    <div class="sec">
+      <div class="sh"><span class="st">🔎 複核佇列（信心&lt;95）</span></div>
+      <div class="sb" id="qc-review"><div class="empty"><div class="ei">👍</div><p>無待複核項目</p></div></div>
+    </div>
+  </div>
+  <div class="sec" style="margin-top:12px">
+    <div class="sh"><span class="st">Template Library（已註冊客戶格式）</span><span style="font-size:10px;color:var(--mu)">新增客戶＝註冊一個 template，核心程式不變</span></div>
+    <div class="sb" id="qc-templates"></div>
+  </div>
+</div>
+
 <!-- ══════════════════════ SETTINGS ══════════════════════ -->
 <div id="pnl-settings" class="pnl">
   <div class="g2">
@@ -563,6 +606,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
             ✅ Northern Uniform<br>
             ✅ Dickson Industries<br>
             ✅ Magnus Textiles<br>
+            ✅ ALSCO（Singapore）<br>
+            ✅ LECHNER & Sons<br>
             ✅ Vestis / WPL（FGCL格式）<br>
             🤖 Virginia Linen / 其他 → Gemini AI<br>
             📊 VRT Weekly Open Order Summary
@@ -623,10 +668,10 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // ══ STATE ══
-const DBNAME='FactoryDB', DBVER=14;
+const DBNAME='FactoryDB', DBVER=15;
 let db=null;
 let APP={
-  orders:[],weekly:[],imports:[],
+  orders:[],weekly:[],imports:[],audit:[],
   sewing:[],cutting:[], // from linked systems
   sortCol:'customer',sortDir:1,
   period:'all',smvPeriod:'week',linkPeriod:'week',
@@ -644,6 +689,7 @@ function openDB(){
         ['po_lines',{keyPath:'id',autoIncrement:true}],
         ['weekly_snapshots',{keyPath:'id',autoIncrement:true}],
         ['order_imports',{keyPath:'id',autoIncrement:true}],
+        ['parse_audit',{keyPath:'id',autoIncrement:true}],
       ];
       stores.forEach(([name,opts])=>{
         if(!d.objectStoreNames.contains(name)){
@@ -731,6 +777,7 @@ async function loadAll(){
   APP.orders=await dbAll('po_lines');
   APP.weekly=await dbAll('weekly_snapshots');
   APP.imports=await dbAll('order_imports');
+  try{APP.audit=await dbAll('parse_audit');}catch(e){APP.audit=[];}
   // Read sewing: SewingCloudProd IDB first, then localStorage fallback
   APP.sewing=await readSewingFromLocalStorage();
   // Read cutting from CuttingProd IDB (cutting_v3 storage)
@@ -868,119 +915,560 @@ function parseDesc(t){
 }
 function parseVDate(d){const m=d.match(/(\d{2})\/(\d{2})\/(\d{2,4})/);if(!m)return d;const yr=parseInt(m[3])<100?(parseInt(m[3])<50?2000+parseInt(m[3]):1900+parseInt(m[3])):parseInt(m[3]);return`${m[1]}/${m[2]}/${yr}`;}
 
-function parseADI(t){
-  const h={customer:'AMERICAN DAWN INC',format:'ADI'};
-  h.po_number=(t.match(/(\d{6,7})\s/)||[])[1]||'';
-  h.order_date=(t.match(/Date\s+([\d-]+)/i)||[])[1]||'';
-  const lines=[];const re=/(\d+)\s+([A-Z0-9]+)\s+(\d{2}-[A-Z]{3}-\d{2,4})\s+([\d.]+)\s+Each\s+N?([\d.]+)\s+([\d.,]+)/g;
-  let m;
-  while((m=re.exec(t))!==null){
-    const{color,size,style}=parseSkuCS(m[2],t.slice(m.index,m.index+200));
-    lines.push({line_num:+m[1],sku:m[2],style_code:style,color,size,cancel_date:m[3],ship_date:'',order_date:h.order_date,qty:+m[4],unit_price:+m[5],ext_price:+(m[6].replace(',','')),description:t.slice(m.index+m[0].length,m.index+m[0].length+100).split('\n')[0].trim().substring(0,100)});
-  }
-  return{header:h,lines};
+/* ════════════════════════════════════════════════════════════════════════
+   VRT ORDER MANAGEMENT v4 — ENTERPRISE PARSING ENGINE
+   ------------------------------------------------------------------------
+   設計模式：
+     • Strategy Pattern  → 每個客戶一個 Parser（BaseParser 子代理）
+     • Factory Pattern   → ParserFactory.resolve() 依文字內容選 Parser
+     • Template Library  → 宣告式 TEMPLATE_LIBRARY；新增客戶＝註冊一個 template
+                           核心程式完全不需要修改（可擴充至 50+ 客戶）
+   資料原則：
+     • Normalize Engine  → 所有 Parser 一律輸出同一份正規化記錄（SSOT）
+     • 不存在欄位填 null（不得留空字串）
+   品質：
+     • QualityCheck      → Header 總額 vs 明細加總、數量/價格/日期合理性…
+     • Confidence        → 每筆 0~100 分，<95 進入複核佇列
+     • DateEngine        → 所有日期方言統一成 ISO 'YYYY-MM-DD'（本地時區，不用 toISOString）
+   相容性：
+     • 引擎輸出最終映射回現有 po_lines / po_headers 結構，
+       下游（訂單總表、樞紐、SMV、裝箱、連動、雲端同步）完全不變。
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ---------- 共用：本地時間字串（取代 toISOString，符合硬規則） ---------- */
+/** 回傳本地時區的 'YYYY-MM-DD HH:mm:ss' */
+function nowLocal(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
-function parseNorthern(t){
-  const h={customer:'NORTHERN UNIFORM',format:'NORTHERN'};
-  h.po_number=(t.match(/Order Date:\s*([A-Z0-9-]+)/i)||t.match(/PO:\s*([A-Z0-9-]+)/i)||[])[1]?.trim()||'';
-  h.order_date=(t.match(/(\w+\s+\d+,\s*\d{4})/)||[])[1]||'';
-  const lines=[];const re=/Line\s+(\d+)\s+([A-Z0-9]+)\s+(.*?)\s+([\d.]+)\s+\$\s*([\d,.]+)/g;let m;
-  while((m=re.exec(t))!==null){
-    const after=t.slice(m.index,m.index+500);
-    const{color,size:sz,style}=parseSkuCS(m[2],m[3]);
-    const sM=after.match(/Size\s+([A-Z0-9X]+)/i);
-    lines.push({line_num:+m[1],sku:m[2],style_code:style,color,size:sM?ns(sM[1]):sz,cancel_date:'',ship_date:'',order_date:h.order_date,qty:+(after.match(/Qty\s+(\d+)/i)||[0,0])[1],unit_price:+m[4],ext_price:+(m[5].replace(',','')),description:m[3].trim().substring(0,100)});
-  }
-  return{header:h,lines};
-}
-function parseDickson(t){
-  const h={customer:'DICKSON INDUSTRIES INC',format:'DICKSON'};
-  h.po_number=(t.match(/Purchase Order No:\s*(\d+)/i)||[])[1]?.trim()||'';
-  h.order_date=(t.match(/PO[.\s]+Date:\s*([\d-]+)/i)||t.match(/(\d{2}-\d{2}-\d{4})/)||[])[1]||'';
-  const ship_date=(t.match(/Requested Delivery Date\s*([^\n]+)/i)||[])[1]?.trim()||'';
-  const lines=[];const re=/(\d{4})\s+([\s\S]{10,200}?)\s+(\d+)\s+1\s+\$([\d.]+)\s+\$([\d,.]+)/g;let m;
-  while((m=re.exec(t))!==null){
-    const rd=m[2].replace(/\s+/g,' ').trim();
-    const sm=rd.match(/\b(XS|SM|SML|MD|MED|LR|LRG|XL|2X|3X|4X|5X)\b/i);
-    const cm=rd.match(/\b(WHITE|NAVY|BLACK|GREY|GRAY|RED|MAROON|ROYAL|KHAKI|KCT|NBL)\b/i);
-    const sty=(rd.match(/^(DI[-\s]?\d+)/i)||[])[1]||('DI-'+m[1]);
-    lines.push({line_num:lines.length+1,sku:m[1],style_code:sty,color:cm?nc(cm[1]):'',size:sm?ns(sm[1]):'',cancel_date:'',ship_date,order_date:h.order_date,qty:+m[3],unit_price:+m[4],ext_price:+(m[5].replace(',','')),description:rd.substring(0,120)});
-  }
-  if(!lines.length){const re2=/(\d{4})\s+.*?(\d+)\s+1\s+\$([\d.]+)/g;while((m=re2.exec(t))!==null&&lines.length<50)lines.push({line_num:lines.length+1,sku:m[1],style_code:'DI-'+m[1],color:'',size:'',cancel_date:'',ship_date,order_date:h.order_date,qty:+m[2],unit_price:+m[3],ext_price:0,description:''});}
-  return{header:h,lines};
-}
-function parseMagnus(t){
-  const h={customer:'MAGNUS TEXTILES',format:'MAGNUS'};
-  h.po_number=(t.match(/^(PO\d+)/m)||t.match(/(PO\d+)/)||[])[1]||'';
-  h.order_date=(t.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)||[])[1]||'';
-  const ship_date=(t.match(/Receive By\s+([\d\/]+)/i)||[])[1]||'';
-  const lines=[];const re=/([A-Z0-9][-A-Z0-9]+(?:-GL)?)\s+([\w-]+)\s+(\d+)\s+EA\s+\$([\d.]+)\s+\$([\d.,]+)/g;let m;
-  while((m=re.exec(t))!==null){
-    const before=t.slice(Math.max(0,m.index-300),m.index);
-    const desc=(before.split('\n').filter(l=>l.trim().length>5).slice(-1)[0]||'').trim();
-    const{color,size,style}=parseMagnusCS(m[1],desc);
-    lines.push({line_num:lines.length+1,sku:m[1],style_code:style,color,size,cancel_date:ship_date,ship_date,order_date:h.order_date,qty:+m[3],unit_price:+m[4],ext_price:+(m[5].replace(',','')),description:desc.substring(0,120)});
-  }
-  return{header:h,lines};
-}
-function parseVestis(t){
-  let customer='VESTIS';
-  if(t.includes('WHITE PLAIN LINEN')||t.includes('VRT PO'))customer='WHITE PLAIN LINEN';
-  const h={customer,format:'VESTIS'};
-  h.po_number=(t.match(/Batch\s*#\s*(FGCL[-\s]?\w+)/i)||t.match(/(FGCL[-\s]?\w+)/i)||[])[1]?.replace(/\s/g,'')||'';
-  h.order_date=(t.match(/Date Created:\s*([\d\/]+)/i)||[])[1]||'';
-  const lines=[];const seen=new Set();
-  const re=/([A-Z][A-Z0-9]{3,15})\s+([A-Z][A-Z0-9]{3,15})\s+([\w,\s]+?)\s+(\d{2}\/\d{2}\/\d{2})\s+\w+\s+EA\s+([A-Z0-9]+)\s+(\w+)\s+([A-Z]{3,})\s+([A-Z0-9]+)\s+N\/A\s+(\d+)\s+\$([\d.]+)/g;
-  let m;
-  while((m=re.exec(t))!==null){
-    const k=m[1]+m[4]+m[6];if(seen.has(k))continue;seen.add(k);
-    const sd=parseVDate(m[4]);
-    lines.push({line_num:lines.length+1,sku:m[1],style_code:m[7],color:nc(m[6]),size:ns(m[8]),cancel_date:sd,ship_date:sd,order_date:h.order_date,qty:+m[9],unit_price:+m[10],ext_price:+m[10],description:(m[3]||'').trim().substring(0,120)});
-  }
-  if(!lines.length){
-    const re2=/([A-Z][A-Z0-9]{3,20})\s+.*?(\d{2}\/\d{2}\/\d{2})\s+.*?(\d+)\s+\$([\d.]+)\s+\$([\d.]+)/g;const seen2=new Set();
-    while((m=re2.exec(t))!==null){if(seen2.has(m[1]+m[2]))continue;seen2.add(m[1]+m[2]);const{color,size,style}=parseSkuCS(m[1],t.slice(m.index-100,m.index+200));const sd=parseVDate(m[2]);lines.push({line_num:lines.length+1,sku:m[1],style_code:style,color,size,cancel_date:sd,ship_date:sd,order_date:h.order_date,qty:+m[3],unit_price:+m[4],ext_price:+m[5],description:''});}
-  }
-  return{header:h,lines};
-}
-async function aiParse(t,key){
-  if(!key)return null;
-  try{
-    const prompt=`Parse this garment factory PO. Return ONLY JSON (no markdown):
-{"customer":"","po_number":"","order_date":"","lines":[{"line_num":1,"sku":"","style_code":"","color":"","size":"","description":"","qty":0,"unit_price":0,"ext_price":0,"ship_date":"","cancel_date":""}]}
-PO TEXT:\n${t.substring(0,3000)}`;
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2048}})});
-    const d=await r.json();
-    if(d.error){
-      const msg=d.error.message||'';
-      const isQuota=msg.toLowerCase().includes('quota')||msg.toLowerCase().includes('limit')||d.error.code===429;
-      if(isQuota){
-        log('⚠ Gemini 免費額度已用盡（每分鐘15次/每天1500次上限）','warn');
-        log('→ 請稍等1分鐘後再試，或明天額度重置後繼續','warn');
-        log('→ 此檔案將跳過，其他已知格式的PO不受影響','warn');
-      } else {
-        log('Gemini錯誤: '+msg,'err');
-      }
-      return null;
+
+/* ════════════════ DATE ENGINE（第七部分） ════════════════ */
+const DateEngine=(()=>{
+  // 月份字典：三字母與全名
+  const MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12,
+    JANUARY:1,FEBRUARY:2,MARCH:3,APRIL:4,JUNE:6,JULY:7,AUGUST:8,SEPTEMBER:9,OCTOBER:10,NOVEMBER:11,DECEMBER:12};
+  /** 兩位數年份補成四位數（70 以下視為 20xx） */
+  const yy=n=>{n=+n;return n<100?(n<70?2000+n:1900+n):n;};
+  const pad=n=>String(n).padStart(2,'0');
+  /** 以 Y/M/D 直接組 ISO 字串，避免時區位移 */
+  const iso=(y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
+  /**
+   * 將任何支援的日期方言正規化為 ISO 'YYYY-MM-DD'，無法辨識回傳 null。
+   * 支援：23-AUG-26 / 09-JAN-2026 / 23 Aug 2026 / June 12 2026 / Aug 23, 2026
+   *       2026/08/23 / 2026-08-23 / 08/23/2026 / 06-17-2026 / 10/3/2025 / 23.08.2026
+   */
+  function normalize(raw){
+    if(raw==null)return null;
+    const s=String(raw).trim();
+    if(!s)return null;
+    let m;
+    // 23-AUG-26 或 09-JAN-2026（日-月名-年）
+    if((m=s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s.]*(\d{2,4})$/))){const mo=MON[m[2].toUpperCase()];if(mo)return iso(yy(m[3]),mo,+m[1]);}
+    // June 12 2026 / Aug 23, 2026（月名-日-年）
+    if((m=s.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/))){const mo=MON[m[1].toUpperCase()];if(mo)return iso(+m[3],mo,+m[2]);}
+    // 23 Aug 2026（日-月名-年）
+    if((m=s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\.?\s+(\d{4})$/))){const mo=MON[m[2].toUpperCase()];if(mo)return iso(+m[3],mo,+m[1]);}
+    // 2026/08/23 或 2026-08-23（ISO 樣式）
+    if((m=s.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})$/)))return iso(+m[1],+m[2],+m[3]);
+    // 08/23/2026 / 06-17-2026 / 10/3/2025（美式 m/d/y）；23.08.2026（歐式 d.m.y，以「點」判斷）
+    if((m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/))){
+      const dot=s.includes('.');
+      let a=+m[1],b=+m[2],y=yy(m[3]),mo,d;
+      if(dot){d=a;mo=b;}else{mo=a;d=b;}
+      if(mo>12&&d<=12){const t=mo;mo=d;d=t;}            // 月份不可能 >12 → 互換
+      if(mo>=1&&mo<=12&&d>=1&&d<=31)return iso(y,mo,d);
     }
-    const raw=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    if(!raw){log('Gemini 回傳空白，略過此PDF','warn');return null;}
-    const p=JSON.parse(raw.replace(/```json|```/g,'').trim());
-    return{header:{customer:p.customer||'UNKNOWN',po_number:p.po_number||'',order_date:p.order_date||'',format:'Gemini'},lines:(p.lines||[]).map((l,i)=>({line_num:l.line_num||i+1,sku:l.sku||'',style_code:l.style_code||l.sku||'',color:nc(l.color||''),size:ns(l.size||''),description:l.description||'',qty:+l.qty||0,unit_price:+l.unit_price||0,ext_price:+l.ext_price||0,ship_date:l.ship_date||'',cancel_date:l.cancel_date||'',order_date:p.order_date||''}))};
-  }catch(e){log('AI解析失敗: '+e.message,'err');return null;}
+    return null;
+  }
+  /** 由 ISO 日期推導週期欄位（本地，FY 預設四月起算） */
+  function parts(isoDate){
+    if(!isoDate)return{year:null,month:null,quarter:null,week:null,isoWeek:null,fiscalMonth:null,fiscalQuarter:null};
+    const [y,mo,d]=isoDate.split('-').map(Number);
+    const q=Math.floor((mo-1)/3)+1;
+    const t=new Date(y,mo-1,d);
+    const day=(t.getDay()+6)%7;t.setDate(t.getDate()-day+3);
+    const firstThu=new Date(t.getFullYear(),0,4);
+    const isoW=1+Math.round(((t-firstThu)/86400000-3+((firstThu.getDay()+6)%7))/7);
+    const fm=((mo-4+12)%12)+1, fq=Math.floor((fm-1)/3)+1;
+    return{year:y,month:mo,quarter:q,week:isoW,isoWeek:`${t.getFullYear()}-W${pad(isoW)}`,fiscalMonth:fm,fiscalQuarter:fq};
+  }
+  return{normalize,parts};
+})();
+
+/* ════════════════ NORMALIZE ENGINE（第三部分） ════════════════ */
+// 唯一的正規化欄位集合（SSOT）。所有 Parser 最終都輸出這個形狀。
+const NORM_FIELDS=['customer','po','revision','vendor','style','itemCode','description',
+  'color','size','qty','unit','unitPrice','amount','currency','orderDate','shipDate',
+  'cancelDate','requiredDate','delivery','incoterm','shipVia','status',
+  'sourceFile','sourcePage','parser','confidence'];
+/** 由 partial 建立正規化記錄；缺漏欄位一律填 null（不得留空字串） */
+function normRecord(p={}){
+  const r={};
+  for(const k of NORM_FIELDS){let v=p[k];if(v===undefined||v==='')v=null;r[k]=v;}
+  return r;
 }
-function parsePO(t,key){
-  const fmt=detectFmt(t);log(`格式: ${fmt}`,'info');
-  if(fmt==='ADI')return Promise.resolve(parseADI(t));
-  if(fmt==='NORTHERN')return Promise.resolve(parseNorthern(t));
-  if(fmt==='DICKSON')return Promise.resolve(parseDickson(t));
-  if(fmt==='MAGNUS')return Promise.resolve(parseMagnus(t));
-  if(fmt==='VESTIS')return Promise.resolve(parseVestis(t));
-  if(key){log('Gemini AI解析中…','info');return aiParse(t,key);}
-  log('未知格式，請設定 Gemini API Key','warn');
-  return Promise.resolve({header:{customer:'UNKNOWN',format:'UNKNOWN',po_number:'',order_date:''},lines:[]});
+/** 安全數字（移除 $ 與千分位逗號），失敗回 null */
+function num(v){
+  if(v==null)return null;
+  if(typeof v==='number')return isNaN(v)?null:v;
+  const n=parseFloat(String(v).replace(/[,$\s]/g,''));
+  return isNaN(n)?null:n;
 }
+
+/* ════════════════ BASE PARSER（Strategy） ════════════════ */
+class BaseParser{
+  /** @param {object} tpl 宣告式客戶 template */
+  constructor(tpl){this.tpl=tpl;this.id=tpl.id;this.customer=tpl.customer;}
+  /** 是否能解析此文字？委派給 template.detect */
+  canParse(text){try{return !!this.tpl.detect(text);}catch(e){return false;}}
+  /** 解析 Header：template.header 每欄為 regex 或 function */
+  parseHeader(text){
+    const h={},H=this.tpl.header||{};
+    for(const [k,rule] of Object.entries(H))
+      h[k]=typeof rule==='function'?rule(text):((text.match(rule)||[])[1]||null);
+    return h;
+  }
+  /** 解析明細：template.line(text,header) → partial 陣列 */
+  parseLines(text,header){return this.tpl.line?this.tpl.line(text,header):[];}
+  /** 完整解析 → {header, records[]}（已正規化、已正規化日期） */
+  parse(text,ctx={}){
+    const header=this.parseHeader(text)||{};
+    const raw=this.parseLines(text,header)||[];
+    const records=raw.map(ln=>{
+      const rec=normRecord({
+        customer:header.customer||this.customer,
+        po:header.po||null,revision:header.revision||null,vendor:header.vendor||null,
+        currency:header.currency||null,incoterm:header.incoterm||null,shipVia:header.shipVia||null,
+        requiredDate:DateEngine.normalize(header.requiredDate),
+        ...ln,
+        orderDate:DateEngine.normalize(ln.orderDate||header.orderDate),
+        shipDate:DateEngine.normalize(ln.shipDate),
+        cancelDate:DateEngine.normalize(ln.cancelDate),
+        sourceFile:ctx.fileName||null,sourcePage:ln.sourcePage||null,
+        parser:this.id,status:'open'
+      });
+      // 數量回推：若 qty 缺、但金額與單價齊全 → qty = round(amount / unitPrice)
+      if((rec.qty==null||rec.qty<=0)&&rec.amount!=null&&rec.unitPrice){
+        const q=Math.round(rec.amount/rec.unitPrice);
+        if(q>0)rec.qty=q;
+      }
+      return rec;
+    });
+    return{header:{...header,customer:header.customer||this.customer,format:this.id},records,declaredTotal:num(header.declaredTotal)};
+  }
+}
+
+/* ════════════════ TEMPLATE LIBRARY（第二部分） ════════════════
+   新增客戶＝在此陣列加入一個 template 物件，核心程式碼不需修改。 */
+const TEMPLATE_LIBRARY=[
+
+  /* ---------- ADI（American Dawn Inc.） ---------- */
+  {
+    id:'ADI',customer:'AMERICAN DAWN INC',
+    detect:t=>/american\s*dawn/i.test(t),
+    header:{
+      customer:()=>'AMERICAN DAWN INC',
+      po:t=>(t.match(/PURCHASE ORDER NUMBER[\s\S]{0,40}?(\d{6,7})/i)||t.match(/\b(\d{6})\b\s+\d{2}-[A-Z]{3}-\d{2}/i)||[])[1]||null,
+      revision:t=>(t.match(/REVISION[\s\S]{0,20}?\b(\d{1,2})\b/i)||[])[1]||null,
+      vendor:t=>(t.match(/VENDOR NO\.?\s*([A-Z0-9]+)/i)||[])[1]||null,
+      orderDate:t=>(t.match(/\b(\d{2}-[A-Z]{3}-\d{2,4})\b/)||[])[1]||null,
+      incoterm:t=>/\bFOB\b/.test(t)?'FOB':null,
+      currency:t=>/US Dollar/i.test(t)?'USD':null,
+      declaredTotal:t=>(t.match(/TOTAL\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[],seen=new Set();
+      // item  sku  due-date  qty  Each  price  ext  [T]
+      const re=/(\d+)\s+([A-Z0-9]+)\s+(\d{2}-[A-Z]{3}-\d{2,4})\s+([\d.]+)\s+Each\s+N?\s*([\d.]+)\s+([\d.,]+)\s*([NY])?/g;
+      let m;
+      while((m=re.exec(t))!==null){
+        const key=m[1]+'|'+m[2];if(seen.has(key))continue;seen.add(key);
+        const ctx=t.slice(m.index,m.index+220);
+        let {color,size,style}=parseSkuCS(m[2],ctx);
+        if(!size){const SZX={SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XXL:'2XL',XS:'XS',XL:'XL','2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL','1X':'1XL'};const sm=m[2].toUpperCase().match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)$/);if(sm)size=SZX[sm[1]]||ns(sm[1]);}
+        const desc=(ctx.split(/\s{2,}|\n/)[1]||'').trim().slice(0,120);
+        out.push({line_num:+m[1],itemCode:m[2],style:style||m[2],color,size,
+          shipDate:m[3],cancelDate:m[3],qty:num(m[4]),unit:'Each',
+          unitPrice:num(m[5]),amount:num(m[6]),description:desc||null});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- WPL（White Plains Linen） ---------- */
+  {
+    id:'WPL',customer:'WHITE PLAINS LINEN',
+    detect:t=>/white\s*plains?\s*linen/i.test(t),
+    header:{
+      customer:()=>'WHITE PLAINS LINEN',
+      po:t=>(t.match(/P\.?O\.?\s*Number:?\s*0*(\d+)/i)||[])[1]||null,
+      vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
+      orderDate:t=>(t.match(/Order Date:?\s*([\d\/]+)/i)||[])[1]||null,
+      requiredDate:t=>(t.match(/Required Date[\s\S]{0,30}?([\d\/]{6,10})/i)||[])[1]||null,
+      incoterm:t=>(t.match(/\b(PEEKSKILL|DDP|FOB)\b/i)||[])[1]||null,
+      declaredTotal:t=>(t.match(/Order Total:?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[],seen=new Set();
+      // itemCode  Whse: 000  ordered  unitcost  amount  description...
+      const re=/([0-9A-Za-z][0-9A-Za-z\-]{4,})\s+Whse:\s*\d+\s+([\d,]+\.\d{2})\s+([\d.]+)\s+([\d,]+\.\d{2})\s+([A-Z][A-Z0-9 \/\-]+?)(?=\s+[0-9A-Za-z][0-9A-Za-z\-]{4,}\s+Whse:|\s+Continued|\s+Net Order|\s+Order Total|\s+Subtotal|\s+Page:|$)/g;
+      let m,i=0;
+      while((m=re.exec(t))!==null){
+        if(seen.has(m[1]))continue;seen.add(m[1]);
+        const desc=m[5].replace(/\s+/g,' ').trim();
+        const {color,size}=parseDesc(desc);
+        out.push({line_num:++i,itemCode:m[1],style:m[1].split('-')[0],color,size,
+          qty:num(m[2]),unit:'EA',unitPrice:num(m[3]),amount:num(m[4]),
+          description:desc.slice(0,120)});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- NU（Northern Uniform / Vantage River Order Form） ----------
+     特殊版型：上半部為 Line/SKU/Desc/Price/Ext，尺寸與數量在另一欄區塊。
+     數量以 round(ext/price) 回推（ext = qty × price），可靠且免猜位置。 */
+  {
+    id:'NU',customer:'NORTHERN UNIFORM',
+    detect:t=>/northern\s*uniform/i.test(t)||/Vantage River Order Form/i.test(t),
+    header:{
+      customer:()=>'NORTHERN UNIFORM',
+      po:t=>(t.match(/PO:?\s*([A-Z]\d{2}-\d{3,4})/i)||t.match(/Order Date:\s*([A-Z0-9-]+)/i)||[])[1]||null,
+      orderDate:t=>(t.match(/Order Date:?\s*([A-Za-z]+\s+\d{1,2}\s+\d{4})/i)||[])[1]||null,
+      declaredTotal:t=>(t.match(/TOTAL\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[];
+      // Line N  SKU  Description  price  $ ext
+      const re=/Line\s+(\d+)\s+([A-Z0-9]+)\s+(.+?)\s+([\d.]+)\s*\$\s*([\d,]+\.\d{2})/g;
+      let m;
+      while((m=re.exec(t))!==null){
+        const desc=m[3].replace(/\s+/g,' ').trim();
+        const {color,size}=parseDesc(desc);
+        out.push({line_num:+m[1],itemCode:m[2],style:m[2],color,size:size||null,
+          unit:'EA',unitPrice:num(m[4]),amount:num(m[5]),
+          description:desc.slice(0,120)}); // qty 由 BaseParser 以 ext/price 回推
+      }
+      return out;
+    }
+  },
+
+  /* ---------- DICKSON（Dickson Industries） ---------- */
+  {
+    id:'DICKSON',customer:'DICKSON INDUSTRIES INC',
+    detect:t=>/dickson\s*industries/i.test(t),
+    header:{
+      customer:()=>'DICKSON INDUSTRIES INC',
+      po:t=>(t.match(/PO#\s*(\d+)/i)||t.match(/\b(\d{6})\b\s+\d{2}-\d{2}-\d{4}/)||[])[1]||null,
+      vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
+      orderDate:t=>(t.match(/\b(\d{2}-\d{2}-\d{4})\b/)||[])[1]||null,
+      requiredDate:t=>(t.match(/REQUESTED\s*DELIVERY\s*DATE[\s\S]{0,40}?\b(ASAP|[\d-\/]{6,10})/i)||[])[1]||null,
+      declaredTotal:t=>(t.match(/TOTAL\s*\$\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[];
+      // qty  materialId  description...  $price per 1 un  $ext
+      const re=/(\d+)\s+(\d{3,4})\s+(.+?)\s+\$([\d.]+)\s+per\s+1\s+un\s+\$([\d,]+\.\d{2})/g;
+      let m,i=0;
+      while((m=re.exec(t))!==null){
+        const desc=m[3].replace(/\s+/g,' ').trim();
+        const {color,size}=parseDesc(desc);
+        const style=(desc.match(/^(DI\s?\d+)/i)||[])[1]||('DI-'+m[2]);
+        out.push({line_num:++i,itemCode:m[2],style,color,size,
+          qty:num(m[1]),unit:'un',unitPrice:num(m[4]),amount:num(m[5]),
+          description:desc.slice(0,120)});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- ALSCO（Alsco Pte Ltd, Singapore）— 新增 ---------- */
+  {
+    id:'ALSCO',customer:'ALSCO PTE LTD',
+    detect:t=>/\bAlsco\b/i.test(t)||/alsco\.com/i.test(t),
+    header:{
+      customer:()=>'ALSCO PTE LTD',
+      po:t=>(t.match(/\b(SSNG\d{5,})\b/i)||[])[1]||null,
+      vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
+      orderDate:t=>(t.match(/Purchase Date:?\s*([\d]{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)||[])[1]||null,
+      requiredDate:t=>(t.match(/Required Date:?\s*([\d]{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)||[])[1]||null,
+      currency:t=>/US Dollars?/i.test(t)?'USD':null,
+      declaredTotal:t=>(t.match(/Purchase Total\s*\$?\s*([\d,]+\.\d{2})/i)||t.match(/Sub Total\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[];
+      // itemCode  description  Each  qty  unitprice  amount
+      const re=/([A-Z0-9][A-Z0-9\-]{4,})\s+(.+?)\s+Each\s+(\d+)\s+([\d.]+)\s+([\d.]+)\b/g;
+      let m,i=0;
+      while((m=re.exec(t))!==null){
+        const code=m[1],desc=m[2].replace(/\s+/g,' ').trim();
+        // 由代碼尾碼推色/碼，例：GCRCLS320BF-WH-L → WH=White, L=L
+        const seg=code.split('-');
+        let size=ns(seg[seg.length-1]||''),color=nc(seg[seg.length-2]||'');
+        if(!size||!color){const d=parseDesc(desc+' '+(t.slice(m.index+m[0].length,m.index+m[0].length+30)));if(!size&&d.size)size=d.size;if(!color&&d.color)color=d.color;}
+        out.push({line_num:++i,itemCode:code,style:seg.slice(0,2).join('-'),color:color||null,size:size||null,
+          qty:num(m[3]),unit:'Each',unitPrice:num(m[4]),amount:num(m[5]),
+          description:desc.slice(0,120)});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- MAGNUS（保留既有支援） ---------- */
+  {
+    id:'MAGNUS',customer:'MAGNUS TEXTILES',
+    detect:t=>/Magnus\s*Textile/i.test(t)||/Magnus\s*-\s*NJ/i.test(t),
+    header:{
+      customer:()=>'MAGNUS TEXTILES',
+      po:t=>(t.match(/\b(PO\d+)\b/)||[])[1]||null,
+      orderDate:t=>(t.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)||[])[1]||null,
+      declaredTotal:t=>(t.match(/TOTAL\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t,h)=>{
+      const out=[],ship=(t.match(/Receive By\s+([\d\/]+)/i)||[])[1]||null;
+      const re=/([A-Z0-9][-A-Z0-9]+(?:-GL)?)\s+([\w-]+)\s+(\d+)\s+EA\s+\$([\d.]+)\s+\$([\d.,]+)/g;
+      let m,i=0;
+      while((m=re.exec(t))!==null){
+        const before=t.slice(Math.max(0,m.index-300),m.index);
+        const desc=(before.split('\n').filter(l=>l.trim().length>5).slice(-1)[0]||'').trim();
+        const {color,size,style}=parseMagnusCS(m[1],desc);
+        out.push({line_num:++i,itemCode:m[1],style,color,size,
+          shipDate:ship,cancelDate:ship,qty:num(m[3]),unit:'EA',
+          unitPrice:num(m[4]),amount:num(m[5]),description:desc.slice(0,120)});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- VESTIS / FGCL（保留既有支援） ---------- */
+  {
+    id:'VESTIS',customer:'VESTIS',
+    detect:t=>/FGCL/i.test(t)||/Finished Goods Confirmation/i.test(t),
+    header:{
+      customer:t=>/(WHITE PLAIN LINEN|VRT PO)/i.test(t)?'WHITE PLAIN LINEN':'VESTIS',
+      po:t=>(t.match(/Batch\s*#\s*(FGCL[-\s]?\w+)/i)||t.match(/(FGCL[-\s]?\w+)/i)||[])[1]?.replace(/\s/g,'')||null,
+      orderDate:t=>(t.match(/Date Created:\s*([\d\/]+)/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[],seen=new Set();
+      const re=/([A-Z][A-Z0-9]{3,15})\s+([A-Z][A-Z0-9]{3,15})\s+([\w,\s]+?)\s+(\d{2}\/\d{2}\/\d{2})\s+\w+\s+EA\s+([A-Z0-9]+)\s+(\w+)\s+([A-Z]{3,})\s+([A-Z0-9]+)\s+N\/A\s+(\d+)\s+\$([\d.]+)/g;
+      let m,i=0;
+      while((m=re.exec(t))!==null){
+        const k=m[1]+m[4]+m[6];if(seen.has(k))continue;seen.add(k);
+        out.push({line_num:++i,itemCode:m[1],style:m[7],color:nc(m[6]),size:ns(m[8]),
+          shipDate:m[4],cancelDate:m[4],qty:num(m[9]),unit:'EA',
+          unitPrice:num(m[10]),amount:num(m[10]),description:(m[3]||'').trim().slice(0,120)});
+      }
+      return out;
+    }
+  },
+
+  /* ---------- LECHNER（Lechner & Sons）— 新增 ----------
+     注意：此版型「數量(QTY)」欄常與「箱數(CTNS)」黏在一起（例：1205＝數量120+箱數5），
+     數量欄不可信 → 一律以 amount/price 回推（BaseParser 內建），結果為乾淨整數。 */
+  {
+    id:'LECHNER',customer:'LECHNER & SONS',
+    detect:t=>/lechner/i.test(t),
+    header:{
+      customer:()=>'LECHNER & SONS',
+      po:t=>(t.match(/\b(BL\d{6,})\b/i)||[])[1]||null,
+      orderDate:t=>(t.match(/\b([A-Za-z]+\s+\d{1,2}\s+\d{4})\b/)||[])[1]||null,
+      incoterm:t=>/\bDDP\b/.test(t)?'DDP':null,
+      currency:t=>/\$/.test(t)?'USD':null,
+      declaredTotal:t=>(t.match(/TOTAL:\s*[\d\s]*\$([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[];let i=0;
+      const TC=s=>s?s[0].toUpperCase()+s.slice(1).toLowerCase():s;
+      // desc  itemCode(LS…)  COLOR  SIZE  …(PCS/BOX·QTY·CTNS 可能黏連)…  $price  $amount
+      const re=/([^$\n]+?)\s+(LS[O0-9A-Z]{3,})\s+(GREY|NAVY|WHITE|PURPLE|CHARCOAL|BLACK|ROYAL|RED|MAROON|KHAKI|GREEN)\s+([2-6]XL|1XL|XL|XS|S|M|L)[\s\S]*?\$\s*([\d.]+)\s+\$\s*([\d,]+\.\d{2})/gi;
+      let m;
+      while((m=re.exec(t))!==null){
+        out.push({line_num:++i,itemCode:m[2],style:m[2],color:TC(m[3]),size:ns(m[4]),
+          unit:'PCS',unitPrice:num(m[5]),amount:num(m[6]),
+          description:m[1].replace(/\s+/g,' ').trim().slice(0,120)}); // qty 由 amount/price 回推
+      }
+      return out;
+    }
+  }
+];
+
+/* ════════════════ GENERIC PARSER（無 template 命中時的啟發式） ════════════════ */
+class GenericParser extends BaseParser{
+  constructor(){super({id:'GENERIC',customer:'UNKNOWN',detect:()=>true,header:{
+    po:t=>(t.match(/\b(PO[#:\s]*[A-Z0-9-]{4,})\b/i)||[])[1]||null,
+    orderDate:t=>(t.match(/(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{1,2}-[A-Z]{3}-\d{2,4})/)||[])[1]||null
+  },line:(t)=>{
+    const out=[];let i=0;
+    // 啟發式：擷取「數量 … 單價 … 金額」樣式的行
+    const re=/([A-Z0-9][A-Z0-9\-]{3,})\s+(.{0,80}?)\s+(\d+)\s+(?:EA|Each|un|pcs)?\s*\$?([\d.]+)\s+\$?([\d,]+\.\d{2})/gi;
+    let m;
+    while((m=re.exec(t))!==null&&i<200){
+      const desc=m[2].replace(/\s+/g,' ').trim();
+      const {color,size}=parseDesc(desc);
+      out.push({line_num:++i,itemCode:m[1],style:m[1],color,size,
+        qty:num(m[3]),unitPrice:num(m[4]),amount:num(m[5]),description:desc.slice(0,120)});
+    }
+    return out;
+  }});}
+}
+
+/* ════════════════ GEMINI PARSER（第十四部分，只在未知格式呼叫） ════════════════ */
+class GeminiParser{
+  constructor(apiKey){this.id='Gemini';this.apiKey=apiKey;}
+  /** 只回傳 JSON；額度/錯誤回 null（由上層 log） */
+  async parse(text,ctx={}){
+    if(!this.apiKey)return{header:{customer:'UNKNOWN',format:'UNKNOWN'},records:[]};
+    try{
+      const prompt=`Parse this garment factory PO. Return ONLY JSON (no markdown):
+{"customer":"","po":"","order_date":"","lines":[{"line_num":1,"itemCode":"","style":"","color":"","size":"","description":"","qty":0,"unitPrice":0,"amount":0,"shipDate":"","cancelDate":""}]}
+PO TEXT:\n${text.substring(0,3500)}`;
+      const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`;
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2048}})});
+      const d=await r.json();
+      if(d.error){
+        const msg=(d.error.message||'').toLowerCase();
+        if(msg.includes('quota')||msg.includes('limit')||d.error.code===429){
+          if(typeof log==='function'){log('⚠ Gemini 免費額度已用盡（每分鐘15次/每天1500次）','warn');log('→ 稍候1分鐘或明日重置後再試，其他已知格式不受影響','warn');}
+        }else if(typeof log==='function')log('Gemini錯誤: '+(d.error.message||''),'err');
+        return{header:{customer:'UNKNOWN',format:'Gemini'},records:[]};
+      }
+      const rawTxt=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      if(!rawTxt)return{header:{customer:'UNKNOWN',format:'Gemini'},records:[]};
+      const p=JSON.parse(rawTxt.replace(/```json|```/g,'').trim());
+      const recs=(p.lines||[]).map((l,i)=>normRecord({
+        customer:p.customer||'UNKNOWN',po:p.po||null,
+        line_num:l.line_num||i+1,itemCode:l.itemCode||l.sku||null,style:l.style||l.itemCode||null,
+        color:nc(l.color||''),size:ns(l.size||''),description:l.description||null,
+        qty:num(l.qty),unitPrice:num(l.unitPrice||l.unit_price),amount:num(l.amount||l.ext_price),
+        orderDate:DateEngine.normalize(p.order_date),shipDate:DateEngine.normalize(l.shipDate),
+        cancelDate:DateEngine.normalize(l.cancelDate),sourceFile:ctx.fileName||null,
+        parser:'Gemini',status:'open'
+      }));
+      return{header:{customer:p.customer||'UNKNOWN',po:p.po||null,orderDate:DateEngine.normalize(p.order_date),format:'Gemini'},records:recs,declaredTotal:null};
+    }catch(e){if(typeof log==='function')log('AI解析失敗: '+e.message,'err');return{header:{customer:'UNKNOWN',format:'Gemini'},records:[]};}
+  }
+}
+
+/* ════════════════ PARSER FACTORY（Factory Pattern） ════════════════ */
+const ParserFactory=(()=>{
+  // 由 template library 建立 strategy 實例（每個 template 一個 BaseParser）
+  const parsers=TEMPLATE_LIBRARY.map(tpl=>new BaseParser(tpl));
+  const generic=new GenericParser();
+  /** 依文字內容選出第一個能解析的 parser；皆未命中回 Generic */
+  function resolve(text){
+    for(const p of parsers)if(p.canParse(text))return p;
+    return generic;
+  }
+  /** 已註冊 template 清單（供 UI 展示擴充性） */
+  function registered(){return TEMPLATE_LIBRARY.map(t=>({id:t.id,customer:t.customer}));}
+  return{resolve,registered,generic};
+})();
+
+/* ════════════════ QUALITY CHECK（第十二部分） ════════════════ */
+const QualityCheck={
+  /** @returns {Array<{level:'error'|'warn',line:number|null,msg:string}>} */
+  run(records,declaredTotal){
+    const issues=[];
+    const sum=records.reduce((a,r)=>a+(r.amount||0),0);
+    // Header 總額 vs 明細加總
+    if(declaredTotal!=null&&Math.abs(sum-declaredTotal)>0.5)
+      issues.push({level:'error',line:null,msg:`總額不符：明細加總 $${sum.toFixed(2)} ≠ 表頭 $${declaredTotal.toFixed(2)}（差 $${(sum-declaredTotal).toFixed(2)}）`});
+    const seen=new Set();
+    records.forEach(r=>{
+      const ln=r.line_num||null;
+      if(r.qty==null||r.qty<=0)issues.push({level:'error',line:ln,msg:`數量缺失/異常 (${r.itemCode||'?'})`});
+      if(r.unitPrice==null||r.unitPrice<=0)issues.push({level:'warn',line:ln,msg:`單價缺失 (${r.itemCode||'?'})`});
+      if(r.amount==null)issues.push({level:'warn',line:ln,msg:`金額缺失 (${r.itemCode||'?'})`});
+      if(r.qty&&r.unitPrice&&r.amount!=null&&Math.abs(r.qty*r.unitPrice-r.amount)>Math.max(0.05,r.amount*0.02))
+        issues.push({level:'warn',line:ln,msg:`金額不符：${r.qty}×${r.unitPrice}≠${r.amount} (${r.itemCode||'?'})`});
+      if(r.orderDate&&r.shipDate&&r.orderDate>r.shipDate)
+        issues.push({level:'warn',line:ln,msg:`日期異常：下單(${r.orderDate})晚於出貨(${r.shipDate})`});
+      if(r.cancelDate&&r.shipDate&&r.cancelDate<r.shipDate)
+        issues.push({level:'warn',line:ln,msg:`取消日(${r.cancelDate})早於出貨日(${r.shipDate})`});
+      const dk=(r.po||'')+'|'+(r.itemCode||'')+'|'+(r.size||'');
+      if(seen.has(dk))issues.push({level:'warn',line:ln,msg:`重複明細 (${r.itemCode||'?'} ${r.size||''})`});
+      seen.add(dk);
+    });
+    return issues;
+  }
+};
+
+/* ════════════════ CONFIDENCE（第十三部分） ════════════════ */
+const Confidence={
+  // 各欄缺漏扣分權重
+  W:{po:30,qty:25,unitPrice:15,amount:10,shipDate:8,description:5,size:4,color:4,style:4},
+  /** 單筆 0~100 */
+  score(r){
+    let s=100;
+    for(const [k,w] of Object.entries(this.W))if(r[k]==null)s-=w;
+    return Math.max(0,Math.min(100,s));
+  }
+};
+
+/* ════════════════ MASTER PARSER（協調器） ════════════════ */
+const MasterParser={
+  /**
+   * @param {string} text PDF 萃取文字
+   * @param {{fileName?:string, apiKey?:string, useAi?:boolean}} ctx
+   * @returns {Promise<{header,records,declaredTotal,parser}>}
+   */
+  async parse(text,ctx={}){
+    let parser=ParserFactory.resolve(text);
+    let res=parser.parse(text,ctx);
+    // 命中 Generic 且結果薄弱、且啟用 AI → 改用 Gemini
+    if((parser.id==='GENERIC')&&(res.records.length===0)&&ctx.useAi&&ctx.apiKey){
+      if(typeof log==='function')log('未知格式 → 交給 Gemini AI','info');
+      const g=new GeminiParser(ctx.apiKey);
+      res=await g.parse(text,ctx);
+      parser={id:'Gemini'};
+    }
+    // 逐筆算信心
+    res.records.forEach(r=>{r.confidence=Confidence.score(r);});
+    return{...res,parserId:parser.id};
+  }
+};
+
+/* ════════════════ 對外橋接：維持舊 parsePO 介面（回傳 po_lines 形狀） ════════════════
+   下游 processFile / 渲染 / 雲端同步全部沿用 {header, lines}，零修改。 */
+async function parsePO(text,key,fileName){
+  const useAi=!!(APP&&APP.sets&&APP.sets.useAi);
+  const res=await MasterParser.parse(text,{fileName,apiKey:key,useAi});
+  const h=res.header||{};
+  // Header → 既有 po_headers 形狀（+ 擴充欄位）
+  const header={
+    customer:h.customer||'UNKNOWN',format:h.format||res.parserId||'UNKNOWN',
+    po_number:h.po||'',order_date:DateEngine.normalize(h.orderDate)||h.orderDate||'',
+    revision:h.revision||null,vendor:h.vendor||null,currency:h.currency||null,
+    incoterm:h.incoterm||null,declared_total:res.declaredTotal??null
+  };
+  // 正規化記錄 → 既有 po_lines 形狀（保留 confidence / currency / parser 擴充）
+  const lines=res.records.map(r=>({
+    line_num:r.line_num||0,sku:r.itemCode||'',style_code:r.style||r.itemCode||'',
+    color:r.color||'',size:r.size||'',cancel_date:r.cancelDate||'',ship_date:r.shipDate||'',
+    order_date:r.orderDate||header.order_date||'',qty:r.qty||0,
+    unit_price:r.unitPrice||0,ext_price:r.amount||0,
+    description:r.description||'',
+    confidence:r.confidence,currency:r.currency||header.currency||null,parser:r.parser||res.parserId
+  }));
+  // QC + 複核佇列 + 審計記錄
+  const issues=QualityCheck.run(res.records,res.declaredTotal);
+  const computed=res.records.reduce((a,r)=>a+(r.amount||0),0);
+  const confs=res.records.map(r=>r.confidence||0);
+  const avgConf=confs.length?Math.round(confs.reduce((a,b)=>a+b,0)/confs.length):0;
+  const reviewCount=confs.filter(c=>c<95).length;
+  const _audit={
+    file:fileName||null,customer:header.customer,po:header.po_number,parser:header.format,
+    lineCount:lines.length,avgConfidence:avgConf,reviewCount,
+    declaredTotal:res.declaredTotal??null,computedTotal:Math.round(computed*100)/100,
+    totalMatch:(res.declaredTotal==null)?null:(Math.abs(computed-res.declaredTotal)<=0.5),
+    issues,review:res.records.filter(r=>(r.confidence||0)<95).map(r=>({line:r.line_num,itemCode:r.itemCode,confidence:r.confidence})),
+    imported_at:nowLocal()
+  };
+  return{header,lines,_audit};
+}
+
 
 // ══ WEEKLY PARSER ══
 function parseWeekly(buf,asOf){
@@ -1016,14 +1504,54 @@ function parseWeekly(buf,asOf){
 }
 const pn=v=>{if(v==null)return 0;if(typeof v==='number')return isNaN(v)?0:Math.round(v*100)/100;const n=parseFloat(v.toString().replace(/[,$]/g,''));return isNaN(n)?0:n;};
 
-// ══ MAIN IMPORT ══
+// ══ MAIN IMPORT（v4：支援直接 .pdf/.xlsx，並寫入 parse_audit） ══
+async function importPoText(t,subj,fileName){
+  const key=APP.sets.apiKey;
+  const parsed=await parsePO(t,key,fileName);
+  if(!parsed||!parsed.lines.length){
+    log(`⚠ ${fileName} 未解析到明細`,'warn');
+    if(parsed&&parsed._audit) await dbAdd('parse_audit',parsed._audit);
+    return 0;
+  }
+  log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行 · 信心${parsed._audit.avgConfidence}%`,'info');
+  const hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:fileName,source_date:nowLocal()});
+  for(const ln of parsed.lines){await dbAdd('po_lines',{...ln,po_id:hid,customer:parsed.header.customer,po_number:parsed.header.po_number});}
+  await dbAdd('order_imports',{type:'po',subject:subj,file_name:fileName,rows:parsed.lines.length,imported_at:nowLocal()});
+  await dbAdd('parse_audit',parsed._audit);
+  const a=parsed._audit;
+  if(a.totalMatch===false) log(`⚠ 總額不符：明細 $${a.computedTotal} ≠ 表頭 $${a.declaredTotal}（見 解析品質）`,'warn');
+  if(a.issues&&a.issues.length) log(`⚠ QC ${a.issues.length} 項（見 解析品質 分頁）`,'warn');
+  if(a.reviewCount) log(`🔎 ${a.reviewCount} 行信心<95 進入複核佇列`,'warn');
+  return parsed.lines.length;
+}
+
 async function processFile(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
   log(`處理: ${file.name} (${(file.size/1024).toFixed(0)}KB)`,'info');
   try{
     const buf=await file.arrayBuffer();
+    // ── 直接拖入 PDF ──
+    if(ext==='pdf'){
+      log('識別: PDF 採購訂單（直接匯入）','info');
+      const t=await pdfText(buf);
+      if(!t||t.length<20){log('⚠ PDF文字提取失敗（掃描圖片PDF需Gemini AI）','warn');return;}
+      await importPoText(t,file.name,file.name);
+      await loadAll();refreshAll();return;
+    }
+    // ── 直接拖入 Excel（週報） ──
+    if(ext==='xls'||ext==='xlsx'){
+      log('識別: 週報（直接匯入）','info');
+      const dm=file.name.match(/(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\w+[-\/]\d+[-\/]\d+)/);
+      const result=parseWeekly(buf,dm?dm[1]:'');
+      if(!result){log('❌ 週報解析失敗','err');return;}
+      let saved=0;for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
+      log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
+      await dbAdd('order_imports',{type:'weekly',subject:file.name,file_name:file.name,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
+      await loadAll();refreshAll();return;
+    }
+    // ── .msg 郵件（原有流程，完全保留） ──
     const type=detectType(buf);
     const subj=getMsgSubject(buf)||file.name;
-    const key=APP.sets.apiKey;
     if(type==='weekly'){
       log('識別: 週報','info');
       const xlsxBuf=extractXlsx(buf);
@@ -1034,7 +1562,7 @@ async function processFile(file){
       let saved=0;
       for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
       log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
-      await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,as_of:result.asOf,rows:saved,imported_at:new Date().toISOString()});
+      await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
     }else{
       log('識別: 採購訂單','info');
       const pdfs=extractPdfs(buf);
@@ -1042,18 +1570,12 @@ async function processFile(file){
       const seen=new Set();const unique=[];
       for(const p of pdfs){const h=hashBuf(p.data);if(!seen.has(h)){seen.add(h);unique.push(p);}else log(`跳過重複: ${p.name}`,'warn');}
       log(`PDF ${unique.length}個（去重後）`,'info');
-      let total=0;
       for(const{data:pd,name:pn2}of unique){
         log(`解析: ${pn2}`,'info');
         const t=await pdfText(pd);
         if(!t||t.length<20){log(`⚠ ${pn2} 文字提取失敗（可能為掃描圖片PDF，需Gemini AI）`,'warn');continue;}
-        const parsed=await parsePO(t,key);
-        if(!parsed||!parsed.lines.length){log(`⚠ ${pn2} 未解析到明細`,'warn');continue;}
-        log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行`,'info');
-        const hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:pn2,source_date:new Date().toISOString()});
-        for(const ln of parsed.lines){await dbAdd('po_lines',{...ln,po_id:hid,customer:parsed.header.customer,po_number:parsed.header.po_number});total++;}
+        await importPoText(t,subj,pn2);
       }
-      if(total>0){log(`✅ 儲存 ${total}筆明細`,'');await dbAdd('order_imports',{type:'po',subject:subj,file_name:file.name,rows:total,imported_at:new Date().toISOString()});}
     }
     await loadAll();refreshAll();
   }catch(e){log('❌ '+e.message,'err');console.error(e);}
@@ -1741,7 +2263,7 @@ async function ccOrders(){if(!confirm('⚠️ 清除全部訂單資料？'))retu
 // ══ DRAG DROP ══
 function dov(e){e.preventDefault();e.currentTarget.classList.add('ov');}
 function dol(e){e.currentTarget.classList.remove('ov');}
-async function ddr(e){e.preventDefault();e.currentTarget.classList.remove('ov');const ff=[...e.dataTransfer.files].filter(f=>f.name.endsWith('.msg'));if(!ff.length){log('請拖入.msg','warn');return;}for(const f of ff)await processFile(f);}
+async function ddr(e){e.preventDefault();e.currentTarget.classList.remove('ov');const ff=[...e.dataTransfer.files].filter(f=>/\.(msg|pdf|xls|xlsx)$/i.test(f.name));if(!ff.length){log('請拖入 .msg / .pdf / .xlsx','warn');return;}for(const f of ff)await processFile(f);}
 async function fsel(e){for(const f of[...e.target.files])await processFile(f);e.target.value='';}
 
 // ══ RECENT ══
@@ -1794,10 +2316,77 @@ function go(tab,btn){
   if(tab==='carton')renderCarton();
   if(tab==='link')renderLink();
   if(tab==='settings')renderSettings();
+  if(tab==='qc')renderQC();
 }
 
+// ══ PARSE QC / 解析品質 (v4) ══
+const fmtMoney=n=>(n==null?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+function renderQC(){
+  const audit=APP.audit||[];
+  const k=document.getElementById('qc-kpis');if(!k)return;
+  const totalLines=audit.reduce((a,x)=>a+(x.lineCount||0),0);
+  const avgConf=audit.length?Math.round(audit.reduce((a,x)=>a+(x.avgConfidence||0),0)/audit.length):0;
+  const review=audit.reduce((a,x)=>a+(x.reviewCount||0),0);
+  const mismatch=audit.filter(x=>x.totalMatch===false).length;
+  k.innerHTML=`
+    <div class="kc ac"><div class="kl">匯入次數</div><div class="kv">${audit.length}</div></div>
+    <div class="kc gr"><div class="kl">解析明細</div><div class="kv">${totalLines}</div></div>
+    <div class="kc ${avgConf>=95?'gr':avgConf>=85?'yl':'rd'}"><div class="kl">平均信心</div><div class="kv">${avgConf}%</div></div>
+    <div class="kc ${mismatch?'rd':'gr'}"><div class="kl">總額不符</div><div class="kv">${mismatch}</div></div>
+    <div class="kc ${review?'yl':'gr'}"><div class="kl">需複核明細</div><div class="kv">${review}</div></div>`;
+  const c=document.getElementById('qc-count');if(c)c.textContent=`${audit.length} 筆審計`;
+  const tb=document.getElementById('qc-tbody');
+  if(!audit.length){tb.innerHTML='<tr><td colspan="12" class="empty">尚未匯入 PO（拖入 .pdf / .msg 後顯示）</td></tr>';}
+  else{
+    tb.innerHTML=[...audit].sort((a,b)=>(b.id||0)-(a.id||0)).map(x=>{
+      const cf=x.avgConfidence>=95?'bg':x.avgConfidence>=85?'by':'br';
+      const tm=x.totalMatch===null?'<span class="bd bk">—</span>':x.totalMatch?'<span class="bd bg">✓</span>':'<span class="bd br">✗</span>';
+      return `<tr>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${x.file||''}">${x.file||'—'}</td>
+        <td>${x.customer||'—'}</td><td class="mono">${x.po||'—'}</td>
+        <td><span class="bd bb">${x.parser||'—'}</span></td>
+        <td class="num">${x.lineCount||0}</td>
+        <td class="ctr"><span class="bd ${cf}">${x.avgConfidence||0}%</span></td>
+        <td class="num">${x.declaredTotal!=null?'$'+fmtMoney(x.declaredTotal):'—'}</td>
+        <td class="num">${x.computedTotal!=null?'$'+fmtMoney(x.computedTotal):'—'}</td>
+        <td class="ctr">${tm}</td>
+        <td class="num">${(x.issues||[]).length}</td>
+        <td class="num">${x.reviewCount||0}</td>
+        <td style="font-size:10px;color:var(--mu)">${x.imported_at||''}</td>
+      </tr>`;
+    }).join('');
+  }
+  const latest=[...audit].sort((a,b)=>(b.id||0)-(a.id||0))[0];
+  const iss=document.getElementById('qc-issues');
+  if(latest&&latest.issues&&latest.issues.length){
+    iss.innerHTML=latest.issues.map(i=>`<div style="display:flex;gap:7px;padding:5px 0;border-bottom:1px solid var(--bor);font-size:11px">
+      <span class="bd ${i.level==='error'?'br':'by'}">${i.level==='error'?'錯誤':'警告'}</span>
+      <span>${i.line!=null?'行'+i.line+'：':''}${i.msg}</span></div>`).join('');
+  }else if(iss) iss.innerHTML='<div class="empty"><div class="ei">✅</div><p>最近匯入無問題</p></div>';
+  const rv=document.getElementById('qc-review');
+  if(latest&&latest.review&&latest.review.length){
+    rv.innerHTML=`<table class="dt" style="width:100%"><thead><tr><th>行</th><th>SKU</th><th class="ctr">信心</th></tr></thead><tbody>${latest.review.map(r=>`<tr><td>${r.line||'—'}</td><td class="mono">${r.itemCode||'—'}</td><td class="ctr"><span class="bd ${r.confidence>=85?'by':'br'}">${r.confidence}%</span></td></tr>`).join('')}</tbody></table>`;
+  }else if(rv) rv.innerHTML='<div class="empty"><div class="ei">👍</div><p>無待複核項目</p></div>';
+  renderTemplates();
+}
+function renderTemplates(){
+  const el=document.getElementById('qc-templates');if(!el)return;
+  const reg=(typeof ParserFactory!=='undefined')?ParserFactory.registered():[];
+  el.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:7px">${reg.map(t=>`<span class="bd bb" style="font-size:10px">${t.id} · ${t.customer}</span>`).join('')}
+    <span class="bd bk" style="font-size:10px">GENERIC · 啟發式</span><span class="bd bp" style="font-size:10px">Gemini · AI</span></div>
+    <div style="margin-top:8px;font-size:10px;color:var(--mu);line-height:1.7">擴充方式：於 <code style="color:var(--acc)">TEMPLATE_LIBRARY</code> 陣列加入一個 <code>{id,customer,detect,header,line}</code> 物件即可，ParserFactory 自動納入（Strategy + Factory），核心程式碼無需修改。</div>`;
+}
+function expQcCsv(){
+  const audit=APP.audit||[];if(!audit.length){alert('無審計資料');return;}
+  const rows=[['檔案','客戶','PO','Parser','明細','平均信心','表頭總額','明細加總','總額一致','QC問題','需複核','時間']];
+  audit.forEach(x=>rows.push([x.file,x.customer,x.po,x.parser,x.lineCount,x.avgConfidence,x.declaredTotal,x.computedTotal,x.totalMatch,(x.issues||[]).length,x.reviewCount,x.imported_at]));
+  dl(rows,'parse_qc');
+}
+async function clearQc(){if(!confirm('清除解析審計（不影響訂單資料）？'))return;await dbClear('parse_audit');APP.audit=[];renderQC();}
+window.renderQC=renderQC;window.renderTemplates=renderTemplates;window.expQcCsv=expQcCsv;window.clearQc=clearQc;
+
 function refreshAll(){
-  renderRecentList();renderMaster();renderWeeklyDateSelect();renderSmv();renderCarton();renderLink();updateDbStats();
+  renderRecentList();renderMaster();renderWeeklyDateSelect();renderSmv();renderCarton();renderLink();renderQC();updateDbStats();
 }
 
 // ══ INIT ══
