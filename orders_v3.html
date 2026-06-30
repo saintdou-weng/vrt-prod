@@ -168,7 +168,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
         <div style="font-size:28px;opacity:.6;margin-bottom:8px">📧</div>
         <div style="font-size:13px;color:var(--tx2)">拖曳 .msg / .pdf / .xlsx 至此</div>
         <div style="font-size:10px;color:var(--mu);margin-top:5px">
-          自動識別：ADI · WPL · NU · Dickson · ALSCO · LECHNER · Magnus · Vestis · 其他→AI · 週報
+          自動識別：ADI · WPL · NU · Dickson · ALSCO · ALS · LECHNER · Magnus · Vestis · 其他→AI · 週報
         </div>
       </div>
       <input type="file" id="fi" accept=".msg,.pdf,.xls,.xlsx" multiple style="display:none" onchange="fsel(event)">
@@ -607,6 +607,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
             ✅ Dickson Industries<br>
             ✅ Magnus Textiles<br>
             ✅ ALSCO（Singapore）<br>
+            ✅ ALS（Australian Linen Supply）<br>
             ✅ LECHNER & Sons<br>
             ✅ Vestis / WPL（FGCL格式）<br>
             🤖 Virginia Linen / 其他 → Gemini AI<br>
@@ -1182,10 +1183,46 @@ const TEMPLATE_LIBRARY=[
     }
   },
 
+  /* ---------- ALS（Australian Linen Supply, AU）— 新增 ----------
+     版型：Quantity 在最前，ItemCode、Description、Unit(Each)、UnitPrice、ItemValue。
+     注意：描述常含 "ALSCO" 品牌字樣，但此為澳洲 ALS（PO=SORD…），與新加坡 Alsco（PO=SSNG…）不同公司，
+     故必須「先於 ALSCO」比對，且 ALSCO 偵測已收緊為 alsco.com / Alsco Pte Ltd / SSNG。 */
+  {
+    id:'ALS',customer:'AUSTRALIAN LINEN SUPPLY',
+    detect:t=>/australian linen supply/i.test(t)||/als\.net\.au/i.test(t)||/\bSORD\d/i.test(t),
+    header:{
+      customer:()=>'AUSTRALIAN LINEN SUPPLY',
+      po:t=>(t.match(/\b(SORD\d+)\b/i)||[])[1]||null,
+      vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
+      orderDate:t=>(t.match(/\b(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})\b/)||[])[1]||null,
+      shipVia:t=>(t.match(/VIA\s+([A-Z]{2,4})\b/i)||[])[1]||null,
+      currency:t=>/United States Dollars/i.test(t)?'USD':null,
+      declaredTotal:t=>(t.match(/Purchase Order Total\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+    },
+    line:(t)=>{
+      const out=[];let i=0;
+      const CMAP={W:'White',BK:'Black',RB:'Royal Blue',R:'Red',GR:'Grey',GY:'Grey',NWP:'Navy/White',NV:'Navy',BL:'Blue',OR:'Orange'};
+      const COLW=['Royal Blue','Navy','Black','White','Charcoal','Purple','Maroon','Orange','Green','Grey','Gray','Red','Blue'];
+      // Quantity  ItemCode  Description…  Each  UnitPrice  ItemValue
+      const re=/(\d+)\s+([A-Z][A-Z0-9]+(?:-[A-Z0-9]+)*)\s+(.+?)\s+Each\s+([\d.]+)\s+([\d,]+\.\d{2})/g;
+      let m;
+      while((m=re.exec(t))!==null){
+        const code=m[2],desc=m[3].replace(/\s+/g,' ').trim();
+        const seg=code.split('-').filter(x=>x.toUpperCase()!=='SP');
+        let color=COLW.find(c=>new RegExp(c.replace(' ','\\s+'),'i').test(desc))||CMAP[(seg[1]||'').toUpperCase()]||null;
+        const sz=(desc.match(/(\d+\s?x\s?\d+\s?cm|\d+cm)/i)||[])[1];
+        out.push({line_num:++i,itemCode:code,style:seg[0]||code,color,size:sz?sz.replace(/\s+/g,''):null,
+          qty:num(m[1]),unit:'Each',unitPrice:num(m[4]),amount:num(m[5]),
+          description:desc.slice(0,120)});
+      }
+      return out;
+    }
+  },
+
   /* ---------- ALSCO（Alsco Pte Ltd, Singapore）— 新增 ---------- */
   {
     id:'ALSCO',customer:'ALSCO PTE LTD',
-    detect:t=>/\bAlsco\b/i.test(t)||/alsco\.com/i.test(t),
+    detect:t=>/alsco\.com/i.test(t)||/Alsco Pte Ltd/i.test(t)||/\bSSNG\d/i.test(t),
     header:{
       customer:()=>'ALSCO PTE LTD',
       po:t=>(t.match(/\b(SSNG\d{5,})\b/i)||[])[1]||null,
