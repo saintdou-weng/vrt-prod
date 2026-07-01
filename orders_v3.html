@@ -223,11 +223,17 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
       <option value="mid">中 ($10K-$100K)</option>
       <option value="low">低 (&lt;$10K)</option>
     </select>
-    <div class="pts">
-      <div class="pt on" onclick="setPeriod('all',this)">全部</div>
-      <div class="pt" onclick="setPeriod('week',this)">本週</div>
-      <div class="pt" onclick="setPeriod('month',this)">本月</div>
-      <div class="pt" onclick="setPeriod('year',this)">本年</div>
+    <div class="pts" style="display:flex;align-items:center;gap:5px">
+      <div class="pt" onclick="periodNav(-1)" title="上一期" style="padding:5px 9px;font-weight:700">◀</div>
+      <select id="f-gran" onchange="onGranChange()" title="時間粒度">
+        <option value="all">全部</option>
+        <option value="day">日</option>
+        <option value="week" selected>週</option>
+        <option value="month">月</option>
+        <option value="year">年</option>
+      </select>
+      <select id="f-period" onchange="renderMaster()" title="期間" style="min-width:130px"></select>
+      <div class="pt" onclick="periodNav(1)" title="下一期" style="padding:5px 9px;font-weight:700">▶</div>
     </div>
     <input type="text" id="f-s" placeholder="搜尋客戶…" oninput="renderMaster()" style="min-width:120px">
     <button class="btn bg2" style="font-size:10px;padding:4px 8px" onclick="expMasterCsv()">⬇ CSV</button>
@@ -1690,7 +1696,19 @@ function latestWeeklyByCustomer(){
 }
 
 function renderMaster(){
-  const{map,date}=latestWeeklyByCustomer();
+  // ── 期間選擇器（sewing 式）：依粒度建期間清單，保留當前選擇 ──
+  const gran=(document.getElementById('f-gran')||{}).value||'all';
+  const psel=document.getElementById('f-period');
+  if(psel){
+    if(gran==='all'){psel.innerHTML='<option value="">全部期間</option>';psel.disabled=true;}
+    else{
+      psel.disabled=false;const keep=psel.value;
+      const keys=[...new Set(APP.weekly.map(w=>periodKey(w.as_of_date,gran)).filter(Boolean))].sort().reverse();
+      psel.innerHTML=keys.length?keys.map(k=>`<option value="${k}">${periodLabel(k,gran)}</option>`).join(''):'<option value="">—</option>';
+      if(keep&&keys.includes(keep))psel.value=keep;
+    }
+  }
+  const{map,date}=weeklyForPeriod(gran,psel?psel.value:'');
   document.getElementById('master-weekly-date').textContent=date||'—';
   const fC=document.getElementById('f-c').value;
   const fType=document.getElementById('f-type').value;
@@ -1772,7 +1790,39 @@ function renderMaster(){
 }
 
 function srt(col){if(APP.sortCol===col)APP.sortDir*=-1;else{APP.sortCol=col;APP.sortDir=1;}renderMaster();}
-function setPeriod(p,el){APP.period=p;document.querySelectorAll('.pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderMaster();}
+// ── 期間選擇器工具（訂單總表，週報日期為軸） ──
+function periodKey(asOf,gran){
+  const iso=DateEngine.normalize(asOf)||asOf;if(!iso)return null;
+  const p=DateEngine.parts(iso);
+  if(gran==='day')return iso;
+  if(gran==='week')return p.isoWeek||iso;
+  if(gran==='month')return (p.year&&p.month)?`${p.year}-${String(p.month).padStart(2,'0')}`:iso;
+  if(gran==='year')return p.year?String(p.year):iso;
+  return iso;
+}
+function periodLabel(k,gran){
+  if(gran==='week'&&k.includes('-W')){const [y,w]=k.split('-W');return `${y} 第${w} 週`;}
+  if(gran==='month')return k+' 月';
+  if(gran==='year')return k+' 年';
+  return k;
+}
+function weeklyForPeriod(gran,selKey){
+  if(gran==='all'||!APP.weekly.length)return latestWeeklyByCustomer();
+  const inP=APP.weekly.filter(w=>periodKey(w.as_of_date,gran)===selKey);
+  if(!inP.length)return{map:{},date:selKey||null};
+  const dates=[...new Set(inP.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const latest=dates[0],map={};
+  inP.filter(w=>w.as_of_date===latest).forEach(w=>{map[w.customer]=w;});
+  return{map,date:latest};
+}
+function onGranChange(){renderMaster();}
+function periodNav(dir){
+  const psel=document.getElementById('f-period');if(!psel||psel.disabled)return;
+  const opts=[...psel.options].map(o=>o.value);const idx=opts.indexOf(psel.value);
+  const next=idx-dir; // 期間清單為新→舊排序：◀(-1)=較舊、▶(1)=較新
+  if(next>=0&&next<opts.length){psel.value=opts[next];renderMaster();}
+}
+window.onGranChange=onGranChange;window.periodNav=periodNav;
 
 // ══ RENDER: PIVOT ══
 function renderPivotInit(){
