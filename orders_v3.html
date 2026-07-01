@@ -1070,26 +1070,28 @@ const TEMPLATE_LIBRARY=[
     detect:t=>/american\s*dawn/i.test(t),
     header:{
       customer:()=>'AMERICAN DAWN INC',
-      po:t=>(t.match(/PURCHASE ORDER NUMBER[\s\S]{0,40}?(\d{6,7})/i)||t.match(/\b(\d{6})\b\s+\d{2}-[A-Z]{3}-\d{2}/i)||[])[1]||null,
+      po:t=>(t.match(/\b(\d{6})\s+\d\s+\d+\s+of\s+\d+/)||t.match(/PURCHASE ORDER NUMBER[\s\S]{0,60}?(\d{6,7})/i)||t.match(/\b(\d{6})\b\s+\d{2}-[A-Z]{3}-\d{2}/i)||[])[1]||null,
       revision:t=>(t.match(/REVISION[\s\S]{0,20}?\b(\d{1,2})\b/i)||[])[1]||null,
       vendor:t=>(t.match(/VENDOR NO\.?\s*([A-Z0-9]+)/i)||[])[1]||null,
       orderDate:t=>(t.match(/\b(\d{2}-[A-Z]{3}-\d{2,4})\b/)||[])[1]||null,
       incoterm:t=>/\bFOB\b/.test(t)?'FOB':null,
       currency:t=>/US Dollar/i.test(t)?'USD':null,
-      declaredTotal:t=>(t.match(/TOTAL\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+      declaredTotal:t=>{const a=[...t.matchAll(/\b([\d,]{2,}\.\d{2})\b/g)].map(x=>x[1]);return a.length?a.sort((x,y)=>parseFloat(y.replace(/,/g,''))-parseFloat(x.replace(/,/g,'')))[0]:null;}
     },
     line:(t)=>{
       const out=[],seen=new Set();
-      // item  sku  due-date  qty  Each  price  ext  [T]
-      const re=/(\d+)\s+([A-Z0-9]+)\s+(\d{2}-[A-Z]{3}-\d{2,4})\s+([\d.]+)\s+Each\s+N?\s*([\d.]+)\s+([\d.,]+)\s*([NY])?/g;
+      const SZX={SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XXL:'2XL',XS:'XS',XL:'XL','2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL','1X':'1XL'};
+      // item · sku · due-date · qty(可含逗號) · Each · [N] · price · ext，描述在 ext 之後到 UPC 前
+      const re=/(\d+)\s+([A-Z0-9]+)\s+(\d{2}-[A-Z]{3}-\d{2,4})\s+([\d,]+\.?\d*)\s+Each\s+N?\s*([\d.]+)\s+([\d,]+\.\d{2})/g;
       let m;
       while((m=re.exec(t))!==null){
         const key=m[1]+'|'+m[2];if(seen.has(key))continue;seen.add(key);
-        const ctx=t.slice(m.index,m.index+220);
-        let {color,size,style}=parseSkuCS(m[2],ctx);
-        if(!size){const SZX={SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XXL:'2XL',XS:'XS',XL:'XL','2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL','1X':'1XL'};const sm=m[2].toUpperCase().match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)$/);if(sm)size=SZX[sm[1]]||ns(sm[1]);}
-        const desc=(ctx.split(/\s{2,}|\n/)[1]||'').trim().slice(0,120);
-        out.push({line_num:+m[1],itemCode:m[2],style:style||m[2],color,size,
+        const after=t.slice(m.index+m[0].length, m.index+m[0].length+150);
+        const desc=(after.split(/\s+UPC|\s+MPU/)[0]||'').replace(/^[NY]\s+/,'').replace(/\s+/g,' ').trim().slice(0,120);
+        let {color,size,style}=parseSkuCS(m[2],desc||'');
+        if(!size){const sm=(desc.match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)\s*$/i)||m[2].toUpperCase().match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)$/));if(sm)size=SZX[sm[1].toUpperCase()]||ns(sm[1]);}
+        if(!color){const cm=desc.match(/\b(WHITE|BLACK|NAVY|GREY|GRAY|RED|GOLD|MAROON|GREEN|ROYAL|CEIL|JADE|WHT|WH|BLK)\b/i);if(cm){const CM={WH:'White',WHT:'White',BLK:'Black'};color=CM[cm[1].toUpperCase()]||(cm[1][0].toUpperCase()+cm[1].slice(1).toLowerCase());}}
+        out.push({line_num:+m[1],itemCode:m[2],style:style||m[2],color:color||null,size:size||null,
           shipDate:m[3],cancelDate:m[3],qty:num(m[4]),unit:'Each',
           unitPrice:num(m[5]),amount:num(m[6]),description:desc||null});
       }
@@ -1103,26 +1105,29 @@ const TEMPLATE_LIBRARY=[
     detect:t=>/white\s*plains?\s*linen/i.test(t),
     header:{
       customer:()=>'WHITE PLAINS LINEN',
-      po:t=>(t.match(/P\.?O\.?\s*Number:?\s*0*(\d+)/i)||[])[1]||null,
+      po:t=>(t.match(/\b(000[2-9]\d{3})\b/)||t.match(/P\.?O\.?\s*Number[\s\S]{0,40}?\b(\d{6,7})\b/i)||[])[1]||null,
       vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
-      orderDate:t=>(t.match(/Order Date:?\s*([\d\/]+)/i)||[])[1]||null,
+      orderDate:t=>(t.match(/Order Date\s*:?\s*([\d\/]+)/i)||[])[1]||null,
       requiredDate:t=>(t.match(/Required Date[\s\S]{0,30}?([\d\/]{6,10})/i)||[])[1]||null,
       incoterm:t=>(t.match(/\b(PEEKSKILL|DDP|FOB)\b/i)||[])[1]||null,
-      declaredTotal:t=>(t.match(/Order Total:?\s*([\d,]+\.\d{2})/i)||[])[1]||null
+      // 總額：取文件最後一個金額（避開 pdf.js 把 0.00 排在 "Order Total:" 後面的情況）
+      declaredTotal:t=>{const a=[...t.matchAll(/([\d,]+\.\d{2})/g)].map(x=>x[1]);return a.length?a[a.length-1]:null;}
     },
     line:(t)=>{
       const out=[],seen=new Set();
-      // itemCode  Whse: 000  ordered  unitcost  amount  description...
-      const re=/([0-9A-Za-z][0-9A-Za-z\-]{4,})\s+Whse:\s*\d+\s+([\d,]+\.\d{2})\s+([\d.]+)\s+([\d,]+\.\d{2})\s+([A-Z][A-Z0-9 \/\-]+?)(?=\s+[0-9A-Za-z][0-9A-Za-z\-]{4,}\s+Whse:|\s+Continued|\s+Net Order|\s+Order Total|\s+Subtotal|\s+Page:|$)/g;
-      let m,i=0;
-      while((m=re.exec(t))!==null){
-        if(seen.has(m[1]))continue;seen.add(m[1]);
-        const desc=m[5].replace(/\s+/g,' ').trim();
-        const {color,size}=parseDesc(desc);
-        out.push({line_num:++i,itemCode:m[1],style:m[1].split('-')[0],color,size,
-          qty:num(m[2]),unit:'EA',unitPrice:num(m[3]),amount:num(m[4]),
-          description:desc.slice(0,120)});
-      }
+      const push=(code,ordered,cost,amt,desc)=>{
+        if(seen.has(code))return;seen.add(code);
+        const dd=(desc||'').replace(/\s+/g,' ').trim();const {color,size}=parseDesc(dd);
+        out.push({line_num:out.length+1,itemCode:code,style:code.split('-')[0],color,size,
+          qty:num(ordered),unit:'EA',unitPrice:num(cost),amount:num(amt),description:dd.slice(0,120)});
+      };
+      // 版型A：code  Whse:000  ordered  cost  amount  desc
+      const reA=/([0-9A-Za-z][0-9A-Za-z\-]{4,})\s+Whse\s*:?\s*\d+\s+([\d,]+\.\d{2})\s+([\d.]+)\s+([\d,]+\.\d{2})\s+([A-Z][A-Z0-9 \/\-]+?)(?=\s+[0-9A-Za-z][0-9A-Za-z\-]{4,}\s+Whse|\s+Continued|\s+Net Order|\s+Order Total|\s+Subtotal|\s+Page|$)/g;
+      // 版型B：code  ordered  cost  amount  Whse:000  desc
+      const reB=/([0-9A-Za-z][0-9A-Za-z\-]{4,})\s+([\d,]+\.\d{2})\s+([\d.]+)\s+([\d,]+\.\d{2})\s+Whse\s*:?\s*\d+\s+([A-Z][A-Z0-9 \/\-]+?)(?=\s+[0-9A-Za-z][0-9A-Za-z\-]{4,}\s+[\d,]|\s+Net Order|\s+Order Total|\s+Sales Tax|\s+Freight|\s+Page|$)/g;
+      let m;
+      while((m=reA.exec(t))!==null)push(m[1],m[2],m[3],m[4],m[5]);
+      while((m=reB.exec(t))!==null)push(m[1],m[2],m[3],m[4],m[5]);
       return out;
     }
   },
@@ -1290,16 +1295,43 @@ const TEMPLATE_LIBRARY=[
       declaredTotal:t=>(t.match(/TOTAL\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
     },
     line:(t,h)=>{
-      const out=[],ship=(t.match(/Receive By\s+([\d\/]+)/i)||[])[1]||null;
-      const re=/([A-Z0-9][-A-Z0-9]+(?:-GL)?)\s+([\w-]+)\s+(\d+)\s+EA\s+\$([\d.]+)\s+\$([\d.,]+)/g;
+      const out=[],seen=new Set(),ship=(t.match(/Receive By[\s\S]{0,40}?(\d{1,2}\/\d{1,2}\/\d{2,4})/i)||[])[1]||null;
+      const CMAP={WHT:'White',WH:'White',GRY:'Grey',GY:'Grey',BLK:'Black',BK:'Black',NB:'Navy',NV:'Navy',RD:'Red',MR:'Maroon',GR:'Green',RYL:'Royal',BL:'Blue'};
+      const SMAP={'2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL',SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XS:'XS',XL:'XL',XXL:'2XL'};
+      // 解碼代碼尾碼（由尾端取色、再取尺寸），例：BF133XSWH-GL → XS / White
+      const decode=code=>{
+        let body=code.replace(/-GL$/i,''),color=null,size=null;
+        const cm=body.match(/(WHT|GRY|BLK|RYL|WH|GY|BK|NB|NV|RD|MR|GR|BL)$/);
+        if(cm){color=CMAP[cm[1]]||null;body=body.slice(0,body.length-cm[1].length);}
+        const sm=body.match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X)$/);
+        if(sm)size=SMAP[sm[1]]||sm[1];
+        return{color,size,style:code.replace(/-GL$/i,'')};
+      };
+      // 新版型(PO6103)：CODE-GL  Qty  EA/DZ  $Rate  $Amount
+      const re=/([A-Z0-9]{4,}-GL)\s+(\d+)\s+(EA|DZ)\s+\$([\d.]+)\s+\$([\d,]+\.\d{2})/g;
       let m,i=0;
       while((m=re.exec(t))!==null){
-        const before=t.slice(Math.max(0,m.index-300),m.index);
-        const desc=(before.split('\n').filter(l=>l.trim().length>5).slice(-1)[0]||'').trim();
-        const {color,size,style}=parseMagnusCS(m[1],desc);
+        if(seen.has(m[1]+'|'+m[2]+'|'+m[5]))continue;seen.add(m[1]+'|'+m[2]+'|'+m[5]);
+        const {color,size,style}=decode(m[1]);
+        // 描述：代碼第一次出現(品名)與第二次出現(數據列)之間的文字
+        const first=t.indexOf(m[1]);
+        let desc=(first>=0&&first<m.index? t.slice(first+m[1].length,m.index):'')
+          .replace(/\s+/g,' ').replace(/\s*-?\s*\d+\s*(?:EA|DZ)\s*\/?\s*Case.*$/i,'').trim().slice(0,120);
         out.push({line_num:++i,itemCode:m[1],style,color,size,
-          shipDate:ship,cancelDate:ship,qty:num(m[3]),unit:'EA',
-          unitPrice:num(m[4]),amount:num(m[5]),description:desc.slice(0,120)});
+          shipDate:ship,cancelDate:ship,qty:num(m[2]),unit:m[3],
+          unitPrice:num(m[4]),amount:num(m[5]),description:desc||null});
+      }
+      // 舊版型相容（CODE CODE2 Qty EA $Rate $Amount）
+      if(out.length===0){
+        const re2=/([A-Z0-9][-A-Z0-9]+(?:-GL)?)\s+([\w-]+)\s+(\d+)\s+EA\s+\$([\d.]+)\s+\$([\d.,]+)/g;
+        while((m=re2.exec(t))!==null){
+          const before=t.slice(Math.max(0,m.index-300),m.index);
+          const desc=(before.split('\n').filter(l=>l.trim().length>5).slice(-1)[0]||'').trim();
+          const {color,size,style}=parseMagnusCS(m[1],desc);
+          out.push({line_num:++i,itemCode:m[1],style,color,size,
+            shipDate:ship,cancelDate:ship,qty:num(m[3]),unit:'EA',
+            unitPrice:num(m[4]),amount:num(m[5]),description:desc.slice(0,120)});
+        }
       }
       return out;
     }
