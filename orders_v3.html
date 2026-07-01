@@ -880,6 +880,24 @@ async function pdfText(buf){
   }catch(e){return '';}
 }
 
+// 座標感知抽取：依 y 分列（容差3）、x 排序，逐列以空白接、列間換行。
+// 供欄位嚴重錯位的表格型 PDF（如 Vestis FGCL 成品確認單）重建表格用。
+async function pdfTextRows(buf){
+  try{
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+    let out='';
+    for(let p=1;p<=pdf.numPages;p++){
+      const pg=await pdf.getPage(p);const ct=await pg.getTextContent();
+      const items=ct.items.map(it=>({s:it.str,x:Math.round(it.transform[4]),y:Math.round(it.transform[5])})).filter(it=>it.s.trim());
+      items.sort((a,b)=>b.y-a.y||a.x-b.x);
+      let cur=null;const rows=[];
+      for(const it of items){if(!cur||Math.abs(cur.y-it.y)>3){cur={y:it.y,cells:[]};rows.push(cur);}cur.cells.push(it);}
+      rows.forEach(r=>{r.cells.sort((a,b)=>a.x-b.x);out+=r.cells.map(c=>c.s).join(' ')+'\n';});
+    }
+    return out;
+  }catch(e){return '';}
+}
+
 // ══ PARSERS ══
 const SZ={XS:'XS',XSML:'XS','X-SMALL':'XS',SM:'S',SML:'S',SMALL:'S',MD:'M',MED:'M',MEDIUM:'M',LR:'L',LRG:'L',LARGE:'L',XL:'XL',XLARGE:'XL','X-LARGE':'XL','2X':'2XL','2XL':'2XL',XXL:'2XL','3X':'3XL','3XL':'3XL','4X':'4XL','4XL':'4XL','5X':'5XL','5XL':'5XL','1X':'1XL','1XL':'1XL'};
 const CL={WHT:'White',WH:'White',WHITE:'White',NBL:'Navy',NVY:'Navy',NAVY:'Navy',NAV:'Navy',NV:'Navy',BLK:'Black',BK:'Black',BLACK:'Black',GRY:'Grey',GREY:'Grey',GRAY:'Grey',GY:'Grey',RED:'Red',RD:'Red',MR:'Maroon',MRN:'Maroon',MAROON:'Maroon',RY:'Royal',ROY:'Royal',ROYAL:'Royal',KCT:'Khaki',KH:'Khaki',KHAKI:'Khaki',GRN:'Green',GREEN:'Green',WO:'White'};
@@ -1343,24 +1361,35 @@ const TEMPLATE_LIBRARY=[
     }
   },
 
-  /* ---------- VESTIS / FGCL（保留既有支援） ---------- */
+  /* ---------- VESTIS / FGCL 成品確認單（座標列式解析） ----------
+     此單欄位在扁平文字下嚴重錯位；改吃 pdfTextRows（依 y 分列）的逐列文字。
+     rowBased:true → MasterParser 會餵入 rowText 而非扁平 text。 */
   {
-    id:'VESTIS',customer:'VESTIS',
-    detect:t=>/FGCL/i.test(t)||/Finished Goods Confirmation/i.test(t),
+    id:'VESTIS',customer:'VESTIS (FGCL)',rowBased:true,
+    detect:t=>/Finished Goods Confirmation/i.test(t)||/Batch\s*#\s*FGCL/i.test(t)||/\bFGCL-\d/i.test(t),
     header:{
-      customer:t=>/(WHITE PLAIN LINEN|VRT PO)/i.test(t)?'WHITE PLAIN LINEN':'VESTIS',
-      po:t=>(t.match(/Batch\s*#\s*(FGCL[-\s]?\w+)/i)||t.match(/(FGCL[-\s]?\w+)/i)||[])[1]?.replace(/\s/g,'')||null,
-      orderDate:t=>(t.match(/Date Created:\s*([\d\/]+)/i)||[])[1]||null
+      customer:()=>'VESTIS (FGCL)',
+      po:t=>(t.match(/Batch\s*#\s*(FGCL[-\s]?\w+)/i)||[])[1]?.replace(/\s/g,'')||null,
+      vendor:t=>/Vantage River/i.test(t)?'VANTAGE RIVER TEXTILES':null,
+      orderDate:t=>(t.match(/Date Created:\s*(\d{2}\/\d{2}\/\d{2,4})/i)||[])[1]||null,
+      declaredTotal:t=>(t.match(/Grand Total\s+[\d,]+\s+\$([\d,]+\.\d{2})/i)||[])[1]||null
     },
-    line:(t)=>{
-      const out=[],seen=new Set();
-      const re=/([A-Z][A-Z0-9]{3,15})\s+([A-Z][A-Z0-9]{3,15})\s+([\w,\s]+?)\s+(\d{2}\/\d{2}\/\d{2})\s+\w+\s+EA\s+([A-Z0-9]+)\s+(\w+)\s+([A-Z]{3,})\s+([A-Z0-9]+)\s+N\/A\s+(\d+)\s+\$([\d.]+)/g;
-      let m,i=0;
-      while((m=re.exec(t))!==null){
-        const k=m[1]+m[4]+m[6];if(seen.has(k))continue;seen.add(k);
-        out.push({line_num:++i,itemCode:m[1],style:m[7],color:nc(m[6]),size:ns(m[8]),
-          shipDate:m[4],cancelDate:m[4],qty:num(m[9]),unit:'EA',
-          unitPrice:num(m[10]),amount:num(m[10]),description:(m[3]||'').trim().slice(0,120)});
+    line:(rows)=>{
+      const out=[];let i=0;
+      const COLORS=['JADE GREEN','CEIL BLUE','ROYAL BLUE','NAVY BLUE','KELLY GREEN','NAVY','WHITE','BLACK','CHARCOAL','MAROON','TEAL','JADE','GREY','GRAY','GREEN','BLUE','RED','ORANGE','PURPLE','KHAKI','CEIL','GOLD'];
+      const TC=s=>s.split(' ').map(w=>w?w[0].toUpperCase()+w.slice(1).toLowerCase():w).join(' ');
+      for(const raw of String(rows).split('\n')){
+        const row=raw.replace(/\s+/g,' ').trim();
+        // 描述  CutNum RefNum  N/A  Style  (中段…含Size)  Pieces  $Price  $Total  EA/DZ  交期
+        const m=row.match(/^(.+?)\s+(\S+)\s+\S+\s+N\/A\s+(\S+)\s+(.*?)\s+(\d+)\s+\$([\d.]+)\s+\$([\d,]+\.\d{2})\s+(?:EA|DZ)\s+(\d{2}\/\d{2}\/\d{2,4})/);
+        if(!m)continue;
+        // Size：取 pieces 前中段的最後 token；若被 pdf.js 切成 "XSM R" 則接回
+        const mid=m[4].trim().split(' ');let size=mid[mid.length-1]||null;
+        if(size&&size.length<=2&&mid.length>=2)size=mid[mid.length-2]+size;
+        const cm=row.match(new RegExp('\\b('+COLORS.join('|')+')\\b','i'));
+        out.push({line_num:++i,itemCode:m[2],style:m[3],color:cm?TC(cm[1]):null,size,
+          qty:num(m[5]),unit:'EA',unitPrice:num(m[6]),amount:num(m[7]),
+          shipDate:m[8],cancelDate:m[8],description:m[1].replace(/\s+/g,' ').trim().slice(0,120)});
       }
       return out;
     }
@@ -1520,7 +1549,9 @@ const MasterParser={
    */
   async parse(text,ctx={}){
     let parser=ParserFactory.resolve(text);
-    let res=parser.parse(text,ctx);
+    // rowBased template（如 FGCL）→ 改用座標列式文字 rowText
+    const src=(parser.tpl&&parser.tpl.rowBased&&ctx.rowText)?ctx.rowText:text;
+    let res=parser.parse(src,ctx);
     // 命中 Generic 且結果薄弱、且啟用 AI → 改用 Gemini
     if((res.records.length===0)&&parser.id!=='Gemini'&&ctx.useAi&&ctx.apiKey){
       if(typeof log==='function')log(`${parser.id} 解析到 0 行 → 改用 Gemini AI`,'info');
@@ -1536,9 +1567,9 @@ const MasterParser={
 
 /* ════════════════ 對外橋接：維持舊 parsePO 介面（回傳 po_lines 形狀） ════════════════
    下游 processFile / 渲染 / 雲端同步全部沿用 {header, lines}，零修改。 */
-async function parsePO(text,key,fileName){
+async function parsePO(text,key,fileName,rowText){
   const useAi=!!(APP&&APP.sets&&APP.sets.useAi);
-  const res=await MasterParser.parse(text,{fileName,apiKey:key,useAi});
+  const res=await MasterParser.parse(text,{fileName,apiKey:key,useAi,rowText});
   const h=res.header||{};
   // Header → 既有 po_headers 形狀（+ 擴充欄位）
   const header={
@@ -1609,9 +1640,9 @@ function parseWeekly(buf,asOf){
 const pn=v=>{if(v==null)return 0;if(typeof v==='number')return isNaN(v)?0:Math.round(v*100)/100;const n=parseFloat(v.toString().replace(/[,$]/g,''));return isNaN(n)?0:n;};
 
 // ══ MAIN IMPORT（v4：支援直接 .pdf/.xlsx，並寫入 parse_audit） ══
-async function importPoText(t,subj,fileName){
+async function importPoText(t,subj,fileName,rowText){
   const key=APP.sets.apiKey;
-  const parsed=await parsePO(t,key,fileName);
+  const parsed=await parsePO(t,key,fileName,rowText);
   if(!parsed||!parsed.lines.length){
     log(`⚠ ${fileName} 未解析到明細`,'warn');
     if(parsed&&parsed._audit) await dbAdd('parse_audit',parsed._audit);
@@ -1639,7 +1670,8 @@ async function processFile(file){
       log('識別: PDF 採購訂單（直接匯入）','info');
       const t=await pdfText(buf);
       if(!t||t.length<20){log('⚠ PDF文字提取失敗（掃描圖片PDF需Gemini AI）','warn');return;}
-      await importPoText(t,file.name,file.name);
+      const rt=await pdfTextRows(buf);
+      await importPoText(t,file.name,file.name,rt);
       await loadAll();refreshAll();return;
     }
     // ── 直接拖入 Excel（週報） ──
@@ -1678,7 +1710,8 @@ async function processFile(file){
         log(`解析: ${pn2}`,'info');
         const t=await pdfText(pd);
         if(!t||t.length<20){log(`⚠ ${pn2} 文字提取失敗（可能為掃描圖片PDF，需Gemini AI）`,'warn');continue;}
-        await importPoText(t,subj,pn2);
+        const rt=await pdfTextRows(pd);
+        await importPoText(t,subj,pn2,rt);
       }
     }
     await loadAll();refreshAll();
