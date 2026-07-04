@@ -138,6 +138,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="tab" onclick="goTab('daily',this)" data-zh="📊 每日報告" data-en="📊 Daily">📊 每日報告</div>
   <div class="tab" onclick="goTab('weekly',this)" data-zh="📅 週統計" data-en="📅 Weekly">📅 週統計</div>
   <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月年趨勢" data-en="📆 Monthly">📆 月年趨勢</div>
+  <div class="tab" onclick="goTab('target',this)" data-zh="🎯 目標&根因" data-en="🎯 Target & RCA">🎯 目標&根因</div>
   <div class="tab" onclick="goTab('eff',this)" data-zh="📈 效率報表" data-en="📈 Efficiency">📈 效率報表</div>
   <div class="tab" onclick="goTab('validate',this)" data-zh="🔍 數據比對" data-en="🔍 Validation">🔍 數據比對</div>
   <div class="tab" onclick="goTab('styles',this)" data-zh="🎯 款式追蹤" data-en="🎯 Styles">🎯 款式追蹤</div>
@@ -330,8 +331,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
       </div>
     </div>
     <div id="dSumTable" class="tw"><table><thead><tr>
-      <th>線別</th><th>Section</th><th>人數</th><th>總件數</th>
-      <th>效率</th><th>目標45%</th><th>人均件數</th><th>箱數</th><th>款式數</th><th style="width:40px"></th>
+      <th>線別</th><th>Section</th><th>人數</th><th>目標<br>Target</th><th>總件數<br>Actual</th>
+      <th>達成率<br>Achiev.%</th><th>效率</th><th>目標45%</th><th>人均件數</th><th>箱數</th><th>款式數</th><th>Issue</th><th>備註 Remark</th><th style="width:40px"></th>
     </tr></thead><tbody id="dTbody"></tbody></table></div>
     <div id="dPOTable" class="tw" style="display:none"><table><thead><tr>
       <th>線別</th><th>Section</th><th>款號</th><th>SELFKEY</th><th>PO</th><th>顏色</th><th>尺寸</th><th>件數</th><th>箱數</th><th style="width:40px"></th>
@@ -378,11 +379,55 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     </div>
     <div class="tw"><table><thead><tr>
       <th>期間</th><th>工作天</th><th>線別數</th><th>合計人數</th>
-      <th>合計件數</th><th>平均效率</th><th>人均件數</th><th>箱數</th>
+      <th>🎯 目標 Target</th><th>合計件數</th><th>達成率 Achiev.%</th><th>平均效率</th><th>人均件數</th><th>箱數</th>
     </tr></thead><tbody id="pBody"></tbody></table></div>
   </div>
 </div>
 
+
+<!-- ══ TARGET & ROOT CAUSE (v5.1) ══ -->
+<div class="sec" id="sec-target">
+  <div class="frow">
+    <div style="display:flex;gap:0;border:1px solid #e2e6f0;border-radius:6px;overflow:hidden">
+      <button id="tgm-d" onclick="setTgtMode('day',this)" style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:#f59e0b;color:#1c1200;font-weight:600">日</button>
+      <button id="tgm-w" onclick="setTgtMode('week',this)" style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">週</button>
+      <button id="tgm-m" onclick="setTgtMode('month',this)" style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:#fff;color:#6b7a9e">月</button>
+    </div>
+    <button class="btn btn-g" onclick="navTgt(-1)" style="padding:6px 10px;font-size:16px" title="上一期">◀</button>
+    <select id="tgtSel" onchange="renderTargetTab()"></select>
+    <button class="btn btn-g" onclick="navTgt(1)" style="padding:6px 10px;font-size:16px" title="下一期">▶</button>
+    <span id="tgtMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+  </div>
+  <div id="tgtEmpty" class="card" style="display:none;text-align:center;padding:40px;color:#9ca3af">
+    尚未匯入含目標資料的報表（VRT_Production_Daily report）。<br>
+    <span style="font-size:12px">請至「📥 上傳報表」匯入 VRT_Production_Daily_report_YYYYMM.xlsx</span>
+  </div>
+  <!-- KPI -->
+  <div id="tgtKpi" class="kpi-strip"></div>
+  <!-- Period Comparison 期間比較分析 -->
+  <div class="card" id="tgtCmpCard" style="display:none">
+    <div class="ct">📊 期間比較分析 Period Comparison（本期 vs 前期）</div>
+    <div id="tgtCmp"></div>
+  </div>
+  <!-- Root Cause -->
+  <div class="card" id="tgtRCCard" style="display:none">
+    <div class="ct">🔍 Top Production Problems 主要生產問題（Root Cause Analysis）</div>
+    <div id="tgtRC" style="display:grid;grid-template-columns:1fr 1.4fr;gap:16px;align-items:start"></div>
+  </div>
+  <!-- Trend -->
+  <div class="card" id="tgtTrendCard" style="display:none">
+    <div class="ct">📈 Target vs Actual 趨勢（含達成率）</div>
+    <div id="tgtTrend" style="overflow-x:auto"></div>
+  </div>
+  <!-- Manager Comment -->
+  <div class="card" id="tgtMCCard" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="ct" style="margin-bottom:0">📝 Manager Comment 管理者摘要（自動整理）</div>
+      <button class="btn btn-g" onclick="copyTgtComment()" style="font-size:12px;padding:5px 12px">📋 複製文字</button>
+    </div>
+    <div id="tgtMC" style="background:#f8fafc;border:1px solid #e2e6f0;border-radius:8px;padding:14px;font-size:13px;line-height:1.8;white-space:pre-wrap;font-family:inherit"></div>
+  </div>
+</div>
 
 <!-- ══ EFF REPORT ══ -->
 <div class="sec" id="sec-eff">
@@ -885,11 +930,13 @@ function dedupAndNorm(all){
   const rawDB=(all||[]).map(r=>({...r,lineNo:normLineNo(r.lineNo||"")}));
   const dedupMap=new Map();
   rawDB.forEach(r=>{
-    const k=[normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||""].join("|");
+    const k=[normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||"",r.tSrc||""].join("|");
     if(!dedupMap.has(k)) dedupMap.set(k,r);
     else{
       const ex=dedupMap.get(k);
-      dedupMap.set(k,{...ex,workers:Math.max(ex.workers||0,r.workers||0),efficiency:Math.max(ex.efficiency||0,r.efficiency||0)});
+      dedupMap.set(k,{...ex,workers:Math.max(ex.workers||0,r.workers||0),efficiency:Math.max(ex.efficiency||0,r.efficiency||0),
+        target:(ex.target||r.target||0),achievement:(ex.achievement||r.achievement||0),
+        issue:(ex.issue||r.issue||undefined),remark:(ex.remark||r.remark||"")});
     }
   });
   return [...dedupMap.values()];
@@ -1160,6 +1207,7 @@ function goTab(name, el){
   if(name==="daily")  { populateDailySel(); renderDaily(); }
   if(name==="weekly") { populateWeekSel(); renderWeekly(); }
   if(name==="monthly"){ renderPeriod(); }
+  if(name==="target"){ if(typeof initTargetTab==="function") initTargetTab(); }
   if(name==="eff")    { renderEffTable(); }
   if(name==="validate"){ renderValidate(); }
   if(name==="styles"){  renderStylesWithCut(); }
@@ -1862,8 +1910,10 @@ function renderFileList(){
 }
 
 async function parseWorkbook(wb, fname) {
+  // ★ v5.1: VRT_Production_Daily report（Dashboard + 01~31 sheets, 含 Target/Issue/Remarks）
+  let result = (typeof parseVRTTargetReport==="function") ? parseVRTTargetReport(wb, fname) : null;
   // Try weekly report first (has "Weekly Output Report" sheet)
-  let result = parseWeeklyReport(wb, fname);
+  if (!result) result = parseWeeklyReport(wb, fname);
   if (!result) result = parseVRT(wb, fname);
   if (!result) result = parseStd(wb, fname);
   return result;
@@ -2000,11 +2050,17 @@ async function doImport(){
 async function confirmImport(){
   if(!pendingRecs.length) return;
   // Remove ALL old records for any date covered by this import, then add new
+  // ★ v5.1: target 記錄（tSrc='target'）與一般日報記錄分開覆蓋，匯入目標報表不會刪除既有日報，反之亦然
   const importDates=new Set(pendingRecs.map(r=>r.date));
-  DB=DB.filter(r=>!importDates.has(r.date));
+  const importHasTgt=pendingRecs.some(r=>r.tSrc==="target");
+  const importHasNorm=pendingRecs.some(r=>r.tSrc!=="target");
+  DB=DB.filter(r=>{
+    if(!importDates.has(r.date)) return true;
+    return (r.tSrc==="target") ? !importHasTgt : !importHasNorm;
+  });
   // Dedup within the new batch itself (date|lineNo|styleNo)
   const map=new Map();
-  pendingRecs.forEach(r=>map.set([normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||""].join("|"),r));
+  pendingRecs.forEach(r=>map.set([normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||"",r.tSrc||""].join("|"),r));
   DB=[...DB,...map.values()];
   saveDB(); updateHeader(); renderDBCard();
   // ★ Save full DB to cloudIDB so it always has complete history across all years
@@ -2964,6 +3020,23 @@ function renderDashboard(){
   if(cap) capUtil=cap.capacityUtilization+'%';
   const lastImport=localStorage.getItem('vrt_sewing_max_date')||getMaxDate(DB)||'-';
 
+  // ★ v5.1: Daily Production Target KPI — 取最新一個有目標資料的日期
+  let tgtKpis=[];
+  const tgtDates=[...new Set(DB.filter(r=>r.tSrc==="target").map(r=>r.date))].sort();
+  if(tgtDates.length){
+    const td=tgtDates[tgtDates.length-1];
+    const tl=buildLineMap(DB.filter(r=>r.date===td)).filter(l=>l.hasTgt&&l.target>0);
+    const tT=tl.reduce((s,l)=>s+l.target,0), tA=tl.reduce((s,l)=>s+l.tgtActual,0);
+    const ach=tT>0?Math.round(tA/tT*1000)/10:0;
+    const gap=tA-tT, am=achMeta(ach);
+    tgtKpis=[
+      {v:tT.toLocaleString(),l:`🎯 日目標 Target (${td.slice(5)})`,c:"#7c3aed",i:"🎯"},
+      {v:tA.toLocaleString(),l:"日實際 Actual",c:"#1d4ed8",i:"📦"},
+      {v:ach+"%",l:"達成率 Achievement",c:am.c,i:am.e},
+      {v:(gap>=0?"+":"")+gap.toLocaleString(),l:"目標差距 Gap",c:gap>=0?"#059669":"#dc2626",i:"📉"},
+    ];
+  }
+
   const kpis=[
     {v:DB.length.toLocaleString(),l:t("hcRecords")||"總記錄",c:"#f59e0b",i:"📋"},
     {v:years.length,l:t("hcYears")||"年份",c:"#8b5cf6",i:"📅"},
@@ -2971,6 +3044,7 @@ function renderDashboard(){
     {v:`${dates[dates.length-1]||"-"}`,l:t("hcLatest")||"最新日期",c:"#059669",i:"🗓"},
     {v:totalPcs.toLocaleString(),l:t("totalPcs")||"總生產件數",c:"#1d4ed8",i:"🧵"},
     {v:avgEff+"%",l:t("avgEff")||"平均效率",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626",i:"📈"},
+    ...tgtKpis,
     {v:coCount,l:t("coChangeovers")||"換款次數",c:"#dc2626",i:"🔄"},
     {v:lostMins,l:t("coLostMins")||"損失工時(分)",c:"#dc2626",i:"⏱"},
     {v:lostPcs,l:t("coLostPcs")||"損失件數",c:"#7c3aed",i:"📦"},
@@ -3075,21 +3149,68 @@ function populateDailySel(){
 
 function buildLineMap(recs){
   const lm={};
+  const pcsByLD={}; // ★ v5.1: line|date → {norm, tgt}，同一天同線若同時有日報明細與目標報表，只計日報件數，避免重複
   recs.forEach(r=>{
     const k=r.lineNo||"(未知)";
-    if(!lm[k]) lm[k]={lineNo:k,section:r.section,workers:0,efficiency:0,totalPcs:0,cartons:0,styles:[],otWorkers:0,otPcs:0};
-    lm[k].totalPcs+=r.pieces;
-    lm[k].cartons+=r.cartons;
+    if(!lm[k]) lm[k]={lineNo:k,section:r.section,workers:0,efficiency:0,totalPcs:0,cartons:0,styles:[],otWorkers:0,otPcs:0,
+      target:0,tgtActual:0,achievement:0,hasTgt:false,tgtRecs:0,
+      issues:{changeover:0,material:0,machine:0,manpower:0,quality:0,others:0},remarks:[]};
+    const ld=k+"|"+(r.date||"");
+    if(!pcsByLD[ld]) pcsByLD[ld]={norm:0,tgt:0,line:k};
+    if(r.tSrc==="target") pcsByLD[ld].tgt+=(r.pieces||0);
+    else pcsByLD[ld].norm+=(r.pieces||0);
+    lm[k].cartons+=(r.cartons||0);
     lm[k].otPcs+=(r.otPcs||0);
     if(r.styleNo) lm[k].styles.push({styleNo:r.styleNo,pcs:r.pieces});
     if(r.workers>lm[k].workers) lm[k].workers=r.workers;
     if((r.workersOT||0)>lm[k].otWorkers) lm[k].otWorkers=r.workersOT||0;
     if(r.efficiency>lm[k].efficiency) lm[k].efficiency=r.efficiency;
+    // ★ v5.1: Daily Production Target 欄位聚合
+    if(r.tSrc==="target"||(r.target||0)>0){
+      lm[k].hasTgt=true; lm[k].tgtRecs++;
+      lm[k].target+=(r.target||0);
+      lm[k].tgtActual+=(r.pieces||0);
+      if(lm[k].tgtRecs===1) lm[k].achievement=(r.achievement||0);
+      if(r.issue){ Object.keys(lm[k].issues).forEach(key=>{ if(r.issue[key]) lm[k].issues[key]++; }); }
+      if(r.remark) lm[k].remarks.push(r.remark);
+    }
+  });
+  Object.values(pcsByLD).forEach(v=>{ if(lm[v.line]) lm[v.line].totalPcs += (v.norm>0 ? v.norm : v.tgt); });
+  // 多筆 target 記錄（週/月彙總）時重算達成率；單日直接沿用 Excel 值
+  Object.values(lm).forEach(l=>{
+    if(l.hasTgt && (l.tgtRecs>1 || !l.achievement) && l.target>0)
+      l.achievement=Math.round(l.tgtActual/l.target*1000)/10;
   });
   return Object.values(lm).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
 }
 
 function effClass(e){ return e>=45?"hi":e>=30?"md":e>0?"lo":"zero"; }
+// ★ v5.1: 達成率判定（依 VRT_Production_Daily report 規則）
+function achMeta(a){
+  if(a>=100) return {e:"🟢",t:"Excellent",c:"#059669",bg:"#ecfdf5"};
+  if(a>=95)  return {e:"🟢",t:"Good",c:"#059669",bg:"#ecfdf5"};
+  if(a>=90)  return {e:"🟡",t:"Acceptable",c:"#d97706",bg:"#fffbeb"};
+  if(a>=80)  return {e:"🟠",t:"Behind",c:"#ea580c",bg:"#fff7ed"};
+  return {e:"🔴",t:"Critical",c:"#dc2626",bg:"#fef2f2"};
+}
+const ISSUE_KEYS=["changeover","material","machine","manpower","quality","others"];
+const ISSUE_LABELS={changeover:"Changeover 換款",material:"Material 缺料",machine:"Machine 機器",manpower:"Manpower 缺人",quality:"Quality 品質",others:"Others 其他"};
+const ISSUE_SHORT={changeover:"Changeover",material:"Material",machine:"Machine",manpower:"Manpower",quality:"Quality",others:"Others"};
+function issueTruthy(v){
+  if(v===null||v===undefined||v==="") return false;
+  if(typeof v==="number") return v>0;
+  const s=String(v).trim().toLowerCase();
+  return s==="1"||s==="yes"||s==="true"||s==="y"||s==="x"||s==="✓"||s==="v"||(parseFloat(s)>0);
+}
+function issueText(issues){
+  if(!issues) return "";
+  return ISSUE_KEYS.filter(k=>issues[k]).map(k=>ISSUE_SHORT[k]).join(" + ");
+}
+function achBadge(l){
+  if(!l.hasTgt||!(l.target>0)) return "--";
+  const a=l.achievement||0, m=achMeta(a);
+  return `<span class="b" style="background:${m.bg};color:${m.c};font-weight:700">${m.e} ${a}%</span>`;
+}
 function effBadge(e){ if(!e) return ""; return `<div class="eff-b">${e}%</div>`; }
 function secClass(s){ return s==="Apron"?"sc-a":"sc-g"; }
 
@@ -3110,6 +3231,24 @@ function lineCardHTML(line){
       <div class="lc-stat"><div class="lc-sn" style="color:#1d4ed8">${line.totalPcs.toLocaleString()}</div><div class="lc-sl">📦 件數</div></div>
     </div>
     ${pp?`<div class="pp"><span style="color:#0369a1">人均產量</span><span class="pp-v">${pp} 件/人</span></div>`:""}
+    ${(function(){ /* ★ v5.1: Daily Production Target 區塊 */
+      if(line.hasTgt&&line.target>0){
+        const m=achMeta(line.achievement||0);
+        return `<div style="background:${m.bg};border:1px solid ${m.c}30;border-radius:7px;padding:6px 8px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+            <span style="color:#6b7a9e">🎯 Target</span><span class="mono" style="font-weight:700">${line.target.toLocaleString()} pcs</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+            <span style="color:#6b7a9e">📦 Actual</span><span class="mono" style="font-weight:700;color:#1d4ed8">${line.tgtActual.toLocaleString()} pcs</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;align-items:center">
+            <span style="color:#6b7a9e">Achievement</span>
+            <span style="font-weight:800;color:${m.c}">${line.achievement}%　${m.e} ${m.t}</span></div>
+          ${issueText(line.issues)?`<div style="font-size:10px;color:#b91c1c;margin-top:3px;border-top:1px dashed ${m.c}30;padding-top:3px">⚠ ${issueText(line.issues)}</div>`:""}
+          ${line.remarks&&line.remarks.length?`<div style="font-size:10px;color:#6b7a9e;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${String(line.remarks.join(" / ")).replace(/"/g,"&quot;")}">📝 ${line.remarks.join(" / ")}</div>`:""}
+        </div>`;
+      }
+      if(window._ctxHasTgt) return `<div style="background:#f8fafc;border:1px dashed #e2e6f0;border-radius:7px;padding:5px 8px;margin-bottom:6px;font-size:11px;color:#9ca3af;text-align:center">🎯 Target: --</div>`;
+      return "";
+    })()}
     ${line.cartons>0?`<div class="ctn-row"><span style="color:#6b7a9e">箱數</span><span class="mono" style="font-weight:600">${Math.round(line.cartons*10)/10} Ctn</span></div>`:""}
     ${(line.otWorkers>0||line.otPcs>0)?`<div class="ctn-row" style="border-top:1px dashed #e9d8fd;margin-top:3px;padding-top:3px"><span style="color:#7c3aed;font-size:11px">⏰ 加班</span><span class="mono" style="color:#7c3aed;font-size:12px;font-weight:700">${line.otWorkers>0?line.otWorkers+"人":""}${line.otWorkers>0&&line.otPcs>0?" · ":""}${line.otPcs>0?line.otPcs.toLocaleString()+"件":""}</span></div>`:""}
     ${line.efficiency>0?`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7a9e;margin-bottom:2px"><span>效率</span><span>目標45%</span></div><div class="capbar"><div class="capfill" style="width:${cap}%;background:${ec==="hi"?"#059669":ec==="md"?"#d97706":"#dc2626"}"></div></div></div>`:""}
@@ -3189,11 +3328,25 @@ function renderDaily(){
   // KPI
   const otActive=active.filter(l=>l.otWorkers>0||l.otPcs>0);
   const totOTW=otActive.reduce((s,l)=>s+l.otWorkers,0);
+  // ★ v5.1: Daily Production Target 彙總
+  const tgtLines=active.filter(l=>l.hasTgt&&l.target>0);
+  const totTgt=tgtLines.reduce((s,l)=>s+l.target,0);
+  const totTAct=tgtLines.reduce((s,l)=>s+l.tgtActual,0);
+  const dayAch=totTgt>0?Math.round(totTAct/totTgt*1000)/10:0;
+  const dayGap=totTAct-totTgt;
+  window._ctxHasTgt=tgtLines.length>0;
+  const achM=achMeta(dayAch);
   document.getElementById("dKpi").innerHTML=[
     {l:"生產線數",v:active.length,u:"條",c:"#f59e0b"},
     {l:"合計人數",v:totW,u:"人",c:"#1e2640"},
     {l:"合計件數",v:totP.toLocaleString(),u:"件",c:"#1d4ed8"},
     {l:"平均效率",v:avgEff,u:"%",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626"},
+    ...(totTgt>0?[
+      {l:"🎯 日目標 Target",v:totTgt.toLocaleString(),u:"件",c:"#7c3aed"},
+      {l:"日實際 Actual",v:totTAct.toLocaleString(),u:"件",c:"#1d4ed8"},
+      {l:"達成率 Achiev.",v:dayAch,u:"%",c:achM.c},
+      {l:"目標差距 Gap",v:(dayGap>=0?"+":"")+dayGap.toLocaleString(),u:"件",c:dayGap>=0?"#059669":"#dc2626"},
+    ]:[]),
     {l:"合計箱數",v:Math.round(totC*10)/10||"-",u:"Ctn",c:"#6b7a9e"},
     {l:"人均件數",v:totW>0?(totP/totW).toFixed(1):"-",u:"件/人",c:"#0369a1"},
     ...(otActive.length?[
@@ -3230,16 +3383,22 @@ function renderDaily(){
     document.getElementById("dTbody").innerHTML=active.map(l=>{
       const pp=l.workers>0?(l.totalPcs/l.workers).toFixed(1):"-";
       const diff=l.efficiency?l.efficiency-45:null;
+      const iTxt=issueText(l.issues);
+      const rTxt=(l.remarks||[]).join(" / ");
       return `<tr>
         <td class="mono" style="font-weight:600">${l.lineNo}</td>
         <td>${l.section||"-"}</td>
         <td class="mono">${l.workers||"-"}</td>
+        <td class="mono" style="color:#7c3aed;font-weight:600">${l.hasTgt&&l.target>0?l.target.toLocaleString():"--"}</td>
         <td class="mono" style="color:#1d4ed8;font-weight:600">${l.totalPcs.toLocaleString()}</td>
+        <td>${achBadge(l)}</td>
         <td>${l.efficiency>0?`<span class="b b${effClass(l.efficiency).slice(0,2)==="hi"?"ok":effClass(l.efficiency).slice(0,2)==="md"?"wn":"bd"}">${l.efficiency}%</span>`:"-"}</td>
         <td>${diff!==null?`<span style="color:${diff>=0?"#059669":"#dc2626"};font-weight:700;font-family:monospace">${diff>=0?"+":""}${diff}%</span>`:"-"}</td>
         <td class="mono" style="color:#0369a1">${pp}</td>
         <td class="mono">${l.cartons>0?Math.round(l.cartons*10)/10:"-"}</td>
         <td class="mono">${l.styles.length||"-"}</td>
+        <td style="font-size:11px;color:#b91c1c;font-weight:600">${iTxt||"-"}</td>
+        <td style="font-size:11px;color:#374151;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${rTxt.replace(/"/g,"&quot;")}">${rTxt||"-"}</td>
         <td><button onclick="deleteLineDay('${_dDate}','${l.lineNo}')" title="刪除 ${_dDate} ${l.lineNo} 的全部記錄"
           style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:15px;padding:2px 4px;border-radius:4px"
           onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'">🗑</button></td>
@@ -3325,12 +3484,23 @@ function renderWeekly(){
         return s+dl.reduce((ss,l)=>ss+l.otWorkers,0);
       },0)/wOTDayCount)
     :0;
+  // ★ v5.1: 週目標彙總（自動累積）
+  const wTgtL=active.filter(l=>l.hasTgt&&l.target>0);
+  const wTgt=wTgtL.reduce((s,l)=>s+l.target,0);
+  const wTAct=wTgtL.reduce((s,l)=>s+l.tgtActual,0);
+  const wAch=wTgt>0?Math.round(wTAct/wTgt*1000)/10:0;
+  window._ctxHasTgt=wTgtL.length>0;
   document.getElementById("wKpi").innerHTML=[
     {l:"工作天數",v:wWorkDays.length,u:"天",c:"#f59e0b"},
     {l:"生產線數",v:active.length,u:"條",c:"#374151"},
     {l:"合計人次",v:totW,u:"人次",c:"#1e2640"},
     {l:"合計件數",v:totP.toLocaleString(),u:"件",c:"#1d4ed8"},
     {l:"平均效率",v:avgEff,u:"%",c:avgEff>=45?"#059669":avgEff>=30?"#d97706":"#dc2626"},
+    ...(wTgt>0?[
+      {l:"🎯 週目標 Weekly Target",v:wTgt.toLocaleString(),u:"件",c:"#7c3aed"},
+      {l:"週實際 Weekly Actual",v:wTAct.toLocaleString(),u:"件",c:"#1d4ed8"},
+      {l:"週達成率 Achiev.",v:wAch,u:"%",c:achMeta(wAch).c},
+    ]:[]),
     {l:"人均件數",v:totW>0?(totP/totW).toFixed(1):"-",u:"件/人",c:"#0369a1"},
     {l:"合計箱數",v:Math.round(totC*10)/10||"-",u:"Ctn",c:"#6b7a9e"},
     ...(wOTDayCount>0?[
@@ -3384,28 +3554,38 @@ function getPKey(date){ return curPeriod==="yearly"?date.slice(0,4):date.slice(0
 
 function renderPeriod(){
   document.getElementById("ptitle").textContent=curPeriod==="yearly"?"年別報表":"月別報表";
-  if(!DB.length){ const pb=document.getElementById("pBody"); pb.innerHTML=""; pb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:30px;color:#8b95b8">尚未有資料</td></tr>`; return; }
+  if(!DB.length){ const pb=document.getElementById("pBody"); pb.innerHTML=""; pb.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:30px;color:#8b95b8">尚未有資料</td></tr>`; return; }
   const map={};
+  const pcsDL={}; // ★ v5.1: period|date|line → {norm,tgt}，同日同線同時有日報與目標報表時只計日報件數
   DB.forEach(r=>{
     const k=getPKey(r.date);
-    if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,effs:[],cartons:0};
+    if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,effs:[],cartons:0,tgt:0,tact:0};
     map[k].dates.add(r.date); map[k].lines.add(r.lineNo);
-    map[k].workers+=r.workers; map[k].pieces+=r.pieces;
+    map[k].workers+=r.workers;
+    const dlk=k+"|"+r.date+"|"+(r.lineNo||"");
+    if(!pcsDL[dlk]) pcsDL[dlk]={p:k,norm:0,tgt:0};
+    if(r.tSrc==="target"){ pcsDL[dlk].tgt+=(r.pieces||0); map[k].tgt+=(r.target||0); map[k].tact+=(r.pieces||0); }
+    else pcsDL[dlk].norm+=(r.pieces||0);
     if(r.efficiency>0) map[k].effs.push(r.efficiency);
-    map[k].cartons+=r.cartons;
+    map[k].cartons+=r.cartons||0;
   });
+  Object.values(pcsDL).forEach(v=>{ if(map[v.p]) map[v.p].pieces += (v.norm>0?v.norm:v.tgt); });
   const periods=Object.keys(map).sort().reverse();
   const pBody=document.getElementById("pBody"); pBody.innerHTML="";
   pBody.innerHTML=periods.map(p=>{
     const d=map[p];
     const avgE=d.effs.length?Math.round(d.effs.reduce((s,v)=>s+v,0)/d.effs.length):0;
     const pp=d.workers>0?(d.pieces/d.workers).toFixed(1):"-";
+    const ach=d.tgt>0?Math.round(d.tact/d.tgt*1000)/10:0;
+    const am=achMeta(ach);
     return `<tr>
       <td class="mono" style="color:#f59e0b;font-weight:700">${p}</td>
       <td class="mono">${d.dates.size}</td>
       <td class="mono">${d.lines.size}</td>
       <td class="mono">${d.workers.toLocaleString()}</td>
+      <td class="mono" style="color:#7c3aed;font-weight:600">${d.tgt>0?d.tgt.toLocaleString():"--"}</td>
       <td class="mono" style="color:#1d4ed8;font-weight:600">${d.pieces.toLocaleString()}</td>
+      <td>${d.tgt>0?`<span class="b" style="background:${am.bg};color:${am.c};font-weight:700">${am.e} ${ach}%</span>`:"--"}</td>
       <td>${avgE>0?`<span class="b b${avgE>=45?"ok":avgE>=30?"wn":"bd"}">${avgE}%</span>`:"-"}</td>
       <td class="mono" style="color:#0369a1">${pp}</td>
       <td class="mono">${Math.round(d.cartons*10)/10||"-"}</td>
@@ -3426,10 +3606,13 @@ function exportExcel(mode){
     if(secF) recs=recs.filter(r=>r.section===secF);
     recs.sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
     const lines=buildLineMap(recs);
-    const header=["線別","Section","人數","件數","效率%","人均件數","箱數","款式數"];
-    const data=[header,...lines.map(l=>[l.lineNo,l.section||"",l.workers||"",l.totalPcs,
+    const header=["線別","Section","人數","目標Target","件數Actual","達成率%","效率%","人均件數","箱數","款式數","Issue","備註Remarks"];
+    const data=[header,...lines.map(l=>[l.lineNo,l.section||"",l.workers||"",
+      (l.hasTgt&&l.target>0)?l.target:"",l.totalPcs,
+      (l.hasTgt&&l.target>0)?l.achievement:"",
       l.efficiency||"",l.workers>0?Math.round(l.totalPcs/l.workers*10)/10:"",
-      l.cartons>0?Math.round(l.cartons*10)/10:"",l.styles.length])];
+      l.cartons>0?Math.round(l.cartons*10)/10:"",l.styles.length,
+      issueText(l.issues)||"",(l.remarks||[]).join(" / ")])];
     // Add detail rows
     data.push([]);
     data.push(["=== 款式明細 ==="]);
@@ -3526,6 +3709,21 @@ function renderAlerts(lines){
   const el = document.getElementById("dAlerts");
   if(!el) return;
   const alerts = [];
+
+  // ★ v5.1: Daily Target 達成率警示
+  const tgtL=lines.filter(l=>l.hasTgt&&l.target>0);
+  if(tgtL.length){
+    const tT=tgtL.reduce((s,l)=>s+l.target,0), tA=tgtL.reduce((s,l)=>s+l.tgtActual,0);
+    const ach=tT>0?Math.round(tA/tT*1000)/10:0;
+    if(ach<80) alerts.push({level:"crit", msg:`🔴 Critical Production Delay — 全廠達成率僅 ${ach}%（目標 ${tT.toLocaleString()} / 實際 ${tA.toLocaleString()}，差 ${(tA-tT).toLocaleString()} 件）`});
+    else if(ach<90) alerts.push({level:"warn", msg:`⚠ Production Behind Target — 全廠達成率 ${ach}%（差 ${(tA-tT).toLocaleString()} 件）`});
+    tgtL.forEach(l=>{
+      if((l.achievement||0)<80){
+        const iTxt=issueText(l.issues);
+        alerts.push({level:"crit", msg:`🔴 ${l.lineNo} 達成率僅 ${l.achievement}%（${l.tgtActual.toLocaleString()}/${l.target.toLocaleString()}）${iTxt?"｜原因："+iTxt:""}${(l.remarks||[]).length?"｜"+l.remarks[0]:""}`});
+      }
+    });
+  }
 
   lines.forEach(l=>{
     if(l.totalPcs===0) return;
@@ -5489,6 +5687,476 @@ async function renderAttCmp() {
 
 </script>
 
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   ★ v5.1 — DAILY PRODUCTION TARGET 模組
+   來源：VRT_Production_Daily_report_YYYYMM.xlsx（Dashboard + 01~31 每日工作表）
+   功能：1) Excel 解析（Target/Actual/Achiev%/Effic%/Issue×6/Remarks）
+        2) 目標&根因分頁：期間比較分析（日/週/月 vs 前期）、Root Cause Pareto、
+           Target vs Actual 趨勢、Manager Comment 自動摘要
+   相容性：新增欄位皆為向下相容擴充；舊資料 target=0 / issue=false / remark=""
+═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. 解析器 ─────────────────────────────────────────────────────────── */
+function parseVRTTargetReport(wb, fname){
+  try{
+    // 判斷：需有 ≥1 個 "01"~"31" 命名的工作表，且該表含 Target / Achiev 欄位標題
+    const daySheets = wb.SheetNames.filter(n=>/^\d{2}$/.test(n.trim()));
+    if(!daySheets.length) return null;
+    const probe = XLSX.utils.sheet_to_json(wb.Sheets[daySheets[0]],{header:1,defval:null});
+    let looksTarget=false;
+    for(let i=0;i<Math.min(12,probe.length);i++){
+      const t=(probe[i]||[]).map(c=>String(c||"")).join(" ");
+      if(/Target/i.test(t)&&/Achiev/i.test(t)&&/Line/i.test(t)){ looksTarget=true; break; }
+      if(/DAILY PRODUCTION REPORT/i.test(t)) looksTarget=true;
+    }
+    if(!looksTarget) return null;
+
+    // ── 月份判定：優先取檔名 YYYYMM，其次 Dashboard 的 Month 設定 ──
+    let yyyy=null, mm=null, monthSrc="";
+    const fm = String(fname||"").match(/(20\d{2})[\-_\. ]?(0[1-9]|1[0-2])/);
+    if(fm){ yyyy=fm[1]; mm=fm[2]; monthSrc="檔名"; }
+    if(!yyyy && wb.Sheets["Dashboard"]){
+      const dRows=XLSX.utils.sheet_to_json(wb.Sheets["Dashboard"],{header:1,defval:null});
+      outer:
+      for(let i=0;i<Math.min(15,dRows.length);i++){
+        for(const cell of (dRows[i]||[])){
+          const m=String(cell||"").match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(20\d{2})/i);
+          if(m){ yyyy=m[2]; mm=String(MONTHS[m[1].toLowerCase().slice(0,3)]).padStart(2,"0"); monthSrc="Dashboard設定"; break outer; }
+        }
+      }
+    }
+    if(!yyyy){ const now=new Date(); yyyy=String(now.getFullYear()); mm=String(now.getMonth()+1).padStart(2,"0"); monthSrc="系統日期"; }
+
+    // ── 逐日解析 ──
+    const recs=[]; const daysWithData=[];
+    daySheets.forEach(sn=>{
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+      // 找欄位標題列（含 "Line" 與 "Target"）
+      let hdr=-1, col={line:0,ops:1,po:2,tgt:3,act:4,ach:5,eff:6,co:7,mat:8,mac:9,man:10,qua:11,oth:12,rmk:13};
+      for(let i=0;i<Math.min(15,rows.length);i++){
+        const r=rows[i]||[];
+        const joined=r.map(c=>String(c||"")).join("|");
+        if(/Line/i.test(String(r[0]||""))&&/Target/i.test(joined)){
+          hdr=i;
+          // 依標題文字動態定位（防止欄位順序調整）
+          r.forEach((c,ci)=>{
+            const s=String(c||"").toLowerCase();
+            if(/operators|人數/.test(s)) col.ops=ci;
+            else if(/^po|款數/.test(s)) col.po=ci;
+            else if(/target|目標/.test(s)) col.tgt=ci;
+            else if(/actual|實際/.test(s)) col.act=ci;
+            else if(/achiev|達成/.test(s)) col.ach=ci;
+            else if(/effic|效率/.test(s)) col.eff=ci;
+            else if(/changeover|換款/.test(s)) col.co=ci;
+            else if(/material|缺料/.test(s)) col.mat=ci;
+            else if(/machine|機器/.test(s)) col.mac=ci;
+            else if(/manpower|缺人/.test(s)) col.man=ci;
+            else if(/quality|品質/.test(s)) col.qua=ci;
+            else if(/others?|其他/.test(s)) col.oth=ci;
+            else if(/remark|備註/.test(s)) col.rmk=ci;
+          });
+          break;
+        }
+      }
+      if(hdr<0) return;
+      const date=`${yyyy}-${mm}-${sn.trim()}`;
+      let dayHas=false;
+      for(let i=hdr+1;i<rows.length;i++){
+        const r=rows[i]||[];
+        const lineRaw=String(r[col.line]||"").trim();
+        if(!lineRaw) continue;
+        if(/^total|合計/i.test(lineRaw)) break;
+        if(!/^LINE[\s_]/i.test(lineRaw)&&!/^Line[\s_]/i.test(lineRaw)) continue;
+        const target=parseFloat(r[col.tgt])||0;
+        const actual=parseFloat(r[col.act])||0;
+        if(target<=0&&actual<=0) continue; // 空線不入庫
+        let ach=parseFloat(r[col.ach]);
+        ach=isNaN(ach)?0:(ach<=3?ach*100:ach);             // Excel 通常為小數（<=3 視為比例，支援達成率至 300%）
+        ach=Math.round(ach*10)/10;
+        if(!ach&&target>0) ach=Math.round(actual/target*1000)/10;
+        let eff=parseFloat(r[col.eff]);
+        eff=isNaN(eff)?0:(eff<=3?Math.round(eff*100):Math.round(eff));
+        const ops=parseFloat(r[col.ops])||0;
+        const lineNo=normLineNo(lineRaw.replace(/_/g," ").replace(/\s+/g," "));
+        const remark=cleanField?cleanField(r[col.rmk]):String(r[col.rmk]||"").trim();
+        recs.push({
+          id:uid(), date, section:"Sewing", lineNo,
+          selfKey:"", po:"", styleNo:"", color:"", size:"",
+          pieces:Math.round(actual), workers:Math.round(ops*100)/100, efficiency:eff,
+          cartons:0, smv:0, normalPcs:0, otPcs:0, workersOT:0, hoursOT:0,
+          tSrc:"target",
+          target:Math.round(target),
+          achievement:ach,
+          issue:{
+            changeover: issueTruthy(r[col.co]),
+            material:   issueTruthy(r[col.mat]),
+            machine:    issueTruthy(r[col.mac]),
+            manpower:   issueTruthy(r[col.man]),
+            quality:    issueTruthy(r[col.qua]),
+            others:     issueTruthy(r[col.oth])
+          },
+          remark: String(remark||"").trim()
+        });
+        dayHas=true;
+      }
+      if(dayHas) daysWithData.push(date);
+    });
+    if(!recs.length) return null;
+    daysWithData.sort();
+    const lineNames=[...new Set(recs.map(r=>r.lineNo))];
+    return {recs, summary:{
+      date: daysWithData.length>1 ? `${daysWithData[0]} ~ ${daysWithData[daysWithData.length-1]}（${daysWithData.length}天，月份來源：${monthSrc}）` : daysWithData[0]+`（月份來源：${monthSrc}）`,
+      section:"🎯 Target Report", lines:lineNames.length,
+      totalPcs: recs.reduce((s,r)=>s+r.pieces,0), lineNames
+    }};
+  }catch(e){ console.warn("[TargetReport] parse error:", e); return null; }
+}
+
+/* ── 2. 期間工具 ───────────────────────────────────────────────────────── */
+let TGT_MODE="day";
+function tgtDates(){ return [...new Set(DB.filter(r=>r.tSrc==="target").map(r=>r.date))].sort(); }
+function tgtPKey(d){
+  if(TGT_MODE==="week") return getWeekKey(d);
+  if(TGT_MODE==="month") return d.slice(0,7);
+  return d;
+}
+function tgtPeriodList(){ return [...new Set(tgtDates().map(tgtPKey))].sort(); }
+function tgtPeriodDates(p){
+  const all=tgtDates();
+  return all.filter(d=>tgtPKey(d)===p);
+}
+function tgtPeriodLabel(p){
+  if(TGT_MODE==="week") return p+"（週）";
+  if(TGT_MODE==="month") return p+"（月）";
+  return p;
+}
+
+/* ── 3. 期間統計引擎 ───────────────────────────────────────────────────── */
+function tgtPeriodStats(dates){
+  if(!dates||!dates.length) return null;
+  const recs=DB.filter(r=>dates.includes(r.date));
+  const lines=buildLineMap(recs).filter(l=>l.totalPcs>0||l.hasTgt);
+  const tgtL=lines.filter(l=>l.hasTgt&&l.target>0);
+  const tot={
+    dates, lines,
+    activeLines:lines.filter(l=>l.totalPcs>0).length,
+    pieces:lines.reduce((s,l)=>s+l.totalPcs,0),
+    workers:lines.reduce((s,l)=>s+l.workers,0),
+    target:tgtL.reduce((s,l)=>s+l.target,0),
+    actual:tgtL.reduce((s,l)=>s+l.tgtActual,0),
+    issues:{changeover:0,material:0,machine:0,manpower:0,quality:0,others:0},
+    remarks:[]
+  };
+  tot.achievement = tot.target>0 ? Math.round(tot.actual/tot.target*1000)/10 : 0;
+  const effL=lines.filter(l=>l.efficiency>0&&l.workers>0);
+  const wSum=effL.reduce((s,l)=>s+l.workers,0);
+  tot.avgEff = wSum>0 ? Math.round(effL.reduce((s,l)=>s+l.efficiency*l.workers,0)/wSum*10)/10
+             : (lines.filter(l=>l.efficiency>0).length ? Math.round(lines.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/lines.filter(l=>l.efficiency>0).length*10)/10 : 0);
+  lines.forEach(l=>{
+    ISSUE_KEYS.forEach(k=>tot.issues[k]+=(l.issues?l.issues[k]:0)||0);
+    (l.remarks||[]).forEach(r=>tot.remarks.push({line:l.lineNo,text:r}));
+  });
+  return tot;
+}
+
+/* ── 4. 差異原因判讀（規則式，非 AI）──────────────────────────────────── */
+function tgtDiagnoseLine(cur, prev){
+  // cur/prev = buildLineMap 的單線物件（prev 可為 undefined）
+  const reasons=[];
+  const iTxt=[];
+  if(cur.issues){
+    ISSUE_KEYS.forEach(k=>{
+      const n=cur.issues[k]||0;
+      if(n>0) iTxt.push(`${ISSUE_LABELS[k]}${n>1?`×${n}`:""}`);
+    });
+  }
+  if(iTxt.length) reasons.push("報表標記問題："+iTxt.join("、"));
+  if((cur.remarks||[]).length) reasons.push("備註："+cur.remarks.join(" / "));
+  if(prev){
+    if(prev.workers>0 && cur.workers>0 && cur.workers < prev.workers*0.9)
+      reasons.push(`人數減少（${prev.workers} → ${cur.workers} 人，-${Math.round((1-cur.workers/prev.workers)*100)}%），可能缺工/調線`);
+    // 款式變化 → 換款/學習曲線
+    const pS=new Set((prev.styles||[]).map(s=>s.styleNo));
+    const newStyles=[...new Set((cur.styles||[]).map(s=>s.styleNo))].filter(s=>!pS.has(s));
+    if(newStyles.length && pS.size)
+      reasons.push(`新款上線（${newStyles.slice(0,3).join(", ")}${newStyles.length>3?"…":""}），換款/學習曲線影響`);
+  }
+  if(!reasons.length) reasons.push("報表無標記問題 → 建議現場查核（可能：SMV 偏差、物料流中斷、機況未通報）");
+  return reasons;
+}
+
+/* ── 5. 分頁初始化 / 導覽 ─────────────────────────────────────────────── */
+function setTgtMode(m, btn){
+  TGT_MODE=m;
+  ["tgm-d","tgm-w","tgm-m"].forEach(id=>{
+    const b=document.getElementById(id); if(!b) return;
+    const on=(id==="tgm-"+m[0]);
+    b.style.background=on?"#f59e0b":"#fff"; b.style.color=on?"#1c1200":"#6b7a9e"; b.style.fontWeight=on?"600":"400";
+  });
+  populateTgtSel(); renderTargetTab();
+}
+function populateTgtSel(){
+  const sel=document.getElementById("tgtSel"); if(!sel) return;
+  const ps=tgtPeriodList();
+  sel.innerHTML=ps.map(p=>`<option value="${p}">${tgtPeriodLabel(p)}</option>`).join("");
+  if(ps.length) sel.value=ps[ps.length-1];
+}
+function navTgt(dir){
+  const sel=document.getElementById("tgtSel");
+  const i=sel.selectedIndex+dir;
+  if(i>=0&&i<sel.options.length){ sel.selectedIndex=i; renderTargetTab(); }
+}
+function initTargetTab(){ populateTgtSel(); renderTargetTab(); }
+
+/* ── 6. 主渲染 ─────────────────────────────────────────────────────────── */
+function renderTargetTab(){
+  const empty=document.getElementById("tgtEmpty");
+  const cards=["tgtCmpCard","tgtRCCard","tgtTrendCard","tgtMCCard"];
+  const ps=tgtPeriodList();
+  if(!ps.length){
+    empty.style.display="block";
+    document.getElementById("tgtKpi").innerHTML="";
+    cards.forEach(id=>document.getElementById(id).style.display="none");
+    document.getElementById("tgtMeta").textContent="";
+    return;
+  }
+  empty.style.display="none";
+  const sel=document.getElementById("tgtSel");
+  const p=sel.value||ps[ps.length-1];
+  const pi=ps.indexOf(p);
+  const prevP=pi>0?ps[pi-1]:null;
+
+  const cur=tgtPeriodStats(tgtPeriodDates(p));
+  const prev=prevP?tgtPeriodStats(tgtPeriodDates(prevP)):null;
+  window._ctxHasTgt=true;
+
+  const modeLbl=TGT_MODE==="day"?"日":TGT_MODE==="week"?"週":"月";
+  const prevLbl=TGT_MODE==="day"?"前一日":TGT_MODE==="week"?"上週":"上月";
+  document.getElementById("tgtMeta").textContent=`${cur.dates.length} 天資料 · ${cur.lines.length} 條線${prevP?` · 比較基準：${tgtPeriodLabel(prevP)}`:" · 無前期可比較"}`;
+
+  // ── KPI（含與前期差異）──
+  const dlt=(c,pv,unit,pct)=>{
+    if(prev===null||pv===undefined||pv===null) return "";
+    const d=Math.round((c-pv)*10)/10;
+    if(!d) return `<span style="font-size:10px;color:#9ca3af">＝${prevLbl}持平</span>`;
+    return `<span style="font-size:10px;color:${d>0?"#059669":"#dc2626"};font-weight:700">${d>0?"▲":"▼"} ${Math.abs(d).toLocaleString()}${pct?"pp":unit||""} vs ${prevLbl}</span>`;
+  };
+  const am=achMeta(cur.achievement);
+  document.getElementById("tgtKpi").innerHTML=[
+    {l:`${modeLbl}目標 Target`,v:cur.target.toLocaleString(),u:"件",c:"#7c3aed",d:dlt(cur.target,prev&&prev.target,"件")},
+    {l:`${modeLbl}實際 Actual`,v:cur.actual.toLocaleString(),u:"件",c:"#1d4ed8",d:dlt(cur.actual,prev&&prev.actual,"件")},
+    {l:"達成率 Achievement",v:cur.achievement,u:"%",c:am.c,d:dlt(cur.achievement,prev&&prev.achievement,"",true)},
+    {l:"目標差距 Gap",v:(cur.actual-cur.target>=0?"+":"")+(cur.actual-cur.target).toLocaleString(),u:"件",c:cur.actual>=cur.target?"#059669":"#dc2626",d:""},
+    {l:"平均效率 Efficiency",v:cur.avgEff,u:"%",c:cur.avgEff>=45?"#059669":cur.avgEff>=30?"#d97706":"#dc2626",d:dlt(cur.avgEff,prev&&prev.avgEff,"",true)},
+    {l:"問題標記 Issues",v:ISSUE_KEYS.reduce((s,k)=>s+cur.issues[k],0),u:"項",c:"#b91c1c",d:dlt(ISSUE_KEYS.reduce((s,k)=>s+cur.issues[k],0),prev&&ISSUE_KEYS.reduce((s,k)=>s+prev.issues[k],0),"項")},
+  ].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c}">${k.v}<span class="kpi-u">${k.u}</span></div><div class="kpi-l">${k.l}</div>${k.d?`<div style="margin-top:2px">${k.d}</div>`:""}</div>`).join("");
+
+  renderTgtComparison(cur, prev, p, prevP, prevLbl);
+  renderTgtRootCause(cur);
+  renderTgtTrend(p);
+  renderTgtComment(cur, prev, p, prevLbl);
+}
+
+/* ── 7. 期間比較分析（本期 vs 前期＋原因判讀）──────────────────────────── */
+function renderTgtComparison(cur, prev, p, prevP, prevLbl){
+  const card=document.getElementById("tgtCmpCard"), el=document.getElementById("tgtCmp");
+  card.style.display="block";
+  if(!prev){
+    el.innerHTML=`<div style="color:#9ca3af;font-size:13px;padding:10px">此為最早的期間，尚無${prevLbl}資料可比較。匯入更多天數後即自動產生比較分析。</div>`;
+    return;
+  }
+  const prevMap={}; prev.lines.forEach(l=>prevMap[l.lineNo]=l);
+  // 逐線差異
+  const rows=cur.lines.map(l=>{
+    const pl=prevMap[l.lineNo];
+    const effD = (pl&&pl.efficiency>0&&l.efficiency>0) ? Math.round((l.efficiency-pl.efficiency)*10)/10 : null;
+    const achD = (pl&&pl.hasTgt&&l.hasTgt) ? Math.round((l.achievement-pl.achievement)*10)/10 : null;
+    const pcsD = pl ? l.totalPcs-pl.totalPcs : null;
+    return {l, pl, effD, achD, pcsD};
+  }).sort((a,b)=>((a.effD===null?999:a.effD)-(b.effD===null?999:b.effD)));
+
+  const worst=rows.filter(r=>r.effD!==null&&r.effD<0);
+  const improved=rows.filter(r=>r.effD!==null&&r.effD>0).sort((a,b)=>b.effD-a.effD);
+
+  const fmtD=(d,unit)=> d===null?"--":`<span style="color:${d>0?"#059669":d<0?"#dc2626":"#9ca3af"};font-weight:700;font-family:monospace">${d>0?"+":""}${d.toLocaleString()}${unit||""}</span>`;
+
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px">
+    <div style="background:#f8fafc;border:1px solid #e2e6f0;border-radius:8px;padding:10px;font-size:12px">
+      <b>本期 ${tgtPeriodLabel(p)}</b><br>件數 ${cur.pieces.toLocaleString()}｜效率 ${cur.avgEff}%｜達成率 ${cur.achievement}%｜人數 ${cur.workers}</div>
+    <div style="background:#f8fafc;border:1px solid #e2e6f0;border-radius:8px;padding:10px;font-size:12px">
+      <b>${prevLbl} ${tgtPeriodLabel(prevP)}</b><br>件數 ${prev.pieces.toLocaleString()}｜效率 ${prev.avgEff}%｜達成率 ${prev.achievement}%｜人數 ${prev.workers}</div>
+    <div style="background:${cur.avgEff>=prev.avgEff?"#ecfdf5":"#fef2f2"};border:1px solid ${cur.avgEff>=prev.avgEff?"#6ee7b7":"#fca5a5"};border-radius:8px;padding:10px;font-size:12px">
+      <b>整體變化</b><br>件數 ${fmtD(cur.pieces-prev.pieces,"件")}｜效率 ${fmtD(Math.round((cur.avgEff-prev.avgEff)*10)/10,"pp")}｜達成率 ${fmtD(Math.round((cur.achievement-prev.achievement)*10)/10,"pp")}</div>
+  </div>`;
+
+  // 效率下降線別 + 原因判讀
+  if(worst.length){
+    html+=`<div style="font-size:12px;font-weight:700;color:#991b1b;margin:8px 0 6px">🔻 效率下降線別（共 ${worst.length} 條）與原因判讀：</div>`;
+    html+=worst.map(r=>{
+      const reasons=tgtDiagnoseLine(r.l, r.pl);
+      return `<div style="background:#fef2f2;border-left:3px solid #dc2626;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
+        <b>${r.l.lineNo}</b>　效率 ${r.pl.efficiency}% → ${r.l.efficiency}%（${fmtD(r.effD,"pp")}）
+        ${r.achD!==null?`　達成率 ${fmtD(r.achD,"pp")}`:""}　件數 ${fmtD(r.pcsD,"件")}
+        <div style="color:#7f1d1d;margin-top:4px">${reasons.map(x=>"• "+x).join("<br>")}</div>
+      </div>`;
+    }).join("");
+  } else {
+    html+=`<div style="font-size:12px;color:#059669;margin:8px 0">✅ 本期無效率下降之線別。</div>`;
+  }
+  if(improved.length){
+    html+=`<div style="font-size:12px;font-weight:700;color:#065f46;margin:10px 0 6px">🔺 效率提升前 ${Math.min(3,improved.length)} 名：</div>`;
+    html+=`<div style="font-size:12px;color:#065f46">`+improved.slice(0,3).map(r=>`• <b>${r.l.lineNo}</b>：${r.pl.efficiency}% → ${r.l.efficiency}%（+${r.effD}pp）`).join("<br>")+`</div>`;
+  }
+  el.innerHTML=html;
+}
+
+/* ── 8. Root Cause 統計 + Pareto ───────────────────────────────────────── */
+function renderTgtRootCause(cur){
+  const card=document.getElementById("tgtRCCard"), el=document.getElementById("tgtRC");
+  const entries=ISSUE_KEYS.map(k=>({k,label:ISSUE_LABELS[k],n:cur.issues[k]||0})).sort((a,b)=>b.n-a.n);
+  const total=entries.reduce((s,e)=>s+e.n,0);
+  card.style.display="block";
+  if(!total){
+    el.innerHTML=`<div style="grid-column:1/-1;color:#9ca3af;font-size:13px;padding:10px">本期無問題標記。</div>`;
+    return;
+  }
+  const max=entries[0].n;
+  const colors={changeover:"#7c3aed",material:"#dc2626",machine:"#d97706",manpower:"#0369a1",quality:"#be123c",others:"#6b7a9e"};
+  // 左：排序清單
+  const list=`<div>${entries.map(e=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px">
+      <span style="width:130px;font-weight:600">${e.label}</span>
+      <div style="flex:1;background:#f1f5f9;border-radius:5px;height:16px;overflow:hidden">
+        <div style="width:${max?Math.round(e.n/max*100):0}%;height:100%;background:${colors[e.k]};border-radius:5px"></div></div>
+      <span class="mono" style="width:64px;text-align:right;font-weight:700">${e.n} <span style="color:#9ca3af;font-weight:400">(${total?Math.round(e.n/total*100):0}%)</span></span>
+    </div>`).join("")}
+    <div style="font-size:11px;color:#6b7a9e;margin-top:6px">合計 ${total} 項問題標記（依次數排序）</div></div>`;
+  // 右：Pareto SVG（柱＝次數，折線＝累積%）
+  const W=460,H=220,PL=36,PR=40,PT=14,PB=34;
+  const iw=W-PL-PR, ih=H-PT-PB;
+  const bw=iw/entries.length*0.62;
+  let cum=0;
+  const bars=entries.map((e,i)=>{
+    const x=PL+iw/entries.length*i+(iw/entries.length-bw)/2;
+    const h=max?e.n/max*ih:0;
+    return `<rect x="${x}" y="${PT+ih-h}" width="${bw}" height="${h}" fill="${colors[e.k]}" rx="3"/>
+      <text x="${x+bw/2}" y="${PT+ih-h-4}" text-anchor="middle" font-size="10" font-weight="700" fill="#374151">${e.n}</text>
+      <text x="${x+bw/2}" y="${H-PB+13}" text-anchor="middle" font-size="9" fill="#6b7a9e">${ISSUE_SHORT[e.k]}</text>`;
+  }).join("");
+  const pts=entries.map((e,i)=>{
+    cum+=e.n;
+    const x=PL+iw/entries.length*i+iw/entries.length/2;
+    const y=PT+ih-(total?cum/total:0)*ih;
+    return {x,y,pct:Math.round(cum/total*100)};
+  });
+  const line=`<polyline points="${pts.map(p=>p.x+","+p.y).join(" ")}" fill="none" stroke="#1e2640" stroke-width="2"/>`+
+    pts.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="3" fill="#1e2640"/><text x="${p.x}" y="${p.y-6}" text-anchor="middle" font-size="9" fill="#1e2640">${p.pct}%</text>`).join("");
+  const pareto=`<div><div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px">Root Cause Pareto（柱＝次數，線＝累積%）</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:520px;background:#fff;border:1px solid #e2e6f0;border-radius:8px">
+      <line x1="${PL}" y1="${PT+ih}" x2="${W-PR}" y2="${PT+ih}" stroke="#e2e6f0"/>
+      ${bars}${line}</svg></div>`;
+  el.innerHTML=list+pareto;
+}
+
+/* ── 9. Target vs Actual 趨勢圖（含達成率）─────────────────────────────── */
+function renderTgtTrend(p){
+  const card=document.getElementById("tgtTrendCard"), el=document.getElementById("tgtTrend");
+  // 取選定期間所屬「月份」的每日資料（日模式取該日所在月）
+  const anyDate=tgtPeriodDates(p)[0]||tgtDates().slice(-1)[0];
+  if(!anyDate){ card.style.display="none"; return; }
+  const month=anyDate.slice(0,7);
+  const days=tgtDates().filter(d=>d.startsWith(month));
+  if(days.length<1){ card.style.display="none"; return; }
+  card.style.display="block";
+  const data=days.map(d=>{
+    const ls=buildLineMap(DB.filter(r=>r.date===d)).filter(l=>l.hasTgt&&l.target>0);
+    const tT=ls.reduce((s,l)=>s+l.target,0), tA=ls.reduce((s,l)=>s+l.tgtActual,0);
+    return {d, tgt:tT, act:tA, ach:tT>0?Math.round(tA/tT*1000)/10:0};
+  });
+  const W=Math.max(680, 24+data.length*44), H=250, PL=56, PR=48, PT=16, PB=32;
+  const iw=W-PL-PR, ih=H-PT-PB;
+  const maxV=Math.max(...data.map(x=>Math.max(x.tgt,x.act)),1);
+  const X=i=>PL+(data.length===1?iw/2:iw/(data.length-1)*i);
+  const Y=v=>PT+ih-(v/maxV)*ih;
+  const YA=a=>PT+ih-(Math.min(a,120)/120)*ih;
+  const poly=(key,color)=>`<polyline points="${data.map((x,i)=>X(i)+","+Y(x[key])).join(" ")}" fill="none" stroke="${color}" stroke-width="2.5"/>`+
+    data.map((x,i)=>`<circle cx="${X(i)}" cy="${Y(x[key])}" r="3" fill="${color}"/>`).join("");
+  const achLine=`<polyline points="${data.map((x,i)=>X(i)+","+YA(x.ach)).join(" ")}" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="5,4"/>`+
+    data.map((x,i)=>`<text x="${X(i)}" y="${YA(x.ach)-6}" text-anchor="middle" font-size="9" fill="#059669" font-weight="700">${x.ach}%</text>`).join("");
+  const ref100=`<line x1="${PL}" y1="${YA(100)}" x2="${W-PR}" y2="${YA(100)}" stroke="#05966940" stroke-dasharray="3,3"/><text x="${W-PR+4}" y="${YA(100)+3}" font-size="9" fill="#059669">100%</text>`;
+  const xlabels=data.map((x,i)=>`<text x="${X(i)}" y="${H-PB+14}" text-anchor="middle" font-size="9" fill="#6b7a9e">${x.d.slice(8)}</text>`).join("");
+  const grid=[0,0.25,0.5,0.75,1].map(f=>`<line x1="${PL}" y1="${PT+ih*f}" x2="${W-PR}" y2="${PT+ih*f}" stroke="#f1f5f9"/><text x="${PL-6}" y="${PT+ih*f+3}" text-anchor="end" font-size="9" fill="#9ca3af">${Math.round(maxV*(1-f)).toLocaleString()}</text>`).join("");
+  el.innerHTML=`<div style="display:flex;gap:14px;font-size:11px;margin-bottom:6px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:18px;height:3px;background:#7c3aed;vertical-align:middle"></span> Target 目標</span>
+      <span><span style="display:inline-block;width:18px;height:3px;background:#1d4ed8;vertical-align:middle"></span> Actual 實際</span>
+      <span><span style="display:inline-block;width:18px;height:3px;background:#059669;border-bottom:2px dashed #059669;vertical-align:middle"></span> Achievement% 達成率（右軸 0~120%）</span>
+      <span style="color:#9ca3af">${month} 每日趨勢</span></div>
+    <svg viewBox="0 0 ${W} ${H}" style="min-width:${W}px;background:#fff;border:1px solid #e2e6f0;border-radius:8px">
+      ${grid}${ref100}${poly("tgt","#7c3aed")}${poly("act","#1d4ed8")}${achLine}${xlabels}</svg>`;
+}
+
+/* ── 10. Manager Comment 自動摘要（規則式）─────────────────────────────── */
+let _tgtCommentText="";
+function renderTgtComment(cur, prev, p, prevLbl){
+  const card=document.getElementById("tgtMCCard"), el=document.getElementById("tgtMC");
+  card.style.display="block";
+  const am=achMeta(cur.achievement);
+  const issues=ISSUE_KEYS.map(k=>({k,n:cur.issues[k]||0})).filter(e=>e.n>0).sort((a,b)=>b.n-a.n);
+  // 最差線別：有目標中達成率最低者
+  const tgtL=cur.lines.filter(l=>l.hasTgt&&l.target>0).sort((a,b)=>a.achievement-b.achievement);
+  const worst=tgtL[0];
+  const RECO={material:"優先解決物料短缺（追料、供應商交期管控、上線前物料齊套檢查）",
+    changeover:"優化換款排程（合併小單、預先準備車位與工序平衡，縮短換線時間）",
+    machine:"加強機修保養與備機調度，縮短停機時間",
+    manpower:"調配人力、跨線支援，並檢討出勤與招工進度",
+    quality:"加強品質稽核與首件確認，減少返工",
+    others:"追蹤其他問題項目並要求各線註明具體原因"};
+  let txt=`【Production Summary 生產摘要】${tgtPeriodLabel(p)}\n`;
+  txt+=`達成率 Achievement：${cur.achievement}%（${am.e} ${am.t}）｜目標 ${cur.target.toLocaleString()} 件 / 實際 ${cur.actual.toLocaleString()} 件 / 差距 ${(cur.actual-cur.target).toLocaleString()} 件\n`;
+  txt+=`平均效率：${cur.avgEff}%｜運行線數：${cur.activeLines} 條\n`;
+  if(prev){
+    const aD=Math.round((cur.achievement-prev.achievement)*10)/10;
+    const eD=Math.round((cur.avgEff-prev.avgEff)*10)/10;
+    txt+=`與${prevLbl}比較：達成率 ${aD>=0?"+":""}${aD}pp、效率 ${eD>=0?"+":""}${eD}pp、件數 ${(cur.pieces-prev.pieces)>=0?"+":""}${(cur.pieces-prev.pieces).toLocaleString()} 件\n`;
+  }
+  if(issues.length){
+    txt+=`\n【Main Issues 主要問題】\n`;
+    issues.forEach((e,i)=>{
+      const affected=cur.lines.filter(l=>l.issues&&l.issues[e.k]>0).map(l=>l.lineNo);
+      txt+=`${i+1}. ${ISSUE_LABELS[e.k]} — ${e.n} 次（${affected.length} 條線：${affected.join("、")}）\n`;
+    });
+  } else {
+    txt+=`\n【Main Issues 主要問題】本期無問題標記。\n`;
+  }
+  if(worst){
+    txt+=`\n【Most Critical Line 最需關注線別】${worst.lineNo}\n`;
+    txt+=`達成率 ${worst.achievement}%（實際 ${worst.tgtActual.toLocaleString()} / 目標 ${worst.target.toLocaleString()} 件）\n`;
+    const iT=issueText(worst.issues);
+    if(iT) txt+=`標記問題：${iT}\n`;
+    if((worst.remarks||[]).length) txt+=`原因（備註）：${worst.remarks.join(" / ")}\n`;
+  }
+  txt+=`\n【Recommendation 改善建議】\n`;
+  if(issues.length){
+    issues.slice(0,3).forEach((e,i)=>{ txt+=`Priority ${i+1}：${RECO[e.k]}\n`; });
+  } else if(cur.achievement<90){
+    txt+=`Priority 1：達成率 ${cur.achievement}% 偏低但無問題標記，請要求各線於日報標記具體原因，並現場查核低效率線別。\n`;
+  } else {
+    txt+=`維持現行管理節奏，持續監控達成率與換款排程。\n`;
+  }
+  _tgtCommentText=txt;
+  el.textContent=txt;
+}
+function copyTgtComment(){
+  if(!_tgtCommentText) return;
+  navigator.clipboard.writeText(_tgtCommentText).then(()=>alert("已複製 Manager Comment"),()=>alert("複製失敗，請手動選取文字"));
+}
+// 供 onclick 使用（window scope）
+window.setTgtMode=setTgtMode; window.navTgt=navTgt; window.renderTargetTab=renderTargetTab;
+window.initTargetTab=initTargetTab; window.copyTgtComment=copyTgtComment;
+window.parseVRTTargetReport=parseVRTTargetReport;
+</script>
 
 </body>
 </html>
