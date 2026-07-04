@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>成品倉庫管理系統 · FG Inventory</title>
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+ VRT_FG_Inventory_Management_v1.html
+ Factory Finished Goods Tracking System  (Fabric → Cutting → Sewing → Finishing → FG → Shipment)
+───────────────────────────────────────────────────────────────────────────────
+ 架構完全對齊 Factory OS 家族：
+   · sewing_v5.html   (UI / IDB-primary / Cloud Sync / 三語 / Dashboard 架構)
+   · cutting_v3.html  (跨系統 IDB 讀取 / 比對架構)
+
+ 資料庫（本系統專屬，絕不寫入其他系統）：
+   VRT_FGInventory
+     ├ fg_records        本系統唯一寫入的 Store（keyPath:'id'）
+     └ system_meta       摘要 / 設定
+ 只讀外部資料庫（read-only，任何情況下不得寫入）：
+   CuttingProd            → cutting_records   （cutting_v3 寫入）
+   VRT_SewingProduction   → daily_records     （sewing_v5 寫入）
+
+ 硬性技術規則（VRT 全系統統一）：
+   · GAS POST Content-Type: text/plain;charset=utf-8（絕不用 application/json）
+   · 所有日期使用本地時區 getter，禁止 toISOString() 取日期
+   · Telegram：parse_mode:'HTML' + escapeHtml()，禁止 Markdown
+   · SheetJS 0.18.5，讀檔 cellDates:false, raw:true
+   · Excel 日期序號轉換：(serial - 25568) * 86400000
+   · 所有 onclick 函式必須掛在 window 作用域
+   · localStorage 僅存設定/標記（vrt_fg_*），資料本體一律 IndexedDB
+
+ 未來擴充預留（依模組註解區塊搜尋 [EXT]）：
+   Packing / Finishing / Shipment Booking / QA / Warehouse Map / ERP Bridge
+═══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+/* ═══ 基礎樣式：與 sewing_v5 / cutting_v3 完全一致，不重新設計 ═══ */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#f0f2f7;color:#1e2640}
+.header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:35px;height:35px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.h-title{font-size:16px;font-weight:600;color:#fff}
+.h-sub{font-size:11px;color:#8b95b8;margin-top:1px}
+.h-stats{margin-left:auto;display:flex;gap:18px}
+.hstat{text-align:right}
+.hstat-v{font-size:17px;font-weight:700;color:#fbbf24;font-family:monospace}
+.hstat-l{font-size:10px;color:#8b95b8}
+.tabs{background:#fff;border-bottom:2px solid #e2e6f0;display:flex;padding:0 20px;overflow-x:auto;gap:0}
+.tab{padding:12px 15px;font-size:13px;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:all .15s;user-select:none}
+.tab:hover{color:#1e2640;background:#f7f8fc}
+.tab.on{color:#d97706;border-bottom-color:#f59e0b;background:#fffbf0}
+.sec{display:none;padding:18px 20px}
+.sec.on{display:block}
+.card{background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.ct::before{content:'';width:3px;height:11px;background:#f59e0b;border-radius:2px}
+/* Grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+/* KPI */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid #e2e6f0;border-radius:8px;padding:11px;text-align:center;box-shadow:0 1px 3px rgba(30,38,64,.04)}
+.kpi-n{font-size:26px;font-weight:700;font-family:monospace;line-height:1;color:#1e2640}
+.kpi-u{font-size:11px;color:#6b7a9e;margin-left:2px;font-weight:400}
+.kpi-l{font-size:10px;color:#6b7a9e;margin-top:4px}
+/* Drop zone */
+.drop{border:2px dashed #c5c9d8;border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:#fafbfc}
+.drop:hover,.drop.drag{border-color:#f59e0b;background:#fffbf0}
+.drop.done{border-color:#10b981;border-style:solid;background:#f0fdf8}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.btn-y{background:#f59e0b;color:#1c1200}
+.btn-y:hover{background:#d97706}
+.btn-y:disabled{background:#e2e6f0;color:#a0aabf;cursor:not-allowed}
+.btn-g{background:#fff;color:#4a5578;border:1px solid #d0d5e8}
+.btn-g:hover{background:#f7f8fc}
+.btn-r{background:#fff5f5;color:#dc2626;border:1px solid #fecaca}
+/* Table */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 11px;color:#6b7a9e;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e6f0;background:#f7f8fc;white-space:nowrap}
+td{padding:8px 11px;border-bottom:1px solid #eef0f6;color:#2d3a5e;white-space:nowrap}
+tr:hover td{background:#fafbfc}
+.mono{font-family:monospace}
+.r{text-align:right}
+/* Badge */
+.b{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;font-family:monospace}
+.bok{background:#d1fae5;color:#065f46}
+.bwn{background:#fef3c7;color:#92400e}
+.bbd{background:#fee2e2;color:#991b1b}
+.bin{background:#e0f2fe;color:#0369a1}
+.bpu{background:#f3e8ff;color:#7c3aed}
+.bgy{background:#f3f4f6;color:#4b5563}
+/* Alert */
+.al{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#e0f2fe;border:1px solid #7dd3fc;color:#0369a1}
+/* Filter */
+.frow{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+select,input[type=text],input[type=date],input[type=number]{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;border-radius:6px;font-size:13px;font-family:inherit}
+select{cursor:pointer}
+.empty{text-align:center;padding:50px 20px;color:#8b95b8}
+/* Preview panel（Upload 解析預覽，同 sewing_v5） */
+.preview-file{background:#f7f8fc;border:1px solid #e2e6f0;border-radius:8px;padding:12px;margin-bottom:10px}
+.preview-lines{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.preview-line{background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:4px;font-size:11px;font-family:monospace;font-weight:600}
+/* Capacity / Flow bar（PO Tracking 製程流量條） */
+.capbar{height:8px;background:#e2e6f0;border-radius:4px;overflow:hidden;margin-top:5px}
+.capfill{height:100%;border-radius:4px;transition:width .3s}
+.flowrow{display:grid;grid-template-columns:56px 1fr 90px;gap:8px;align-items:center;font-size:11px;margin-bottom:4px}
+.flowlbl{color:#6b7a9e;font-weight:700;text-transform:uppercase;font-size:10px}
+.flowval{font-family:monospace;font-weight:700;text-align:right;color:#1e2640}
+/* Aging 色階 */
+.ag0{background:#ecfdf5;color:#065f46}   /* 0-3 天 */
+.ag1{background:#e0f2fe;color:#0369a1}   /* 4-7 天 */
+.ag2{background:#fef3c7;color:#92400e}   /* 8-15 天 */
+.ag3{background:#ffedd5;color:#c2410c}   /* 16-30 天 */
+.ag4{background:#fee2e2;color:#991b1b}   /* 30+ 天 */
+/* 展開群組（FG Inventory / Warehouse） */
+.grp{border:1px solid #e2e6f0;border-radius:8px;margin-bottom:8px;overflow:hidden}
+.grp-hd{background:#f7f8fc;padding:9px 13px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;font-size:13px}
+.grp-hd:hover{background:#eef1f8}
+.grp-hd .car{transition:transform .15s;font-size:10px;color:#6b7a9e}
+.grp.open .grp-hd .car{transform:rotate(90deg)}
+.grp-bd{display:none;padding:6px 13px 10px}
+.grp.open .grp-bd{display:block}
+/* CSS 長條圖（同 sewing_v5 儀錶板作法，不引入 Chart.js） */
+.bars{display:flex;align-items:flex-end;gap:4px;height:120px;padding:6px 0}
+.bar{flex:1;min-width:8px;background:linear-gradient(180deg,#fbbf24,#f59e0b);border-radius:3px 3px 0 0;position:relative}
+.bar.blue{background:linear-gradient(180deg,#60a5fa,#3b82f6)}
+.bar .tip{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-family:monospace;color:#6b7a9e;white-space:nowrap}
+.bar-x{display:flex;gap:4px}
+.bar-x div{flex:1;min-width:8px;text-align:center;font-size:9px;color:#8b95b8;font-family:monospace;overflow:hidden}
+/* 圓餅（conic-gradient 純 CSS） */
+.pie{width:130px;height:130px;border-radius:50%;flex-shrink:0}
+.pieleg{font-size:12px;display:flex;flex-direction:column;gap:5px}
+.pieleg .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+/* Heat map */
+.heat{display:grid;gap:3px}
+.heat .hc{border-radius:3px;min-height:22px;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:monospace}
+/* Toast（同 sewing_v5） */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:6px;align-items:center}
+.toast-item{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.25);animation:tIn .2s}
+.toast-ok{background:#065f46;color:#d1fae5}.toast-err{background:#991b1b;color:#fee2e2}.toast-info{background:#1e2640;color:#e0e7ff}
+@keyframes tIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* Cloud Sync 浮動元件（與 sewing_v5 相同外觀） */
+#vrtCloudBtn{position:fixed;bottom:22px;right:22px;z-index:9999;width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(135deg,#1a2540,#253058);border:1px solid #2d3a6e;color:#93c5fd;font-size:20px;
+  cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;transition:all .2s;user-select:none}
+#vrtCloudBtn:hover{transform:scale(1.08);border-color:#3b82f6;color:#60a5fa}
+#vrtCloudPanel{position:fixed;bottom:76px;right:22px;z-index:9999;width:230px;background:#0f1929;border:1px solid #1e3050;
+  border-radius:14px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:none;flex-direction:column;gap:9px;
+  font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif}
+#vrtCloudPanel.show{display:flex}
+.vcp-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.vcp-status{font-size:11px;color:#475569;font-family:monospace;min-height:14px;line-height:1.5}
+.vcp-status.ok{color:#4ade80}.vcp-status.warn{color:#fbbf24}.vcp-status.err{color:#f87171}
+.vcp-row{display:flex;gap:7px}
+.vcp-btn{flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s}
+.vcp-push{background:#1c1500;border:1px solid #92400e;color:#fbbf24}
+.vcp-push:hover{background:#292000}
+.vcp-pull{background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd}
+.vcp-pull:hover{background:#0f2040}
+.vcp-btn:disabled{opacity:.4;cursor:not-allowed}
+.vcp-gasrow{display:flex;gap:5px;align-items:center}
+.vcp-gasinput{flex:1;background:#0a1120;border:1px solid #1e3050;border-radius:6px;color:#f1f5f9;padding:5px 8px;font-size:10px;font-family:monospace;outline:none}
+.vcp-gasinput:focus{border-color:#f59e0b}
+.vcp-gassave{background:#253058;border:none;color:#cbd5e1;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}
+.vcp-log{font-size:10px;font-family:monospace;color:#475569;max-height:60px;overflow-y:auto;line-height:1.6;border-top:1px solid #1e3050;padding-top:7px}
+.vcl-ok{color:#4ade80}.vcl-err{color:#f87171}.vcl-i{color:#64748b}
+@media(max-width:600px){
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .h-stats,.kpi-strip .kpi:nth-child(n+7){display:none}
+  .sec{padding:12px 12px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ HEADER（同 sewing_v5 版型） ══ -->
+<div class="header">
+  <div class="logo">📦</div>
+  <div>
+    <div class="h-title" data-zh="成品倉庫管理系統" data-en="FG Inventory Management" data-km="ប្រព័ន្ធគ្រប់គ្រងឃ្លាំងផលិតផល">成品倉庫管理系統</div>
+    <div class="h-sub">FG INVENTORY · FACTORY OS · v1.0</div>
+  </div>
+  <div class="h-stats">
+    <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
+    <div class="hstat"><div class="hstat-v" id="hPcs">0</div><div class="hstat-l" data-zh="FG 庫存件數" data-en="FG Balance" data-km="សមតុល្យ FG">FG 庫存件數</div></div>
+    <div class="hstat"><div class="hstat-v" id="hPOs">0</div><div class="hstat-l" data-zh="PO 數" data-en="POs" data-km="PO">PO 數</div></div>
+    <div class="hstat"><div class="hstat-v" id="hStorage" style="font-size:12px">-</div><div class="hstat-l" data-zh="儲存用量" data-en="Storage" data-km="ទំហំ">儲存用量</div></div>
+  </div>
+</div>
+
+<!-- 三語切換按鈕（同 sewing_v5 右上角固定樣式） -->
+<div style="position:fixed;top:8px;right:12px;z-index:9999">
+  <button onclick="toggleLang()" id="langBtn"
+    style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.4);border-radius:20px;
+           padding:4px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;backdrop-filter:blur(4px);
+           transition:all .2s;font-family:inherit"
+    title="Switch Language / 切換語言">🌐 EN</button>
+</div>
+
+<!-- ══ TABS：16 個分頁 ══ -->
+<div class="tabs">
+  <div class="tab on" onclick="goTab('dashboard',this)" data-zh="📊 儀錶板" data-en="📊 Dashboard" data-km="📊 ផ្ទាំង">📊 儀錶板</div>
+  <div class="tab" onclick="goTab('upload',this)" data-zh="📥 上傳資料" data-en="📥 Upload" data-km="📥 បញ្ចូល">📥 上傳資料</div>
+  <div class="tab" onclick="goTab('daily',this)" data-zh="📊 每日FG" data-en="📊 Daily FG" data-km="📊 ប្រចាំថ្ងៃ">📊 每日FG</div>
+  <div class="tab" onclick="goTab('weekly',this)" data-zh="📅 週統計" data-en="📅 Weekly" data-km="📅 សប្ដាហ៍">📅 週統計</div>
+  <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月統計" data-en="📆 Monthly" data-km="📆 ខែ">📆 月統計</div>
+  <div class="tab" onclick="goTab('inventory',this)" data-zh="📦 FG 庫存" data-en="📦 FG Inventory" data-km="📦 ស្តុក">📦 FG 庫存</div>
+  <div class="tab" onclick="goTab('aging',this)" data-zh="⏳ 庫齡分析" data-en="⏳ Aging" data-km="⏳ អាយុស្តុក">⏳ 庫齡分析</div>
+  <div class="tab" onclick="goTab('shipment',this)" data-zh="🚢 出貨追蹤" data-en="🚢 Shipment" data-km="🚢 ដឹកជញ្ជូន">🚢 出貨追蹤</div>
+  <div class="tab" onclick="goTab('po',this)" data-zh="📋 PO 追蹤" data-en="📋 PO Tracking" data-km="📋 PO">📋 PO 追蹤</div>
+  <div class="tab" onclick="goTab('style',this)" data-zh="🎯 款式追蹤" data-en="🎯 Style" data-km="🎯 ស្ទីល">🎯 款式追蹤</div>
+  <div class="tab" onclick="goTab('customer',this)" data-zh="👤 客戶分析" data-en="👤 Customer" data-km="👤 អតិថិជន">👤 客戶分析</div>
+  <div class="tab" onclick="goTab('warehouse',this)" data-zh="🏬 倉位管理" data-en="🏬 Warehouse" data-km="🏬 ឃ្លាំង">🏬 倉位管理</div>
+  <div class="tab" onclick="goTab('balance',this)" data-zh="⚖️ 平衡分析" data-en="⚖️ Balance" data-km="⚖️ តុល្យភាព">⚖️ 平衡分析</div>
+  <div class="tab" onclick="goTab('recon',this)" data-zh="🔍 異常勾稽" data-en="🔍 Reconcile" data-km="🔍 ផ្ទៀងផ្ទាត់">🔍 異常勾稽</div>
+  <div class="tab" onclick="goTab('query',this)" data-zh="🔎 查詢" data-en="🔎 Query" data-km="🔎 ស្វែងរក">🔎 查詢</div>
+  <div class="tab" onclick="goTab('records',this)" data-zh="📋 所有記錄" data-en="📋 Records" data-km="📋 កំណត់ត្រា">📋 所有記錄</div>
+</div>
+
+<!-- ══ 1. DASHBOARD ══ -->
+<div class="sec on" id="sec-dashboard">
+  <div class="card">
+    <div class="ct" data-zh="📊 管理儀錶板" data-en="📊 Management Dashboard" data-km="📊 ផ្ទាំងគ្រប់គ្រង">📊 管理儀錶板</div>
+    <div id="dashKpiGrid" class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"></div>
+    <div id="dashAlerts"></div>
+    <div id="dashMeta" style="font-size:11px;color:#9ca3af;text-align:right;margin-top:8px"></div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="ct" data-zh="📈 近14日 收貨 vs 出貨" data-en="📈 14-Day Receive vs Shipment" data-km="📈 14ថ្ងៃ">📈 近14日 收貨 vs 出貨</div>
+      <div id="dashTrend"></div>
+    </div>
+    <div class="card">
+      <div class="ct" data-zh="🥧 客戶 FG 佔比" data-en="🥧 FG by Customer" data-km="🥧 តាមអតិថិជន">🥧 客戶 FG 佔比</div>
+      <div id="dashPie" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct" data-zh="🤖 AI 自動分析" data-en="🤖 AI Auto Analysis" data-km="🤖 វិភាគ AI">🤖 AI 自動分析</div>
+    <div id="dashAI"></div>
+  </div>
+</div>
+
+<!-- ══ 2. UPLOAD ══ -->
+<div class="sec" id="sec-upload">
+  <div class="card">
+    <div class="ct" data-zh="📧 直接拖郵件、Excel 或 CSV 進來" data-en="📧 Drop Email / Excel / CSV" data-km="📧 ទម្លាក់ឯកសារ">📧 直接拖郵件、Excel 或 CSV 進來</div>
+    <div class="g3" style="margin-bottom:14px">
+      <div style="background:#f0fdf4;border-radius:8px;padding:12px;border:1px solid #bbf7d0">
+        <div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:6px">✅ 最推薦：.eml 郵件</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          <b>Gmail：</b>打開郵件 → 「⋮ 更多」→「下載郵件」→ 拖 .eml 進來<br>
+          <b>Outlook：</b>選中郵件 → 「檔案」→「另存新檔」→ 選 .eml 格式<br>
+          <span style="color:#059669;font-size:11px">✓ 自動提取所有 Excel 附件</span>
+        </div>
+      </div>
+      <div style="background:#f0f9ff;border-radius:8px;padding:12px;border:1px solid #bae6fd">
+        <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px">📊 直接拖 Excel / CSV（最快）</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          支援 收貨 / 裝箱 / 驗貨 / 出貨 報表<br>
+          自動辨識 客戶·PO·Style·Color·Size·SKU·Carton·PCS·日期·櫃號·倉位<br>
+          <span style="color:#0369a1;font-size:11px">✓ 多檔可同時拖入，自動去重</span>
+        </div>
+      </div>
+      <div style="background:#fefce8;border-radius:8px;padding:12px;border:1px solid #fde68a">
+        <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">⚠️ .msg 格式（限制多）</div>
+        <div style="font-size:12px;color:#374151;line-height:1.9">
+          Outlook 的 .msg 是 OLE 複合格式<br>
+          僅嘗試提取 xlsx 附件，無法保證成功<br>
+          <b>建議改存為 .eml 再拖入</b>
+        </div>
+      </div>
+    </div>
+    <div id="dz" class="drop" ondragover="dzOver(event)" ondragleave="dzOut()" ondrop="dzDrop(event)" style="padding:40px 20px;border-width:3px">
+      <input type="file" multiple accept=".xlsx,.xls,.csv,.eml,.msg" onchange="dzSelect(event)">
+      <div style="font-size:36px;margin-bottom:10px">📥</div>
+      <div style="font-size:16px;font-weight:600;color:#1e2640;margin-bottom:4px" data-zh="拖放郵件或 Excel 到這裡" data-en="Drop email or Excel here" data-km="ទម្លាក់ឯកសារនៅទីនេះ">拖放郵件或 Excel 到這裡</div>
+      <div style="font-size:12px;color:#6b7a9e">.eml 自動提取附件 · .xlsx/.csv 直接解析 · 多檔同時拖入</div>
+    </div>
+    <div id="fileList" style="margin-top:10px"></div>
+    <div id="previewArea" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <div class="ct" data-zh="✍️ 手動新增 FG 記錄" data-en="✍️ Manual Entry" data-km="✍️ បញ្ចូលដោយដៃ">✍️ 手動新增 FG 記錄</div>
+    <div class="g4" style="margin-bottom:10px">
+      <input type="text" id="mCust" placeholder="Customer 客戶">
+      <input type="text" id="mPO" placeholder="PO">
+      <input type="text" id="mStyle" placeholder="Style 款號">
+      <input type="text" id="mColor" placeholder="Color 顏色">
+    </div>
+    <div class="g4" style="margin-bottom:10px">
+      <input type="text" id="mSize" placeholder="Size">
+      <input type="text" id="mSKU" placeholder="SKU">
+      <input type="number" id="mCtn" placeholder="Carton 箱數">
+      <input type="number" id="mPcs" placeholder="PCS 件數">
+    </div>
+    <div class="g4" style="margin-bottom:10px">
+      <input type="date" id="mRecv" title="Receive Date 收貨日">
+      <input type="date" id="mShip" title="Shipment Date 出貨日">
+      <input type="text" id="mCont" placeholder="Container 櫃號">
+      <input type="text" id="mLoc" placeholder="Warehouse/Location 倉位">
+    </div>
+    <button class="btn btn-y" onclick="manualAdd()" data-zh="➕ 新增記錄" data-en="➕ Add Record" data-km="➕ បន្ថែម">➕ 新增記錄</button>
+  </div>
+
+  <div class="card">
+    <div class="ct" data-zh="🗂 資料庫維護" data-en="🗂 Database" data-km="🗂 មូលដ្ឋានទិន្នន័យ">🗂 資料庫維護</div>
+    <div id="dbCard" style="font-size:13px;color:#4a5578;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="exportXlsx()" data-zh="📤 匯出 Excel" data-en="📤 Export Excel" data-km="📤 នាំចេញ">📤 匯出 Excel</button>
+      <button class="btn btn-g" onclick="exportJSON()" data-zh="💾 匯出 JSON 備份" data-en="💾 Export JSON" data-km="💾 JSON">💾 匯出 JSON 備份</button>
+      <button class="btn btn-g" onclick="document.getElementById('impJson').click()" data-zh="📂 匯入 JSON 備份" data-en="📂 Import JSON" data-km="📂 បញ្ចូល JSON">📂 匯入 JSON 備份</button>
+      <input type="file" id="impJson" accept=".json" style="display:none" onchange="importJSON(event)">
+      <button class="btn btn-g" onclick="scanFolderPick()" data-zh="📁 連結資料夾自動掃描" data-en="📁 Folder Scan" data-km="📁 ស្កេនថត">📁 連結資料夾自動掃描</button>
+      <button class="btn btn-r" onclick="clearAllData()" data-zh="🗑 清空全部資料" data-en="🗑 Clear All" data-km="🗑 លុបទាំងអស់">🗑 清空全部資料</button>
+    </div>
+    <div id="scanStatus" style="font-size:12px;color:#6b7a9e;margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <div class="ct" data-zh="📲 Telegram 通知設定" data-en="📲 Telegram Settings" data-km="📲 Telegram">📲 Telegram 通知設定</div>
+    <div class="g3" style="margin-bottom:10px">
+      <input type="text" id="tgToken" placeholder="Bot Token">
+      <input type="text" id="tgChat" placeholder="Chat ID">
+      <button class="btn btn-g" onclick="tgSave()" data-zh="💾 儲存設定" data-en="💾 Save" data-km="💾 រក្សាទុក">💾 儲存設定</button>
+    </div>
+    <button class="btn btn-y" onclick="tgSendDaily()" data-zh="📨 發送今日 FG 摘要" data-en="📨 Send Daily Summary" data-km="📨 ផ្ញើសង្ខេប">📨 發送今日 FG 摘要</button>
+    <span id="tgStatus" style="font-size:12px;color:#6b7a9e;margin-left:10px"></span>
+  </div>
+</div>
+
+<!-- ══ 3. DAILY FG ══ -->
+<div class="sec" id="sec-daily">
+  <div class="card">
+    <div class="ct" data-zh="📊 每日 FG 報告" data-en="📊 Daily FG Report" data-km="📊 របាយការណ៍ប្រចាំថ្ងៃ">📊 每日 FG 報告</div>
+    <div class="frow">
+      <button class="btn btn-g" onclick="dailyShift(-1)">◀</button>
+      <select id="dsel" onchange="renderDaily()"></select>
+      <button class="btn btn-g" onclick="dailyShift(1)">▶</button>
+      <button class="btn btn-g" onclick="dailyToday()" data-zh="今天" data-en="Today" data-km="ថ្ងៃនេះ">今天</button>
+    </div>
+    <div id="dailyKpi" class="kpi-strip"></div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th data-zh="類型" data-en="Type">類型</th><th>Customer</th><th>PO</th><th>Style</th><th>Color</th><th>Size</th><th>SKU</th>
+        <th class="r">CTN</th><th class="r">PCS</th><th data-zh="倉位" data-en="Location">倉位</th><th data-zh="櫃號" data-en="Container">櫃號</th>
+      </tr></thead>
+      <tbody id="dailyBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ 4. WEEKLY ══ -->
+<div class="sec" id="sec-weekly">
+  <div class="card">
+    <div class="ct" data-zh="📅 週統計（收貨 / 出貨 / 淨變動）" data-en="📅 Weekly Statistics" data-km="📅 ស្ថិតិសប្ដាហ៍">📅 週統計（收貨 / 出貨 / 淨變動）</div>
+    <div id="weeklyWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 5. MONTHLY ══ -->
+<div class="sec" id="sec-monthly">
+  <div class="card">
+    <div class="ct" data-zh="📆 月統計與趨勢" data-en="📆 Monthly Trend" data-km="📆 និន្នាការខែ">📆 月統計與趨勢</div>
+    <div id="monthlyChart" style="margin-bottom:14px"></div>
+    <div id="monthlyWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 6. FG INVENTORY ══ -->
+<div class="sec" id="sec-inventory">
+  <div class="card">
+    <div class="ct" data-zh="📦 FG 庫存（Customer → PO → Style → Color/Size/SKU，可展開）" data-en="📦 FG Inventory (Expandable Groups)" data-km="📦 ស្តុក FG">📦 FG 庫存</div>
+    <div class="frow">
+      <select id="invCust" onchange="renderInventory()"></select>
+      <input type="text" id="invSearch" placeholder="🔎 PO / Style / SKU..." oninput="renderInventory()">
+      <label style="font-size:12px;color:#6b7a9e"><input type="checkbox" id="invShowZero" onchange="renderInventory()"> <span data-zh="顯示零庫存" data-en="Show zero balance">顯示零庫存</span></label>
+    </div>
+    <div id="invWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 7. AGING ANALYSIS ══ -->
+<div class="sec" id="sec-aging">
+  <div class="card">
+    <div class="ct" data-zh="⏳ 庫齡分析（依收貨日，僅計未出貨庫存）" data-en="⏳ Aging Analysis (Unshipped by Receive Date)" data-km="⏳ វិភាគអាយុស្តុក">⏳ 庫齡分析</div>
+    <div id="agingKpi" class="kpi-strip" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th data-zh="庫齡" data-en="Aging">庫齡</th><th>Customer</th><th>PO</th><th>Style</th><th>Color</th><th>Size</th>
+        <th data-zh="收貨日" data-en="Received">收貨日</th><th class="r" data-zh="天數" data-en="Days">天數</th><th class="r">PCS</th><th data-zh="倉位" data-en="Location">倉位</th>
+      </tr></thead>
+      <tbody id="agingBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ 8. SHIPMENT TRACKING ══ -->
+<div class="sec" id="sec-shipment">
+  <div class="card">
+    <div class="ct" data-zh="🚢 出貨追蹤（ETD / ETA / Container）" data-en="🚢 Shipment Tracking" data-km="🚢 តាមដានដឹកជញ្ជូន">🚢 出貨追蹤</div>
+    <div class="frow">
+      <select id="shipStatusSel" onchange="renderShipment()">
+        <option value="">全部狀態 All Status</option>
+        <option value="READY">Ready</option><option value="LOADING">Loading</option>
+        <option value="SHIPPED">Shipped</option><option value="COMPLETED">Completed</option>
+        <option value="DELAYED">Delayed</option>
+      </select>
+    </div>
+    <div id="shipKpi" class="kpi-strip" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div id="shipWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 9. PO TRACKING ══ -->
+<div class="sec" id="sec-po">
+  <div class="card">
+    <div class="ct" data-zh="📋 PO 追蹤（Order → Cut → Sew → FG → Ship 全流程）" data-en="📋 PO Tracking (Full Flow)" data-km="📋 តាមដាន PO">📋 PO 追蹤</div>
+    <div class="frow">
+      <input type="text" id="poSearch" placeholder="🔎 PO / Style / Customer..." oninput="renderPO()">
+      <select id="poSort" onchange="renderPO()">
+        <option value="ship">依出貨進度 By Ship %</option>
+        <option value="fg">依 FG 數量 By FG Qty</option>
+        <option value="po">依 PO 排序 By PO</option>
+      </select>
+      <span id="poLinkStatus" style="font-size:12px;color:#6b7a9e"></span>
+    </div>
+    <div id="poWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 10. STYLE TRACKING ══ -->
+<div class="sec" id="sec-style">
+  <div class="card">
+    <div class="ct" data-zh="🎯 款式追蹤（Cut / Sew / FG / Ship + 目前製程）" data-en="🎯 Style Tracking (Current Stage)" data-km="🎯 តាមដានស្ទីល">🎯 款式追蹤</div>
+    <div class="frow"><input type="text" id="stySearch" placeholder="🔎 Style..." oninput="renderStyle()"></div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th>Style</th><th>Customer</th>
+        <th class="r">Cut</th><th class="r">Sew</th><th class="r">FG</th><th class="r">Ship</th>
+        <th class="r" data-zh="在製 WIP" data-en="WIP">在製 WIP</th>
+        <th data-zh="目前製程" data-en="Current Stage">目前製程</th>
+      </tr></thead>
+      <tbody id="styBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ 11. CUSTOMER ANALYSIS ══ -->
+<div class="sec" id="sec-customer">
+  <div class="card">
+    <div class="ct" data-zh="👤 客戶分析" data-en="👤 Customer Dashboard" data-km="👤 វិភាគអតិថិជន">👤 客戶分析</div>
+    <div id="custWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 12. WAREHOUSE ══ -->
+<div class="sec" id="sec-warehouse">
+  <div class="card">
+    <div class="ct" data-zh="🏬 倉位管理（Warehouse → Rack → Location → Shelf → Carton）" data-en="🏬 Warehouse Locations" data-km="🏬 ទីតាំងឃ្លាំង">🏬 倉位管理</div>
+    <div class="frow"><input type="text" id="whSearch" placeholder="🔎 倉位 / Rack / Carton / PO..." oninput="renderWarehouse()"></div>
+    <div id="whWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 13. BALANCE ANALYSIS ══ -->
+<div class="sec" id="sec-balance">
+  <div class="card">
+    <div class="ct" data-zh="⚖️ 平衡分析（Cutting vs Sewing vs FG vs Shipment）" data-en="⚖️ Balance Analysis" data-km="⚖️ វិភាគតុល្យភាព">⚖️ 平衡分析</div>
+    <div id="balKpi" class="kpi-strip" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th>PO</th><th>Style</th>
+        <th class="r">Cut</th><th class="r">Sew</th><th class="r">FG</th><th class="r">Ship</th>
+        <th class="r">Loss %</th><th class="r" data-zh="缺口" data-en="Missing">缺口</th><th class="r" data-zh="差異" data-en="Diff">差異</th>
+      </tr></thead>
+      <tbody id="balBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══ 14. RECONCILIATION ══ -->
+<div class="sec" id="sec-recon">
+  <div class="card">
+    <div class="ct" data-zh="🔍 異常勾稽（自動列出所有異常）" data-en="🔍 Reconciliation (All Anomalies)" data-km="🔍 ផ្ទៀងផ្ទាត់">🔍 異常勾稽</div>
+    <div id="reconWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 15. QUERY ══ -->
+<div class="sec" id="sec-query">
+  <div class="card">
+    <div class="ct" data-zh="🔎 全域查詢" data-en="🔎 Global Query" data-km="🔎 ស្វែងរក">🔎 全域查詢</div>
+    <div class="frow">
+      <input type="text" id="qText" placeholder="PO / Style / Customer / SKU / Location / Carton / Container..." style="min-width:320px" oninput="renderQuery()">
+      <select id="qField" onchange="renderQuery()">
+        <option value="">全部欄位 All Fields</option>
+        <option value="po">PO</option><option value="styleNo">Style</option><option value="customer">Customer</option>
+        <option value="sku">SKU</option><option value="location">Location</option><option value="carton">Carton</option>
+        <option value="containerNo">Container</option>
+      </select>
+    </div>
+    <div id="qWrap"></div>
+  </div>
+</div>
+
+<!-- ══ 16. ALL RECORDS ══ -->
+<div class="sec" id="sec-records">
+  <div class="card">
+    <div class="ct" data-zh="📋 所有記錄" data-en="📋 All Records" data-km="📋 កំណត់ត្រាទាំងអស់">📋 所有記錄</div>
+    <div class="frow">
+      <select id="recPage" onchange="renderRecs()"></select>
+      <button class="btn btn-g" onclick="exportXlsx()" data-zh="📤 匯出 Excel" data-en="📤 Export">📤 匯出 Excel</button>
+      <span id="recCount" style="font-size:12px;color:#6b7a9e"></span>
+    </div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th>#</th><th>Customer</th><th>PO</th><th>Style</th><th>Color</th><th>Size</th><th>SKU</th>
+        <th class="r">CTN</th><th class="r">PCS</th>
+        <th data-zh="收貨" data-en="Recv">收貨</th><th data-zh="裝箱" data-en="Pack">裝箱</th><th data-zh="驗貨" data-en="Insp">驗貨</th><th data-zh="出貨" data-en="Ship">出貨</th>
+        <th data-zh="櫃號" data-en="Container">櫃號</th><th data-zh="倉位" data-en="Location">倉位</th><th data-zh="狀態" data-en="Status">狀態</th><th></th>
+      </tr></thead>
+      <tbody id="recBody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Toast 容器 -->
+<div id="toast"></div>
+
+<!-- ══ Cloud Sync 浮動元件（同 sewing_v5 外觀，tool='fg'） ══ -->
+<button id="vrtCloudBtn" title="☁ 雲端同步" onclick="vcToggle()">☁</button>
+<div id="vrtCloudPanel">
+  <div class="vcp-title">☁ 雲端同步 — FG</div>
+  <div class="vcp-status" id="vcStatus">讀取中...</div>
+  <div class="vcp-row">
+    <button class="vcp-btn vcp-push" id="vcPushBtn" onclick="vcPush()">☁ 推送</button>
+    <button class="vcp-btn vcp-pull" id="vcPullBtn" onclick="vcPull()">⬇ 拉取</button>
+  </div>
+  <div>
+    <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
+    <div class="vcp-gasrow">
+      <input class="vcp-gasinput" id="vcGasInput" placeholder="/exec 結尾的網址" />
+      <button class="vcp-gassave" onclick="vcSaveGas()">存</button>
+    </div>
+  </div>
+  <div class="vcp-log" id="vcLog"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION A — 全域常數 / 三語 i18n / 日期工具
+   （架構 1:1 對齊 sewing_v5：data-zh/en/km 屬性 + toggleLang 三段循環）
+═══════════════════════════════════════════════════════════════════════════ */
+
+// ── 本地時區日期（硬性規則：禁止 toISOString 取日期） ──────────────────────
+function localDateStr(d){
+  const x = d instanceof Date ? d : new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+}
+const TODAY = localDateStr(new Date());
+const THIS_MONTH = TODAY.slice(0,7);
+
+// ── Excel 日期序號 → 本地日期字串（硬性規則：(serial-25568)*86400000） ─────
+function excelSerialToDate(serial){
+  if(typeof serial!=='number' || serial<20000 || serial>60000) return '';
+  return localDateStr(new Date((serial - 25568) * 86400000));
+}
+
+// ── 日期字串正規化（支援 2026-7-4 / 2026/07/04 / 04-Jul-26 / Excel 序號） ──
+function normalizeDate(d){
+  if(d===null||d===undefined||d==='') return '';
+  if(typeof d==='number') return excelSerialToDate(d);
+  const s=String(d).trim();
+  let m=s.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=s.match(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);            // DD/MM/YYYY（工廠慣用）
+  if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  m=s.toLowerCase().match(/(\d{1,2})[-\s]?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[-\s]?(\d{2,4})/);
+  if(m){ let y=+m[3]; if(y<100)y+=2000; return `${y}-${String(MONTHS[m[2]]).padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
+  const n=Number(s); if(!isNaN(n)) return excelSerialToDate(n);
+  return '';
+}
+function daysBetween(a,b){ // b - a（天）
+  if(!a||!b) return 0;
+  return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000);
+}
+function weekKey(ds){
+  const dt=new Date(ds+'T00:00:00'), jan=new Date(dt.getFullYear(),0,1);
+  const w=Math.ceil(((dt-jan)/86400000+jan.getDay()+1)/7);
+  return `${dt.getFullYear()}-W${String(w).padStart(2,'0')}`;
+}
+function fmt(n){ return (n||0).toLocaleString('en-US'); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function cleanField(v){ if(v===null||v===undefined) return ''; return String(v).trim().toUpperCase(); }
+function escAttr(s){ return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ── 三語系統（同 sewing_v5：_lang + vrt_lang key + data-zh/en/km 掃描） ─────
+let _lang = localStorage.getItem('vrt_lang') || 'zh';
+const I18N = {
+  zh:{ recv:'收貨', ship:'出貨', pack:'裝箱', insp:'驗貨', hold:'HOLD', ready:'可出貨',
+       waiting:'待驗貨', balance:'庫存餘量', noData:'尚無資料', total:'合計',
+       stageFabric:'布料', stageCut:'裁剪', stageSew:'車縫', stageFG:'成品倉', stageShip:'已出貨', done:'完成' },
+  en:{ recv:'Receive', ship:'Shipment', pack:'Packing', insp:'Inspection', hold:'HOLD', ready:'Ready to Ship',
+       waiting:'Waiting Inspection', balance:'FG Balance', noData:'No data yet', total:'Total',
+       stageFabric:'Fabric', stageCut:'Cutting', stageSew:'Sewing', stageFG:'FG WH', stageShip:'Shipped', done:'Done' },
+  km:{ recv:'ទទួល', ship:'ដឹកចេញ', pack:'វេចខ្ចប់', insp:'ត្រួតពិនិត្យ', hold:'HOLD', ready:'ត្រៀមដឹក',
+       waiting:'រង់ចាំពិនិត្យ', balance:'សមតុល្យ', noData:'គ្មានទិន្នន័យ', total:'សរុប',
+       stageFabric:'ក្រណាត់', stageCut:'កាត់', stageSew:'ដេរ', stageFG:'ឃ្លាំង FG', stageShip:'ដឹករួច', done:'រួចរាល់' }
+};
+function t(k){ return (I18N[_lang]||I18N.zh)[k] || I18N.zh[k] || k; }
+
+function applyLang(){
+  document.querySelectorAll('[data-zh]').forEach(el=>{
+    const v = el.getAttribute('data-'+_lang) || el.getAttribute('data-zh');
+    if(v) el.textContent = v;
+  });
+  const btn=document.getElementById('langBtn');
+  if(btn) btn.textContent = _lang==='zh' ? '🌐 EN' : _lang==='en' ? '🌐 ខ្មែរ' : '🌐 中文';
+  // 重繪目前分頁的動態內容
+  const cur=document.querySelector('.sec.on');
+  if(cur && window._rendered) reRenderCurrent(cur.id.replace('sec-',''));
+}
+window.toggleLang = function(){
+  _lang = _lang==='zh' ? 'en' : _lang==='en' ? 'km' : 'zh';
+  localStorage.setItem('vrt_lang', _lang);
+  applyLang();
+};
+
+// ── Toast（同 sewing_v5 樣式） ──────────────────────────────────────────────
+function toast(msg,type){
+  const box=document.getElementById('toast');
+  const el=document.createElement('div');
+  el.className='toast-item toast-'+(type==='ok'?'ok':type==='err'?'err':'info');
+  el.textContent=msg;
+  box.appendChild(el);
+  setTimeout(()=>el.remove(),3200);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION B — IndexedDB 儲存層
+   本系統：VRT_FGInventory / fg_records + system_meta（唯一寫入點）
+   外部只讀：CuttingProd/cutting_records、VRT_SewingProduction/daily_records
+   ★ 絕不寫入 cutting_records / sewing_records / daily_records
+═══════════════════════════════════════════════════════════════════════════ */
+const FG_IDB_NAME='VRT_FGInventory', FG_IDB_VER=1, FG_ST='fg_records';
+let FG=[];            // 主資料（記憶體鏡像，所有 render 讀這裡）
+let CUT=[];           // cutting_v3 資料（只讀快取）
+let SEW=[];           // sewing_v5 資料（只讀快取）
+let _fgIDB=null;
+
+function openFgIDB(){
+  if(_fgIDB) return Promise.resolve(_fgIDB);
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(FG_IDB_NAME,FG_IDB_VER);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(FG_ST)) db.createObjectStore(FG_ST,{keyPath:'id'});
+      if(!db.objectStoreNames.contains('system_meta')) db.createObjectStore('system_meta',{keyPath:'key'});
+      // [EXT] 未來模組預留 Store：packing_records / finishing_records / qa_records / booking_records
+    };
+    req.onsuccess=e=>{ _fgIDB=e.target.result; res(_fgIDB); };
+    req.onerror=rej;
+  });
+}
+async function saveFG(){
+  const db=await openFgIDB();
+  const tx=db.transaction(FG_ST,'readwrite');
+  const os=tx.objectStore(FG_ST);
+  os.clear();
+  FG.forEach(r=>os.put(r));
+  await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+  const mt=db.transaction('system_meta','readwrite');
+  mt.objectStore('system_meta').put({key:'summary',recordCount:FG.length,savedAt:new Date().toISOString()});
+  // localStorage 僅存標記（跨系統可讀），不存資料本體
+  try{
+    localStorage.setItem('vrt_fg_record_count',String(FG.length));
+    localStorage.setItem('vrt_fg_max_date', FG.map(r=>r.receiveDate||'').sort().pop()||'');
+  }catch(e){}
+}
+async function loadFG(){
+  try{
+    const db=await openFgIDB();
+    const tx=db.transaction(FG_ST,'readonly');
+    FG=await new Promise(res=>{
+      const q=tx.objectStore(FG_ST).getAll();
+      q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([]);
+    });
+  }catch(e){ FG=[]; }
+}
+
+// ── 只讀外部資料庫（open 不帶版本號，避免觸發 upgrade 影響對方系統） ─────────
+function readExternalStore(dbName, storeName){
+  return new Promise(res=>{
+    let req;
+    try{ req=indexedDB.open(dbName); }catch(e){ res([]); return; }
+    req.onerror=()=>res([]);
+    req.onsuccess=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains(storeName)){ d.close(); res([]); return; }
+      const all=[];
+      try{
+        const cur=d.transaction(storeName,'readonly').objectStore(storeName).openCursor();
+        cur.onsuccess=ev=>{
+          if(ev.target.result){ all.push(ev.target.result.value); ev.target.result.continue(); }
+          else{ d.close(); res(all); }
+        };
+        cur.onerror=()=>{ d.close(); res([]); };
+      }catch(e){ d.close(); res([]); }
+    };
+    // ★ 若對方資料庫版本較新需要升級，onblocked 直接放棄，維持只讀安全
+    req.onblocked=()=>res([]);
+  });
+}
+async function loadExternal(){
+  // cutting_v3：CuttingProd / cutting_records（排除週報/月報彙總列，只取日常記錄）
+  const cutRaw = await readExternalStore('CuttingProd','cutting_records');
+  CUT = cutRaw.filter(r=>r.src!=='ref'&&r.src!=='summary'&&r.lineNo!=='Weekly Report'&&r.lineNo!=='Monthly Summary'&&(r.pieces||0)>0);
+  // sewing_v5：VRT_SewingProduction / daily_records
+  SEW = await readExternalStore('VRT_SewingProduction','daily_records');
+  const el=document.getElementById('poLinkStatus');
+  if(el) el.textContent=`🔗 Cutting ${fmt(CUT.length)} 筆 · Sewing ${fmt(SEW.length)} 筆（只讀連動）`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION C — FG 記錄資料模型 / 狀態 / 去重
+   record = { id, customer, po, styleNo, color, size, sku, carton, pcs,
+              receiveDate, packingDate, inspectionDate, shipmentDate,
+              etd, eta, containerNo, warehouse, location, hold, remark, src, importedAt }
+═══════════════════════════════════════════════════════════════════════════ */
+function recStatus(r){
+  if(r.shipmentDate) return 'SHIPPED';
+  if(r.hold) return 'HOLD';
+  if(r.inspectionDate) return 'READY';       // 已驗貨 → 可出貨
+  return 'WAITING';                          // 未驗貨 → 待驗
+}
+function statusBadge(r){
+  const s=recStatus(r);
+  if(s==='SHIPPED') return `<span class="b bgy">SHIPPED</span>`;
+  if(s==='HOLD')    return `<span class="b bbd">HOLD</span>`;
+  if(s==='READY')   return `<span class="b bok">READY</span>`;
+  return `<span class="b bwn">WAITING</span>`;
+}
+// 去重鍵：客戶|PO|款|色|碼|SKU|箱|收貨日|出貨日（同鍵取 pcs 較大者）
+function dedupFG(list){
+  const map=new Map();
+  (list||[]).forEach(r=>{
+    const k=[r.customer,r.po,r.styleNo,r.color,r.size,r.sku,r.carton,r.receiveDate,r.shipmentDate].map(v=>v||'').join('|');
+    if(!map.has(k)) map.set(k,r);
+    else{ const ex=map.get(k); if((r.pcs||0)>(ex.pcs||0)) map.set(k,{...ex,...r}); }
+  });
+  return [...map.values()];
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION D — 檔案匯入：Excel / CSV / EML / MSG
+   · SheetJS 0.18.5 讀檔硬性規則：{cellDates:false, raw:true}
+   · 欄位自動辨識（HM 表頭字典，中英混用皆可）
+═══════════════════════════════════════════════════════════════════════════ */
+let pendingRecs=[], pendingFiles=[];
+
+// 表頭辨識字典（比對時轉小寫去空白）
+const HM={
+  customer:['customer','客戶','cust','buyer','client','brand'],
+  po:['po','po no','po#','p/o','訂單','訂單號','order no','order','po number'],
+  styleNo:['style','style no','款號','款式','item','item no','style#','model'],
+  color:['color','colour','顏色','色'],
+  size:['size','尺碼','尺寸','sz'],
+  sku:['sku','sku no','barcode','條碼','upc','article'],
+  carton:['carton','ctn','ctns','箱數','carton qty','箱','cartons','ctn qty'],
+  pcs:['pcs','qty','quantity','件數','數量','pieces','total pcs','qty pcs','total qty'],
+  receiveDate:['receive date','received','入庫日','收貨日','in date','receiving date','recv date','入倉日','receive'],
+  packingDate:['packing date','裝箱日','pack date','packed'],
+  inspectionDate:['inspection date','驗貨日','inspect date','qc date','inspection','final inspection'],
+  shipmentDate:['shipment date','出貨日','ship date','shipped','delivery date','出倉日','shipping date'],
+  etd:['etd','預計開船','etd date'],
+  eta:['eta','預計到港','eta date'],
+  containerNo:['container','container no','櫃號','貨櫃','cntr','container#','cntr no'],
+  warehouse:['warehouse','倉庫','wh','仓库'],
+  location:['location','倉位','儲位','loc','rack','位置','bin','storage'],
+  remark:['remark','備註','note','notes','memo'],
+};
+function matchHeader(cells){
+  const H={};
+  cells.forEach((c,i)=>{
+    const s=String(c||'').trim().toLowerCase().replace(/\s+/g,' ');
+    if(!s) return;
+    for(const [field,keys] of Object.entries(HM)){
+      if(H[field]!==undefined) continue;
+      if(keys.some(k=>s===k || s.startsWith(k))) { H[field]=i; break; }
+    }
+  });
+  return H;
+}
+
+// ── Sheet(AOA) → FG 記錄陣列 ────────────────────────────────────────────────
+function parseAOA(aoa, srcName){
+  // 在前 12 列內尋找最像表頭的一列（命中欄位 ≥3 且含 pcs 或 po）
+  let hdrRow=-1, H=null;
+  for(let i=0;i<Math.min(12,aoa.length);i++){
+    const h=matchHeader(aoa[i]||[]);
+    const hits=Object.keys(h).length;
+    if(hits>=3 && (h.pcs!==undefined||h.po!==undefined)){ hdrRow=i; H=h; break; }
+  }
+  if(hdrRow<0) return [];
+  const recs=[];
+  for(let i=hdrRow+1;i<aoa.length;i++){
+    const row=aoa[i]||[];
+    const pcs=Number(row[H.pcs]);
+    const po=H.po!==undefined?cleanField(row[H.po]):'';
+    if((!pcs||isNaN(pcs)) && !po) continue;                 // 空列
+    const joined=row.map(c=>String(c||'')).join(' ').toLowerCase();
+    if(/total|合計|小計|grand/.test(joined) && !po) continue; // ★ 排除小計/合計列（防 4x 膨脹）
+    if(!pcs||isNaN(pcs)||pcs<=0) continue;
+    recs.push({
+      id:uid(),
+      customer:H.customer!==undefined?cleanField(row[H.customer]):'',
+      po,
+      styleNo:H.styleNo!==undefined?cleanField(row[H.styleNo]):'',
+      color:H.color!==undefined?String(row[H.color]||'').trim():'',
+      size:H.size!==undefined?cleanField(row[H.size]):'',
+      sku:H.sku!==undefined?cleanField(row[H.sku]):'',
+      carton:H.carton!==undefined?(Number(row[H.carton])||0):0,
+      pcs:Math.round(pcs),
+      receiveDate:H.receiveDate!==undefined?normalizeDate(row[H.receiveDate]):'',
+      packingDate:H.packingDate!==undefined?normalizeDate(row[H.packingDate]):'',
+      inspectionDate:H.inspectionDate!==undefined?normalizeDate(row[H.inspectionDate]):'',
+      shipmentDate:H.shipmentDate!==undefined?normalizeDate(row[H.shipmentDate]):'',
+      etd:H.etd!==undefined?normalizeDate(row[H.etd]):'',
+      eta:H.eta!==undefined?normalizeDate(row[H.eta]):'',
+      containerNo:H.containerNo!==undefined?cleanField(row[H.containerNo]):'',
+      warehouse:H.warehouse!==undefined?cleanField(row[H.warehouse]):'',
+      location:H.location!==undefined?cleanField(row[H.location]):'',
+      remark:H.remark!==undefined?String(row[H.remark]||'').trim():'',
+      hold:false, src:srcName, importedAt:new Date().toISOString(),
+    });
+  }
+  // 未填收貨日的列 → 預設今天（收貨報表常省略日期欄）
+  recs.forEach(r=>{ if(!r.receiveDate && !r.shipmentDate) r.receiveDate=TODAY; });
+  return recs;
+}
+
+function parseWorkbook(wb, srcName){
+  let all=[];
+  wb.SheetNames.forEach(sn=>{
+    const ws=wb.Sheets[sn];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    all=all.concat(parseAOA(aoa, srcName+' › '+sn));
+  });
+  return all;
+}
+
+// ── EML：multipart 邊界解析，base64 解出 xlsx/csv 附件 ──────────────────────
+async function parseEML(text, fname){
+  let recs=[];
+  const bm=text.match(/boundary="?([^";\r\n]+)"?/i);
+  if(!bm) return recs;
+  const parts=text.split('--'+bm[1]);
+  for(const part of parts){
+    const nm=part.match(/(?:name|filename)="?([^";\r\n]+\.(xlsx|xls|csv))"?/i);
+    if(!nm) continue;
+    const isB64=/Content-Transfer-Encoding:\s*base64/i.test(part);
+    if(!isB64) continue;
+    const bodyIdx=part.indexOf('\r\n\r\n')>=0?part.indexOf('\r\n\r\n')+4:part.indexOf('\n\n')+2;
+    const b64=part.slice(bodyIdx).replace(/[^A-Za-z0-9+/=]/g,'');
+    try{
+      const bin=atob(b64);
+      const bytes=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      const wb=XLSX.read(bytes,{type:'array',cellDates:false,raw:true});
+      recs=recs.concat(parseWorkbook(wb, fname+' › '+nm[1]));
+    }catch(e){ console.warn('[FG] EML 附件解析失敗:',nm[1],e); }
+  }
+  return recs;
+}
+
+// ── MSG：OLE 內掃描 xlsx 魔術數（PK\x03\x04 + [Content_Types]），盡力而為 ────
+async function parseMSG(buf, fname){
+  const bytes=new Uint8Array(buf);
+  const recs=[];
+  for(let i=0;i<bytes.length-4;i++){
+    if(bytes[i]===0x50&&bytes[i+1]===0x4B&&bytes[i+2]===0x03&&bytes[i+3]===0x04){
+      try{
+        const wb=XLSX.read(bytes.slice(i),{type:'array',cellDates:false,raw:true});
+        parseWorkbook(wb,fname).forEach(r=>recs.push(r));
+        break; // 取第一個有效 zip 即可
+      }catch(e){}
+    }
+  }
+  return recs;
+}
+
+// ── DropZone 事件（掛在 window，同 sewing_v5 慣例） ─────────────────────────
+window.dzOver=e=>{e.preventDefault();document.getElementById('dz').classList.add('drag');};
+window.dzOut=()=>document.getElementById('dz').classList.remove('drag');
+window.dzDrop=e=>{e.preventDefault();dzOut();handleFiles([...e.dataTransfer.files]);};
+window.dzSelect=e=>handleFiles([...e.target.files]);
+
+async function handleFiles(files){
+  pendingRecs=[]; pendingFiles=[];
+  const listEl=document.getElementById('fileList');
+  listEl.innerHTML='';
+  for(const f of files){
+    const ext=f.name.split('.').pop().toLowerCase();
+    let recs=[];
+    try{
+      if(ext==='eml'){ recs=await parseEML(await f.text(), f.name); }
+      else if(ext==='msg'){ recs=await parseMSG(await f.arrayBuffer(), f.name); }
+      else if(ext==='csv'){
+        const wb=XLSX.read(await f.text(),{type:'string',cellDates:false,raw:true});
+        recs=parseWorkbook(wb,f.name);
+      }else{
+        const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,raw:true});
+        recs=parseWorkbook(wb,f.name);
+      }
+    }catch(e){ console.warn('[FG] 解析失敗:',f.name,e); }
+    pendingFiles.push({name:f.name,count:recs.length});
+    pendingRecs=pendingRecs.concat(recs);
+  }
+  renderPreview();
+}
+function renderPreview(){
+  const el=document.getElementById('previewArea');
+  if(!pendingRecs.length){
+    el.innerHTML=`<div class="al al-w">⚠ 未解析出任何記錄。請確認表頭包含 PO / PCS / Style 等欄位。</div>`;
+    return;
+  }
+  const pcs=pendingRecs.reduce((s,r)=>s+r.pcs,0);
+  const pos=[...new Set(pendingRecs.map(r=>r.po).filter(Boolean))];
+  el.innerHTML=`
+    <div class="preview-file">
+      ${pendingFiles.map(f=>`<div style="font-size:12px">📄 <b>${escAttr(f.name)}</b> → ${f.count} 筆</div>`).join('')}
+      <div class="preview-lines">
+        <span class="preview-line">共 ${fmt(pendingRecs.length)} 筆</span>
+        <span class="preview-line">${fmt(pcs)} PCS</span>
+        <span class="preview-line">${pos.length} PO</span>
+        ${pos.slice(0,8).map(p=>`<span class="preview-line">${escAttr(p)}</span>`).join('')}
+      </div>
+    </div>
+    <button class="btn btn-y" onclick="confirmImport()">✅ 確認存入（自動去重）</button>
+    <button class="btn btn-g" onclick="pendingRecs=[];document.getElementById('previewArea').innerHTML='';document.getElementById('fileList').innerHTML=''">取消</button>`;
+}
+window.confirmImport=async function(){
+  const before=FG.length;
+  FG=dedupFG(FG.concat(pendingRecs));
+  await saveFG();
+  toast(`✅ 已存入 ${fmt(FG.length-before)} 筆（去重後）`,'ok');
+  pendingRecs=[];
+  document.getElementById('previewArea').innerHTML='';
+  document.getElementById('fileList').innerHTML='';
+  updateHeader(); renderDashboard(); renderDbCard();
+};
+
+// ── 手動新增 ────────────────────────────────────────────────────────────────
+window.manualAdd=async function(){
+  const g=id=>document.getElementById(id).value;
+  const pcs=Number(g('mPcs'));
+  if(!pcs||pcs<=0){ toast('請輸入 PCS 件數','err'); return; }
+  FG.push({
+    id:uid(), customer:cleanField(g('mCust')), po:cleanField(g('mPO')), styleNo:cleanField(g('mStyle')),
+    color:g('mColor').trim(), size:cleanField(g('mSize')), sku:cleanField(g('mSKU')),
+    carton:Number(g('mCtn'))||0, pcs:Math.round(pcs),
+    receiveDate:g('mRecv')||TODAY, packingDate:'', inspectionDate:'', shipmentDate:g('mShip')||'',
+    etd:'', eta:'', containerNo:cleanField(g('mCont')), warehouse:'', location:cleanField(g('mLoc')),
+    remark:'', hold:false, src:'manual', importedAt:new Date().toISOString(),
+  });
+  await saveFG();
+  toast('✅ 已新增 1 筆','ok');
+  ['mCust','mPO','mStyle','mColor','mSize','mSKU','mCtn','mPcs','mCont','mLoc'].forEach(i=>document.getElementById(i).value='');
+  updateHeader(); renderDashboard(); renderDbCard();
+};
+
+// ── 匯出 / 匯入 / 清空 ──────────────────────────────────────────────────────
+window.exportXlsx=function(){
+  if(!FG.length){ toast(t('noData'),'err'); return; }
+  const rows=FG.map(r=>({Customer:r.customer,PO:r.po,Style:r.styleNo,Color:r.color,Size:r.size,SKU:r.sku,
+    Carton:r.carton,PCS:r.pcs,ReceiveDate:r.receiveDate,PackingDate:r.packingDate,InspectionDate:r.inspectionDate,
+    ShipmentDate:r.shipmentDate,ETD:r.etd,ETA:r.eta,Container:r.containerNo,Warehouse:r.warehouse,Location:r.location,
+    Status:recStatus(r),Remark:r.remark}));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'FG_Records');
+  XLSX.writeFile(wb,`VRT_FG_Inventory_${TODAY}.xlsx`);
+};
+window.exportJSON=function(){
+  const blob=new Blob([JSON.stringify({fg:FG,exported:new Date().toISOString()})],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`fg_data_${TODAY}.json`; a.click();
+};
+window.importJSON=async function(e){
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const data=JSON.parse(await f.text());
+    const recs=data.fg||data.records||data;
+    if(!Array.isArray(recs)) throw new Error('格式錯誤');
+    FG=dedupFG(FG.concat(recs.map(r=>({...r,id:r.id||uid()}))));
+    await saveFG();
+    toast(`✅ 匯入完成，現有 ${fmt(FG.length)} 筆`,'ok');
+    updateHeader(); renderDashboard(); renderDbCard();
+  }catch(err){ toast('✗ JSON 匯入失敗：'+err.message,'err'); }
+  e.target.value='';
+};
+window.clearAllData=async function(){
+  if(!confirm(`確定清空全部 ${fmt(FG.length)} 筆 FG 資料？\n（不影響 Cutting / Sewing 資料庫）\n此操作不可復原。`)) return;
+  FG=[];
+  await saveFG();
+  toast('已清空 FG 資料','info');
+  updateHeader(); renderDashboard(); renderDbCard();
+};
+window.deleteRec=async function(id){
+  const r=FG.find(x=>x.id===id); if(!r) return;
+  if(!confirm(`刪除此筆？\n${r.po} ${r.styleNo} ${fmt(r.pcs)} PCS`)) return;
+  FG=FG.filter(x=>x.id!==id);
+  await saveFG(); renderRecs(); updateHeader();
+  toast('已刪除 1 筆','info');
+};
+
+// ── Folder Scan（FSA API，同 sewing_v5 慣例：記住已掃描檔案鍵） ─────────────
+const _SCAN_LS='vrt_fg_scanned_files';
+function _getScanned(){ try{return new Set(JSON.parse(localStorage.getItem(_SCAN_LS)||'[]'));}catch(e){return new Set();} }
+function _addScanned(keys){ const s=_getScanned(); keys.forEach(k=>s.add(k)); try{localStorage.setItem(_SCAN_LS,JSON.stringify([...s]));}catch(e){} }
+window.scanFolderPick=async function(){
+  if(!('showDirectoryPicker' in window)){ toast('此瀏覽器不支援資料夾掃描，請用 Chrome/Edge','err'); return; }
+  try{
+    const dir=await window.showDirectoryPicker();
+    const el=document.getElementById('scanStatus');
+    el.textContent='掃描中…';
+    const scanned=_getScanned(); const files=[]; const newKeys=[];
+    for await(const [name,handle] of dir.entries()){
+      if(handle.kind!=='file') continue;
+      if(!/\.(xlsx|xls|csv|eml)$/i.test(name)) continue;
+      const f=await handle.getFile();
+      const key=name+'|'+f.size+'|'+f.lastModified;
+      if(scanned.has(key)) continue;
+      files.push(f); newKeys.push(key);
+    }
+    if(!files.length){ el.textContent='✓ 無新檔案（已掃描過的檔案自動跳過）'; return; }
+    el.textContent=`發現 ${files.length} 個新檔案，解析中…`;
+    await handleFiles(files);
+    _addScanned(newKeys);
+    el.textContent=`✓ 已解析 ${files.length} 個新檔案，請在上方預覽確認存入`;
+  }catch(e){ /* 使用者取消 */ }
+};
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION E — 跨系統彙總引擎（Fabric→Cut→Sew→FG→Ship 全流程比對）
+   · PO 層級：cutByPO / sewByPO / fgByPO / shipByPO
+   · Style 層級：同上，鍵為正規化款號
+   ★ 只讀 CUT / SEW 記憶體快取，不回寫任何外部資料庫
+═══════════════════════════════════════════════════════════════════════════ */
+function normStyle(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+
+function buildFlow(){
+  const flow={ po:new Map(), style:new Map() };
+  const bump=(map,key,field,qty)=>{
+    if(!key) return;
+    if(!map.has(key)) map.set(key,{cut:0,sew:0,fg:0,ship:0,customer:'',styles:new Set(),pos:new Set()});
+    map.get(key)[field]+=qty;
+  };
+  // Cutting（cutting_v3 記錄含 po / styleNo / pieces）
+  CUT.forEach(r=>{
+    bump(flow.po, cleanField(r.po), 'cut', r.pieces||0);
+    bump(flow.style, normStyle(r.styleNo), 'cut', r.pieces||0);
+  });
+  // Sewing（sewing_v5 daily_records 含 po / styleNo / pieces）
+  SEW.forEach(r=>{
+    bump(flow.po, cleanField(r.po), 'sew', r.pieces||0);
+    bump(flow.style, normStyle(r.styleNo), 'sew', r.pieces||0);
+  });
+  // FG（本系統：fg=收貨總量、ship=已出貨量）
+  FG.forEach(r=>{
+    const pk=cleanField(r.po), sk=normStyle(r.styleNo);
+    bump(flow.po, pk, 'fg', r.pcs||0);
+    bump(flow.style, sk, 'fg', r.pcs||0);
+    if(r.shipmentDate){ bump(flow.po, pk, 'ship', r.pcs||0); bump(flow.style, sk, 'ship', r.pcs||0); }
+    if(pk&&flow.po.has(pk)){ const o=flow.po.get(pk); if(r.customer)o.customer=r.customer; if(r.styleNo)o.styles.add(r.styleNo); }
+    if(sk&&flow.style.has(sk)){ const o=flow.style.get(sk); if(r.customer)o.customer=r.customer; if(pk)o.pos.add(pk); }
+  });
+  return flow;
+}
+// 目前製程判定（Style Tracking 用）
+function currentStage(o){
+  if(o.ship>0 && o.ship>=o.fg && o.ship>=o.sew*0.98) return {k:'stageShip',cls:'bgy'};
+  if(o.fg>0   && o.fg-o.ship>0)                      return {k:'stageFG',cls:'bok'};
+  if(o.sew>0  && o.sew-o.fg>0)                        return {k:'stageSew',cls:'bin'};
+  if(o.cut>0)                                         return {k:'stageCut',cls:'bpu'};
+  return {k:'stageFabric',cls:'bwn'};
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION F — 各分頁 Render
+═══════════════════════════════════════════════════════════════════════════ */
+const kpiCell=(n,l,color,unit)=>`<div class="kpi"><div class="kpi-n" style="${color?'color:'+color:''}">${typeof n==='number'?fmt(n):n}<span class="kpi-u">${unit||''}</span></div><div class="kpi-l">${l}</div></div>`;
+
+// 未出貨庫存列
+const unshipped=()=>FG.filter(r=>!r.shipmentDate);
+const agingDays=r=>r.receiveDate?daysBetween(r.receiveDate,TODAY):0;
+function agingBucket(d){ return d<=3?0 : d<=7?1 : d<=15?2 : d<=30?3 : 4; }
+const AGING_LBL=['0~3 Days','4~7 Days','8~15 Days','16~30 Days','30+ Days'];
+const AGING_CLS=['ag0','ag1','ag2','ag3','ag4'];
+
+// ── 1) Dashboard ────────────────────────────────────────────────────────────
+function renderDashboard(){
+  const un=unshipped();
+  const bal=un.reduce((s,r)=>s+r.pcs,0);
+  const totalFG=FG.reduce((s,r)=>s+r.pcs,0);
+  const todayRecv=FG.filter(r=>r.receiveDate===TODAY).reduce((s,r)=>s+r.pcs,0);
+  const todayShip=FG.filter(r=>r.shipmentDate===TODAY).reduce((s,r)=>s+r.pcs,0);
+  const ready=un.filter(r=>recStatus(r)==='READY').reduce((s,r)=>s+r.pcs,0);
+  const wait=un.filter(r=>recStatus(r)==='WAITING').reduce((s,r)=>s+r.pcs,0);
+  const hold=un.filter(r=>r.hold).reduce((s,r)=>s+r.pcs,0);
+  const ag7=un.filter(r=>agingDays(r)>7).reduce((s,r)=>s+r.pcs,0);
+  const ag30=un.filter(r=>agingDays(r)>30).reduce((s,r)=>s+r.pcs,0);
+  const wk=weekKey(TODAY);
+  const shipWeek=FG.filter(r=>r.shipmentDate&&weekKey(r.shipmentDate)===wk).reduce((s,r)=>s+r.pcs,0);
+  const shipMonth=FG.filter(r=>r.shipmentDate&&r.shipmentDate.slice(0,7)===THIS_MONTH).reduce((s,r)=>s+r.pcs,0);
+  // Inventory Accuracy：FG 收貨量 vs Sewing 產出量（同 PO 交集），偏差越小越準
+  const flow=buildFlow();
+  let accN=0,accSum=0;
+  flow.po.forEach(o=>{ if(o.sew>0&&o.fg>0){ accN++; accSum+=Math.min(o.fg,o.sew)/Math.max(o.fg,o.sew); } });
+  const acc=accN?Math.round(accSum/accN*100):null;
+
+  document.getElementById('dashKpiGrid').innerHTML=
+    kpiCell(totalFG,'Total FG PCS','#1d4ed8','pcs')+
+    kpiCell(todayRecv,"Today's Receive",'#059669','pcs')+
+    kpiCell(todayShip,"Today's Shipment",'#d97706','pcs')+
+    kpiCell(bal,'FG Balance 庫存餘量','#1e2640','pcs')+
+    kpiCell(ready,'Ready to Ship','#059669','pcs')+
+    kpiCell(wait,'Waiting Inspection','#92400e','pcs')+
+    kpiCell(hold,'Hold Qty',hold>0?'#dc2626':'#9ca3af','pcs')+
+    kpiCell(ag7,'Aging >7 Days',ag7>0?'#c2410c':'#9ca3af','pcs')+
+    kpiCell(ag30,'Aging >30 Days',ag30>0?'#dc2626':'#9ca3af','pcs')+
+    kpiCell(shipWeek,'Shipment This Week','#0369a1','pcs')+
+    kpiCell(shipMonth,'Shipment This Month','#0369a1','pcs')+
+    kpiCell(acc===null?'—':acc+'%','Inventory Accuracy',acc===null?'#9ca3af':acc>=95?'#059669':acc>=85?'#d97706':'#dc2626','');
+
+  // Alerts
+  const alerts=[];
+  if(ag30>0) alerts.push(`<div class="al al-e">🔴 庫齡超過 30 天：${fmt(ag30)} PCS，請優先安排出貨或查明原因。</div>`);
+  if(hold>0) alerts.push(`<div class="al al-w">🟡 HOLD 庫存 ${fmt(hold)} PCS。</div>`);
+  if(!FG.length) alerts.push(`<div class="al al-i">ℹ️ ${t('noData')}——請至「📥 上傳資料」匯入收貨 / 出貨報表。</div>`);
+  document.getElementById('dashAlerts').innerHTML=alerts.join('');
+  document.getElementById('dashMeta').textContent=`資料 ${fmt(FG.length)} 筆 · Cutting 連動 ${fmt(CUT.length)} 筆 · Sewing 連動 ${fmt(SEW.length)} 筆 · ${new Date().toLocaleString()}`;
+
+  renderDashTrend(); renderDashPie(); renderDashAI(flow);
+}
+// 近14日 收/出 雙色長條（CSS bars，同 sewing_v5 不引 Chart.js）
+function renderDashTrend(){
+  const days=[]; for(let i=13;i>=0;i--){ days.push(localDateStr(new Date(Date.now()-i*86400000))); }
+  const rv=days.map(d=>FG.filter(r=>r.receiveDate===d).reduce((s,r)=>s+r.pcs,0));
+  const sp=days.map(d=>FG.filter(r=>r.shipmentDate===d).reduce((s,r)=>s+r.pcs,0));
+  const max=Math.max(...rv,...sp,1);
+  document.getElementById('dashTrend').innerHTML=`
+    <div style="font-size:10px;color:#6b7a9e;margin-bottom:4px"><span style="color:#f59e0b">■</span> Receive　<span style="color:#3b82f6">■</span> Shipment</div>
+    <div class="bars">${days.map((d,i)=>`
+      <div style="flex:1;display:flex;gap:1px;align-items:flex-end;height:100%">
+        <div class="bar" style="height:${Math.max(rv[i]/max*100,rv[i]?3:0)}%" title="${d} 收貨 ${fmt(rv[i])}"></div>
+        <div class="bar blue" style="height:${Math.max(sp[i]/max*100,sp[i]?3:0)}%" title="${d} 出貨 ${fmt(sp[i])}"></div>
+      </div>`).join('')}</div>
+    <div class="bar-x">${days.map(d=>`<div>${d.slice(5)}</div>`).join('')}</div>`;
+}
+// 客戶佔比圓餅（conic-gradient）
+function renderDashPie(){
+  const un=unshipped(); const map={};
+  un.forEach(r=>{ const c=r.customer||'(未標客戶)'; map[c]=(map[c]||0)+r.pcs; });
+  const list=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const total=list.reduce((s,[,v])=>s+v,0);
+  if(!total){ document.getElementById('dashPie').innerHTML=`<div class="empty">${t('noData')}</div>`; return; }
+  const COLORS=['#f59e0b','#3b82f6','#10b981','#8b5cf6','#ef4444','#14b8a6','#f97316','#64748b'];
+  let acc=0; const stops=list.map(([c,v],i)=>{ const a=acc/total*360; acc+=v; return `${COLORS[i]} ${a}deg ${acc/total*360}deg`; });
+  document.getElementById('dashPie').innerHTML=`
+    <div class="pie" style="background:conic-gradient(${stops.join(',')})"></div>
+    <div class="pieleg">${list.map(([c,v],i)=>`<div><span class="sw" style="background:${COLORS[i]}"></span>${escAttr(c)} <b class="mono">${fmt(v)}</b> (${Math.round(v/total*100)}%)</div>`).join('')}</div>`;
+}
+// AI 規則分析（快完成 / 卡製程 / 延誤 / 庫齡 / 數量異常）
+function renderDashAI(flow){
+  const out=[];
+  const near=[],stuckSew=[],stuckFG=[],anomaly=[];
+  flow.po.forEach((o,po)=>{
+    if(!po) return;
+    const base=Math.max(o.cut,o.sew,o.fg);
+    if(base>0 && o.ship/base>=0.9 && o.ship/base<1) near.push([po,Math.round(o.ship/base*100)]);
+    if(o.cut>0 && o.sew<o.cut*0.5 && o.cut-o.sew>500) stuckSew.push([po,o.cut-o.sew]);
+    if(o.sew>0 && o.fg<o.sew*0.5 && o.sew-o.fg>500) stuckFG.push([po,o.sew-o.fg]);
+    if(o.fg>o.sew*1.05 && o.sew>0) anomaly.push([po,'FG > Sewing（多 '+fmt(o.fg-o.sew)+'）']);
+    if(o.ship>o.fg) anomaly.push([po,'Shipment > FG（多 '+fmt(o.ship-o.fg)+'）']);
+  });
+  const delayed=FG.filter(r=>r.etd&&!r.shipmentDate&&r.etd<TODAY);
+  const ag30=unshipped().filter(r=>agingDays(r)>30);
+  const upcoming=FG.filter(r=>r.etd&&!r.shipmentDate&&daysBetween(TODAY,r.etd)>=0&&daysBetween(TODAY,r.etd)<=7);
+
+  if(near.length) out.push(`<div class="al al-ok">🟢 <b>快完成 PO</b>：${near.slice(0,6).map(([p,x])=>`${escAttr(p)}（${x}%）`).join('、')}${near.length>6?' …共'+near.length+'張':''}</div>`);
+  if(stuckSew.length) out.push(`<div class="al al-w">🟠 <b>卡在車縫</b>：${stuckSew.slice(0,5).map(([p,q])=>`${escAttr(p)}（欠 ${fmt(q)}）`).join('、')}</div>`);
+  if(stuckFG.length) out.push(`<div class="al al-w">🟠 <b>卡在成品入庫</b>（已車縫未入 FG）：${stuckFG.slice(0,5).map(([p,q])=>`${escAttr(p)}（欠 ${fmt(q)}）`).join('、')}</div>`);
+  if(delayed.length) out.push(`<div class="al al-e">🔴 <b>出貨延誤</b>（ETD 已過仍未出）：${[...new Set(delayed.map(r=>r.po))].slice(0,6).map(escAttr).join('、')} 共 ${fmt(delayed.reduce((s,r)=>s+r.pcs,0))} PCS</div>`);
+  if(upcoming.length) out.push(`<div class="al al-i">🔵 <b>7 日內即將出貨</b>：${[...new Set(upcoming.map(r=>(r.customer?r.customer+' / ':'')+r.po))].slice(0,6).map(escAttr).join('、')}</div>`);
+  if(ag30.length) out.push(`<div class="al al-e">🔴 <b>庫齡 >30 天</b>：${[...new Set(ag30.map(r=>r.po))].slice(0,8).map(escAttr).join('、')} 共 ${fmt(ag30.reduce((s,r)=>s+r.pcs,0))} PCS</div>`);
+  if(anomaly.length) out.push(`<div class="al al-e">⚠️ <b>數量異常</b>：${anomaly.slice(0,6).map(([p,m])=>`${escAttr(p)}：${m}`).join('；')}（詳見「🔍 異常勾稽」）</div>`);
+  document.getElementById('dashAI').innerHTML=out.join('')||`<div class="al al-ok">✅ 目前無異常訊號。</div>`;
+}
+
+// ── 2) Daily ────────────────────────────────────────────────────────────────
+function allDates(){
+  return [...new Set(FG.flatMap(r=>[r.receiveDate,r.shipmentDate]).filter(Boolean))].sort().reverse();
+}
+function populateDailySel(){
+  const sel=document.getElementById('dsel');
+  const cur=sel.value;
+  const dates=allDates();
+  sel.innerHTML=dates.map(d=>`<option value="${d}">${d}</option>`).join('')||`<option value="">—</option>`;
+  if(dates.includes(cur)) sel.value=cur;
+}
+window.dailyShift=function(dir){
+  const sel=document.getElementById('dsel');
+  const i=sel.selectedIndex+ (dir>0?-1:1);  // 清單為新→舊
+  if(i>=0&&i<sel.options.length){ sel.selectedIndex=i; renderDaily(); }
+};
+window.dailyToday=function(){
+  const sel=document.getElementById('dsel');
+  for(const o of sel.options) if(o.value===TODAY){ sel.value=TODAY; break; }
+  renderDaily();
+};
+function renderDaily(){
+  const d=document.getElementById('dsel').value;
+  const rv=FG.filter(r=>r.receiveDate===d), sp=FG.filter(r=>r.shipmentDate===d);
+  document.getElementById('dailyKpi').innerHTML=
+    kpiCell(rv.reduce((s,r)=>s+r.pcs,0),t('recv')+' PCS','#059669')+
+    kpiCell(rv.reduce((s,r)=>s+(r.carton||0),0),t('recv')+' CTN','#059669')+
+    kpiCell(sp.reduce((s,r)=>s+r.pcs,0),t('ship')+' PCS','#d97706')+
+    kpiCell(sp.reduce((s,r)=>s+(r.carton||0),0),t('ship')+' CTN','#d97706')+
+    kpiCell([...new Set(rv.concat(sp).map(r=>r.po).filter(Boolean))].length,'PO','#1d4ed8');
+  const row=(r,type)=>`<tr><td>${type==='r'?`<span class="b bok">IN</span>`:`<span class="b bwn">OUT</span>`}</td>
+    <td>${escAttr(r.customer)||'-'}</td><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.styleNo)||'-'}</td>
+    <td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td><td class="mono" style="font-size:11px">${escAttr(r.sku)||'-'}</td>
+    <td class="r">${r.carton||'-'}</td><td class="r" style="font-weight:700;color:${type==='r'?'#059669':'#d97706'}">${fmt(r.pcs)}</td>
+    <td class="mono" style="font-size:11px">${escAttr((r.warehouse?r.warehouse+' ':'')+r.location)||'-'}</td><td class="mono" style="font-size:11px">${escAttr(r.containerNo)||'-'}</td></tr>`;
+  document.getElementById('dailyBody').innerHTML=
+    rv.map(r=>row(r,'r')).join('')+sp.map(r=>row(r,'s')).join('')
+    ||`<tr><td colspan="11" class="empty">此日無 FG 進出資料</td></tr>`;
+}
+
+// ── 3) Weekly / 4) Monthly ──────────────────────────────────────────────────
+function periodTable(keyFn,labelFn){
+  const map={};
+  FG.forEach(r=>{
+    if(r.receiveDate){ const k=keyFn(r.receiveDate); (map[k]=map[k]||{rv:0,sp:0,rvC:0,spC:0}).rv+=r.pcs; map[k].rvC+=r.carton||0; }
+    if(r.shipmentDate){ const k=keyFn(r.shipmentDate); (map[k]=map[k]||{rv:0,sp:0,rvC:0,spC:0}).sp+=r.pcs; map[k].spC+=r.carton||0; }
+  });
+  const keys=Object.keys(map).sort().reverse();
+  if(!keys.length) return `<div class="empty">${t('noData')}</div>`;
+  return `<div class="tw"><table><thead><tr><th>Period</th><th class="r">${t('recv')} PCS</th><th class="r">${t('recv')} CTN</th>
+    <th class="r">${t('ship')} PCS</th><th class="r">${t('ship')} CTN</th><th class="r" data-zh="淨變動" data-en="Net">淨變動</th></tr></thead><tbody>
+    ${keys.map(k=>{const o=map[k];const net=o.rv-o.sp;return `<tr><td class="mono" style="font-weight:700">${labelFn(k)}</td>
+      <td class="r mono" style="color:#059669">${fmt(o.rv)}</td><td class="r mono">${fmt(o.rvC)}</td>
+      <td class="r mono" style="color:#d97706">${fmt(o.sp)}</td><td class="r mono">${fmt(o.spC)}</td>
+      <td class="r mono" style="font-weight:700;color:${net>=0?'#1d4ed8':'#dc2626'}">${net>=0?'+':''}${fmt(net)}</td></tr>`;}).join('')}
+    </tbody></table></div>`;
+}
+function renderWeekly(){ document.getElementById('weeklyWrap').innerHTML=periodTable(weekKey,k=>k); }
+function renderMonthly(){
+  document.getElementById('monthlyWrap').innerHTML=periodTable(d=>d.slice(0,7),k=>k);
+  // 近 12 月趨勢長條
+  const months=[]; const now=new Date();
+  for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); }
+  const rv=months.map(m=>FG.filter(r=>r.receiveDate&&r.receiveDate.slice(0,7)===m).reduce((s,r)=>s+r.pcs,0));
+  const sp=months.map(m=>FG.filter(r=>r.shipmentDate&&r.shipmentDate.slice(0,7)===m).reduce((s,r)=>s+r.pcs,0));
+  const max=Math.max(...rv,...sp,1);
+  document.getElementById('monthlyChart').innerHTML=`
+    <div style="font-size:10px;color:#6b7a9e;margin-bottom:4px"><span style="color:#f59e0b">■</span> Receive　<span style="color:#3b82f6">■</span> Shipment　近12月</div>
+    <div class="bars">${months.map((m,i)=>`
+      <div style="flex:1;display:flex;gap:1px;align-items:flex-end;height:100%">
+        <div class="bar" style="height:${Math.max(rv[i]/max*100,rv[i]?3:0)}%" title="${m} 收 ${fmt(rv[i])}"></div>
+        <div class="bar blue" style="height:${Math.max(sp[i]/max*100,sp[i]?3:0)}%" title="${m} 出 ${fmt(sp[i])}"></div>
+      </div>`).join('')}</div>
+    <div class="bar-x">${months.map(m=>`<div>${m.slice(2)}</div>`).join('')}</div>`;
+}
+
+// ── 5) FG Inventory（Customer→PO→Style 展開群組） ──────────────────────────
+function populateInvCust(){
+  const sel=document.getElementById('invCust'); const cur=sel.value;
+  const custs=[...new Set(FG.map(r=>r.customer).filter(Boolean))].sort();
+  sel.innerHTML=`<option value="">全部客戶 All Customers</option>`+custs.map(c=>`<option value="${escAttr(c)}">${escAttr(c)}</option>`).join('');
+  if(custs.includes(cur)) sel.value=cur;
+}
+window.toggleGrp=function(el){ el.parentElement.classList.toggle('open'); };
+function renderInventory(){
+  const cust=document.getElementById('invCust').value;
+  const q=document.getElementById('invSearch').value.trim().toUpperCase();
+  const showZero=document.getElementById('invShowZero').checked;
+  let rows=showZero?FG.slice():unshipped();
+  if(cust) rows=rows.filter(r=>r.customer===cust);
+  if(q) rows=rows.filter(r=>(r.po+r.styleNo+r.sku+r.location+r.carton).toUpperCase().includes(q));
+  if(!rows.length){ document.getElementById('invWrap').innerHTML=`<div class="empty">${t('noData')}</div>`; return; }
+  // 三層群組：Customer → PO → Style，明細列 Color/Size/SKU/Location/Carton
+  const byCust={};
+  rows.forEach(r=>{
+    const c=r.customer||'(未標客戶)', p=r.po||'(未標PO)', s=r.styleNo||'(未標Style)';
+    ((byCust[c]=byCust[c]||{})[p]=byCust[c][p]||{})[s]=(byCust[c][p][s]||[]).concat(r);
+  });
+  document.getElementById('invWrap').innerHTML=Object.entries(byCust).map(([c,pos])=>{
+    const cPcs=Object.values(pos).flatMap(o=>Object.values(o)).flat().reduce((s,r)=>s+r.pcs,0);
+    return `<div class="grp open"><div class="grp-hd" onclick="toggleGrp(this)"><span class="car">▶</span>
+      <b>👤 ${escAttr(c)}</b><span style="margin-left:auto" class="mono b bin">${fmt(cPcs)} pcs</span></div>
+      <div class="grp-bd">${Object.entries(pos).map(([p,stys])=>{
+        const pPcs=Object.values(stys).flat().reduce((s,r)=>s+r.pcs,0);
+        return `<div class="grp"><div class="grp-hd" onclick="toggleGrp(this)"><span class="car">▶</span>
+          <span class="mono" style="font-weight:700">📋 ${escAttr(p)}</span><span style="margin-left:auto" class="mono b bpu">${fmt(pPcs)} pcs</span></div>
+          <div class="grp-bd">${Object.entries(stys).map(([s,list])=>{
+            const sPcs=list.reduce((x,r)=>x+r.pcs,0), sCtn=list.reduce((x,r)=>x+(r.carton||0),0);
+            return `<div class="grp"><div class="grp-hd" onclick="toggleGrp(this)"><span class="car">▶</span>
+              <span class="mono">🎯 ${escAttr(s)}</span><span style="margin-left:auto;font-size:11px;color:#6b7a9e">${fmt(sCtn)} ctn</span><span class="mono b bok">${fmt(sPcs)} pcs</span></div>
+              <div class="grp-bd"><div class="tw"><table><thead><tr><th>Color</th><th>Size</th><th>SKU</th><th class="r">CTN</th><th class="r">PCS</th><th>Location</th><th>Recv</th><th>Status</th></tr></thead><tbody>
+                ${list.map(r=>`<tr><td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td><td class="mono" style="font-size:11px">${escAttr(r.sku)||'-'}</td>
+                  <td class="r">${r.carton||'-'}</td><td class="r mono" style="font-weight:700">${fmt(r.pcs)}</td>
+                  <td class="mono" style="font-size:11px">${escAttr((r.warehouse?r.warehouse+' ':'')+r.location)||'-'}</td>
+                  <td class="mono" style="font-size:11px">${r.receiveDate||'-'}</td><td>${statusBadge(r)}</td></tr>`).join('')}
+              </tbody></table></div></div></div>`;
+          }).join('')}</div></div>`;
+      }).join('')}</div></div>`;
+  }).join('');
+}
+
+// ── 6) Aging ────────────────────────────────────────────────────────────────
+function renderAging(){
+  const un=unshipped().filter(r=>r.receiveDate);
+  const buckets=[0,0,0,0,0];
+  un.forEach(r=>buckets[agingBucket(agingDays(r))]+=r.pcs);
+  document.getElementById('agingKpi').innerHTML=buckets.map((v,i)=>
+    `<div class="kpi ${AGING_CLS[i]}" style="border:none"><div class="kpi-n" style="color:inherit">${fmt(v)}</div><div class="kpi-l" style="color:inherit;opacity:.8">${AGING_LBL[i]}</div></div>`).join('');
+  const rows=un.slice().sort((a,b)=>agingDays(b)-agingDays(a));
+  document.getElementById('agingBody').innerHTML=rows.map(r=>{
+    const d=agingDays(r), b=agingBucket(d);
+    return `<tr><td><span class="b ${AGING_CLS[b]}">${AGING_LBL[b]}</span></td>
+      <td>${escAttr(r.customer)||'-'}</td><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.styleNo)||'-'}</td>
+      <td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td>
+      <td class="mono">${r.receiveDate}</td><td class="r mono" style="font-weight:700;color:${b>=3?'#dc2626':b===2?'#c2410c':'#1e2640'}">${d}</td>
+      <td class="r mono" style="font-weight:700">${fmt(r.pcs)}</td>
+      <td class="mono" style="font-size:11px">${escAttr((r.warehouse?r.warehouse+' ':'')+r.location)||'-'}</td></tr>`;
+  }).join('')||`<tr><td colspan="10" class="empty">${t('noData')}</td></tr>`;
+}
+
+// ── 7) Shipment Tracking ────────────────────────────────────────────────────
+// 狀態：SHIPPED 有 shipmentDate（>14天 → COMPLETED）；未出：ETD過期→DELAYED，ETD=今天→LOADING，其他→READY
+function shipStatus(r){
+  if(r.shipmentDate) return daysBetween(r.shipmentDate,TODAY)>14?'COMPLETED':'SHIPPED';
+  if(r.etd && r.etd<TODAY) return 'DELAYED';
+  if(r.etd===TODAY) return 'LOADING';
+  return 'READY';
+}
+const SHIP_CLS={READY:'bok',LOADING:'bin',SHIPPED:'bpu',COMPLETED:'bgy',DELAYED:'bbd'};
+function renderShipment(){
+  const filter=document.getElementById('shipStatusSel').value;
+  const rows=FG.filter(r=>r.etd||r.eta||r.containerNo||r.shipmentDate);
+  const cnt={READY:0,LOADING:0,SHIPPED:0,COMPLETED:0,DELAYED:0};
+  rows.forEach(r=>cnt[shipStatus(r)]+=r.pcs);
+  document.getElementById('shipKpi').innerHTML=Object.entries(cnt).map(([k,v])=>
+    kpiCell(v,k,k==='DELAYED'?'#dc2626':k==='READY'?'#059669':'#1e2640','pcs')).join('');
+  // 依 Container / ETD 群組
+  const grp={};
+  rows.filter(r=>!filter||shipStatus(r)===filter).forEach(r=>{
+    const k=[r.containerNo||'(無櫃號)',r.etd||'',r.customer||''].join('|');
+    (grp[k]=grp[k]||[]).push(r);
+  });
+  const keys=Object.keys(grp).sort();
+  document.getElementById('shipWrap').innerHTML=keys.map(k=>{
+    const [cont,etd,cust]=k.split('|');
+    const list=grp[k], pcs=list.reduce((s,r)=>s+r.pcs,0), ctn=list.reduce((s,r)=>s+(r.carton||0),0);
+    const st=shipStatus(list[0]);
+    return `<div class="grp open"><div class="grp-hd" onclick="toggleGrp(this)"><span class="car">▶</span>
+      <span class="mono" style="font-weight:700">🚢 ${escAttr(cont)}</span>
+      <span style="font-size:11px;color:#6b7a9e">ETD ${etd||'-'} · ETA ${list[0].eta||'-'} · ${escAttr(cust)||'-'}</span>
+      <span style="margin-left:auto" class="b ${SHIP_CLS[st]}">${st}</span><span class="mono b bin">${fmt(pcs)} pcs / ${fmt(ctn)} ctn</span></div>
+      <div class="grp-bd"><div class="tw"><table><thead><tr><th>PO</th><th>Style</th><th>Color</th><th>Size</th><th class="r">CTN</th><th class="r">PCS</th><th>ETD</th><th>ETA</th><th data-zh="出貨日" data-en="Shipped">出貨日</th><th>Status</th></tr></thead><tbody>
+      ${list.map(r=>`<tr><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.styleNo)||'-'}</td>
+        <td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td>
+        <td class="r">${r.carton||'-'}</td><td class="r mono" style="font-weight:700">${fmt(r.pcs)}</td>
+        <td class="mono">${r.etd||'-'}</td><td class="mono">${r.eta||'-'}</td><td class="mono">${r.shipmentDate||'-'}</td>
+        <td><span class="b ${SHIP_CLS[shipStatus(r)]}">${shipStatus(r)}</span></td></tr>`).join('')}
+      </tbody></table></div></div></div>`;
+  }).join('')||`<div class="empty">${t('noData')}（記錄需含 ETD / ETA / Container 或出貨日）</div>`;
+}
+
+// ── 8) PO Tracking（Order→Cut→Sew→FG→Ship Flow Bar） ────────────────────────
+function flowBar(label,val,base,color){
+  const pct=base>0?Math.min(val/base*100,100):0;
+  return `<div class="flowrow"><div class="flowlbl">${label}</div>
+    <div class="capbar"><div class="capfill" style="width:${pct}%;background:${color}"></div></div>
+    <div class="flowval">${fmt(val)} <span style="color:#9ca3af;font-weight:400">${base>0?Math.round(val/base*100)+'%':'—'}</span></div></div>`;
+}
+function renderPO(){
+  const q=document.getElementById('poSearch').value.trim().toUpperCase();
+  const sort=document.getElementById('poSort').value;
+  const flow=buildFlow();
+  let list=[...flow.po.entries()].filter(([po])=>po);
+  if(q) list=list.filter(([po,o])=>(po+o.customer+[...o.styles].join('')).toUpperCase().includes(q));
+  // Ordered Qty：以 Cut 為訂單基準（無 OrderMaster 時的近似值；[EXT] 未來可接訂單平台）
+  list.forEach(([,o])=>o.ordered=Math.max(o.cut,o.sew,o.fg,o.ship));
+  if(sort==='fg') list.sort((a,b)=>b[1].fg-a[1].fg);
+  else if(sort==='po') list.sort((a,b)=>a[0].localeCompare(b[0]));
+  else list.sort((a,b)=>(a[1].ordered?a[1].ship/a[1].ordered:0)-(b[1].ordered?b[1].ship/b[1].ordered:0));
+  document.getElementById('poWrap').innerHTML=`<div class="g2">`+list.map(([po,o])=>{
+    const bal=o.fg-o.ship;
+    return `<div class="card" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="mono" style="font-size:14px;font-weight:700">📋 ${escAttr(po)}</span>
+        <span style="font-size:11px;color:#6b7a9e">${escAttr(o.customer)||''} ${[...o.styles].slice(0,3).map(escAttr).join(' ')}</span>
+        <span style="margin-left:auto" class="b ${bal>0?'bok':'bgy'}">${t('balance')} ${fmt(bal)}</span>
+      </div>
+      ${flowBar('Order',o.ordered,o.ordered,'#64748b')}
+      ${flowBar('Cut',o.cut,o.ordered,'#8b5cf6')}
+      ${flowBar('Sew',o.sew,o.ordered,'#3b82f6')}
+      ${flowBar('FG',o.fg,o.ordered,'#10b981')}
+      ${flowBar('Ship',o.ship,o.ordered,'#f59e0b')}
+    </div>`;
+  }).join('')+`</div>`||`<div class="empty">${t('noData')}</div>`;
+  if(!list.length) document.getElementById('poWrap').innerHTML=`<div class="empty">${t('noData')}——匯入 FG 資料或確認 Cutting/Sewing 資料庫存在後重試</div>`;
+}
+
+// ── 9) Style Tracking ───────────────────────────────────────────────────────
+function renderStyle(){
+  const q=document.getElementById('stySearch').value.trim().toUpperCase();
+  const flow=buildFlow();
+  let list=[...flow.style.entries()].filter(([s])=>s);
+  if(q) list=list.filter(([s,o])=>(s+o.customer).toUpperCase().includes(q));
+  list.sort((a,b)=>(b[1].fg-b[1].ship)-(a[1].fg-a[1].ship));
+  document.getElementById('styBody').innerHTML=list.map(([s,o])=>{
+    const st=currentStage(o), wip=Math.max(o.cut-o.sew,0)+Math.max(o.sew-o.fg,0);
+    return `<tr><td class="mono" style="font-weight:700">${escAttr(s)}</td><td>${escAttr(o.customer)||'-'}</td>
+      <td class="r mono" style="color:#8b5cf6">${fmt(o.cut)}</td><td class="r mono" style="color:#3b82f6">${fmt(o.sew)}</td>
+      <td class="r mono" style="color:#10b981;font-weight:700">${fmt(o.fg)}</td><td class="r mono" style="color:#d97706">${fmt(o.ship)}</td>
+      <td class="r mono">${fmt(wip)}</td><td><span class="b ${st.cls}">${t(st.k)}</span></td></tr>`;
+  }).join('')||`<tr><td colspan="8" class="empty">${t('noData')}</td></tr>`;
+}
+
+// ── 10) Customer Analysis ───────────────────────────────────────────────────
+function renderCustomer(){
+  const map={};
+  FG.forEach(r=>{
+    const c=r.customer||'(未標客戶)';
+    const o=map[c]=map[c]||{pos:new Set(),pcs:0,fg:0,ship:0,late:0};
+    if(r.po)o.pos.add(r.po);
+    o.pcs+=r.pcs;
+    if(r.shipmentDate)o.ship+=r.pcs; else o.fg+=r.pcs;
+    if(!r.shipmentDate&&r.etd&&r.etd<TODAY)o.late+=r.pcs;   // Late Shipment：ETD 已過未出
+  });
+  const list=Object.entries(map).sort((a,b)=>b[1].pcs-a[1].pcs);
+  document.getElementById('custWrap').innerHTML=`<div class="tw"><table><thead><tr>
+    <th>Customer</th><th class="r">Total Orders</th><th class="r">Total PCS</th><th class="r">FG Qty</th>
+    <th class="r">Shipment Qty</th><th class="r">Balance</th><th class="r">Late Shipment</th><th style="width:180px" data-zh="出貨進度" data-en="Ship %">出貨進度</th></tr></thead><tbody>
+    ${list.map(([c,o])=>{const pct=o.pcs?Math.round(o.ship/o.pcs*100):0;
+      return `<tr><td style="font-weight:700">${escAttr(c)}</td><td class="r mono">${o.pos.size}</td>
+      <td class="r mono">${fmt(o.pcs)}</td><td class="r mono" style="color:#10b981">${fmt(o.fg)}</td>
+      <td class="r mono" style="color:#d97706">${fmt(o.ship)}</td><td class="r mono" style="font-weight:700">${fmt(o.pcs-o.ship)}</td>
+      <td class="r mono" style="color:${o.late?'#dc2626':'#9ca3af'};font-weight:${o.late?700:400}">${fmt(o.late)}</td>
+      <td><div class="capbar" style="margin:0"><div class="capfill" style="width:${pct}%;background:${pct>=90?'#10b981':pct>=50?'#f59e0b':'#3b82f6'}"></div></div>
+        <div style="font-size:10px;color:#6b7a9e;text-align:right">${pct}%</div></td></tr>`;}).join('')
+    ||`<tr><td colspan="8" class="empty">${t('noData')}</td></tr>`}
+  </tbody></table></div>`;
+}
+
+// ── 11) Warehouse ───────────────────────────────────────────────────────────
+function renderWarehouse(){
+  const q=document.getElementById('whSearch').value.trim().toUpperCase();
+  let rows=unshipped();
+  if(q) rows=rows.filter(r=>(String(r.warehouse)+r.location+String(r.carton)+r.po+r.styleNo).toUpperCase().includes(q));
+  if(!rows.length){ document.getElementById('whWrap').innerHTML=`<div class="empty">${t('noData')}</div>`; return; }
+  // Warehouse → Location(Rack/Shelf) 群組
+  const byWh={};
+  rows.forEach(r=>{
+    const w=r.warehouse||'(未標倉庫)', l=r.location||'(未標倉位)';
+    ((byWh[w]=byWh[w]||{})[l]=byWh[w][l]||[]).push(r);
+  });
+  document.getElementById('whWrap').innerHTML=Object.entries(byWh).map(([w,locs])=>{
+    const wPcs=Object.values(locs).flat().reduce((s,r)=>s+r.pcs,0);
+    return `<div class="grp open"><div class="grp-hd" onclick="toggleGrp(this)"><span class="car">▶</span>
+      <b>🏬 ${escAttr(w)}</b><span style="margin-left:auto" class="mono b bin">${fmt(wPcs)} pcs</span></div>
+      <div class="grp-bd">${Object.entries(locs).sort().map(([l,list])=>{
+        const pcs=list.reduce((s,r)=>s+r.pcs,0), ctn=list.reduce((s,r)=>s+(r.carton||0),0);
+        return `<div class="grp"><div class="grp-hd" onclick="toggleGrp(this)"><span class="car">▶</span>
+          <span class="mono">📍 ${escAttr(l)}</span><span style="margin-left:auto;font-size:11px;color:#6b7a9e">${fmt(ctn)} ctn</span><span class="mono b bok">${fmt(pcs)} pcs</span></div>
+          <div class="grp-bd"><div class="tw"><table><thead><tr><th>Customer</th><th>PO</th><th>Style</th><th>Color</th><th>Size</th><th class="r">CTN</th><th class="r">PCS</th><th>Recv</th></tr></thead><tbody>
+          ${list.map(r=>`<tr><td>${escAttr(r.customer)||'-'}</td><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.styleNo)||'-'}</td>
+            <td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td><td class="r">${r.carton||'-'}</td>
+            <td class="r mono" style="font-weight:700">${fmt(r.pcs)}</td><td class="mono" style="font-size:11px">${r.receiveDate||'-'}</td></tr>`).join('')}
+          </tbody></table></div></div></div>`;
+      }).join('')}</div></div>`;
+  }).join('');
+}
+
+// ── 12) Balance Analysis ────────────────────────────────────────────────────
+function renderBalance(){
+  const flow=buildFlow();
+  const list=[...flow.po.entries()].filter(([po,o])=>po&&(o.cut||o.sew||o.fg||o.ship));
+  const T={cut:0,sew:0,fg:0,ship:0};
+  list.forEach(([,o])=>{T.cut+=o.cut;T.sew+=o.sew;T.fg+=o.fg;T.ship+=o.ship;});
+  document.getElementById('balKpi').innerHTML=
+    kpiCell(T.cut,'Cutting Qty','#8b5cf6','pcs')+kpiCell(T.sew,'Sewing Qty','#3b82f6','pcs')+
+    kpiCell(T.fg,'FG Qty','#10b981','pcs')+kpiCell(T.ship,'Shipment Qty','#d97706','pcs');
+  list.sort((a,b)=>{
+    const la=a[1].cut?Math.abs(a[1].cut-a[1].fg)/a[1].cut:0, lb=b[1].cut?Math.abs(b[1].cut-b[1].fg)/b[1].cut:0;
+    return lb-la;
+  });
+  document.getElementById('balBody').innerHTML=list.map(([po,o])=>{
+    const base=o.cut||o.sew||o.fg;
+    const loss=base?((base-Math.max(o.fg,o.ship))/base*100):0;
+    const missing=Math.max(o.cut-o.fg,0), diff=o.fg-o.sew;
+    const lossCls=loss>5?'bbd':loss>2?'bwn':'bok';
+    return `<tr><td class="mono" style="font-weight:700">${escAttr(po)}</td><td class="mono" style="font-size:11px">${[...o.styles].slice(0,2).map(escAttr).join(' ')||'-'}</td>
+      <td class="r mono" style="color:#8b5cf6">${fmt(o.cut)}</td><td class="r mono" style="color:#3b82f6">${fmt(o.sew)}</td>
+      <td class="r mono" style="color:#10b981;font-weight:700">${fmt(o.fg)}</td><td class="r mono" style="color:#d97706">${fmt(o.ship)}</td>
+      <td class="r"><span class="b ${lossCls}">${loss.toFixed(1)}%</span></td>
+      <td class="r mono" style="color:${missing?'#c2410c':'#9ca3af'}">${fmt(missing)}</td>
+      <td class="r mono" style="color:${diff>0?'#dc2626':diff<0?'#0369a1':'#9ca3af'};font-weight:700">${diff>0?'+':''}${fmt(diff)}</td></tr>`;
+  }).join('')||`<tr><td colspan="9" class="empty">${t('noData')}</td></tr>`;
+}
+
+// ── 13) Reconciliation ──────────────────────────────────────────────────────
+function renderRecon(){
+  const flow=buildFlow(); const issues=[];
+  const add=(sev,type,msg)=>issues.push({sev,type,msg}); // sev: e=紅 w=黃 i=藍
+  flow.po.forEach((o,po)=>{
+    if(!po) return;
+    if(o.cut>0&&o.sew>0&&o.cut>o.sew) add('i','Cut > Sew',`${po}：裁 ${fmt(o.cut)} > 車 ${fmt(o.sew)}（在製 ${fmt(o.cut-o.sew)}）`);
+    if(o.sew>0&&o.sew>o.fg&&o.fg>0)   add('w','Sew > FG',`${po}：車 ${fmt(o.sew)} > FG ${fmt(o.fg)}（未入庫 ${fmt(o.sew-o.fg)}）`);
+    if(o.fg>o.sew*1.02&&o.sew>0)      add('e','FG > Sewing',`${po}：FG ${fmt(o.fg)} > 車縫 ${fmt(o.sew)}——數量異常，請核對來源報表`);
+    if(o.ship>o.fg)                   add('e','Shipment > FG',`${po}：出貨 ${fmt(o.ship)} > FG ${fmt(o.fg)}——出貨量超過入庫量`);
+  });
+  // 重覆 PO+Style+Color+Size+Carton（同箱重覆入帳）
+  const seen=new Map();
+  FG.forEach(r=>{
+    if(!r.carton) return;
+    const k=[r.po,r.styleNo,r.color,r.size,r.carton,r.receiveDate].join('|');
+    if(seen.has(k)) add('e','重覆 Carton',`${r.po} ${r.styleNo} CTN:${r.carton}（${r.receiveDate}）疑似重覆入帳`);
+    else seen.set(k,1);
+  });
+  // Missing 欄位
+  const miss=(field,label)=>{
+    const n=FG.filter(r=>!r[field]).length;
+    if(n) add('w','Missing '+label,`${fmt(n)} 筆記錄缺 ${label}`);
+  };
+  miss('sku','SKU'); miss('color','Color'); miss('size','Size'); miss('po','PO'); miss('styleNo','Style');
+  // 數量異常（單筆超大 / 每箱件數異常）
+  FG.forEach(r=>{
+    if(r.pcs>50000) add('w','數量異常',`${r.po||'(無PO)'} ${r.styleNo||''} 單筆 ${fmt(r.pcs)} PCS，請確認非合計列`);
+    if(r.carton>0&&r.pcs/r.carton>500) add('w','數量異常',`${r.po||'(無PO)'} 每箱 ${Math.round(r.pcs/r.carton)} pcs/ctn 偏高`);
+  });
+  const CLS={e:'al-e',w:'al-w',i:'al-i'};
+  const order={e:0,w:1,i:2};
+  issues.sort((a,b)=>order[a.sev]-order[b.sev]);
+  document.getElementById('reconWrap').innerHTML=
+    (issues.length?`<div class="al ${issues.some(i=>i.sev==='e')?'al-e':'al-w'}">共發現 <b>${issues.length}</b> 項需勾稽項目（🔴 ${issues.filter(i=>i.sev==='e').length}　🟡 ${issues.filter(i=>i.sev==='w').length}　🔵 ${issues.filter(i=>i.sev==='i').length}）</div>`:'')+
+    (issues.map(i=>`<div class="al ${CLS[i.sev]}"><b>[${i.type}]</b> ${i.msg}</div>`).join('')
+     ||`<div class="al al-ok">✅ 未發現異常。</div>`);
+}
+
+// ── 14) Query ───────────────────────────────────────────────────────────────
+function renderQuery(){
+  const q=document.getElementById('qText').value.trim().toUpperCase();
+  const f=document.getElementById('qField').value;
+  const el=document.getElementById('qWrap');
+  if(!q){ el.innerHTML=`<div class="empty" data-zh="輸入關鍵字開始查詢" data-en="Type keyword to search">輸入關鍵字開始查詢</div>`; return; }
+  const rows=FG.filter(r=>{
+    if(f) return String(r[f]||'').toUpperCase().includes(q);
+    return [r.po,r.styleNo,r.customer,r.sku,r.location,r.warehouse,String(r.carton),r.containerNo].some(v=>String(v||'').toUpperCase().includes(q));
+  });
+  const pcs=rows.reduce((s,r)=>s+r.pcs,0);
+  el.innerHTML=`<div class="al al-i">命中 <b>${fmt(rows.length)}</b> 筆 · <b>${fmt(pcs)}</b> PCS</div>
+    <div class="tw"><table><thead><tr><th>Customer</th><th>PO</th><th>Style</th><th>Color</th><th>Size</th><th>SKU</th>
+    <th class="r">CTN</th><th class="r">PCS</th><th>Recv</th><th>Ship</th><th>Container</th><th>Location</th><th>Status</th></tr></thead><tbody>
+    ${rows.slice(0,500).map(r=>`<tr><td>${escAttr(r.customer)||'-'}</td><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.styleNo)||'-'}</td>
+      <td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td><td class="mono" style="font-size:11px">${escAttr(r.sku)||'-'}</td>
+      <td class="r">${r.carton||'-'}</td><td class="r mono" style="font-weight:700">${fmt(r.pcs)}</td>
+      <td class="mono" style="font-size:11px">${r.receiveDate||'-'}</td><td class="mono" style="font-size:11px">${r.shipmentDate||'-'}</td>
+      <td class="mono" style="font-size:11px">${escAttr(r.containerNo)||'-'}</td><td class="mono" style="font-size:11px">${escAttr((r.warehouse?r.warehouse+' ':'')+r.location)||'-'}</td>
+      <td>${statusBadge(r)}</td></tr>`).join('')}
+    </tbody></table></div>${rows.length>500?'<div style="font-size:11px;color:#9ca3af;margin-top:6px">僅顯示前 500 筆</div>':''}`;
+}
+
+// ── 15) All Records（分頁 500 筆） ──────────────────────────────────────────
+const REC_PAGE=500;
+function renderRecs(){
+  const sel=document.getElementById('recPage');
+  const pages=Math.max(1,Math.ceil(FG.length/REC_PAGE));
+  if(sel.options.length!==pages){
+    const cur=sel.value;
+    sel.innerHTML=Array.from({length:pages},(_,i)=>`<option value="${i}">第 ${i+1}/${pages} 頁</option>`).join('');
+    if(cur&&+cur<pages) sel.value=cur;
+  }
+  const p=+sel.value||0;
+  const rows=FG.slice().sort((a,b)=>(b.receiveDate||'').localeCompare(a.receiveDate||'')).slice(p*REC_PAGE,(p+1)*REC_PAGE);
+  document.getElementById('recCount').textContent=`共 ${fmt(FG.length)} 筆`;
+  document.getElementById('recBody').innerHTML=rows.map((r,i)=>`<tr>
+    <td class="mono" style="color:#9ca3af">${p*REC_PAGE+i+1}</td>
+    <td>${escAttr(r.customer)||'-'}</td><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.styleNo)||'-'}</td>
+    <td>${escAttr(r.color)||'-'}</td><td class="mono">${escAttr(r.size)||'-'}</td><td class="mono" style="font-size:11px">${escAttr(r.sku)||'-'}</td>
+    <td class="r">${r.carton||'-'}</td><td class="r mono" style="font-weight:700">${fmt(r.pcs)}</td>
+    <td class="mono" style="font-size:11px">${r.receiveDate||'-'}</td><td class="mono" style="font-size:11px">${r.packingDate||'-'}</td>
+    <td class="mono" style="font-size:11px">${r.inspectionDate||'-'}</td><td class="mono" style="font-size:11px">${r.shipmentDate||'-'}</td>
+    <td class="mono" style="font-size:11px">${escAttr(r.containerNo)||'-'}</td><td class="mono" style="font-size:11px">${escAttr((r.warehouse?r.warehouse+' ':'')+r.location)||'-'}</td>
+    <td>${statusBadge(r)}</td>
+    <td><button class="btn btn-r" style="padding:2px 8px;font-size:11px" onclick="deleteRec('${r.id}')">🗑</button></td></tr>`).join('')
+    ||`<tr><td colspan="17" class="empty">${t('noData')}</td></tr>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION G — Tab 導覽 / Header / DB 卡片 / 初始化
+═══════════════════════════════════════════════════════════════════════════ */
+window._rendered=false;
+function reRenderCurrent(name){
+  if(name==='dashboard') renderDashboard();
+  if(name==='daily'){ populateDailySel(); renderDaily(); }
+  if(name==='weekly') renderWeekly();
+  if(name==='monthly') renderMonthly();
+  if(name==='inventory'){ populateInvCust(); renderInventory(); }
+  if(name==='aging') renderAging();
+  if(name==='shipment') renderShipment();
+  if(name==='po') renderPO();
+  if(name==='style') renderStyle();
+  if(name==='customer') renderCustomer();
+  if(name==='warehouse') renderWarehouse();
+  if(name==='balance') renderBalance();
+  if(name==='recon') renderRecon();
+  if(name==='query') renderQuery();
+  if(name==='records') renderRecs();
+}
+window.goTab=function(name, el){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t2=>t2.classList.remove('on'));
+  document.getElementById('sec-'+name).classList.add('on');
+  el.classList.add('on');
+  reRenderCurrent(name);
+};
+function updateHeader(){
+  document.getElementById('hRecs').textContent=fmt(FG.length);
+  document.getElementById('hPcs').textContent=fmt(unshipped().reduce((s,r)=>s+r.pcs,0));
+  document.getElementById('hPOs').textContent=[...new Set(FG.map(r=>r.po).filter(Boolean))].length;
+  if(navigator.storage&&navigator.storage.estimate){
+    navigator.storage.estimate().then(e=>{
+      document.getElementById('hStorage').textContent=e.usage?(e.usage/1048576).toFixed(1)+' MB':'-';
+    });
+  }
+}
+function renderDbCard(){
+  const el=document.getElementById('dbCard');
+  const dates=allDates();
+  el.innerHTML=`IndexedDB：<b class="mono">VRT_FGInventory / fg_records</b> · ${fmt(FG.length)} 筆 ·
+    日期範圍 <b class="mono">${dates[dates.length-1]||'-'} ~ ${dates[0]||'-'}</b><br>
+    <span style="font-size:11px;color:#9ca3af">只讀連動：CuttingProd/cutting_records（${fmt(CUT.length)}）· VRT_SewingProduction/daily_records（${fmt(SEW.length)}）——本系統絕不寫入外部資料庫</span>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION H — Telegram（硬性規則：parse_mode:'HTML' + escapeHtml，禁 Markdown）
+═══════════════════════════════════════════════════════════════════════════ */
+function escapeHtml(s){
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+window.tgSave=function(){
+  localStorage.setItem('vrt_fg_tg_token',document.getElementById('tgToken').value.trim());
+  localStorage.setItem('vrt_fg_tg_chat',document.getElementById('tgChat').value.trim());
+  document.getElementById('tgStatus').textContent='✓ 已儲存';
+  toast('Telegram 設定已儲存','ok');
+};
+window.tgSendDaily=async function(){
+  const token=localStorage.getItem('vrt_fg_tg_token')||'', chat=localStorage.getItem('vrt_fg_tg_chat')||'';
+  if(!token||!chat){ toast('請先填入 Bot Token 與 Chat ID','err'); return; }
+  const rv=FG.filter(r=>r.receiveDate===TODAY), sp=FG.filter(r=>r.shipmentDate===TODAY);
+  const bal=unshipped().reduce((s,r)=>s+r.pcs,0);
+  const msg=
+    `📦 <b>VRT FG 每日摘要</b> ${escapeHtml(TODAY)}\n`+
+    `━━━━━━━━━━━━━━\n`+
+    `📥 今日收貨：<b>${fmt(rv.reduce((s,r)=>s+r.pcs,0))}</b> pcs / ${fmt(rv.reduce((s,r)=>s+(r.carton||0),0))} ctn\n`+
+    `🚢 今日出貨：<b>${fmt(sp.reduce((s,r)=>s+r.pcs,0))}</b> pcs / ${fmt(sp.reduce((s,r)=>s+(r.carton||0),0))} ctn\n`+
+    `📊 FG 庫存餘量：<b>${fmt(bal)}</b> pcs\n`+
+    `⏳ 庫齡&gt;30天：<b>${fmt(unshipped().filter(r=>agingDays(r)>30).reduce((s,r)=>s+r.pcs,0))}</b> pcs\n`+
+    (sp.length?`\n🚢 出貨明細：\n${[...new Set(sp.map(r=>`· ${escapeHtml(r.po)} ${escapeHtml(r.styleNo)} ${fmt(r.pcs)}pcs`))].slice(0,10).join('\n')}`:'');
+  const el=document.getElementById('tgStatus');
+  el.textContent='發送中…';
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:chat,text:msg,parse_mode:'HTML'}),
+    });
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.description||'發送失敗');
+    el.textContent='✓ 已發送'; toast('📨 Telegram 摘要已發送','ok');
+  }catch(e){ el.textContent='✗ '+e.message; toast('Telegram 發送失敗：'+e.message,'err'); }
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION I — Cloud Sync（GAS，同 sewing_v5 分批推拉，tool='fg'）
+   硬性規則：POST Content-Type 'text/plain;charset=utf-8'、URL 為 /exec 結尾
+═══════════════════════════════════════════════════════════════════════════ */
+(function(){
+  const LS_GAS='vrt_portal_gas_url';       // 全 VRT 工具共用 GAS URL key
+  const LS_META='vrt_cloud_fg_meta';
+  let gasUrl='', panelOpen=false;
+
+  function vcInit(){
+    gasUrl=localStorage.getItem(LS_GAS)||'';
+    document.getElementById('vcGasInput').value=gasUrl;
+    vcShowStatus();
+  }
+  window.vcToggle=function(){
+    panelOpen=!panelOpen;
+    document.getElementById('vrtCloudPanel').classList.toggle('show',panelOpen);
+    if(panelOpen) vcInit();
+  };
+  window.vcSaveGas=function(){
+    gasUrl=document.getElementById('vcGasInput').value.trim();
+    if(!gasUrl) return;
+    localStorage.setItem(LS_GAS,gasUrl);
+    vcLog('GAS URL 已儲存','i'); vcShowStatus();
+  };
+  function vcShowStatus(){
+    const el=document.getElementById('vcStatus');
+    const meta=JSON.parse(localStorage.getItem(LS_META)||'null');
+    if(meta){
+      const mins=(Date.now()-new Date(meta.ts))/60000;
+      const age=mins<60?`${Math.round(mins)}分前`:`${Math.round(mins/60)}小時前`;
+      el.textContent=`本機 ${FG.length} 筆 · 上次同步 ${age}`;
+      el.className='vcp-status '+(mins<120?'ok':'warn');
+    }else{
+      el.textContent=`本機 ${FG.length} 筆 · 尚未同步`;
+      el.className='vcp-status warn';
+    }
+    if(!gasUrl){ el.textContent+=' · ⚠ 未設定 GAS URL'; el.className='vcp-status err'; }
+  }
+  window.vcPush=async function(){
+    if(!gasUrl){ vcLog('請先填入 GAS URL','err'); return; }
+    vcSetBusy(true);
+    try{
+      const total=FG.length, CHUNK=2000, chunks=Math.max(1,Math.ceil(total/CHUNK));
+      vcLog(`開始推送 ${total} 筆（共 ${chunks} 批）...`,'i');
+      for(let i=0;i<chunks;i++){
+        const slice=FG.slice(i*CHUNK,(i+1)*CHUNK);
+        const isLast=(i===chunks-1);
+        const payload={
+          tool:'fg', chunk:i, totalChunks:chunks, recordCount:total, records:slice,
+          ...(isLast?{summary:{
+            today:TODAY,
+            balance:unshipped().reduce((s,r)=>s+r.pcs,0),
+            todayRecv:FG.filter(r=>r.receiveDate===TODAY).reduce((s,r)=>s+r.pcs,0),
+            todayShip:FG.filter(r=>r.shipmentDate===TODAY).reduce((s,r)=>s+r.pcs,0),
+          }}:{}),
+        };
+        vcLog(`推送第 ${i+1}/${chunks} 批（${slice.length} 筆）...`,'i');
+        const r=await fetch(gasUrl,{
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},  // ★ 硬性規則
+          body:JSON.stringify(payload), redirect:'follow',
+        });
+        const d=await r.json();
+        if(!d.ok) throw new Error(d.error);
+      }
+      localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:total}));
+      vcLog(`✓ 推送完成（共 ${total} 筆）`,'ok'); vcShowStatus();
+    }catch(e){ vcLog('✗ 推送失敗：'+e.message,'err'); }
+    finally{ vcSetBusy(false); }
+  };
+  window.vcPull=async function(){
+    if(!gasUrl){ vcLog('請先填入 GAS URL','err'); return; }
+    if(!confirm('拉取會覆蓋本機 FG 資料，確定嗎？')) return;
+    vcSetBusy(true); vcLog('拉取中...','i');
+    try{
+      const metaR=await fetch(`${gasUrl}?action=pull&meta=1&tool=fg`,{redirect:'follow'});
+      const metaD=await metaR.json();
+      if(!metaD.ok) throw new Error(metaD.error||'GAS error');
+      const d=metaD.data;
+      if(!d||(!d.chunked&&!d.data)){ vcLog('雲端尚無 FG 資料','err'); return; }
+      let allRecs=[];
+      if(d.chunked&&d.meta&&d.meta.totalChunks){
+        const total=d.meta.totalChunks;
+        vcLog(`分批拉取，共 ${total} 批...`,'i');
+        for(let i=0;i<total;i++){
+          vcLog(`拉取第 ${i+1}/${total} 批...`,'i');
+          const cr=await fetch(`${gasUrl}?action=pull&tool=fg&chunk=${i}`,{redirect:'follow'});
+          const cd=await cr.json();
+          if(cd.ok&&Array.isArray(cd.data.records)) allRecs=allRecs.concat(cd.data.records);
+        }
+      }else if(!d.chunked&&d.data){
+        allRecs=d.data.records||[];
+      }
+      if(!allRecs.length){ vcLog('雲端資料為空（0筆）','err'); return; }
+      vcLog(`共拉取 ${allRecs.length} 筆，寫入本機...`,'i');
+      FG=dedupFG(allRecs.map(r=>({...r,id:r.id||uid()})));
+      await saveFG();
+      localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length}));
+      vcLog(`✓ 拉取完成（${allRecs.length} 筆），資料已更新`,'ok');
+      vcShowStatus(); updateHeader(); renderDashboard(); renderDbCard();
+    }catch(e){ vcLog('✗ 拉取失敗：'+e.message,'err'); }
+    finally{ vcSetBusy(false); }
+  };
+  function vcSetBusy(on){
+    document.getElementById('vcPushBtn').disabled=on;
+    document.getElementById('vcPullBtn').disabled=on;
+    document.getElementById('vcPushBtn').innerHTML=on?'⏳':'☁ 推送';
+    document.getElementById('vcPullBtn').innerHTML=on?'⏳':'⬇ 拉取';
+  }
+  function vcLog(msg,type){
+    const el=document.getElementById('vcLog');
+    const now=new Date();
+    const t2=[now.getHours(),now.getMinutes(),now.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+    const cls=type==='ok'?'vcl-ok':type==='err'?'vcl-err':'vcl-i';
+    el.innerHTML+=`<span class="${cls}">[${t2}] ${msg}</span>\n`;
+    el.scrollTop=el.scrollHeight;
+  }
+  document.addEventListener('click',e=>{
+    if(panelOpen&&!e.target.closest('#vrtCloudPanel')&&!e.target.closest('#vrtCloudBtn')){
+      panelOpen=false;
+      document.getElementById('vrtCloudPanel').classList.remove('show');
+    }
+  });
+  window._vcInit=vcInit;
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION J — 初始化流程（同 sewing_v5：loadDB → 連動 → render）
+═══════════════════════════════════════════════════════════════════════════ */
+(async function init(){
+  await loadFG();                 // 1. 本系統 IDB
+  await loadExternal();           // 2. Cutting / Sewing 只讀連動
+  // 3. 還原 Telegram 設定
+  document.getElementById('tgToken').value=localStorage.getItem('vrt_fg_tg_token')||'';
+  document.getElementById('tgChat').value=localStorage.getItem('vrt_fg_tg_chat')||'';
+  // 4. 套用語言 + 首次渲染
+  applyLang();
+  updateHeader(); renderDbCard(); renderDashboard();
+  window._rendered=true;
+  if(window._vcInit) window._vcInit();
+  console.log(`[VRT FG] init | FG:${FG.length} | CUT:${CUT.length} | SEW:${SEW.length} | TODAY:${TODAY}`);
+})();
+</script>
+</body>
+</html>

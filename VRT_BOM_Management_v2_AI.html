@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT BOM Management AI · v2</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+/* ============ TOKENS — pastel ERP / Sewing_v5 style ============ */
+:root{
+  --bg:#eef2f7; --panel:#ffffff; --panel2:#f7f9fc;
+  --ink:#1f2d3d; --ink2:#54657a; --ink3:#90a0b3;
+  --line:#e3e9f1; --line2:#eef2f7;
+  --brand:#3b6ea5; --brand2:#5a8bc4; --brand-soft:#e7f0f9;
+  --blue:#4a90d9; --blue-soft:#e8f1fb;
+  --green:#4ea787; --green-soft:#e6f4ee;
+  --gray:#7b8aa0; --gray-soft:#eef1f6;
+  --amber:#d9a441; --amber-soft:#fbf3e0;
+  --red:#d36b6b; --red-soft:#fbeaea;
+  --purple:#8e7cc3; --purple-soft:#efeaf7;
+  --teal:#4aa4a4; --teal-soft:#e4f3f3;
+  --good:#4ea787; --good-soft:#e6f4ee; --bad:#d36b6b; --bad-soft:#fbeaea;
+  --warn:#d9a441; --warn-soft:#fbf3e0;
+  --radius:14px; --radius-sm:10px;
+  --shadow:0 1px 3px rgba(31,45,61,.06),0 1px 2px rgba(31,45,61,.04);
+  --shadow-lg:0 12px 32px rgba(31,45,61,.16);
+  --sans:'Noto Sans TC','Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  --headh:54px; --rib1h:46px; --rib2h:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono)}
+.muted{color:var(--ink3)} .sp{flex:1}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#cdd6e2;border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#b6c2d2}
+
+/* ============ TOP HEADER ============ */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--headh);z-index:50;
+  background:linear-gradient(90deg,#34618f,#3b6ea5);color:#fff;display:flex;align-items:center;
+  gap:14px;padding:0 16px;box-shadow:0 2px 10px rgba(31,45,61,.12)}
+.hdr .brand{display:flex;align-items:center;gap:11px}
+.hdr .brand .mk{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.16);
+  display:flex;align-items:center;justify-content:center;font-size:19px}
+.hdr .brand b{font-size:15.5px;font-weight:800;letter-spacing:.3px}
+.hdr .brand .ai{font-size:9.5px;background:#fff;color:var(--brand);font-weight:800;padding:2px 6px;
+  border-radius:5px;margin-left:3px;vertical-align:middle;letter-spacing:.5px}
+.hdr .gsearch{position:relative;margin-left:8px}
+.hdr .gsearch i{position:absolute;left:11px;top:9px;color:rgba(255,255,255,.7);font-size:14px}
+.hdr .gsearch input{height:34px;width:min(300px,30vw);border:none;border-radius:9px;padding:0 12px 0 33px;
+  background:rgba(255,255,255,.15);color:#fff;font-size:13px;outline:none}
+.hdr .gsearch input::placeholder{color:rgba(255,255,255,.7)}
+.hdr .gsearch input:focus{background:rgba(255,255,255,.24)}
+.hdr .cloudtag{display:flex;align-items:center;gap:6px;font-size:11.5px;background:rgba(255,255,255,.14);
+  padding:5px 10px;border-radius:20px;font-family:var(--mono)}
+.hdr .cloudtag .dot{width:7px;height:7px;border-radius:50%;background:#cdd6e2}
+.hdr .cloudtag.dirty .dot{background:var(--amber)} .hdr .cloudtag.synced .dot{background:#7ee0b8}
+.hdr .langs{display:flex;background:rgba(255,255,255,.14);border-radius:8px;padding:2px;gap:1px}
+.hdr .langs button{border:none;background:transparent;color:rgba(255,255,255,.8);font-size:12px;
+  padding:5px 9px;border-radius:6px;cursor:pointer;font-family:var(--sans)}
+.hdr .langs button.on{background:#fff;color:var(--brand);font-weight:700}
+.hdr .ic{width:34px;height:34px;border-radius:9px;border:none;background:rgba(255,255,255,.14);
+  color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hdr .ic:hover{background:rgba(255,255,255,.26)}
+
+/* ============ RIBBON 1 (Office tabs) ============ */
+.rib1{position:fixed;top:var(--headh);left:0;right:0;height:var(--rib1h);z-index:49;
+  background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:flex-end;
+  padding:0 12px;gap:2px;overflow-x:auto}
+.rib1 .tab{padding:0 16px;height:var(--rib1h);display:flex;align-items:center;gap:7px;cursor:pointer;
+  font-size:13.5px;font-weight:600;color:var(--ink2);border:none;background:transparent;white-space:nowrap;
+  border-bottom:2.5px solid transparent;position:relative}
+.rib1 .tab i{font-size:15px}
+.rib1 .tab:hover{color:var(--brand);background:var(--brand-soft)}
+.rib1 .tab.on{color:var(--brand);border-bottom-color:var(--brand)}
+
+/* ============ RIBBON 2 (contextual sticky toolbar) ============ */
+.rib2{position:fixed;top:calc(var(--headh) + var(--rib1h));left:0;right:0;min-height:var(--rib2h);z-index:48;
+  background:var(--panel2);border-bottom:1px solid var(--line);display:flex;align-items:center;
+  gap:5px;padding:8px 14px;overflow-x:auto;flex-wrap:nowrap}
+.rib2 .grp{display:flex;align-items:flex-end;gap:3px;padding:0 9px;border-right:1px solid var(--line);height:48px}
+.rib2 .grp:last-child{border-right:none}
+.rib2 .glbl{position:absolute}
+.rbtn{display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:transparent;
+  cursor:pointer;padding:5px 9px;border-radius:9px;color:var(--ink2);min-width:54px}
+.rbtn i{font-size:19px}
+.rbtn span{font-size:10.5px;font-weight:500;white-space:nowrap}
+.rbtn:hover{background:var(--brand-soft);color:var(--brand)}
+.rbtn.primary{color:var(--brand)} .rbtn.primary i{color:var(--brand)}
+.rbtn.danger:hover{background:var(--bad-soft);color:var(--bad)}
+.rbtn:disabled{opacity:.38;cursor:not-allowed;background:transparent !important;color:var(--ink3)}
+.rib2 . glabel{}
+
+/* ============ MAIN ============ */
+.main{margin-top:calc(var(--headh) + var(--rib1h) + var(--rib2h) + 6px);padding:18px 22px 90px;
+  max-width:1500px;margin-left:auto;margin-right:auto}
+.phead{display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.phead h1{font-size:22px;font-weight:800;letter-spacing:-.3px}
+.phead .sub{font-size:13px;color:var(--ink3);margin-top:3px}
+
+/* ============ CARDS ============ */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card .ch{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line2)}
+.card .ch h3{font-size:14.5px;font-weight:700} .card .ch i{color:var(--brand);font-size:16px}
+.card .cb{padding:16px 18px} .card .cb.flush{padding:0}
+
+/* KPI grid */
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:13px;margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi .top{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.kpi .chip{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.kpi .ttl{font-size:11.5px;color:var(--ink2);font-weight:600;line-height:1.3}
+.kpi .val{font-size:27px;font-weight:800;letter-spacing:-1px;line-height:1}
+.kpi .sub{font-size:11px;color:var(--ink3);margin-top:5px}
+.c-blue .chip{background:var(--blue-soft);color:var(--blue)} .c-blue .val{color:var(--blue)}
+.c-green .chip{background:var(--green-soft);color:var(--green)} .c-green .val{color:var(--green)}
+.c-gray .chip{background:var(--gray-soft);color:var(--gray)} .c-gray .val{color:var(--gray)}
+.c-amber .chip{background:var(--amber-soft);color:var(--amber)} .c-amber .val{color:var(--amber)}
+.c-red .chip{background:var(--red-soft);color:var(--red)} .c-red .val{color:var(--red)}
+.c-purple .chip{background:var(--purple-soft);color:var(--purple)} .c-purple .val{color:var(--purple)}
+.c-teal .chip{background:var(--teal-soft);color:var(--teal)} .c-teal .val{color:var(--teal)}
+.c-brand .chip{background:var(--brand-soft);color:var(--brand)} .c-brand .val{color:var(--brand)}
+
+/* charts */
+.chgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+@media(max-width:880px){.chgrid{grid-template-columns:1fr}}
+.chbox{height:280px;position:relative}
+
+/* tables */
+.tblwrap{overflow-x:auto;max-width:100%}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+table.tbl th{text-align:left;padding:11px 14px;background:var(--panel2);color:var(--ink2);font-weight:700;
+  font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:1}
+table.tbl td{padding:11px 14px;border-bottom:1px solid var(--line2);vertical-align:middle}
+table.tbl tr:hover td{background:var(--panel2)}
+table.tbl td.num,table.tbl th.num{text-align:right;font-family:var(--mono)}
+table.tbl td.center,table.tbl th.center{text-align:center}
+.lk{color:var(--brand);font-weight:600;cursor:pointer;text-decoration:none}
+.lk:hover{text-decoration:underline}
+.empty{text-align:center;color:var(--ink3);padding:34px !important}
+
+/* filter bar */
+.filterbar{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);padding:13px 15px;margin-bottom:16px;box-shadow:var(--shadow)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;color:var(--ink2);font-weight:600}
+.inp,select.inp{height:36px;border:1px solid var(--line);border-radius:9px;padding:0 11px;font-size:13px;
+  background:var(--panel);color:var(--ink);outline:none;font-family:var(--sans);min-width:120px}
+.inp:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:100%}
+
+/* badges / chips */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
+.b-active{background:var(--green-soft);color:var(--green)}
+.b-develop{background:var(--blue-soft);color:var(--blue)}
+.b-pending{background:var(--amber-soft);color:var(--amber)}
+.b-hold{background:var(--gray-soft);color:var(--gray)}
+.tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px}
+.cMainFabric{background:var(--blue-soft);color:var(--blue)}
+.cContrast{background:var(--purple-soft);color:var(--purple)}
+.cRib{background:var(--teal-soft);color:var(--teal)}
+.cLining{background:var(--green-soft);color:var(--green)}
+.cPocketing{background:var(--amber-soft);color:var(--amber)}
+.cInterlining{background:var(--gray-soft);color:var(--gray)}
+.cTrim{background:var(--red-soft);color:var(--red)}
+.cThread{background:#fbe8f3;color:#c45b9b}
+.cPacking{background:#e8eef9;color:#5a72c4}
+.cOthers{background:var(--gray-soft);color:var(--gray)}
+
+/* buttons */
+.btn{height:36px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;
+  padding:0 15px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  font-family:var(--sans);white-space:nowrap}
+.btn:hover{background:var(--panel2);border-color:#cfd9e6}
+.btn.dark{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.dark:hover{background:#345f90}
+.btn.good{background:var(--good);border-color:var(--good);color:#fff}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.sm{height:30px;padding:0 11px;font-size:12px}
+.btn.lg{height:42px;padding:0 20px;font-size:14px}
+.btn i{font-size:15px}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(31,45,61,.45);backdrop-filter:blur(2px);z-index:120;
+  display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:var(--panel);border-radius:16px;box-shadow:var(--shadow-lg);width:100%;max-width:880px;
+  animation:pop .2s ease;max-height:92vh;display:flex;flex-direction:column}
+.modal.sm{max-width:440px}.modal.md{max-width:620px}.modal.lg{max-width:1180px}.modal.xl{max-width:1400px}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+.modal .mh{display:flex;align-items:center;gap:12px;padding:15px 20px;border-bottom:1px solid var(--line2)}
+.modal .mh h3{font-size:16.5px;font-weight:800} .modal .mh i{color:var(--brand)}
+.modal .mh .x{width:32px;height:32px;border-radius:9px;border:none;background:var(--line2);color:var(--ink2);
+  font-size:15px;cursor:pointer;margin-left:auto}
+.modal .mh .x:hover{background:var(--bad-soft);color:var(--bad)}
+.modal .mb{padding:18px 20px;overflow-y:auto}
+.modal .mf{display:flex;gap:9px;justify-content:flex-end;padding:13px 20px;border-top:1px solid var(--line2);
+  background:var(--panel2);border-radius:0 0 16px 16px;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:620px){.grid2,.grid3{grid-template-columns:1fr}}
+.fld{display:flex;flex-direction:column;gap:5px;margin-bottom:11px}
+.fld label{font-size:11.5px;color:var(--ink2);font-weight:600}
+.note{padding:10px 14px;border-radius:10px;background:var(--line2);font-size:12.5px;color:var(--ink2);line-height:1.6}
+.note.good{background:var(--good-soft);color:var(--green)}
+.note.warn{background:var(--warn-soft);color:#a8801f}
+.note.blue{background:var(--blue-soft);color:var(--blue)}
+.hr{height:1px;background:var(--line2);border:0;margin:15px 0}
+
+/* item editor rows */
+.itemtbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.itemtbl th{background:var(--panel2);padding:8px 7px;font-size:10.5px;text-transform:uppercase;color:var(--ink2);
+  font-weight:700;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.itemtbl td{padding:4px 5px;border-bottom:1px solid var(--line2)}
+.itemtbl input,.itemtbl select{width:100%;height:32px;border:1px solid var(--line);border-radius:7px;
+  padding:0 7px;font-size:12px;background:var(--panel);font-family:var(--sans)}
+.itemtbl input.num{font-family:var(--mono);text-align:right}
+.itemtbl input:focus,.itemtbl select:focus{border-color:var(--brand);outline:none}
+.irow-del{width:30px;height:30px;border:none;background:var(--bad-soft);color:var(--bad);border-radius:7px;cursor:pointer}
+
+/* PDF import split screen */
+.pdfsplit{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:64vh}
+@media(max-width:880px){.pdfsplit{grid-template-columns:1fr;height:auto}}
+.pdfpane{border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;background:var(--panel2)}
+.pdfpane .ph{padding:9px 13px;background:var(--panel);border-bottom:1px solid var(--line);font-size:12.5px;
+  font-weight:700;color:var(--ink2);display:flex;align-items:center;gap:7px}
+.pdfpane .pc{flex:1;overflow:auto;padding:10px}
+.pdfcanvas-wrap{display:flex;flex-direction:column;gap:10px;align-items:center}
+.pdfcanvas-wrap canvas{max-width:100%;box-shadow:var(--shadow);border-radius:6px}
+.dropzone{border:2px dashed #c2cfdf;border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;
+  background:var(--panel2);transition:.15s}
+.dropzone:hover,.dropzone.drag{border-color:var(--brand);background:var(--brand-soft)}
+.dropzone i{font-size:46px;color:var(--brand);opacity:.7}
+.fileitem{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:9px;font-size:12.5px;margin-bottom:6px}
+.fileitem .nm{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fileitem .st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+
+/* toast / fab */
+.toasts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:200;display:flex;
+  flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--brand);color:#fff;padding:11px 18px;border-radius:11px;box-shadow:var(--shadow-lg);
+  font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transition:.3s;max-width:84vw}
+.toast.good{background:var(--good)}.toast.bad{background:var(--bad)}.toast.warn{background:var(--warn)}
+.fabs{position:fixed;right:22px;bottom:22px;z-index:60;display:flex;flex-direction:column;gap:11px;align-items:flex-end}
+.fab{width:50px;height:50px;border-radius:15px;border:none;color:#fff;font-size:20px;box-shadow:var(--shadow-lg);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.fab:hover{transform:translateY(-2px) scale(1.04)}
+.fab.add{background:var(--brand)}.fab.save{background:var(--good)}.fab.ana{background:var(--purple)}
+.fab.top{background:#fff;color:var(--ink2);width:44px;height:44px;font-size:17px;border:1px solid var(--line)}
+
+/* misc */
+.pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.pill{padding:6px 13px;border-radius:20px;border:1px solid var(--line);background:var(--panel);font-size:12.5px;
+  font-weight:600;cursor:pointer;color:var(--ink2)}
+.pill.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.rptcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.rptcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;
+  box-shadow:var(--shadow);cursor:pointer;transition:.15s}
+.rptcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--brand2)}
+.rptcard .ic{width:44px;height:44px;border-radius:11px;background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:11px}
+.rptcard h4{font-size:14.5px;font-weight:700;margin-bottom:4px}
+.rptcard p{font-size:12px;color:var(--ink3);line-height:1.5}
+.bar{height:7px;background:var(--line2);border-radius:4px;overflow:hidden}
+.bar>div{height:100%;background:var(--brand);border-radius:4px}
+.diff-add{background:var(--good-soft)} .diff-mod{background:var(--warn-soft)} .diff-del{background:var(--bad-soft)}
+.actlog{display:flex;flex-direction:column}
+.actrow{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line2);font-size:13px}
+.actrow .ai{width:34px;height:34px;border-radius:9px;background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.actrow .at{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-left:auto;white-space:nowrap}
+@media(max-width:680px){
+  .main{padding:14px 12px 90px;margin-top:calc(var(--headh) + var(--rib1h) + var(--rib2h) + 80px)}
+  .hdr .gsearch{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="hdr">
+  <div class="brand"><div class="mk"><i class="bi bi-diagram-3-fill"></i></div>
+    <div><b>VRT BOM Management</b><span class="ai">AI</span></div></div>
+  <div class="gsearch"><i class="bi bi-search"></i>
+    <input id="globalSearch" placeholder="搜尋 Search…" oninput="onGlobalSearch(this.value)"></div>
+  <div class="sp"></div>
+  <div class="cloudtag" id="cloudTag"><span class="dot"></span><span id="cloudTxt">Local</span></div>
+  <button class="ic" onclick="openTelegram()" title="Telegram"><i class="bi bi-send"></i></button>
+  <button class="ic" onclick="openBackup()" title="Backup"><i class="bi bi-hdd"></i></button>
+  <div class="langs" id="langs">
+    <button data-l="zh" class="on" onclick="setLang('zh')">繁</button>
+    <button data-l="en" onclick="setLang('en')">EN</button>
+    <button data-l="km" onclick="setLang('km')">ខ្មែរ</button>
+  </div>
+</header>
+
+<!-- ===== RIBBON 1 (tabs) ===== -->
+<nav class="rib1" id="rib1"></nav>
+
+<!-- ===== RIBBON 2 (contextual sticky toolbar) ===== -->
+<div class="rib2" id="rib2"></div>
+
+<!-- ===== MAIN ===== -->
+<main class="main" id="main"></main>
+
+<!-- ===== OVERLAYS ===== -->
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
+<div class="toasts" id="toasts"></div>
+<div class="fabs" id="fabs"></div>
+
+<script id="seedData" type="application/json">[{"customer":"ADI","styleNo":"1504","sizeRange":"","baseSize":"1SIZE","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0888","desc":"9.2OZ 60%Polyester 40%Cotton Twill For Main Body","color":"#9680 White","width":"72\"","qtyPcs":1.77,"qtyDozen":21.24,"unit":"Yards"},{"no":2,"category":"Trim","item":"Dome Snap Cap","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Dome Snap Socket","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Dome Snap Stud","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":5,"category":"Trim","item":"Dome Snap Post","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":6,"category":"Trim","item":"ADI Main Label","desc":"At Center Back Neck","color":"White","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":7,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.051,"qtyDozen":0.612,"unit":"Cone"},{"no":8,"category":"Trim","item":"Master Polybag","desc":"Master Polybag","color":"Clear","width":"85x85","qtyPcs":0.056,"qtyDozen":0.667,"unit":"Pcs"}]},{"customer":"ADI","styleNo":"1504REDCLR","sizeRange":"","baseSize":"1SIZE","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0888","desc":"9.2OZ 60%Polyester 40%Cotton Twill For Main Body","color":"#9680 White","width":"72\"","qtyPcs":1.77,"qtyDozen":21.24,"unit":"Yards"},{"no":2,"category":"Contrast Fabric","item":"Contrast Fabric-TCF0823","desc":"6.14OZ 100%Polyester For Collar","color":"K797 Red","width":"66\"","qtyPcs":0.035,"qtyDozen":0.42,"unit":"Yards"},{"no":3,"category":"Trim","item":"Dome Snap Cap","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Dome Snap Socket","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":5,"category":"Trim","item":"Dome Snap Stud","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":6,"category":"Trim","item":"Dome Snap Post","desc":"At Center front Closure","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":7,"category":"Trim","item":"ADI Main Label","desc":"At Center Back Neck","color":"White","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":8,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.049,"qtyDozen":0.588,"unit":"Cone"},{"no":9,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Contrast","width":"Tex40","qtyPcs":0.002,"qtyDozen":0.024,"unit":"Cone"},{"no":10,"category":"Trim","item":"Master Polybag","desc":"Master Polybag","color":"Clear","width":"85x85","qtyPcs":0.056,"qtyDozen":0.667,"unit":"Pcs"}]},{"customer":"ADI","styleNo":"1744SS","sizeRange":"XXS-5XL","baseSize":"L","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0824","desc":"6.14OZ-100%Polyester For Main Body","color":"#K796 Maroon","width":"66\"","qtyPcs":2.995,"qtyDozen":35.94,"unit":"Yards"},{"no":2,"category":"Trim","item":"ADI Main Label","desc":"At Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.062,"qtyDozen":0.744,"unit":"Cons"},{"no":4,"category":"Trim","item":"Master Poly Bag","desc":"Master Poly Bag","color":"Clear","width":"85CM X 85CM","qtyPcs":0.028,"qtyDozen":0.333,"unit":"Pcs"}]},{"customer":"ADI","styleNo":"401K","sizeRange":"XS-6XL","baseSize":"L","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0164","desc":"7.3OZ 100% Polyester For Main Body","color":"#GP300 White","width":"66\"","qtyPcs":1.82,"qtyDozen":21.84,"unit":"Yards"},{"no":2,"category":"Trim","item":"ADI Main Label","desc":"At Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Knot Button","desc":"At Center Front Closure","color":"DTM Body","width":"","qtyPcs":10.0,"qtyDozen":120.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.065,"qtyDozen":0.78,"unit":"Cons"},{"no":5,"category":"Trim","item":"Master Poly Bag","desc":"Master Poly Bag","color":"Clear","width":"85CM X 85CM","qtyPcs":0.021,"qtyDozen":0.25,"unit":"Pcs"}]},{"customer":"ADI","styleNo":"500BWHTMK","sizeRange":"","baseSize":"XL","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0004","desc":"7.1OZ 100%Polyester-For Main Body","color":"#ALSCO WHITE","width":"64 5\"","qtyPcs":1.95,"qtyDozen":23.4,"unit":"Yards"},{"no":2,"category":"Trim","item":"Plastic Button","desc":"4Hole 30L Plastic Button At Center Front Closure","color":"CLEAR","width":"30L","qtyPcs":10.0,"qtyDozen":120.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"ADI Main Label","desc":"At Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.065,"qtyDozen":0.78,"unit":"Cone"}]},{"customer":"ADI","styleNo":"500K","sizeRange":"XS-6XL","baseSize":"L","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0004","desc":"7.1OZ-100% Polyester For Main Body","color":"#Alsco White","width":"64.5\"","qtyPcs":1.82,"qtyDozen":21.84,"unit":"Yards"},{"no":2,"category":"Trim","item":"ADI Main Label","desc":"At Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Knot Button","desc":"At Center Front Closure","color":"DTM Body","width":"","qtyPcs":10.0,"qtyDozen":120.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.065,"qtyDozen":0.78,"unit":"Cons"},{"no":5,"category":"Trim","item":"Master Poly Bag","desc":"Master Poly Bag","color":"Clear","width":"85CM X 85CM","qtyPcs":0.021,"qtyDozen":0.25,"unit":"Pcs"}]},{"customer":"ADI","styleNo":"7522BLK","sizeRange":"28.5\"W X 34.5\"H","baseSize":"","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0242 6.1OZ-100%Polyester For Main Body","desc":"#K385 Black","color":"65 5\"","width":"0.500Yards","qtyPcs":6.0,"qtyDozen":0.0,"unit":"Yards"},{"no":2,"category":"Trim","item":"Satin Care Label","desc":"WEARER'S LEFT EDGE, 3\" FROM TIE","color":"","width":"32mm","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Flat Tie-1cm","desc":"For Waist Tie","color":"Black","width":"1cm","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Yards"},{"no":4,"category":"Trim","item":"Thread Tex40/3000M Sewing Thread","desc":"DTM Body","color":"Tex40","width":"0.020Cones","qtyPcs":0.24,"qtyDozen":0.0,"unit":"Cones"},{"no":5,"category":"Trim","item":"Master Poly Bag","desc":"Master Poly Bag","color":"Clear","width":"85CM X 85CM","qtyPcs":0.008,"qtyDozen":0.1,"unit":"Pcs"}]},{"customer":"LECHNER","styleNo":"LS101LSYGY","sizeRange":"XS-6XL","baseSize":"L","dateModified":"24 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-A","desc":"4.5OZ 65%Polyester 35%Cotton For Main Body","color":"9885 Navy","width":"58.5\"","qtyPcs":1.67,"qtyDozen":20.04,"unit":"Yards"},{"no":2,"category":"Contrast Fabric","item":"Contrast Fabric-B","desc":"6.14oz For Contrast Tape","color":"Fhoss Yellow","width":"66\"","qtyPcs":0.2,"qtyDozen":2.4,"unit":"Yards"},{"no":3,"category":"Trim","item":"Reflective Tape-1/2\" (same as 6137)","desc":"Sew On Center Yellow Tape","color":"Grey","width":"1/2\"","qtyPcs":3.75,"qtyDozen":45.0,"unit":"Yards"},{"no":4,"category":"Trim","item":"Lechner Main Label","desc":"At Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":5,"category":"Trim","item":"Metal Snap Prong","desc":"At Top of Center Front Clouser","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":6,"category":"Trim","item":"Metal Snap Socket","desc":"At Top of Center Front Clouser","color":"Silver","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":7,"category":"Trim","item":"Metal Snap Stud","desc":"At Top of Center Front Clouser","color":"Silver","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":8,"category":"Trim","item":"Plastic Button-4H-20L","desc":"At Center Front Clouser, Cuffs & Pkts Opening","color":"Black","width":"20L","qtyPcs":10.0,"qtyDozen":120.0,"unit":"Pcs"},{"no":9,"category":"Trim","item":"Collar Stay","desc":"At Collar Point End","color":"Clear","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":10,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.055,"qtyDozen":0.66,"unit":"Cone"},{"no":11,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread For Yellow Tape","color":"DTM Yellow Tape","width":"Tex40","qtyPcs":0.012,"qtyDozen":0.144,"unit":"Cone"},{"no":12,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread For Reflective Tape","color":"DTM Reflective Tape","width":"Tex40","qtyPcs":0.012,"qtyDozen":0.144,"unit":"Cone"}]},{"customer":"LECHNER","styleNo":"LS101SSYGY","sizeRange":"XS-6XL","baseSize":"L","dateModified":"24 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-A","desc":"4.5OZ 65%Polyester 35%Cotton For Main Body","color":"9885 Navy","width":"58.5\"","qtyPcs":1.33,"qtyDozen":15.96,"unit":"Yards"},{"no":2,"category":"Contrast Fabric","item":"Contrast Fabric-B","desc":"6.14oz For Contrast Tape","color":"Fhoss Yellow","width":"66\"","qtyPcs":0.163,"qtyDozen":1.956,"unit":"Yards"},{"no":3,"category":"Trim","item":"Reflective Tape-1/2\" (same as 6137)","desc":"Sew On Center Yellow Tape","color":"Grey","width":"1/2\"","qtyPcs":3.056,"qtyDozen":36.667,"unit":"Yards"},{"no":4,"category":"Trim","item":"Lechner Main Label","desc":"At Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":5,"category":"Trim","item":"Metal Snap Prong","desc":"At Top of Center Front Clouser","color":"Silver","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":6,"category":"Trim","item":"Metal Snap Socket","desc":"At Top of Center Front Clouser","color":"Silver","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":7,"category":"Trim","item":"Metal Snap Stud","desc":"At Top of Center Front Clouser","color":"Silver","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":8,"category":"Trim","item":"Plastic Button-4H-20L","desc":"At Center Front Clouser & Pkts Opening","color":"Black","width":"20L","qtyPcs":8.0,"qtyDozen":96.0,"unit":"Pcs"},{"no":9,"category":"Trim","item":"Collar Stay","desc":"At Collar Point End","color":"Clear","width":"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":10,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.05,"qtyDozen":0.6,"unit":"Cone"},{"no":11,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread For Yellow Tape","color":"DTM Yellow Tape","width":"Tex40","qtyPcs":0.01,"qtyDozen":0.12,"unit":"Cone"},{"no":12,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread For Reflective Tape","color":"DTM Reflective Tape","width":"Tex40","qtyPcs":0.01,"qtyDozen":0.12,"unit":"Cone"}]},{"customer":"ADI","styleNo":"O4064K","sizeRange":"XS-6XL","baseSize":"3XL","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0837","desc":"6.14OZ 100%Polyester For Main Body","color":"#K594 Forest Green","width":"66\"","qtyPcs":1.413,"qtyDozen":16.956,"unit":"Yards"},{"no":2,"category":"Trim","item":"ADI Print Label","desc":"1\" Below Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Metal Snap Prong","desc":"At Center Front Closer","color":"Silver","width":"","qtyPcs":8.0,"qtyDozen":96.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Metal Snap Socket","desc":"At Center Front Closer","color":"Silver","width":"","qtyPcs":4.0,"qtyDozen":48.0,"unit":"Pcs"},{"no":5,"category":"Trim","item":"Metal Snap Stud","desc":"At Center Front Closer","color":"Silver","width":"","qtyPcs":4.0,"qtyDozen":48.0,"unit":"Pcs"},{"no":6,"category":"Rib","item":"Rib Cuff","desc":"At Sleeve Opening","color":"Navy","width":"3\"X9\"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":7,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.062,"qtyDozen":0.744,"unit":"Cons"},{"no":8,"category":"Trim","item":"Master Poly Bag","desc":"Master Poly Bag","color":"Clear","width":"85CM X 85CM","qtyPcs":0.021,"qtyDozen":0.25,"unit":"Pcs"}]},{"customer":"ADI","styleNo":"O5064K","sizeRange":"XS-6XL","baseSize":"3XL","dateModified":"16 June 2026","items":[{"no":1,"category":"Main Fabric","item":"Main Fabric-TCF0889","desc":"6.14OZ-100%Polyester For Main Body","color":"#K258 SANDALWOOD","width":"66\"","qtyPcs":1.603,"qtyDozen":19.236,"unit":"Yards"},{"no":2,"category":"Trim","item":"ADI Print Label","desc":"1\" Below Center Back Neck","color":"","width":"","qtyPcs":1.0,"qtyDozen":12.0,"unit":"Pcs"},{"no":3,"category":"Trim","item":"Metal Snap Prong","desc":"At Center Front Closer","color":"Silver","width":"","qtyPcs":10.0,"qtyDozen":120.0,"unit":"Pcs"},{"no":4,"category":"Trim","item":"Metal Snap Socket","desc":"At Center Front Closer","color":"Silver","width":"","qtyPcs":5.0,"qtyDozen":60.0,"unit":"Pcs"},{"no":5,"category":"Trim","item":"Metal Snap Stud","desc":"At Center Front Closer","color":"Silver","width":"","qtyPcs":5.0,"qtyDozen":60.0,"unit":"Pcs"},{"no":6,"category":"Rib","item":"Rib Cuff","desc":"At Sleeve Opening","color":"Navy","width":"3\"X9\"","qtyPcs":2.0,"qtyDozen":24.0,"unit":"Pcs"},{"no":7,"category":"Trim","item":"Thread Tex40/3000M","desc":"Sewing Thread","color":"DTM Body","width":"Tex40","qtyPcs":0.063,"qtyDozen":0.756,"unit":"Cons"},{"no":8,"category":"Trim","item":"Master Poly Bag","desc":"Master Poly Bag","color":"Clear","width":"85CM X 85CM","qtyPcs":0.021,"qtyDozen":0.25,"unit":"Pcs"}]}]</script>
+<script>
+'use strict';
+/* ====================================================================
+   VRT BOM Management AI · v2
+   Single-file offline-first ERP — Top Ribbon UI + AI PDF Import
+   ==================================================================== */
+
+/* ---------------- i18n ---------------- */
+const I18N = {
+  zh:{
+    'app.title':'VRT BOM 智慧管理系統',
+    'tab.dashboard':'儀表板','tab.bom':'BOM','tab.material':'物料','tab.analysis':'分析',
+    'tab.reports':'報表','tab.import':'匯入','tab.settings':'設定','tab.help':'說明',
+    'rg.file':'檔案','rg.edit':'編輯','rg.version':'版本','rg.io':'匯入匯出','rg.tool':'工具',
+    'rg.view':'檢視','rg.ai':'AI 智慧','rg.cloud':'雲端','rg.report':'報表','rg.sys':'系統',
+    'b.new':'新增','b.edit':'編輯','b.del':'刪除','b.dup':'複製','b.save':'儲存',
+    'b.undo':'復原','b.redo':'重做','b.version':'版本','b.compare':'比對','b.export':'匯出',
+    'b.import':'匯入','b.pdf':'PDF 匯入','b.excel':'Excel 匯入','b.print':'列印','b.analysis':'分析',
+    'b.telegram':'Telegram','b.cloudup':'上傳雲端','b.clouddn':'下載雲端','b.setting':'設定',
+    'b.refresh':'重新整理','b.explosion':'展料','b.material':'物料總覽','b.cost':'成本','b.backup':'備份',
+    'b.restore':'還原','b.wipe':'清除全部','b.pdfcompare':'PDF 比對','b.report':'產生報表',
+    'kpi.customer':'客戶數','kpi.styles':'款式總數','kpi.main':'主布種類','kpi.contrast':'配布種類',
+    'kpi.trim':'輔料項目','kpi.total':'物料總筆數','kpi.today':'今日新增','kpi.week':'本週',
+    'kpi.month':'本月','kpi.year':'本年','kpi.latest':'最後更新','kpi.pending':'待審核',
+    'kpi.version':'版本總數','kpi.pdf':'PDF 匯入','kpi.excel':'Excel 匯入',
+    'col.style':'款號','col.styleName':'款名','col.customer':'客戶','col.desc':'描述','col.items':'項目',
+    'col.status':'狀態','col.updated':'更新時間','col.cat':'類別','col.material':'物料','col.qty':'用量',
+    'col.unit':'單位','col.width':'幅寬','col.color':'顏色','col.supplier':'供應商','col.waste':'損耗%',
+    'common.search':'搜尋','common.all':'全部','common.clear':'清除','common.cancel':'取消','common.ok':'確定',
+    'common.save':'儲存','common.close':'關閉','common.yes':'是','common.no':'否',
+    'msg.saved':'已儲存','msg.deleted':'已刪除','msg.imported':'匯入完成','msg.exported':'已匯出','msg.nodata':'尚無資料',
+    'dash.title':'營運儀表板','dash.sub':'BOM 全局即時概況',
+    'boms.title':'BOM 管理','boms.sub':'款式物料表 · 版本控制','boms.new':'新增 BOM',
+    'mat.title':'物料總覽','mat.sub':'跨款式物料明細 · 支援十萬筆','ana.title':'用料分析','ana.sub':'物料與客戶分佈',
+    'rep.title':'報表中心','rep.sub':'產生並匯出各式報表','imp.title':'AI 智慧匯入','imp.sub':'PDF / Excel 自動辨識 BOM',
+    'set.title':'系統設定','set.sub':'公司 · 通知 · 雲端','help.title':'使用說明','help.sub':'功能導覽與快速上手'
+  },
+  en:{
+    'app.title':'VRT BOM Management AI',
+    'tab.dashboard':'Dashboard','tab.bom':'BOM','tab.material':'Material','tab.analysis':'Analysis',
+    'tab.reports':'Reports','tab.import':'Import','tab.settings':'Settings','tab.help':'Help',
+    'rg.file':'File','rg.edit':'Edit','rg.version':'Version','rg.io':'Import/Export','rg.tool':'Tools',
+    'rg.view':'View','rg.ai':'AI','rg.cloud':'Cloud','rg.report':'Reports','rg.sys':'System',
+    'b.new':'New','b.edit':'Edit','b.del':'Delete','b.dup':'Duplicate','b.save':'Save',
+    'b.undo':'Undo','b.redo':'Redo','b.version':'Version','b.compare':'Compare','b.export':'Export',
+    'b.import':'Import','b.pdf':'PDF Import','b.excel':'Excel Import','b.print':'Print','b.analysis':'Analysis',
+    'b.telegram':'Telegram','b.cloudup':'Upload','b.clouddn':'Download','b.setting':'Settings',
+    'b.refresh':'Refresh','b.explosion':'Explosion','b.material':'Materials','b.cost':'Cost','b.backup':'Backup',
+    'b.restore':'Restore','b.wipe':'Wipe All','b.pdfcompare':'PDF Compare','b.report':'Generate',
+    'kpi.customer':'Customers','kpi.styles':'Total Styles','kpi.main':'Main Fabrics','kpi.contrast':'Contrast',
+    'kpi.trim':'Trim Items','kpi.total':'Total Materials','kpi.today':'Today','kpi.week':'This Week',
+    'kpi.month':'This Month','kpi.year':'This Year','kpi.latest':'Last Update','kpi.pending':'Pending',
+    'kpi.version':'Versions','kpi.pdf':'PDF Imported','kpi.excel':'Excel Imported',
+    'col.style':'Style','col.styleName':'Name','col.customer':'Customer','col.desc':'Description','col.items':'Items',
+    'col.status':'Status','col.updated':'Updated','col.cat':'Category','col.material':'Material','col.qty':'Qty',
+    'col.unit':'Unit','col.width':'Width','col.color':'Color','col.supplier':'Supplier','col.waste':'Waste%',
+    'common.search':'Search','common.all':'All','common.clear':'Clear','common.cancel':'Cancel','common.ok':'OK',
+    'common.save':'Save','common.close':'Close','common.yes':'Yes','common.no':'No',
+    'msg.saved':'Saved','msg.deleted':'Deleted','msg.imported':'Imported','msg.exported':'Exported','msg.nodata':'No data',
+    'dash.title':'Operations Dashboard','dash.sub':'Real-time BOM overview',
+    'boms.title':'BOM Management','boms.sub':'Style materials · version control','boms.new':'New BOM',
+    'mat.title':'Material Overview','mat.sub':'Cross-style materials · 100k records','ana.title':'Usage Analysis','ana.sub':'Material & customer distribution',
+    'rep.title':'Report Center','rep.sub':'Generate & export reports','imp.title':'AI Smart Import','imp.sub':'Auto-recognize BOM from PDF/Excel',
+    'set.title':'Settings','set.sub':'Company · notify · cloud','help.title':'Help','help.sub':'Feature guide'
+  },
+  km:{
+    'app.title':'ប្រព័ន្ធគ្រប់គ្រង BOM VRT',
+    'tab.dashboard':'ផ្ទាំង','tab.bom':'BOM','tab.material':'សម្ភារៈ','tab.analysis':'វិភាគ',
+    'tab.reports':'របាយការណ៍','tab.import':'នាំចូល','tab.settings':'ការកំណត់','tab.help':'ជំនួយ',
+    'rg.file':'ឯកសារ','rg.edit':'កែ','rg.version':'កំណែ','rg.io':'នាំចូល/ចេញ','rg.tool':'ឧបករណ៍',
+    'rg.view':'មើល','rg.ai':'AI','rg.cloud':'ពពក','rg.report':'របាយការណ៍','rg.sys':'ប្រព័ន្ធ',
+    'b.new':'ថ្មី','b.edit':'កែ','b.del':'លុប','b.dup':'ចម្លង','b.save':'រក្សាទុក',
+    'b.undo':'មិនធ្វើ','b.redo':'ធ្វើឡើងវិញ','b.version':'កំណែ','b.compare':'ប្រៀបធៀប','b.export':'នាំចេញ',
+    'b.import':'នាំចូល','b.pdf':'នាំចូល PDF','b.excel':'នាំចូល Excel','b.print':'បោះពុម្ព','b.analysis':'វិភាគ',
+    'b.telegram':'Telegram','b.cloudup':'ផ្ទុកឡើង','b.clouddn':'ទាញយក','b.setting':'កំណត់',
+    'b.refresh':'ផ្ទុកឡើងវិញ','b.explosion':'បំបែក','b.material':'សម្ភារៈ','b.cost':'តម្លៃ','b.backup':'បម្រុង',
+    'b.restore':'ស្ដារ','b.wipe':'លុបទាំងអស់','b.pdfcompare':'ប្រៀបធៀប PDF','b.report':'បង្កើត',
+    'kpi.customer':'អតិថិជន','kpi.styles':'ម៉ូដែលសរុប','kpi.main':'ក្រណាត់មេ','kpi.contrast':'ក្រណាត់ផ្សេង',
+    'kpi.trim':'គ្រឿងបន្លាស់','kpi.total':'សម្ភារៈសរុប','kpi.today':'ថ្ងៃនេះ','kpi.week':'សប្ដាហ៍នេះ',
+    'kpi.month':'ខែនេះ','kpi.year':'ឆ្នាំនេះ','kpi.latest':'ធ្វើបច្ចុប្បន្នភាព','kpi.pending':'រង់ចាំ',
+    'kpi.version':'កំណែ','kpi.pdf':'PDF នាំចូល','kpi.excel':'Excel នាំចូល',
+    'col.style':'ម៉ូដែល','col.styleName':'ឈ្មោះ','col.customer':'អតិថិជន','col.desc':'ការពិពណ៌នា','col.items':'ធាតុ',
+    'col.status':'ស្ថានភាព','col.updated':'ធ្វើបច្ចុប្បន្នភាព','col.cat':'ប្រភេទ','col.material':'សម្ភារៈ','col.qty':'បរិមាណ',
+    'col.unit':'ឯកតា','col.width':'ទទឹង','col.color':'ពណ៌','col.supplier':'អ្នកផ្គត់ផ្គង់','col.waste':'ខ្ជះខ្ជាយ%',
+    'common.search':'ស្វែងរក','common.all':'ទាំងអស់','common.clear':'សម្អាត','common.cancel':'បោះបង់','common.ok':'យល់ព្រម',
+    'common.save':'រក្សាទុក','common.close':'បិទ','common.yes':'បាទ','common.no':'ទេ',
+    'msg.saved':'បានរក្សាទុក','msg.deleted':'បានលុប','msg.imported':'បាននាំចូល','msg.exported':'បាននាំចេញ','msg.nodata':'គ្មានទិន្នន័យ',
+    'dash.title':'ផ្ទាំងប្រតិបត្តិការ','dash.sub':'ទិដ្ឋភាព BOM ពេលវេលាជាក់ស្ដែង',
+    'boms.title':'គ្រប់គ្រង BOM','boms.sub':'សម្ភារៈម៉ូដែល · កំណែ','boms.new':'BOM ថ្មី',
+    'mat.title':'ទិដ្ឋភាពសម្ភារៈ','mat.sub':'សម្ភារៈឆ្លងម៉ូដែល','ana.title':'វិភាគការប្រើ','ana.sub':'ការបែងចែកសម្ភារៈ',
+    'rep.title':'មជ្ឈមណ្ឌលរបាយការណ៍','rep.sub':'បង្កើត និងនាំចេញ','imp.title':'នាំចូលឆ្លាតវៃ','imp.sub':'ស្គាល់ BOM ពី PDF/Excel',
+    'set.title':'ការកំណត់','set.sub':'ក្រុមហ៊ុន · ជូនដំណឹង · ពពក','help.title':'ជំនួយ','help.sub':'មគ្គុទ្ទេសក៍'
+  }
+};
+let LANG = (function(){ try{ return localStorage.getItem('vrt_bom2_lang')||'zh'; }catch(e){ return 'zh'; } })();
+function t(k){ return (I18N[LANG]&&I18N[LANG][k]) || (I18N.zh[k]) || k; }
+function setLang(l){ LANG=l; try{ localStorage.setItem('vrt_bom2_lang',l); }catch(e){}
+  document.documentElement.lang = l==='zh'?'zh-Hant':(l==='km'?'km':'en');
+  document.querySelectorAll('#langs button').forEach(b=>b.classList.toggle('on',b.dataset.l===l));
+  buildRibbon1(); renderRibbon2(); render();
+}
+
+/* ---------------- Categories & Units ---------------- */
+const CATS = ['Main Fabric','Contrast Fabric','Lining','Pocketing','Rib','Interlining','Trim','Thread','Packing','Others'];
+const CAT_CLASS = {'Main Fabric':'cMainFabric','Contrast Fabric':'cContrast','Lining':'cLining','Pocketing':'cPocketing',
+  'Rib':'cRib','Interlining':'cInterlining','Trim':'cTrim','Thread':'cThread','Packing':'cPacking','Others':'cOthers'};
+const CAT_LABEL = {
+  zh:{'Main Fabric':'主布','Contrast Fabric':'配布','Lining':'裡布','Pocketing':'袋布','Rib':'羅紋',
+      'Interlining':'襯','Trim':'輔料','Thread':'車線','Packing':'包裝','Others':'其他'},
+  en:{'Main Fabric':'Main Fabric','Contrast Fabric':'Contrast','Lining':'Lining','Pocketing':'Pocketing','Rib':'Rib',
+      'Interlining':'Interlining','Trim':'Trim','Thread':'Thread','Packing':'Packing','Others':'Others'},
+  km:{'Main Fabric':'ក្រណាត់មេ','Contrast Fabric':'ក្រណាត់ផ្សេង','Lining':'ស្រទាប់ក្នុង','Pocketing':'ហោប៉ៅ','Rib':'Rib',
+      'Interlining':'ស្រទាប់','Trim':'គ្រឿងបន្លាស់','Thread':'អំបោះ','Packing':'វេចខ្ចប់','Others':'ផ្សេងៗ'}
+};
+function catLabel(c){ return (CAT_LABEL[LANG]&&CAT_LABEL[LANG][c])||c; }
+const UNITS = ['Yards','Meter','PCS','Pair','Cone','Roll','Kg','Gram','Box','Carton','Set','Dozen'];
+
+/* keyword → category map (AI auto-classification) */
+const CLASSIFY_RULES = [
+  [/contrast/i,'Contrast Fabric'],
+  [/\brib\b|ribbing/i,'Rib'],
+  [/pocket/i,'Pocketing'],
+  [/inter ?lining|fusible|fusing/i,'Interlining'],
+  [/lining/i,'Lining'],
+  [/main ?fabric|body ?fabric|shell ?fabric|self ?fabric/i,'Main Fabric'],
+  [/thread|sewing thread/i,'Thread'],
+  [/poly ?bag|polybag|carton|hang ?tag|hangtag|sticker|barcode|tissue|box(?!er)/i,'Packing'],
+  [/label|button|snap|zipper|velcro|elastic|reflective|tape|drawcord|drawstring|eyelet|rivet|cord|webbing|buckle|hook|patch|emblem|stay|prong|socket|stud/i,'Trim']
+];
+function classifyItem(name){
+  const s=String(name||'');
+  for(const [re,cat] of CLASSIFY_RULES){ if(re.test(s)) return cat; }
+  return 'Others';
+}
+/* unit auto-detect from free text */
+function detectUnit(txt){
+  const s=String(txt||'').toLowerCase();
+  if(/\byard|yds?\b/.test(s))return'Yards'; if(/\bmeter|metre|\bm\b/.test(s))return'Meter';
+  if(/\bpair|prs?\b/.test(s))return'Pair'; if(/\bcone/.test(s))return'Cone';
+  if(/\broll/.test(s))return'Roll'; if(/\bkg|kilo/.test(s))return'Kg'; if(/\bgram|gsm|\bg\b/.test(s))return'Gram';
+  if(/\bbox/.test(s))return'Box'; if(/\bcarton|ctn/.test(s))return'Carton'; if(/\bset/.test(s))return'Set';
+  if(/\bdoz|dz/.test(s))return'Dozen'; if(/\bpcs?\b|piece/.test(s))return'PCS';
+  return '';
+}
+
+/* ====================================================================
+   RIBBON CONFIG — primary tabs + contextual secondary toolbar
+   ==================================================================== */
+const TABS = [
+  {id:'dashboard', icon:'bi-grid-1x2-fill', label:'tab.dashboard'},
+  {id:'bom',       icon:'bi-list-columns-reverse', label:'tab.bom'},
+  {id:'material',  icon:'bi-boxes', label:'tab.material'},
+  {id:'analysis',  icon:'bi-pie-chart-fill', label:'tab.analysis'},
+  {id:'reports',   icon:'bi-file-earmark-bar-graph', label:'tab.reports'},
+  {id:'import',    icon:'bi-robot', label:'tab.import'},
+  {id:'settings',  icon:'bi-gear-fill', label:'tab.settings'},
+  {id:'help',      icon:'bi-question-circle', label:'tab.help'}
+];
+/* each toolbar = array of groups; group = {label, btns:[{i,l,fn,cls,dis}]} */
+function ribbonFor(tab){
+  switch(tab){
+    case 'dashboard': return [
+      {l:'rg.view', b:[
+        {i:'bi-arrow-clockwise',l:'b.refresh',fn:'render()'},
+        {i:'bi-plus-square-fill',l:'b.new',fn:'openBomEditor()',cls:'primary'},
+        {i:'bi-pie-chart',l:'b.analysis',fn:"go('analysis')"}
+      ]},
+      {l:'rg.cloud', b:[
+        {i:'bi-cloud-upload',l:'b.cloudup',fn:'cloudPush()'},
+        {i:'bi-cloud-download',l:'b.clouddn',fn:'cloudPull()'},
+        {i:'bi-send',l:'b.telegram',fn:'openTelegram()'}
+      ]}
+    ];
+    case 'bom': return [
+      {l:'rg.file', b:[
+        {i:'bi-plus-square-fill',l:'b.new',fn:'openBomEditor()',cls:'primary'},
+        {i:'bi-pencil-square',l:'b.edit',fn:'editSelected()'},
+        {i:'bi-trash',l:'b.del',fn:'delSelected()',cls:'danger'},
+        {i:'bi-files',l:'b.dup',fn:'dupSelected()'}
+      ]},
+      {l:'rg.edit', b:[
+        {i:'bi-arrow-counterclockwise',l:'b.undo',fn:'undo()',dis:'!canUndo()'},
+        {i:'bi-arrow-clockwise',l:'b.redo',fn:'redo()',dis:'!canRedo()'}
+      ]},
+      {l:'rg.version', b:[
+        {i:'bi-clock-history',l:'b.version',fn:'versionSelected()'},
+        {i:'bi-vr',l:'b.compare',fn:"go('analysis');setTimeout(openVersionCompare,30)"}
+      ]},
+      {l:'rg.io', b:[
+        {i:'bi-filetype-pdf',l:'b.pdf',fn:"go('import')"},
+        {i:'bi-file-earmark-excel',l:'b.excel',fn:'pickExcel()'},
+        {i:'bi-download',l:'b.export',fn:'exportAll("xlsx")'},
+        {i:'bi-printer',l:'b.print',fn:'printCurrent()'}
+      ]},
+      {l:'rg.tool', b:[
+        {i:'bi-diagram-3',l:'b.explosion',fn:'openExplosion()'}
+      ]}
+    ];
+    case 'material': return [
+      {l:'rg.view', b:[
+        {i:'bi-arrow-clockwise',l:'b.refresh',fn:'render()'},
+        {i:'bi-funnel',l:'common.clear',fn:'clearMatFilter()'}
+      ]},
+      {l:'rg.io', b:[
+        {i:'bi-download',l:'b.export',fn:'exportMaterials()'},
+        {i:'bi-printer',l:'b.print',fn:'printMaterials()'}
+      ]}
+    ];
+    case 'analysis': return [
+      {l:'rg.view', b:[
+        {i:'bi-arrow-clockwise',l:'b.refresh',fn:'render()'},
+        {i:'bi-vr',l:'b.compare',fn:'openVersionCompare()'},
+        {i:'bi-diagram-3',l:'b.explosion',fn:'openExplosion()'},
+        {i:'bi-cash-stack',l:'b.cost',fn:'openCost()'}
+      ]}
+    ];
+    case 'reports': return [
+      {l:'rg.report', b:[
+        {i:'bi-file-earmark-spreadsheet',l:'b.report',fn:"go('reports')"},
+        {i:'bi-printer',l:'b.print',fn:'window.print()'}
+      ]},
+      {l:'rg.io', b:[
+        {i:'bi-filetype-json',l:'JSON',fn:'exportAll("json")'},
+        {i:'bi-filetype-csv',l:'CSV',fn:'exportAll("csv")'},
+        {i:'bi-file-earmark-excel',l:'Excel',fn:'exportAll("xlsx")'}
+      ]}
+    ];
+    case 'import': return [
+      {l:'rg.ai', b:[
+        {i:'bi-filetype-pdf',l:'b.pdf',fn:'pickPDF()',cls:'primary'},
+        {i:'bi-file-earmark-excel',l:'b.excel',fn:'pickExcel()'},
+        {i:'bi-vr',l:'b.pdfcompare',fn:'openPdfCompare()'}
+      ]},
+      {l:'rg.io', b:[
+        {i:'bi-filetype-json',l:'b.import',fn:'pickJSON()'},
+        {i:'bi-download',l:'b.export',fn:'exportAll("xlsx")'}
+      ]}
+    ];
+    case 'settings': return [
+      {l:'rg.sys', b:[
+        {i:'bi-save',l:'b.save',fn:'saveSettings()',cls:'primary'},
+        {i:'bi-hdd',l:'b.backup',fn:'openBackup()'},
+        {i:'bi-upload',l:'b.restore',fn:'pickBackup()'},
+        {i:'bi-trash',l:'b.wipe',fn:'wipeAll()',cls:'danger'}
+      ]},
+      {l:'rg.cloud', b:[
+        {i:'bi-send',l:'b.telegram',fn:'openTelegram()'},
+        {i:'bi-cloud-upload',l:'b.cloudup',fn:'cloudPush()'},
+        {i:'bi-cloud-download',l:'b.clouddn',fn:'cloudPull()'}
+      ]}
+    ];
+    case 'help': return [
+      {l:'rg.view', b:[ {i:'bi-grid-1x2',l:'tab.dashboard',fn:"go('dashboard')"} ]}
+    ];
+    default: return [];
+  }
+}
+/* ====================================================================
+   PART 2 — Helpers · Storage · Data model
+   ==================================================================== */
+function uid(p){ return (p||'id')+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function pad(n){ return n<10?'0'+n:''+n; }
+function nowISO(){ return new Date().toISOString(); }
+function localStamp(iso){ const d=iso?new Date(iso):new Date(); if(isNaN(d))return '';
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes()); }
+function localDate(iso){ const d=iso?new Date(iso):new Date(); if(isNaN(d))return '';
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function parseNum(v){ if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/[, ]/g,'')); return isNaN(n)?0:n; }
+function fmt(n,d){ n=parseNum(n); return n.toLocaleString('en-US',{minimumFractionDigits:d||0,maximumFractionDigits:d!=null?d:2}); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function startOfWeek(d){ d=new Date(d); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
+
+/* ---------------- Storage constants ---------------- */
+const LS_KEY='vrt_bom2_state', IDB_NAME='vrt_bom2_v1', IDB_STORE='kv', CHUNK_SIZE=5000;
+let DB={ customers:[], styles:[], settings:{}, activity:[], meta:{rev:0, pdfImported:0, excelImported:0} };
+let dirty=false, saveTimer=null;
+
+const DEFAULT_SETTINGS={
+  company:'Vantage River Textiles Co., Ltd.', companyZh:'萬泰紡織有限公司',
+  factory:'VRT Sihanoukville', dept:'Production', defaultCustomer:'ADI',
+  defaultWaste:3, defaultUnit:'Yards', defaultFabricCost:0, defaultTrimCost:0, defaultPackCost:0,
+  tgEnabled:false, tgProxy:'', tgChat:'', tgEvents:{create:true,update:true,delete:false,daily:false},
+  cloudProxy:'', autosave:true
+};
+
+/* ---------------- IndexedDB (chunked for large datasets) ---------------- */
+let idb=null;
+function openIDB(){ return new Promise(res=>{
+  try{ const r=indexedDB.open(IDB_NAME,1);
+    r.onupgradeneeded=e=>{ const d=e.target.result; if(!d.objectStoreNames.contains(IDB_STORE)) d.createObjectStore(IDB_STORE); };
+    r.onsuccess=e=>{ idb=e.target.result; res(idb); };
+    r.onerror=()=>{ idb=null; res(null); };
+  }catch(e){ res(null); } }); }
+function idbGet(k){ return new Promise(res=>{ if(!idb)return res(null);
+  try{ const rq=idb.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(k);
+    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>res(null); }catch(e){ res(null); } }); }
+function idbSet(k,v){ return new Promise(res=>{ if(!idb)return res(false);
+  try{ const rq=idb.transaction(IDB_STORE,'readwrite').objectStore(IDB_STORE).put(v,k);
+    rq.onsuccess=()=>res(true); rq.onerror=()=>res(false); }catch(e){ res(false); } }); }
+
+function markDirty(){ dirty=true; setCloudTag('dirty');
+  if(DB.settings.autosave){ clearTimeout(saveTimer); saveTimer=setTimeout(persist,700); } }
+
+async function persist(){
+  DB.meta.rev=(DB.meta.rev||0)+1; DB.meta.savedAt=nowISO();
+  const json=JSON.stringify(DB);
+  // IndexedDB first (handles large data); LocalStorage as fallback mirror
+  await idbSet('state',json);
+  try{ localStorage.setItem(LS_KEY, json.length<4500000?json:JSON.stringify({_idbOnly:true,meta:DB.meta})); }
+  catch(e){ try{ localStorage.setItem(LS_KEY, JSON.stringify({_idbOnly:true,meta:DB.meta})); }catch(_){} }
+  dirty=false; setCloudTag(DB.meta.lastSync?'synced':'local');
+}
+async function loadState(){
+  await openIDB();
+  let raw=await idbGet('state');
+  if(!raw){ try{ const ls=localStorage.getItem(LS_KEY); if(ls && ls.indexOf('_idbOnly')<0) raw=ls; }catch(e){} }
+  if(raw){ try{ const d=JSON.parse(raw);
+    DB=Object.assign({customers:[],styles:[],settings:{},activity:[],meta:{rev:0}}, d);
+    DB.meta=Object.assign({rev:0,pdfImported:0,excelImported:0},DB.meta);
+    DB.settings=Object.assign({},DEFAULT_SETTINGS,DB.settings); return true; }catch(e){} }
+  DB.settings=Object.assign({},DEFAULT_SETTINGS);
+  return false;
+}
+function setCloudTag(state){
+  const el=document.getElementById('cloudTag'), tx=document.getElementById('cloudTxt'); if(!el)return;
+  el.className='cloudtag'+(state==='synced'?' synced':state==='dirty'?' dirty':'');
+  tx.textContent = state==='synced'?'Synced':state==='dirty'?'Unsaved':'Saved · r'+(DB.meta.rev||0);
+}
+
+/* ---------------- Activity log ---------------- */
+function logAct(action,target){
+  DB.activity.unshift({ts:nowISO(),action,target:target||'',user:DB.settings.dept||'system'});
+  if(DB.activity.length>800) DB.activity.length=800;
+}
+
+/* ---------------- Undo / Redo (snapshot stacks) ---------------- */
+let UNDO=[], REDO=[];
+function snapshot(){ try{ UNDO.push(JSON.stringify({customers:DB.customers,styles:DB.styles}));
+  if(UNDO.length>40) UNDO.shift(); REDO.length=0; }catch(e){} }
+function canUndo(){ return UNDO.length>0; }
+function canRedo(){ return REDO.length>0; }
+function applySnap(s){ const d=JSON.parse(s); DB.customers=d.customers; DB.styles=d.styles; }
+function undo(){ if(!UNDO.length){ toast('無可復原','warn'); return; }
+  REDO.push(JSON.stringify({customers:DB.customers,styles:DB.styles}));
+  applySnap(UNDO.pop()); markDirty(); persist(); toast('已復原 Undo','good'); render(); renderRibbon2(); }
+function redo(){ if(!REDO.length){ toast('無可重做','warn'); return; }
+  UNDO.push(JSON.stringify({customers:DB.customers,styles:DB.styles}));
+  applySnap(REDO.pop()); markDirty(); persist(); toast('已重做 Redo','good'); render(); renderRibbon2(); }
+
+/* ---------------- Item / Style normalization ---------------- */
+function normItem(raw,idx){
+  const item = raw.item||raw.itemName||raw.Items||raw.name||raw.material||'';
+  let fabricCode=raw.fabricCode||'';
+  if(!fabricCode){ const fm=item.match(/(?:Main Fabric|Contrast Fabric|Fabric)[-\s]*([A-Za-z0-9.]+)/i); if(fm)fabricCode=fm[1]; }
+  const cat = raw.category||classifyItem(item);
+  return {
+    id: raw.id||uid('it'),
+    no: raw.no||idx+1,
+    category: CATS.indexOf(cat)>=0?cat:classifyItem(item),
+    itemName: item,
+    fabricCode,
+    description: raw.desc||raw.description||raw.Description||'',
+    composition: raw.composition||'',
+    weight: raw.weight||'',
+    color: raw.color||raw.Color||'',
+    shade: raw.shade||'',
+    width: raw.width||raw['Width/size']||raw.widthSize||'',
+    supplier: raw.supplier||'',
+    unit: raw.unit||raw.Unit||detectUnit(item+' '+(raw.desc||''))||(DB.settings.defaultUnit||'Yards'),
+    qtyPcs: parseNum(raw.qtyPcs!=null?raw.qtyPcs:(raw['Qty/Unit']!=null?raw['Qty/Unit']:raw.qtyUnit)),
+    qtyDozen: parseNum(raw.qtyDozen!=null?raw.qtyDozen:raw['Qty/Dozen']),
+    wastePct: raw.wastePct!=null?parseNum(raw.wastePct):(DB.settings.defaultWaste||0),
+    unitCost: parseNum(raw.unitCost),
+    remark: raw.remark||''
+  };
+}
+function coerceStyle(raw){
+  if(!raw||!raw.styleNo) return null;
+  const items=(raw.items||[]).map((i,ix)=>normItem(i,ix)).filter(i=>i.itemName);
+  if(!items.length && !raw.allowEmpty) return null;
+  return {
+    id: raw.id||uid('st'),
+    customerCode:(raw.customer||raw.customerCode||'OTHER').toString().toUpperCase().trim(),
+    styleNo:String(raw.styleNo).trim(), styleName:raw.styleName||'', description:raw.description||'',
+    season:raw.season||'', revision:raw.revision||'', department:raw.department||'', factory:raw.factory||'',
+    baseSize:raw.baseSize||'', sizeRange:raw.sizeRange||'', sampleDate:raw.sampleDate||'', effectiveDate:raw.effectiveDate||'',
+    status:raw.status||'Active', source:raw.source||'manual', dateModified:raw.dateModified||'', remark:raw.remark||'',
+    items, versions:raw.versions||[],
+    createdAt:raw.createdAt||nowISO(), updatedAt:nowISO()
+  };
+}
+
+/* ---------------- Accessors / aggregates ---------------- */
+function custByCode(c){ return DB.customers.find(x=>x.code===c); }
+function custName(c){ const o=custByCode(c); return o?(LANG==='zh'&&o.nameZh?o.nameZh:o.name):c; }
+function styleById(id){ return DB.styles.find(s=>s.id===id); }
+function bomItemCount(){ return DB.styles.reduce((a,s)=>a+(s.items?s.items.length:0),0); }
+function catCount(cat){ return DB.styles.reduce((a,s)=>a+(s.items||[]).filter(i=>i.category===cat).length,0); }
+function fabricKinds(){ const set=new Set(); DB.styles.forEach(s=>(s.items||[]).forEach(i=>{ if(i.category==='Main Fabric'&&i.fabricCode)set.add(i.fabricCode); })); return set.size; }
+function contrastKinds(){ const set=new Set(); DB.styles.forEach(s=>(s.items||[]).forEach(i=>{ if(i.category==='Contrast Fabric')set.add(i.fabricCode||i.itemName); })); return set.size; }
+function trimCount(){ return catCount('Trim'); }
+function versionTotal(){ return DB.styles.reduce((a,s)=>a+((s.versions||[]).length),0); }
+function countSince(d){ return DB.styles.filter(s=>new Date(s.createdAt)>=d).length; }
+function allMaterials(){ const out=[]; DB.styles.forEach(s=>(s.items||[]).forEach(i=>out.push(Object.assign({_style:s.styleNo,_cust:s.customerCode,_sid:s.id},i)))); return out; }
+function statusBadge(st){ const map={'Active':'b-active','Develop':'b-develop','Pending':'b-pending','Hold':'b-hold'};
+  return `<span class="badge ${map[st]||'b-hold'}">${esc(st||'—')}</span>`; }
+function catTag(c){ return `<span class="tag ${CAT_CLASS[c]||'cOthers'}">${esc(catLabel(c))}</span>`; }
+/* ====================================================================
+   PART 3 — Ribbon system · Router · Dashboard · BOM list
+   ==================================================================== */
+let CURRENT='dashboard';
+let SELECTED_ID=null;
+let FILTER={cust:'',status:'',q:''};
+let MATFILTER={cust:'',cat:'',q:''};
+
+function MAIN(){ return document.getElementById('main'); }
+
+/* ---------- Ribbon 1 (tabs) ---------- */
+function buildRibbon1(){
+  const el=document.getElementById('rib1'); if(!el)return;
+  el.innerHTML=TABS.map(tb=>`<button class="tab ${tb.id===CURRENT?'on':''}" onclick="go('${tb.id}')">
+    <i class="bi ${tb.icon}"></i><span>${t(tb.label)}</span></button>`).join('');
+}
+/* ---------- Ribbon 2 (contextual toolbar) ---------- */
+function renderRibbon2(){
+  const el=document.getElementById('rib2'); if(!el)return;
+  const groups=ribbonFor(CURRENT);
+  el.innerHTML=groups.map(g=>{
+    const btns=g.b.map(b=>{
+      let dis=false; if(b.dis){ try{ dis=!!eval(b.dis); }catch(e){ dis=false; } }
+      const label = b.l.indexOf('.')>0 ? t(b.l) : b.l;
+      return `<button class="rbtn ${b.cls||''}" ${dis?'disabled':''} onclick="${esc(b.fn)}">
+        <i class="bi ${b.i}"></i><span>${esc(label)}</span></button>`;
+    }).join('');
+    return `<div class="grp">${btns}</div>`;
+  }).join('');
+}
+/* ---------- FABs ---------- */
+function setFabs(){
+  const el=document.getElementById('fabs'); if(!el)return;
+  let html='';
+  if(['dashboard','bom','material'].includes(CURRENT))
+    html+=`<button class="fab add" title="新增" onclick="openBomEditor()"><i class="bi bi-plus-lg"></i></button>`;
+  html+=`<button class="fab ana" title="分析" onclick="go('analysis')"><i class="bi bi-pie-chart"></i></button>`;
+  html+=`<button class="fab top" title="回頂端" onclick="window.scrollTo({top:0,behavior:'smooth'})"><i class="bi bi-arrow-up"></i></button>`;
+  el.innerHTML=html;
+}
+/* ---------- Router ---------- */
+function go(tab){ CURRENT=tab; SELECTED_ID=null; buildRibbon1(); renderRibbon2(); setFabs(); render(); window.scrollTo({top:0}); }
+function render(){
+  buildRibbon1(); renderRibbon2();
+  const m=MAIN(); if(!m)return;
+  switch(CURRENT){
+    case 'dashboard': renderDashboard(); break;
+    case 'bom': renderBoms(); break;
+    case 'material': renderMaterial(); break;
+    case 'analysis': renderAnalysis(); break;
+    case 'reports': renderReports(); break;
+    case 'import': renderImport(); break;
+    case 'settings': renderSettings(); break;
+    case 'help': renderHelp(); break;
+    default: renderDashboard();
+  }
+}
+
+/* ====================================================================
+   DASHBOARD
+   ==================================================================== */
+function renderDashboard(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const wk=startOfWeek(new Date());
+  const mo=new Date(); mo.setDate(1); mo.setHours(0,0,0,0);
+  const yr=new Date(today.getFullYear(),0,1);
+  const pending=DB.styles.filter(s=>s.status==='Pending'||s.status==='Develop').length;
+  const latest=DB.styles.slice().sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt))[0];
+
+  const K=(cls,icon,key,val,sub)=>`<div class="kpi ${cls}"><div class="top">
+    <div class="chip"><i class="bi ${icon}"></i></div><div class="ttl">${t(key)}</div></div>
+    <div class="val">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
+
+  const kpis=`<div class="kpis">
+    ${K('c-blue','bi-people-fill','kpi.customer',DB.customers.length)}
+    ${K('c-brand','bi-list-columns','kpi.styles',DB.styles.length)}
+    ${K('c-teal','bi-layers-fill','kpi.main',fabricKinds())}
+    ${K('c-purple','bi-layers-half','kpi.contrast',contrastKinds())}
+    ${K('c-red','bi-tags-fill','kpi.trim',trimCount())}
+    ${K('c-green','bi-boxes','kpi.total',bomItemCount())}
+    ${K('c-amber','bi-plus-circle','kpi.today',countSince(today))}
+    ${K('c-blue','bi-calendar-week','kpi.week',countSince(wk))}
+    ${K('c-green','bi-calendar-month','kpi.month',countSince(mo))}
+    ${K('c-gray','bi-calendar3','kpi.year',countSince(yr))}
+    ${K('c-amber','bi-hourglass-split','kpi.pending',pending)}
+    ${K('c-purple','bi-clock-history','kpi.version',versionTotal())}
+    ${K('c-red','bi-filetype-pdf','kpi.pdf',DB.meta.pdfImported||0)}
+    ${K('c-green','bi-file-earmark-excel','kpi.excel',DB.meta.excelImported||0)}
+    ${K('c-gray','bi-clock','kpi.latest',latest?`<span style="font-size:14px">${esc(localDate(latest.updatedAt))}</span>`:'—')}
+  </div>`;
+
+  const recent=DB.styles.slice().sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt)).slice(0,8);
+  const rows=recent.map(s=>`<tr>
+    <td><span class="lk" onclick="openBomEditor('${s.id}')">${esc(s.styleNo)}</span></td>
+    <td>${esc(custName(s.customerCode))}</td>
+    <td class="muted">${esc(s.styleName||s.description||'')}</td>
+    <td class="center">${(s.items||[]).length}</td>
+    <td>${statusBadge(s.status)}</td>
+    <td class="mono muted" style="font-size:11px">${esc(localStamp(s.updatedAt))}</td>
+  </tr>`).join('')||`<tr><td colspan="6" class="empty">${t('msg.nodata')}</td></tr>`;
+
+  MAIN().innerHTML=`
+   <div class="phead"><div><h1>${t('dash.title')}</h1><div class="sub">${t('dash.sub')}</div></div><div class="sp"></div>
+     <button class="btn dark" onclick="openBomEditor()"><i class="bi bi-plus-lg"></i> ${t('boms.new')}</button></div>
+   ${kpis}
+   <div class="chgrid">
+     <div class="card"><div class="ch"><i class="bi bi-pie-chart-fill"></i><h3>物料類別分佈 · Material Distribution</h3></div>
+       <div class="cb"><div class="chbox"><canvas id="chMat"></canvas></div></div></div>
+     <div class="card"><div class="ch"><i class="bi bi-bar-chart-fill"></i><h3>各客戶款式數 · Styles by Customer</h3></div>
+       <div class="cb"><div class="chbox"><canvas id="chCust"></canvas></div></div></div>
+   </div>
+   <div class="card"><div class="ch"><i class="bi bi-clock-history"></i><h3>最近更新 · Recent Updates</h3><div class="sp"></div>
+     <button class="btn sm" onclick="go('bom')">查看全部 →</button></div>
+     <div class="cb flush"><div class="tblwrap"><table class="tbl">
+       <thead><tr><th>${t('col.style')}</th><th>${t('col.customer')}</th><th>${t('col.desc')}</th>
+       <th class="center">${t('col.items')}</th><th>${t('col.status')}</th><th>${t('col.updated')}</th></tr></thead>
+       <tbody>${rows}</tbody></table></div></div></div>`;
+  setTimeout(drawDashCharts,30);
+}
+
+/* ====================================================================
+   BOM LIST
+   ==================================================================== */
+function selRow(id){ SELECTED_ID=(SELECTED_ID===id?null:id); renderBoms(); renderRibbon2(); }
+function editSelected(){ if(!SELECTED_ID){ toast('請先選取一列 BOM','warn'); return; } openBomEditor(SELECTED_ID); }
+function delSelected(){ if(!SELECTED_ID){ toast('請先選取一列 BOM','warn'); return; } delBom(SELECTED_ID); }
+function dupSelected(){ if(!SELECTED_ID){ toast('請先選取一列 BOM','warn'); return; } dupBom(SELECTED_ID); }
+function versionSelected(){ if(!SELECTED_ID){ toast('請先選取一列 BOM','warn'); return; } showHistory(SELECTED_ID); }
+
+function renderBoms(){
+  const custs=DB.customers.slice().sort((a,b)=>a.code.localeCompare(b.code));
+  const custOpts=`<option value="">${t('common.all')}</option>`+custs.map(c=>`<option value="${c.code}" ${FILTER.cust===c.code?'selected':''}>${esc(c.code)}</option>`).join('');
+  const statuses=['Active','Develop','Pending','Hold'];
+  const stOpts=`<option value="">${t('common.all')}</option>`+statuses.map(s=>`<option value="${s}" ${FILTER.status===s?'selected':''}>${s}</option>`).join('');
+
+  let list=DB.styles.slice();
+  if(FILTER.cust) list=list.filter(s=>s.customerCode===FILTER.cust);
+  if(FILTER.status) list=list.filter(s=>s.status===FILTER.status);
+  if(FILTER.q){ const q=FILTER.q.toLowerCase();
+    list=list.filter(s=>(s.styleNo+' '+s.styleName+' '+s.description+' '+s.customerCode).toLowerCase().includes(q)
+      || (s.items||[]).some(i=>(i.itemName+' '+i.description).toLowerCase().includes(q))); }
+  list.sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
+
+  const rows=list.map(s=>{
+    const fk=(s.items||[]).filter(i=>i.category==='Main Fabric').length;
+    const tk=(s.items||[]).filter(i=>i.category==='Trim').length;
+    return `<tr class="${SELECTED_ID===s.id?'':''}" style="${SELECTED_ID===s.id?'background:var(--brand-soft)':''}" onclick="selRow('${s.id}')">
+      <td onclick="event.stopPropagation()"><input type="radio" name="bomsel" ${SELECTED_ID===s.id?'checked':''} onclick="selRow('${s.id}')"></td>
+      <td><span class="lk" onclick="event.stopPropagation();openBomEditor('${s.id}')">${esc(s.styleNo)}</span>
+        ${s.source==='pdf'?'<i class="bi bi-filetype-pdf" style="color:var(--red);margin-left:5px" title="PDF 匯入"></i>':''}</td>
+      <td class="muted">${esc(s.styleName||'')}</td>
+      <td>${esc(custName(s.customerCode))}</td>
+      <td class="center">${(s.items||[]).length}</td>
+      <td class="center"><span class="muted" style="font-size:11px">主${fk}·輔${tk}</span></td>
+      <td>${statusBadge(s.status)}</td>
+      <td class="center">${(s.versions||[]).length?`<span class="lk" onclick="event.stopPropagation();showHistory('${s.id}')">V${(s.versions||[]).length}</span>`:'—'}</td>
+      <td class="mono muted" style="font-size:11px">${esc(localStamp(s.updatedAt))}</td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <button class="btn sm" onclick="openBomEditor('${s.id}')" title="編輯"><i class="bi bi-pencil"></i></button>
+        <button class="btn sm" onclick="openExplosionFor('${s.id}')" title="展料"><i class="bi bi-diagram-3"></i></button>
+        <button class="btn sm" onclick="dupBom('${s.id}')" title="複製"><i class="bi bi-files"></i></button>
+        <button class="btn sm" onclick="delBom('${s.id}')" title="刪除"><i class="bi bi-trash" style="color:var(--bad)"></i></button>
+      </td></tr>`;
+  }).join('')||`<tr><td colspan="10" class="empty">${t('msg.nodata')}</td></tr>`;
+
+  MAIN().innerHTML=`
+   <div class="phead"><div><h1>${t('boms.title')}</h1><div class="sub">${t('boms.sub')} · ${list.length} / ${DB.styles.length}</div></div>
+     <div class="sp"></div>
+     <button class="btn" onclick="openCustomers()"><i class="bi bi-people"></i> 客戶管理</button>
+     <button class="btn dark" onclick="openBomEditor()"><i class="bi bi-plus-lg"></i> ${t('boms.new')}</button></div>
+   <div class="filterbar">
+     <div class="field"><label>${t('col.customer')}</label><select class="inp" onchange="FILTER.cust=this.value;renderBoms()">${custOpts}</select></div>
+     <div class="field"><label>${t('col.status')}</label><select class="inp" onchange="FILTER.status=this.value;renderBoms()">${stOpts}</select></div>
+     <div class="field" style="flex:1;min-width:200px"><label>${t('common.search')}</label>
+       <input class="inp" style="width:100%" value="${esc(FILTER.q)}" placeholder="款號 / 物料 / 描述…"
+         oninput="FILTER.q=this.value;clearTimeout(window._bft);window._bft=setTimeout(renderBoms,200)"></div>
+     <div class="field"><label>&nbsp;</label><button class="btn" onclick="FILTER={cust:'',status:'',q:''};renderBoms()">${t('common.clear')}</button></div>
+   </div>
+   <div class="card"><div class="cb flush"><div class="tblwrap"><table class="tbl">
+     <thead><tr><th style="width:34px"></th><th>${t('col.style')}</th><th>${t('col.styleName')}</th><th>${t('col.customer')}</th>
+       <th class="center">${t('col.items')}</th><th class="center">主/輔</th><th>${t('col.status')}</th>
+       <th class="center">${t('b.version')}</th><th>${t('col.updated')}</th><th></th></tr></thead>
+     <tbody>${rows}</tbody></table></div></div></div>`;
+}
+/* ====================================================================
+   PART 4 — Modal · BOM editor · Version · Customer master
+   ==================================================================== */
+function openModal(html,size){
+  const box=document.getElementById('modalBox');
+  box.className='modal '+(size||'');
+  box.innerHTML=html;
+  document.getElementById('modalBg').classList.add('show');
+}
+function closeModal(){ document.getElementById('modalBg').classList.remove('show'); }
+document.getElementById('modalBg').addEventListener('click',e=>{ if(e.target.id==='modalBg') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+/* ---------- BOM editor ---------- */
+let EDIT_ID=null, EDIT_ITEMS=[];
+function blankItem(cat){ return {id:uid('it'),no:0,category:cat||'Trim',itemName:'',fabricCode:'',description:'',
+  composition:'',weight:'',color:'',shade:'',width:'',supplier:'',unit:DB.settings.defaultUnit||'Yards',
+  qtyPcs:0,qtyDozen:0,wastePct:DB.settings.defaultWaste||0,unitCost:0,remark:''}; }
+
+function openBomEditor(id){
+  EDIT_ID=id||null;
+  const s=id?styleById(id):null;
+  EDIT_ITEMS = s ? (s.items&&s.items.length?s.items:[blankItem('Main Fabric')]).map(i=>Object.assign(blankItem(),i))
+                 : [Object.assign(blankItem('Main Fabric'),{no:1}),Object.assign(blankItem('Trim'),{no:2})];
+  const custOpts=DB.customers.map(c=>`<option value="${c.code}" ${(s?s.customerCode:DB.settings.defaultCustomer)===c.code?'selected':''}>${esc(c.code)} · ${esc(c.name)}</option>`).join('');
+  const statusOpts=['Active','Develop','Pending','Hold'].map(x=>`<option value="${x}" ${(s?s.status:'Develop')===x?'selected':''}>${x}</option>`).join('');
+
+  openModal(`<div class="mh"><i class="bi bi-list-columns-reverse"></i><h3>${id?'編輯 BOM · Edit':'新增 BOM · New'}</h3>
+     <button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb">
+     <div class="grid3">
+       <div class="fld"><label>${t('col.customer')} *</label><select class="inp" id="bCust">${custOpts}</select></div>
+       <div class="fld"><label>${t('col.style')} *</label><input class="inp" id="bStyle" value="${esc(s?s.styleNo:'')}" placeholder="e.g. 1504"></div>
+       <div class="fld"><label>${t('col.styleName')}</label><input class="inp" id="bName" value="${esc(s?s.styleName:'')}"></div>
+       <div class="fld"><label>Revision</label><input class="inp" id="bRev" value="${esc(s?s.revision:'')}"></div>
+       <div class="fld"><label>Season</label><input class="inp" id="bSeason" value="${esc(s?s.season:'')}"></div>
+       <div class="fld"><label>${t('col.status')}</label><select class="inp" id="bStatus">${statusOpts}</select></div>
+       <div class="fld"><label>Size Range</label><input class="inp" id="bSize" value="${esc(s?s.sizeRange:'')}"></div>
+       <div class="fld"><label>Base Size</label><input class="inp" id="bBase" value="${esc(s?s.baseSize:'')}"></div>
+       <div class="fld"><label>Department</label><input class="inp" id="bDept" value="${esc(s?s.department:DB.settings.dept)}"></div>
+       <div class="fld"><label>Sample Date</label><input class="inp" id="bSample" type="date" value="${esc(s?s.sampleDate:'')}"></div>
+       <div class="fld"><label>Effective Date</label><input class="inp" id="bEff" type="date" value="${esc(s?s.effectiveDate:'')}"></div>
+       <div class="fld"><label>${t('col.desc')}</label><input class="inp" id="bDesc" value="${esc(s?s.description:'')}"></div>
+     </div>
+     <div class="hr"></div>
+     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+       <b style="font-size:14px"><i class="bi bi-boxes"></i> BOM 物料明細</b>
+       <span class="muted" style="font-size:12px" id="itemCount">${EDIT_ITEMS.length} 項</span>
+       <div class="sp"></div>
+       <button class="btn sm" onclick="addCatRows()"><i class="bi bi-layers"></i> 加全類別</button>
+       <button class="btn sm dark" onclick="addItemRow()"><i class="bi bi-plus"></i> 加一列</button>
+     </div>
+     <div class="tblwrap"><table class="itemtbl" id="itemTbl"><thead><tr>
+       <th style="width:30px">#</th><th style="width:118px">${t('col.cat')}</th><th style="min-width:150px">${t('col.material')}</th>
+       <th style="min-width:160px">${t('col.desc')}</th><th style="width:90px">${t('col.color')}</th><th style="width:70px">${t('col.width')}</th>
+       <th style="width:78px">Qty/PCS</th><th style="width:80px">Qty/Doz</th><th style="width:78px">${t('col.unit')}</th>
+       <th style="width:60px">${t('col.waste')}</th><th style="width:34px"></th></tr></thead>
+       <tbody id="itemBody"></tbody></table></div>
+   </div>
+   <div class="mf">
+     <button class="btn" onclick="closeModal()">${t('common.cancel')}</button>
+     <button class="btn dark" onclick="saveBom()"><i class="bi bi-save"></i> ${t('common.save')}</button>
+   </div>`,'xl');
+  drawItemRows();
+}
+function drawItemRows(){
+  const tb=document.getElementById('itemBody'); if(!tb)return;
+  const catOpt=(c)=>CATS.map(x=>`<option value="${x}" ${c===x?'selected':''}>${esc(catLabel(x))}</option>`).join('');
+  const unitOpt=(u)=>UNITS.map(x=>`<option value="${x}" ${u===x?'selected':''}>${x}</option>`).join('');
+  tb.innerHTML=EDIT_ITEMS.map((it,i)=>`<tr>
+    <td class="muted center">${i+1}</td>
+    <td><select onchange="updItem(${i},'category',this.value)">${catOpt(it.category)}</select></td>
+    <td><input value="${esc(it.itemName)}" oninput="updItem(${i},'itemName',this.value)" onblur="autoCat(${i})"></td>
+    <td><input value="${esc(it.description)}" oninput="updItem(${i},'description',this.value)"></td>
+    <td><input value="${esc(it.color)}" oninput="updItem(${i},'color',this.value)"></td>
+    <td><input value="${esc(it.width)}" oninput="updItem(${i},'width',this.value)"></td>
+    <td><input class="num" value="${it.qtyPcs||''}" oninput="updItem(${i},'qtyPcs',this.value);syncDozen(${i})"></td>
+    <td><input class="num" value="${it.qtyDozen||''}" oninput="updItem(${i},'qtyDozen',this.value)"></td>
+    <td><select onchange="updItem(${i},'unit',this.value)">${unitOpt(it.unit)}</select></td>
+    <td><input class="num" value="${it.wastePct||''}" oninput="updItem(${i},'wastePct',this.value)"></td>
+    <td><button class="irow-del" onclick="delItemRow(${i})"><i class="bi bi-x"></i></button></td>
+  </tr>`).join('');
+  const c=document.getElementById('itemCount'); if(c)c.textContent=EDIT_ITEMS.length+' 項';
+}
+function updItem(i,k,v){ if(!EDIT_ITEMS[i])return; EDIT_ITEMS[i][k]=(k==='qtyPcs'||k==='qtyDozen'||k==='wastePct')?parseNum(v):v; }
+function syncDozen(i){ const it=EDIT_ITEMS[i]; if(it&&it.qtyPcs&&!it.qtyDozen){ it.qtyDozen=+(it.qtyPcs*12).toFixed(2);
+  const row=document.getElementById('itemBody').children[i]; if(row) row.querySelectorAll('input.num')[1].value=it.qtyDozen; } }
+function autoCat(i){ const it=EDIT_ITEMS[i]; if(!it)return; const c=classifyItem(it.itemName);
+  if(c!=='Others'){ it.category=c; const row=document.getElementById('itemBody').children[i]; if(row) row.querySelector('select').value=c; }
+  const u=detectUnit(it.itemName); if(u){ it.unit=u; const row=document.getElementById('itemBody').children[i]; if(row) row.querySelectorAll('select')[1].value=u; } }
+function addItemRow(){ EDIT_ITEMS.push(blankItem()); drawItemRows(); }
+function delItemRow(i){ EDIT_ITEMS.splice(i,1); if(!EDIT_ITEMS.length) EDIT_ITEMS.push(blankItem()); drawItemRows(); }
+function addCatRows(){ EDIT_ITEMS=CATS.map(c=>{ const b=blankItem(c); b.itemName=c==='Trim'||c==='Others'?'':c; return b; }); drawItemRows(); }
+
+function readBomForm(){
+  const g=id=>document.getElementById(id);
+  const styleNo=g('bStyle').value.trim();
+  if(!styleNo){ toast('請輸入款號','warn'); return null; }
+  const items=EDIT_ITEMS.map((it,ix)=>Object.assign({},it,{no:ix+1})).filter(i=>i.itemName.trim());
+  return {
+    customerCode:g('bCust').value, styleNo, styleName:g('bName').value.trim(),
+    revision:g('bRev').value.trim(), season:g('bSeason').value.trim(), status:g('bStatus').value,
+    sizeRange:g('bSize').value.trim(), baseSize:g('bBase').value.trim(), department:g('bDept').value.trim(),
+    sampleDate:g('bSample').value, effectiveDate:g('bEff').value, description:g('bDesc').value.trim(), items
+  };
+}
+function saveBom(){
+  const f=readBomForm(); if(!f)return;
+  snapshot();
+  if(!custByCode(f.customerCode)) DB.customers.push({id:uid('cu'),code:f.customerCode,name:f.customerCode,active:true});
+  let st, isNew=false;
+  if(EDIT_ID){ st=styleById(EDIT_ID);
+    st.versions=st.versions||[];
+    st.versions.push({ver:st.versions.length+1, ts:nowISO(), editor:DB.settings.dept||'user',
+      comment:'更新', items:(st.items||[]).length, snapshot:JSON.stringify(st.items)});
+    Object.assign(st,f); st.updatedAt=nowISO();
+    logAct('更新 BOM',st.styleNo);
+  }else{ isNew=true;
+    st=coerceStyle(Object.assign({},f,{source:'manual',allowEmpty:true}));
+    st.versions=[{ver:1,ts:nowISO(),editor:DB.settings.dept||'user',comment:'建立',items:st.items.length,snapshot:JSON.stringify(st.items)}];
+    DB.styles.push(st); logAct('新增 BOM',st.styleNo);
+  }
+  markDirty(); persist(); closeModal();
+  toast(t('msg.saved')+' · '+st.styleNo,'good');
+  notifyTg(isNew?'create':'update',st);
+  render();
+}
+function dupBom(id){ const s=styleById(id); if(!s)return; snapshot();
+  const c=coerceStyle(Object.assign({},JSON.parse(JSON.stringify(s)),{id:null,styleNo:s.styleNo+'-COPY',allowEmpty:true,source:'copy'}));
+  c.versions=[{ver:1,ts:nowISO(),editor:DB.settings.dept||'user',comment:'複製自 '+s.styleNo,items:c.items.length}];
+  DB.styles.push(c); logAct('複製 BOM',c.styleNo); markDirty(); persist(); toast('已複製 → '+c.styleNo,'good'); render(); }
+function delBom(id){ const s=styleById(id); if(!s)return;
+  confirmBox(`確定刪除 BOM「${s.styleNo}」？此操作可用復原（Undo）還原。`,()=>{
+    snapshot(); DB.styles=DB.styles.filter(x=>x.id!==id); if(SELECTED_ID===id)SELECTED_ID=null;
+    logAct('刪除 BOM',s.styleNo); markDirty(); persist(); notifyTg('delete',s);
+    toast(t('msg.deleted')+' · '+s.styleNo,'warn'); render(); renderRibbon2();
+  }); }
+
+/* ---------- Version history ---------- */
+function showHistory(id){ const s=styleById(id); if(!s){ toast('找不到款式','warn'); return; }
+  const vs=(s.versions||[]).slice().reverse();
+  const rows=vs.map(v=>`<tr><td class="center">V${v.ver}</td><td class="mono" style="font-size:11px">${esc(localStamp(v.ts))}</td>
+    <td>${esc(v.editor||'')}</td><td>${esc(v.comment||'')}</td><td class="center">${v.items}</td>
+    <td>${v.snapshot?`<button class="btn sm" onclick="restoreVer('${id}',${v.ver})">還原</button>`:'—'}</td></tr>`).join('')
+    ||`<tr><td colspan="6" class="empty">尚無版本</td></tr>`;
+  openModal(`<div class="mh"><i class="bi bi-clock-history"></i><h3>版本歷史 · ${esc(s.styleNo)}</h3>
+     <button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="tblwrap"><table class="tbl"><thead><tr><th class="center">版本</th><th>時間</th>
+     <th>編輯者</th><th>備註</th><th class="center">項目</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button></div>`,'md');
+}
+function restoreVer(id,ver){ const s=styleById(id); if(!s)return;
+  const v=(s.versions||[]).find(x=>x.ver===ver); if(!v||!v.snapshot){ toast('此版本無快照','warn'); return; }
+  confirmBox(`還原 ${s.styleNo} 至 V${ver}？目前內容會另存為新版本。`,()=>{
+    snapshot();
+    s.versions.push({ver:s.versions.length+1,ts:nowISO(),editor:DB.settings.dept||'user',comment:'還原前快照',items:(s.items||[]).length,snapshot:JSON.stringify(s.items)});
+    s.items=JSON.parse(v.snapshot).map((i,ix)=>normItem(i,ix)); s.updatedAt=nowISO();
+    logAct('還原版本',s.styleNo+' V'+ver); markDirty(); persist(); closeModal(); toast('已還原至 V'+ver,'good'); render();
+  },{danger:false,ok:'還原'});
+}
+
+/* ---------- Customer master ---------- */
+function openCustomers(){
+  const presets=['ADI','American Dawn','Vestis','Cintas','Lechner','Aramark','Northern'];
+  const rows=DB.customers.map(c=>{ const cnt=DB.styles.filter(s=>s.customerCode===c.code).length;
+    return `<tr><td><b>${esc(c.code)}</b></td><td>${esc(c.name)}</td><td>${esc(c.nameZh||'')}</td>
+      <td class="center">${cnt}</td><td><button class="btn sm" onclick="editCust('${c.id}')"><i class="bi bi-pencil"></i></button>
+      <button class="btn sm" onclick="delCust('${c.id}')"><i class="bi bi-trash" style="color:var(--bad)"></i></button></td></tr>`; }).join('')
+    ||`<tr><td colspan="5" class="empty">尚無客戶</td></tr>`;
+  openModal(`<div class="mh"><i class="bi bi-people-fill"></i><h3>客戶管理 · Customer Master</h3>
+     <button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb">
+     <div class="note blue" style="margin-bottom:12px">常用：${presets.map(p=>`<span class="lk" onclick="quickAddCust('${esc(p)}')">${esc(p)}</span>`).join(' · ')}</div>
+     <div class="grid3" style="margin-bottom:12px">
+       <input class="inp" id="ncCode" placeholder="代碼 Code *"><input class="inp" id="ncName" placeholder="名稱 Name">
+       <div style="display:flex;gap:8px"><input class="inp" id="ncZh" placeholder="中文名" style="flex:1">
+         <button class="btn dark" onclick="addCust()"><i class="bi bi-plus"></i></button></div>
+     </div>
+     <div class="tblwrap"><table class="tbl"><thead><tr><th>Code</th><th>Name</th><th>中文</th><th class="center">款式</th><th></th></tr></thead>
+       <tbody>${rows}</tbody></table></div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button></div>`,'md');
+}
+function addCust(){ const g=id=>document.getElementById(id);
+  const code=(g('ncCode').value||'').trim().toUpperCase(); if(!code){ toast('請輸入代碼','warn'); return; }
+  if(custByCode(code)){ toast('代碼已存在','warn'); return; }
+  DB.customers.push({id:uid('cu'),code,name:(g('ncName').value||code).trim(),nameZh:(g('ncZh').value||'').trim(),active:true});
+  markDirty(); persist(); logAct('新增客戶',code); openCustomers(); }
+function quickAddCust(name){ const code=name.split(' ')[0].toUpperCase(); if(custByCode(code)){ toast('已存在','warn'); return; }
+  DB.customers.push({id:uid('cu'),code,name,active:true}); markDirty(); persist(); openCustomers(); }
+function editCust(id){ const c=DB.customers.find(x=>x.id===id); if(!c)return;
+  openModal(`<div class="mh"><h3>編輯客戶</h3><button class="x" onclick="openCustomers()">×</button></div>
+   <div class="mb"><div class="fld"><label>Code</label><input class="inp" id="ecCode" value="${esc(c.code)}"></div>
+     <div class="fld"><label>Name</label><input class="inp" id="ecName" value="${esc(c.name)}"></div>
+     <div class="fld"><label>中文名</label><input class="inp" id="ecZh" value="${esc(c.nameZh||'')}"></div></div>
+   <div class="mf"><button class="btn" onclick="openCustomers()">${t('common.cancel')}</button>
+     <button class="btn dark" onclick="saveCust('${id}')">${t('common.save')}</button></div>`,'sm'); }
+function saveCust(id){ const c=DB.customers.find(x=>x.id===id); if(!c)return; const g=i=>document.getElementById(i);
+  const old=c.code; c.code=g('ecCode').value.trim().toUpperCase(); c.name=g('ecName').value.trim(); c.nameZh=g('ecZh').value.trim();
+  if(old!==c.code) DB.styles.forEach(s=>{ if(s.customerCode===old)s.customerCode=c.code; });
+  markDirty(); persist(); openCustomers(); toast(t('msg.saved'),'good'); }
+function delCust(id){ const c=DB.customers.find(x=>x.id===id); if(!c)return;
+  const cnt=DB.styles.filter(s=>s.customerCode===c.code).length;
+  confirmBox(`刪除客戶「${c.code}」？${cnt?'其 '+cnt+' 個款式的客戶代碼將保留。':''}`,()=>{
+    DB.customers=DB.customers.filter(x=>x.id!==id); markDirty(); persist(); logAct('刪除客戶',c.code); openCustomers();
+  }); }
+/* ====================================================================
+   PART 5 — Material overview · Analysis · Explosion · Cost · Compare
+   ==================================================================== */
+let MATPAGE=0; const MATPER=200;
+function clearMatFilter(){ MATFILTER={cust:'',cat:'',q:''}; MATPAGE=0; renderMaterial(); }
+
+function renderMaterial(){
+  let mats=allMaterials();
+  if(MATFILTER.cust) mats=mats.filter(m=>m._cust===MATFILTER.cust);
+  if(MATFILTER.cat) mats=mats.filter(m=>m.category===MATFILTER.cat);
+  if(MATFILTER.q){ const q=MATFILTER.q.toLowerCase();
+    mats=mats.filter(m=>(m.itemName+' '+m.description+' '+m.color+' '+m.supplier+' '+m._style).toLowerCase().includes(q)); }
+  const total=mats.length, pages=Math.max(1,Math.ceil(total/MATPER));
+  if(MATPAGE>=pages)MATPAGE=pages-1;
+  const slice=mats.slice(MATPAGE*MATPER,MATPAGE*MATPER+MATPER);
+
+  const custs=DB.customers.slice().sort((a,b)=>a.code.localeCompare(b.code));
+  const custOpts=`<option value="">${t('common.all')}</option>`+custs.map(c=>`<option value="${c.code}" ${MATFILTER.cust===c.code?'selected':''}>${esc(c.code)}</option>`).join('');
+  const catOpts=`<option value="">${t('common.all')}</option>`+CATS.map(c=>`<option value="${c}" ${MATFILTER.cat===c?'selected':''}>${esc(catLabel(c))}</option>`).join('');
+
+  const rows=slice.map(m=>`<tr>
+    <td>${catTag(m.category)}</td>
+    <td><span class="lk" onclick="openBomEditor('${m._sid}')">${esc(m._style)}</span></td>
+    <td class="muted">${esc(m._cust)}</td>
+    <td><b>${esc(m.itemName)}</b></td>
+    <td class="muted" style="font-size:12px">${esc(m.description)}</td>
+    <td>${esc(m.color)}</td><td class="center">${esc(m.width)}</td>
+    <td class="num">${m.qtyPcs?fmt(m.qtyPcs,2):''}</td>
+    <td class="center">${esc(m.unit)}</td>
+    <td class="num">${m.wastePct||0}%</td>
+  </tr>`).join('')||`<tr><td colspan="10" class="empty">${t('msg.nodata')}</td></tr>`;
+
+  const pager=pages>1?`<div style="display:flex;align-items:center;gap:8px;justify-content:center;padding:13px">
+    <button class="btn sm" ${MATPAGE<=0?'disabled':''} onclick="MATPAGE--;renderMaterial()"><i class="bi bi-chevron-left"></i></button>
+    <span class="muted">第 ${MATPAGE+1} / ${pages} 頁 · 共 ${fmt(total)} 筆</span>
+    <button class="btn sm" ${MATPAGE>=pages-1?'disabled':''} onclick="MATPAGE++;renderMaterial()"><i class="bi bi-chevron-right"></i></button></div>`:'';
+
+  MAIN().innerHTML=`
+   <div class="phead"><div><h1>${t('mat.title')}</h1><div class="sub">${t('mat.sub')} · ${fmt(total)} 筆</div></div></div>
+   <div class="filterbar">
+     <div class="field"><label>${t('col.customer')}</label><select class="inp" onchange="MATFILTER.cust=this.value;MATPAGE=0;renderMaterial()">${custOpts}</select></div>
+     <div class="field"><label>${t('col.cat')}</label><select class="inp" onchange="MATFILTER.cat=this.value;MATPAGE=0;renderMaterial()">${catOpts}</select></div>
+     <div class="field" style="flex:1;min-width:200px"><label>${t('common.search')}</label>
+       <input class="inp" style="width:100%" value="${esc(MATFILTER.q)}" placeholder="物料 / 描述 / 顏色 / 供應商…"
+         oninput="MATFILTER.q=this.value;MATPAGE=0;clearTimeout(window._mft);window._mft=setTimeout(renderMaterial,200)"></div>
+     <div class="field"><label>&nbsp;</label><button class="btn" onclick="exportMaterials()"><i class="bi bi-download"></i> ${t('b.export')}</button></div>
+   </div>
+   <div class="card"><div class="cb flush"><div class="tblwrap"><table class="tbl">
+     <thead><tr><th>${t('col.cat')}</th><th>${t('col.style')}</th><th>${t('col.customer')}</th><th>${t('col.material')}</th>
+       <th>${t('col.desc')}</th><th>${t('col.color')}</th><th class="center">${t('col.width')}</th>
+       <th class="num">Qty/PCS</th><th class="center">${t('col.unit')}</th><th class="num">${t('col.waste')}</th></tr></thead>
+     <tbody>${rows}</tbody></table></div>${pager}</div></div>`;
+}
+
+/* ====================================================================
+   ANALYSIS
+   ==================================================================== */
+function renderAnalysis(){
+  const byCat={}, byItem={}, byCust={};
+  DB.styles.forEach(s=>{ byCust[s.customerCode]=(byCust[s.customerCode]||0)+(s.items||[]).length;
+    (s.items||[]).forEach(i=>{ byCat[i.category]=(byCat[i.category]||0)+1;
+      const k=i.itemName.replace(/[-\s]*[A-Z0-9.#]+$/,'').trim()||i.itemName; byItem[k]=(byItem[k]||0)+1; }); });
+  const top=Object.entries(byItem).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const topRows=top.map(([n,c],i)=>`<tr><td class="center muted">${i+1}</td><td>${esc(n)}</td><td class="num">${c}</td>
+    <td><div class="bar"><div style="width:${(c/top[0][1]*100).toFixed(0)}%"></div></div></td></tr>`).join('')
+    ||`<tr><td colspan="4" class="empty">${t('msg.nodata')}</td></tr>`;
+
+  MAIN().innerHTML=`
+   <div class="phead"><div><h1>${t('ana.title')}</h1><div class="sub">${t('ana.sub')}</div></div><div class="sp"></div>
+     <button class="btn" onclick="openVersionCompare()"><i class="bi bi-vr"></i> 版本比對</button>
+     <button class="btn" onclick="openExplosion()"><i class="bi bi-diagram-3"></i> 展料</button>
+     <button class="btn" onclick="openCost()"><i class="bi bi-cash-stack"></i> 成本</button></div>
+   <div class="kpis">
+     <div class="kpi c-brand"><div class="top"><div class="chip"><i class="bi bi-list-columns"></i></div><div class="ttl">${t('kpi.styles')}</div></div><div class="val">${DB.styles.length}</div></div>
+     <div class="kpi c-green"><div class="top"><div class="chip"><i class="bi bi-boxes"></i></div><div class="ttl">${t('kpi.total')}</div></div><div class="val">${bomItemCount()}</div></div>
+     <div class="kpi c-teal"><div class="top"><div class="chip"><i class="bi bi-layers"></i></div><div class="ttl">${t('kpi.main')}</div></div><div class="val">${fabricKinds()}</div></div>
+     <div class="kpi c-red"><div class="top"><div class="chip"><i class="bi bi-tags"></i></div><div class="ttl">${t('kpi.trim')}</div></div><div class="val">${trimCount()}</div></div>
+   </div>
+   <div class="chgrid">
+     <div class="card"><div class="ch"><i class="bi bi-pie-chart-fill"></i><h3>物料類別分佈 · By Category</h3></div><div class="cb"><div class="chbox"><canvas id="aCat"></canvas></div></div></div>
+     <div class="card"><div class="ch"><i class="bi bi-bar-chart-fill"></i><h3>客戶用料量 · By Customer</h3></div><div class="cb"><div class="chbox"><canvas id="aCust"></canvas></div></div></div>
+   </div>
+   <div class="card"><div class="ch"><i class="bi bi-trophy"></i><h3>物料使用排行 Top 15</h3></div>
+     <div class="cb flush"><div class="tblwrap"><table class="tbl"><thead><tr><th class="center">#</th><th>${t('col.material')}</th>
+       <th class="num">出現次數</th><th style="width:32%"></th></tr></thead><tbody>${topRows}</tbody></table></div></div></div>`;
+  setTimeout(()=>drawAnalysisCharts(byCat,byCust),40);
+}
+
+/* ====================================================================
+   EXPLOSION
+   ==================================================================== */
+let EXP={sid:'',qty:5000};
+function openExplosion(){ EXP={sid:DB.styles[0]?DB.styles[0].id:'',qty:5000}; explosionModal(); }
+function openExplosionFor(id){ EXP={sid:id,qty:5000}; explosionModal(); }
+function explosionModal(){
+  const opts=DB.styles.map(s=>`<option value="${s.id}" ${EXP.sid===s.id?'selected':''}>${esc(s.styleNo)} · ${esc(custName(s.customerCode))}</option>`).join('');
+  const s=styleById(EXP.sid);
+  let body='<tr><td colspan="7" class="empty">請選擇款式</td></tr>';
+  if(s){ body=(s.items||[]).map(i=>{ const per=i.qtyPcs||0; const waste=i.wastePct||0;
+    const need=per*EXP.qty; const withWaste=need*(1+waste/100);
+    return `<tr><td>${catTag(i.category)}</td><td><b>${esc(i.itemName)}</b></td><td class="center">${esc(i.unit)}</td>
+      <td class="num">${fmt(per,3)}</td><td class="num">${fmt(need,1)}</td><td class="center">${waste}%</td>
+      <td class="num"><b>${fmt(withWaste,1)}</b></td></tr>`; }).join('')||'<tr><td colspan="7" class="empty">無物料</td></tr>'; }
+  openModal(`<div class="mh"><i class="bi bi-diagram-3-fill"></i><h3>BOM 展料 · Explosion</h3>
+     <button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb">
+     <div class="grid2" style="margin-bottom:14px">
+       <div class="fld"><label>款式 Style</label><select class="inp" onchange="EXP.sid=this.value;explosionModal()">${opts}</select></div>
+       <div class="fld"><label>訂單數量 Order Qty (pcs)</label><input class="inp" type="number" value="${EXP.qty}"
+         oninput="EXP.qty=parseNum(this.value);clearTimeout(window._eq);window._eq=setTimeout(explosionModal,300)"></div>
+     </div>
+     <div class="tblwrap"><table class="tbl"><thead><tr><th>${t('col.cat')}</th><th>${t('col.material')}</th><th class="center">${t('col.unit')}</th>
+       <th class="num">用量/PCS</th><th class="num">總需求</th><th class="center">損耗</th><th class="num">含損耗</th></tr></thead>
+       <tbody>${body}</tbody></table></div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button>
+     ${s?`<button class="btn dark" onclick="exportExplosion()"><i class="bi bi-download"></i> 匯出</button>`:''}</div>`,'lg');
+}
+
+/* ====================================================================
+   COST
+   ==================================================================== */
+function openCost(){
+  const rows=DB.styles.map(s=>{ let fab=0,trim=0,pack=0;
+    (s.items||[]).forEach(i=>{ const cost=(i.unitCost||0)*(i.qtyPcs||0);
+      if(['Main Fabric','Contrast Fabric','Lining','Pocketing','Rib','Interlining'].includes(i.category))fab+=cost;
+      else if(i.category==='Packing')pack+=cost; else trim+=cost; });
+    const tot=fab+trim+pack;
+    return {s,fab,trim,pack,tot};
+  });
+  const body=rows.map(r=>`<tr><td><b>${esc(r.s.styleNo)}</b></td><td class="muted">${esc(custName(r.s.customerCode))}</td>
+    <td class="num">${fmt(r.fab,3)}</td><td class="num">${fmt(r.trim,3)}</td><td class="num">${fmt(r.pack,3)}</td>
+    <td class="num"><b>${fmt(r.tot,3)}</b></td></tr>`).join('')||`<tr><td colspan="6" class="empty">${t('msg.nodata')}</td></tr>`;
+  openModal(`<div class="mh"><i class="bi bi-cash-stack"></i><h3>物料成本估算 · Material Cost</h3>
+     <button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="note warn" style="margin-bottom:12px">成本依各物料「單價 × 用量/PCS」估算；可在 BOM 編輯器填入單價。</div>
+     <div class="tblwrap"><table class="tbl"><thead><tr><th>${t('col.style')}</th><th>${t('col.customer')}</th>
+       <th class="num">布料成本</th><th class="num">輔料成本</th><th class="num">包裝成本</th><th class="num">單件合計</th></tr></thead>
+       <tbody>${body}</tbody></table></div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button></div>`,'lg');
+}
+
+/* ====================================================================
+   VERSION COMPARE (between two styles or two versions)
+   ==================================================================== */
+let CMP={a:'',b:''};
+function openVersionCompare(){ CMP={a:DB.styles[0]?DB.styles[0].id:'',b:DB.styles[1]?DB.styles[1].id:''}; cmpModal(); }
+function cmpModal(){
+  const opts=v=>`<option value="">—</option>`+DB.styles.map(s=>`<option value="${s.id}" ${CMP[v]===s.id?'selected':''}>${esc(s.styleNo)} · ${esc(custName(s.customerCode))}</option>`).join('');
+  const a=styleById(CMP.a), b=styleById(CMP.b);
+  let body='<tr><td colspan="4" class="empty">請選擇兩個款式進行比對</td></tr>';
+  if(a&&b){
+    const map={}; (a.items||[]).forEach(i=>map[i.itemName]={a:i}); (b.items||[]).forEach(i=>{ map[i.itemName]=map[i.itemName]||{}; map[i.itemName].b=i; });
+    const keys=Object.keys(map).sort();
+    body=keys.map(k=>{ const o=map[k];
+      let cls='',tag='';
+      if(o.a&&!o.b){ cls='diff-del'; tag='<span class="tag cTrim">刪除</span>'; }
+      else if(!o.a&&o.b){ cls='diff-add'; tag='<span class="tag cLining">新增</span>'; }
+      else if(o.a&&o.b){ const ch=(o.a.qtyPcs!==o.b.qtyPcs)||(o.a.description!==o.b.description)||(o.a.color!==o.b.color);
+        if(ch){ cls='diff-mod'; tag='<span class="tag cPocketing">修改</span>'; } else tag='<span class="muted">—</span>'; }
+      return `<tr class="${cls}"><td><b>${esc(k)}</b></td>
+        <td>${o.a?`${esc(o.a.qtyPcs)} ${esc(o.a.unit)}`:'<span class="muted">無</span>'}</td>
+        <td>${o.b?`${esc(o.b.qtyPcs)} ${esc(o.b.unit)}`:'<span class="muted">無</span>'}</td><td class="center">${tag}</td></tr>`;
+    }).join('');
+  }
+  openModal(`<div class="mh"><i class="bi bi-vr"></i><h3>版本比對 · Compare</h3><button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="grid2" style="margin-bottom:14px">
+       <div class="fld"><label>版本 A</label><select class="inp" onchange="CMP.a=this.value;cmpModal()">${opts('a')}</select></div>
+       <div class="fld"><label>版本 B</label><select class="inp" onchange="CMP.b=this.value;cmpModal()">${opts('b')}</select></div></div>
+     <div class="pills" style="margin-bottom:0"><span class="tag cLining">新增 Added</span>
+       <span class="tag cPocketing">修改 Modified</span><span class="tag cTrim">刪除 Deleted</span></div>
+     <div class="tblwrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>${t('col.material')}</th>
+       <th>A</th><th>B</th><th class="center">差異</th></tr></thead><tbody>${body}</tbody></table></div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button></div>`,'lg');
+}
+/* ====================================================================
+   PART 6 — AI PDF IMPORT (core) · Import page · PDF Compare · pickers
+   ==================================================================== */
+if(window.pdfjsLib){ try{ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }catch(e){} }
+
+let PDF_QUEUE=[];      // [{name, parsed, raw, status}]
+let PDF_PREVIEW=null;  // file currently in split-screen
+let PDF_DOC_CACHE={};  // name -> pdfDoc for canvas render
+
+/* ---------- low-level: extract positioned rows from a page ---------- */
+function extractRows(textContent){
+  const items=textContent.items.filter(it=>it.str && it.str.trim()!=='').map(it=>({
+    x:it.transform[4], y:it.transform[5], str:it.str.trim(), w:it.width||0 }));
+  items.sort((a,b)=> (b.y-a.y) || (a.x-b.x));
+  const rows=[]; let cur=null;
+  items.forEach(it=>{
+    if(cur && Math.abs(cur.y-it.y)<=3.2){ cur.cells.push(it); }
+    else { cur={y:it.y, cells:[it]}; rows.push(cur); }
+  });
+  rows.forEach(r=>{ r.cells.sort((a,b)=>a.x-b.x); r.text=r.cells.map(c=>c.str).join(' ').replace(/\s+/g,' ').trim(); });
+  return rows;
+}
+
+/* ---------- detect header row & column map ---------- */
+const COL_PATTERNS=[
+  {field:'no',     re:/^(n[ºo°]?|#|no\.?|item ?no)$/i},
+  {field:'item',   re:/^items?$/i},
+  {field:'desc',   re:/^(description|desc|construction|details?)$/i},
+  {field:'color',  re:/^(colou?r|shade)$/i},
+  {field:'width',  re:/^(width|width\/?size|size|w\/s)$/i},
+  {field:'qtyUnit',re:/^(qty\/?unit|qty\/?pcs|consumption|usage|per ?pcs|qty ?per)$/i},
+  {field:'qtyDozen',re:/^(qty\/?dozen|dozen|per ?dozen|qty\/?doz)$/i},
+  {field:'unit',   re:/^(unit|uom)$/i}
+];
+function detectHeader(rows){
+  for(let r=0;r<rows.length;r++){
+    const cells=rows[r].cells;
+    const joined=rows[r].text.toLowerCase();
+    const hasItems=/items?\b/.test(joined);
+    const hasQty=/(qty|consumption|usage|dozen)/.test(joined);
+    const hasDesc=/(description|desc|construction)/.test(joined);
+    if(hasItems && (hasQty||hasDesc)){
+      // build column map from cells
+      const cols=[];
+      cells.forEach(c=>{
+        let field=null;
+        for(const p of COL_PATTERNS){ if(p.re.test(c.str.replace(/[\s.]/g,''))||p.re.test(c.str)){ field=p.field; break; } }
+        // fuzzy contains
+        if(!field){ const s=c.str.toLowerCase();
+          if(/item/.test(s))field='item'; else if(/desc|construct/.test(s))field='desc';
+          else if(/colou?r|shade/.test(s))field='color'; else if(/width|size/.test(s))field='width';
+          else if(/dozen|doz/.test(s))field='qtyDozen'; else if(/qty|consum|usage/.test(s))field='qtyUnit';
+          else if(/unit|uom/.test(s))field='unit'; else if(/^n|no|#/.test(s))field='no'; }
+        cols.push({x:c.x, field});
+      });
+      // ensure ascending x
+      cols.sort((a,b)=>a.x-b.x);
+      if(cols.filter(c=>c.field).length>=2) return {row:r, cols};
+    }
+  }
+  return null;
+}
+function assignCol(x, cols){
+  // nearest column whose x <= cell x (left-aligned columns); fallback nearest
+  let best=cols[0], bestd=1e9;
+  for(const c of cols){ const d=Math.abs(c.x-x); if(x>=c.x-6 && d<bestd){ best=c; bestd=d; } }
+  if(bestd===1e9){ for(const c of cols){ const d=Math.abs(c.x-x); if(d<bestd){ best=c; bestd=d; } } }
+  return best.field;
+}
+
+/* ---------- detect metadata (style / customer / etc) ---------- */
+function detectMeta(rows){
+  const meta={customer:'',styleNo:'',revision:'',sizeRange:'',baseSize:'',dateModified:''};
+  const blob=rows.map(r=>r.text).join('\n');
+  const grab=(re)=>{ const m=blob.match(re); return m?m[1].trim():''; };
+  meta.customer = grab(/customer\s*[:\-]?\s*([A-Za-z][A-Za-z0-9 &.\-]{1,30})/i);
+  meta.styleNo  = grab(/style\s*(?:no|number|#)?\s*[:\-]?\s*([A-Za-z0-9._\-\/]{2,30})/i);
+  meta.revision = grab(/rev(?:ision)?\.?\s*[:\-]?\s*([A-Za-z0-9.\-]{1,12})/i);
+  meta.sizeRange= grab(/size\s*range\s*[:\-]?\s*([A-Za-z0-9 ,\-\/]{1,40})/i);
+  meta.baseSize = grab(/base\s*size\s*[:\-]?\s*([A-Za-z0-9 \-]{1,20})/i);
+  meta.dateModified = grab(/(?:date|modified)\s*(?:folder\s*modified)?\s*[:\-]?\s*([0-9]{1,2}[\/\-.][0-9]{1,2}[\/\-.][0-9]{2,4})/i);
+  // VANTAGE RIVER appears in these sheets; customer often near top
+  if(!meta.customer){ const m=blob.match(/\b(ADI|AMERICAN DAWN|LECHNER|VESTIS|CINTAS|ARAMARK|NORTHERN)\b/i); if(m)meta.customer=m[1]; }
+  return meta;
+}
+
+/* ---------- parse one pdf's rows into a style record ---------- */
+function parsePdfRows(rows){
+  const meta=detectMeta(rows);
+  const hdr=detectHeader(rows);
+  const items=[];
+  if(hdr){
+    const cols=hdr.cols;
+    for(let r=hdr.row+1;r<rows.length;r++){
+      const row=rows[r];
+      // stop at footer-ish rows
+      if(/^(total|remark|note|approved|prepared|signature|page \d)/i.test(row.text)) continue;
+      const rec={no:'',item:'',desc:'',color:'',width:'',qtyUnit:'',qtyDozen:'',unit:''};
+      row.cells.forEach(c=>{ const f=assignCol(c.x,cols); if(f){ rec[f]=(rec[f]?rec[f]+' ':'')+c.str; } });
+      // require an item-ish name OR a numeric consumption to count as a row
+      const name=(rec.item||'').trim();
+      const hasNum=parseNum(rec.qtyUnit)>0||parseNum(rec.qtyDozen)>0;
+      if(!name && !hasNum) continue;
+      if(/^[\d.]+$/.test(name) && !hasNum) continue; // pure number stray
+      items.push({
+        no: rec.no||items.length+1,
+        item: name||rec.desc.slice(0,30),
+        desc: rec.desc.trim(),
+        color: rec.color.trim(),
+        width: rec.width.trim(),
+        qtyPcs: parseNum(rec.qtyUnit),
+        qtyDozen: parseNum(rec.qtyDozen),
+        unit: rec.unit.trim()||detectUnit(name+' '+rec.desc),
+        category: classifyItem(name||rec.desc)
+      });
+    }
+  }
+  return { customer:(meta.customer||'OTHER').toUpperCase().trim(), styleNo:meta.styleNo,
+    revision:meta.revision, sizeRange:meta.sizeRange, baseSize:meta.baseSize, dateModified:meta.dateModified,
+    source:'pdf', items };
+}
+
+/* ---------- read + parse a PDF File ---------- */
+async function parsePdfFile(file){
+  const buf=await file.arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:buf}).promise;
+  PDF_DOC_CACHE[file.name]=doc;
+  let allRows=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p);
+    const tc=await page.getTextContent();
+    allRows=allRows.concat(extractRows(tc));
+  }
+  const parsed=parsePdfRows(allRows);
+  if(!parsed.styleNo){ // fallback: filename
+    parsed.styleNo=file.name.replace(/\.pdf$/i,'').replace(/[^A-Za-z0-9._\-]/g,'').slice(0,24)||'STYLE';
+  }
+  return parsed;
+}
+
+/* ---------- Import page ---------- */
+function renderImport(){
+  const q=PDF_QUEUE.map((f,i)=>{
+    const st=f.status==='ok'?`<span class="st" style="background:var(--good-soft);color:var(--green)">已辨識 ${f.parsed.items.length} 項</span>`
+      :f.status==='err'?`<span class="st" style="background:var(--bad-soft);color:var(--bad)">失敗</span>`
+      :`<span class="st" style="background:var(--amber-soft);color:var(--amber)">處理中…</span>`;
+    return `<div class="fileitem"><i class="bi bi-filetype-pdf" style="color:var(--red);font-size:18px"></i>
+      <div class="nm">${esc(f.name)}</div>
+      ${f.parsed?`<span class="muted" style="font-size:11px">${esc(f.parsed.customer)} · ${esc(f.parsed.styleNo)}</span>`:''}
+      ${st}
+      ${f.status==='ok'?`<button class="btn sm" onclick="openPdfPreview(${i})"><i class="bi bi-eye"></i> 預覽</button>
+        <button class="btn sm dark" onclick="importParsed(${i})"><i class="bi bi-check"></i> 匯入</button>`:''}
+      <button class="btn sm" onclick="removeQueue(${i})"><i class="bi bi-x"></i></button></div>`;
+  }).join('');
+
+  MAIN().innerHTML=`
+   <div class="phead"><div><h1>${t('imp.title')}</h1><div class="sub">${t('imp.sub')}</div></div></div>
+   <div class="note blue" style="margin-bottom:16px"><i class="bi bi-stars"></i>
+     AI 自動辨識 PDF 表格：偵測款號 / 客戶 / Revision / 尺寸，並依關鍵字自動分類物料（主布 / 配布 / 輔料 / 車線 / 包裝…）。支援批次拖放，匯入前可左右分割預覽並編輯。</div>
+   <div class="grid2" style="margin-bottom:16px">
+     <div class="dropzone" id="pdfDrop" onclick="pickPDF()"
+       ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')"
+       ondrop="onPdfDrop(event)">
+       <i class="bi bi-filetype-pdf"></i>
+       <div style="font-weight:700;margin-top:8px;font-size:15px">拖放 PDF 至此 · 或點擊選擇</div>
+       <div class="muted" style="font-size:12px;margin-top:4px">支援單檔 / 批次 · ADI · American Dawn · Lechner · Cintas · 任何成衣 BOM</div>
+     </div>
+     <div class="dropzone" id="xlsDrop" onclick="pickExcel()"
+       ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')"
+       ondrop="onXlsDrop(event)">
+       <i class="bi bi-file-earmark-excel" style="color:var(--green)"></i>
+       <div style="font-weight:700;margin-top:8px;font-size:15px">Excel / CSV 匯入</div>
+       <div class="muted" style="font-size:12px;margin-top:4px">xlsx · xls · csv · 自動對應欄位</div>
+     </div>
+   </div>
+   ${PDF_QUEUE.length?`<div class="card"><div class="ch"><i class="bi bi-list-check"></i><h3>待匯入清單 · ${PDF_QUEUE.length}</h3>
+     <div class="sp"></div><button class="btn sm dark" onclick="importAllQueue()"><i class="bi bi-cloud-arrow-down"></i> 全部匯入</button>
+     <button class="btn sm" onclick="PDF_QUEUE=[];renderImport()">清空</button></div>
+     <div class="cb">${q}</div></div>`:''}`;
+}
+function removeQueue(i){ PDF_QUEUE.splice(i,1); renderImport(); }
+
+/* file pickers */
+function pickFile(accept,cb,multiple){ const inp=document.createElement('input'); inp.type='file'; inp.accept=accept;
+  if(multiple)inp.multiple=true; inp.onchange=()=>cb(Array.from(inp.files)); inp.click(); }
+function pickPDF(){ pickFile('.pdf,application/pdf',handlePdfFiles,true); }
+function pickExcel(){ pickFile('.xlsx,.xls,.csv',files=>importExcelFiles(files)); }
+function pickJSON(){ pickFile('.json',files=>files[0]&&importJSONFile(files[0])); }
+function pickBackup(){ pickFile('.json',files=>files[0]&&restoreBackup(files[0])); }
+function onPdfDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('drag');
+  handlePdfFiles(Array.from(e.dataTransfer.files).filter(f=>/\.pdf$/i.test(f.name))); }
+function onXlsDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('drag');
+  importExcelFiles(Array.from(e.dataTransfer.files).filter(f=>/\.(xlsx|xls|csv)$/i.test(f.name))); }
+
+async function handlePdfFiles(files){
+  if(!files||!files.length) return;
+  if(!window.pdfjsLib){ toast('PDF.js 尚未載入，請檢查網路','bad'); return; }
+  if(CURRENT!=='import') go('import');
+  for(const f of files){
+    const entry={name:f.name, parsed:null, status:'busy'}; PDF_QUEUE.push(entry); renderImport();
+    try{ entry.parsed=await parsePdfFile(f); entry.status='ok'; }
+    catch(err){ console.error(err); entry.status='err'; entry.err=err.message; }
+    renderImport();
+  }
+  const ok=PDF_QUEUE.filter(f=>f.status==='ok').length;
+  toast('PDF 辨識完成 · '+ok+' 檔','good');
+}
+
+/* ---------- split-screen preview ---------- */
+function openPdfPreview(i){ PDF_PREVIEW=i; const f=PDF_QUEUE[i]; if(!f||!f.parsed)return;
+  PDF_EDIT=JSON.parse(JSON.stringify(f.parsed));
+  openModal(`<div class="mh"><i class="bi bi-eye-fill"></i><h3>PDF 匯入預覽 · ${esc(f.name)}</h3>
+     <button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb">
+     <div class="pdfsplit">
+       <div class="pdfpane"><div class="ph"><i class="bi bi-filetype-pdf"></i> 原始 PDF</div>
+         <div class="pc"><div class="pdfcanvas-wrap" id="pdfCanvas"></div></div></div>
+       <div class="pdfpane"><div class="ph"><i class="bi bi-table"></i> 辨識結果（可編輯）</div>
+         <div class="pc" id="pdfRecog"></div></div>
+     </div>
+   </div>
+   <div class="mf">
+     <button class="btn" onclick="closeModal()">${t('common.cancel')}</button>
+     <button class="btn dark" onclick="importParsed(${i},true)"><i class="bi bi-check-lg"></i> 確認匯入</button>
+   </div>`,'xl');
+  renderPdfCanvas(f.name); renderRecog();
+}
+async function renderPdfCanvas(name){
+  const wrap=document.getElementById('pdfCanvas'); if(!wrap)return;
+  const doc=PDF_DOC_CACHE[name];
+  if(!doc){ wrap.innerHTML='<div class="muted" style="padding:20px">無法載入 PDF 影像</div>'; return; }
+  wrap.innerHTML='';
+  const pages=Math.min(doc.numPages,3);
+  for(let p=1;p<=pages;p++){
+    const page=await doc.getPage(p);
+    const vp=page.getViewport({scale:1.1});
+    const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+    wrap.appendChild(cv);
+    await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+  }
+}
+let PDF_EDIT=null;
+function renderRecog(){
+  const el=document.getElementById('pdfRecog'); if(!el||!PDF_EDIT)return;
+  const m=PDF_EDIT;
+  const catOpt=(c)=>CATS.map(x=>`<option value="${x}" ${c===x?'selected':''}>${esc(catLabel(x))}</option>`).join('');
+  const itemRows=m.items.map((it,i)=>`<tr>
+    <td><select onchange="PDF_EDIT.items[${i}].category=this.value">${catOpt(it.category)}</select></td>
+    <td><input value="${esc(it.item)}" oninput="PDF_EDIT.items[${i}].item=this.value"></td>
+    <td><input class="num" value="${it.qtyPcs||''}" oninput="PDF_EDIT.items[${i}].qtyPcs=parseNum(this.value)"></td>
+    <td><input value="${esc(it.unit)}" oninput="PDF_EDIT.items[${i}].unit=this.value" style="width:60px"></td>
+    <td><button class="irow-del" onclick="PDF_EDIT.items.splice(${i},1);renderRecog()"><i class="bi bi-x"></i></button></td>
+  </tr>`).join('')||`<tr><td colspan="5" class="empty">未辨識到物料，請手動新增或檢查 PDF</td></tr>`;
+  el.innerHTML=`
+   <div class="grid2" style="margin-bottom:10px">
+     <div class="fld" style="margin:0"><label>客戶</label><input class="inp" value="${esc(m.customer)}" oninput="PDF_EDIT.customer=this.value.toUpperCase()"></div>
+     <div class="fld" style="margin:0"><label>款號</label><input class="inp" value="${esc(m.styleNo)}" oninput="PDF_EDIT.styleNo=this.value"></div>
+     <div class="fld" style="margin:0"><label>Revision</label><input class="inp" value="${esc(m.revision)}" oninput="PDF_EDIT.revision=this.value"></div>
+     <div class="fld" style="margin:0"><label>Size Range</label><input class="inp" value="${esc(m.sizeRange)}" oninput="PDF_EDIT.sizeRange=this.value"></div>
+   </div>
+   <div style="display:flex;align-items:center;gap:8px;margin:8px 0">
+     <b style="font-size:13px">物料 ${m.items.length} 項</b><div class="sp"></div>
+     <button class="btn sm" onclick="PDF_EDIT.items.push({item:'',category:'Trim',qtyPcs:0,unit:'PCS'});renderRecog()"><i class="bi bi-plus"></i> 加列</button></div>
+   <table class="itemtbl"><thead><tr><th style="width:100px">類別</th><th>物料</th><th style="width:72px">Qty/PCS</th><th style="width:64px">單位</th><th style="width:32px"></th></tr></thead>
+     <tbody>${itemRows}</tbody></table>`;
+}
+
+/* ---------- import a parsed entry (with collision handling) ---------- */
+function importParsed(i, fromPreview){
+  const f=PDF_QUEUE[i]; if(!f)return;
+  const src = (fromPreview&&PDF_EDIT)?PDF_EDIT:f.parsed;
+  doImportStyle(src,()=>{
+    DB.meta.pdfImported=(DB.meta.pdfImported||0)+1;
+    f.status='done'; markDirty(); persist();
+    if(fromPreview)closeModal();
+    toast('已匯入 · '+src.styleNo,'good'); render();
+  });
+}
+function importAllQueue(){
+  const ok=PDF_QUEUE.filter(f=>f.status==='ok');
+  if(!ok.length){ toast('無可匯入項目','warn'); return; }
+  snapshot();
+  let n=0;
+  ok.forEach(f=>{ const st=coerceStyle(Object.assign({},f.parsed,{allowEmpty:true}));
+    if(!st)return;
+    if(!custByCode(st.customerCode)) DB.customers.push({id:uid('cu'),code:st.customerCode,name:st.customerCode,active:true});
+    const exist=DB.styles.find(x=>x.styleNo===st.styleNo&&x.customerCode===st.customerCode);
+    if(exist){ exist.items=st.items; exist.updatedAt=nowISO(); (exist.versions=exist.versions||[]).push({ver:exist.versions.length+1,ts:nowISO(),editor:'pdf',comment:'PDF 覆蓋',items:st.items.length}); }
+    else { st.source='pdf'; st.versions=[{ver:1,ts:nowISO(),editor:'pdf',comment:'PDF 匯入',items:st.items.length}]; DB.styles.push(st); }
+    f.status='done'; n++; DB.meta.pdfImported=(DB.meta.pdfImported||0)+1; logAct('PDF 匯入',st.styleNo);
+  });
+  markDirty(); persist(); toast('已匯入 '+n+' 個款式','good'); render();
+}
+/* generic import with create/overwrite/merge/version prompt */
+function doImportStyle(src, done){
+  const st=coerceStyle(Object.assign({},src,{allowEmpty:true,source:src.source||'pdf'}));
+  if(!st){ toast('無有效物料','warn'); return; }
+  if(!custByCode(st.customerCode)) DB.customers.push({id:uid('cu'),code:st.customerCode,name:st.customerCode,active:true});
+  const exist=DB.styles.find(x=>x.styleNo===st.styleNo&&x.customerCode===st.customerCode);
+  if(!exist){ snapshot(); st.versions=[{ver:1,ts:nowISO(),editor:'import',comment:'匯入',items:st.items.length}];
+    DB.styles.push(st); logAct('匯入 BOM',st.styleNo); done&&done(); return; }
+  // collision
+  openModal(`<div class="mh"><i class="bi bi-exclamation-triangle"></i><h3>款式已存在</h3><button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="note warn">「${esc(st.styleNo)}」（${esc(st.customerCode)}）已存在 ${(exist.items||[]).length} 項物料。新匯入有 ${st.items.length} 項。請選擇處理方式：</div></div>
+   <div class="mf" style="justify-content:flex-start;flex-wrap:wrap">
+     <button class="btn" onclick="resolveCollision('version')"><i class="bi bi-clock-history"></i> 建立新版本</button>
+     <button class="btn" onclick="resolveCollision('overwrite')"><i class="bi bi-arrow-repeat"></i> 覆蓋</button>
+     <button class="btn" onclick="resolveCollision('merge')"><i class="bi bi-union"></i> 合併</button>
+     <div class="sp" style="flex:1"></div>
+     <button class="btn" onclick="closeModal();window._impDone=null">取消</button>
+   </div>`,'md');
+  window._impTarget=exist; window._impSrc=st; window._impDone=done;
+}
+function resolveCollision(mode){
+  const exist=window._impTarget, st=window._impSrc, done=window._impDone;
+  if(!exist||!st){ closeModal(); return; }
+  snapshot();
+  (exist.versions=exist.versions||[]).push({ver:exist.versions.length+1,ts:nowISO(),editor:'import',
+    comment:'匯入前快照('+mode+')',items:(exist.items||[]).length,snapshot:JSON.stringify(exist.items)});
+  if(mode==='overwrite'){ exist.items=st.items; }
+  else if(mode==='merge'){ const map={}; (exist.items||[]).forEach(i=>map[i.itemName]=i);
+    st.items.forEach(i=>{ map[i.itemName]=i; }); exist.items=Object.values(map); }
+  else if(mode==='version'){ exist.items=st.items; }
+  exist.updatedAt=nowISO(); logAct('匯入合併('+mode+')',exist.styleNo);
+  closeModal(); done&&done();
+}
+
+/* ====================================================================
+   PDF COMPARE (old vs new)
+   ==================================================================== */
+let PDFCMP={a:null,b:null};
+function openPdfCompare(){
+  openModal(`<div class="mh"><i class="bi bi-vr"></i><h3>PDF 比對 · Compare</h3><button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="grid2" style="margin-bottom:12px">
+       <div class="dropzone" onclick="pickCmp('a')" style="padding:24px"><i class="bi bi-filetype-pdf"></i>
+         <div style="margin-top:6px;font-weight:700" id="cmpA">${PDFCMP.a?esc(PDFCMP.a.styleNo):'選擇舊版 PDF'}</div></div>
+       <div class="dropzone" onclick="pickCmp('b')" style="padding:24px"><i class="bi bi-filetype-pdf" style="color:var(--green)"></i>
+         <div style="margin-top:6px;font-weight:700" id="cmpB">${PDFCMP.b?esc(PDFCMP.b.styleNo):'選擇新版 PDF'}</div></div>
+     </div>
+     <div id="cmpResult">${PDFCMP.a&&PDFCMP.b?pdfCmpTable():'<div class="note">請選擇兩個 PDF 檔進行比對</div>'}</div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button></div>`,'lg');
+}
+function pickCmp(slot){ pickFile('.pdf',async files=>{ if(!files[0])return;
+  try{ const p=await parsePdfFile(files[0]); PDFCMP[slot]=p; openPdfCompare(); }
+  catch(e){ toast('解析失敗：'+e.message,'bad'); } }); }
+function pdfCmpTable(){
+  const a=PDFCMP.a, b=PDFCMP.b; const map={};
+  (a.items||[]).forEach(i=>map[i.item]={a:i}); (b.items||[]).forEach(i=>{ map[i.item]=map[i.item]||{}; map[i.item].b=i; });
+  const rows=Object.keys(map).sort().map(k=>{ const o=map[k]; let cls='',tag='';
+    if(o.a&&!o.b){cls='diff-del';tag='刪除';} else if(!o.a&&o.b){cls='diff-add';tag='新增';}
+    else { const ch=(o.a.qtyPcs!==o.b.qtyPcs)||(o.a.desc!==o.b.desc); if(ch){cls='diff-mod';tag='修改';} else tag='—'; }
+    return `<tr class="${cls}"><td>${esc(k)}</td><td>${o.a?esc(o.a.qtyPcs):'-'}</td><td>${o.b?esc(o.b.qtyPcs):'-'}</td><td class="center">${tag}</td></tr>`;
+  }).join('');
+  return `<div class="tblwrap"><table class="tbl"><thead><tr><th>物料</th><th>舊 Qty</th><th>新 Qty</th><th class="center">差異</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+/* ====================================================================
+   PART 7 — Excel I/O · Reports · Telegram · Cloud · Backup · Settings
+   ==================================================================== */
+
+/* ---------- Excel / CSV import ---------- */
+function importExcelFiles(files){ if(!files||!files.length)return;
+  if(CURRENT!=='import')go('import');
+  files.forEach(f=>{ const fr=new FileReader();
+    fr.onload=()=>{ try{
+        if(/\.csv$/i.test(f.name)){ importCSVText(fr.result, f.name); }
+        else { const wb=XLSX.read(fr.result,{type:'array',cellDates:false,raw:true}); importWorkbook(wb,f.name); }
+      }catch(e){ console.error(e); toast('Excel 解析失敗：'+e.message,'bad'); } };
+    if(/\.csv$/i.test(f.name)) fr.readAsText(f); else fr.readAsArrayBuffer(f);
+  });
+}
+function importWorkbook(wb,name){
+  let imported=0;
+  wb.SheetNames.forEach(sn=>{ const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});
+    const styles=parseSheetAOA(aoa,sn); styles.forEach(st=>{ doImportStyle(st,()=>imported++); });
+  });
+  DB.meta.excelImported=(DB.meta.excelImported||0)+1; markDirty(); persist();
+  toast('Excel 匯入完成 · '+name,'good'); render();
+}
+function importCSVText(text,name){ const rows=text.split(/\r?\n/).filter(r=>r.trim()).map(splitCSV);
+  const styles=parseSheetAOA(rows,name); styles.forEach(st=>doImportStyle(st));
+  DB.meta.excelImported=(DB.meta.excelImported||0)+1; markDirty(); persist(); toast('CSV 匯入完成','good'); render(); }
+
+/* parse an AOA: supports flat (customer,style,item,...) or construction-style header */
+function parseSheetAOA(aoa,sheetName){
+  if(!aoa||!aoa.length) return [];
+  // locate header row with Items + qty/desc
+  let hr=-1, cols={};
+  for(let r=0;r<Math.min(aoa.length,25);r++){
+    const low=aoa[r].map(c=>String(c).toLowerCase().trim());
+    if(low.some(c=>/item/.test(c)) && low.some(c=>/(qty|consum|dozen|desc)/.test(c))){
+      hr=r; low.forEach((c,ci)=>{
+        if(/item/.test(c))cols.item=ci; else if(/desc|construct/.test(c))cols.desc=ci;
+        else if(/colou?r|shade/.test(c))cols.color=ci; else if(/width|size/.test(c))cols.width=ci;
+        else if(/dozen|doz/.test(c))cols.dozen=ci; else if(/qty|consum|usage/.test(c))cols.qty=ci;
+        else if(/unit|uom/.test(c))cols.unit=ci; else if(/category|cat/.test(c))cols.cat=ci;
+        else if(/customer/.test(c))cols.cust=ci; else if(/style/.test(c))cols.style=ci;
+      }); break;
+    }
+  }
+  if(hr<0) return [];
+  // metadata from rows above header
+  const meta={customer:'',styleNo:'',sizeRange:'',baseSize:''};
+  for(let r=0;r<hr;r++){ const line=aoa[r].join(' ');
+    let m; if((m=line.match(/customer\s*[:\-]?\s*([A-Za-z][\w &.\-]{1,30})/i)))meta.customer=m[1].trim();
+    if((m=line.match(/style\s*(?:no|#)?\s*[:\-]?\s*([\w.\-\/]{2,30})/i)))meta.styleNo=m[1].trim();
+    if((m=line.match(/size\s*range\s*[:\-]?\s*([\w ,\-\/]{1,40})/i)))meta.sizeRange=m[1].trim();
+  }
+  // group rows: if customer/style columns exist → multi-style flat; else single style from meta
+  const hasInline = cols.cust!=null || cols.style!=null;
+  const groups={};
+  for(let r=hr+1;r<aoa.length;r++){ const row=aoa[r]; if(!row||!row.length)continue;
+    const item=String(cols.item!=null?row[cols.item]:'').trim(); if(!item)continue;
+    const cust=(hasInline&&cols.cust!=null?String(row[cols.cust]).trim():meta.customer)||'OTHER';
+    const style=(hasInline&&cols.style!=null?String(row[cols.style]).trim():meta.styleNo)||sheetName||'STYLE';
+    const key=cust+'||'+style; (groups[key]=groups[key]||{customer:cust,styleNo:style,sizeRange:meta.sizeRange,source:'excel',items:[]});
+    groups[key].items.push({ item, desc:cols.desc!=null?row[cols.desc]:'', color:cols.color!=null?row[cols.color]:'',
+      width:cols.width!=null?row[cols.width]:'', qtyPcs:cols.qty!=null?row[cols.qty]:'', qtyDozen:cols.dozen!=null?row[cols.dozen]:'',
+      unit:cols.unit!=null?row[cols.unit]:'', category:cols.cat!=null?row[cols.cat]:classifyItem(item) });
+  }
+  return Object.values(groups).filter(g=>g.items.length);
+}
+function importJSONFile(file){ const fr=new FileReader();
+  fr.onload=()=>{ try{ const d=JSON.parse(fr.result); const arr=Array.isArray(d)?d:(d.styles||[]);
+    let n=0; arr.forEach(s=>doImportStyle(s,()=>n++)); markDirty(); persist(); toast('JSON 匯入 '+arr.length+' 款式','good'); render();
+  }catch(e){ toast('JSON 格式錯誤','bad'); } }; fr.readAsText(file); }
+
+/* ---------- Export ---------- */
+function styleToAOA(s){ const aoa=[['Customer',s.customerCode],['Style No',s.styleNo],['Style Name',s.styleName||''],
+  ['Revision',s.revision||''],['Size Range',s.sizeRange||''],['Base Size',s.baseSize||''],[],
+  ['Nº','Category','Item','Description','Color','Width','Qty/PCS','Qty/Dozen','Unit','Waste%']];
+  (s.items||[]).forEach((i,n)=>aoa.push([n+1,i.category,i.itemName,i.description,i.color,i.width,i.qtyPcs,i.qtyDozen,i.unit,i.wastePct]));
+  return aoa; }
+function exportAll(kind){
+  if(!DB.styles.length){ toast('無資料可匯出','warn'); return; }
+  if(kind==='json'){ downloadFile('VRT_BOM_'+localDate()+'.json', JSON.stringify({_app:'VRT_BOM',_ver:2,customers:DB.customers,styles:DB.styles},null,2),'application/json');
+    toast(t('msg.exported'),'good'); return; }
+  if(kind==='csv'){ const lines=[['Customer','Style','Nº','Category','Item','Description','Color','Width','Qty/PCS','Qty/Dozen','Unit','Waste%'].map(csvCell).join(',')];
+    DB.styles.forEach(s=>(s.items||[]).forEach((i,n)=>lines.push([s.customerCode,s.styleNo,n+1,i.category,i.itemName,i.description,i.color,i.width,i.qtyPcs,i.qtyDozen,i.unit,i.wastePct].map(csvCell).join(','))));
+    downloadFile('VRT_BOM_'+localDate()+'.csv', lines.join('\n'),'text/csv'); toast(t('msg.exported'),'good'); return; }
+  // xlsx
+  const wb=XLSX.utils.book_new();
+  const summary=[['Customer','Style','Name','Items','Status','Updated']];
+  DB.styles.forEach(s=>summary.push([s.customerCode,s.styleNo,s.styleName||'',(s.items||[]).length,s.status,localStamp(s.updatedAt)]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(summary),'Summary');
+  DB.styles.slice(0,180).forEach(s=>{ const nm=(s.styleNo||'S').replace(/[\\/?*\[\]:]/g,'').slice(0,28)||'Style';
+    try{ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(styleToAOA(s)),nm); }catch(e){} });
+  XLSX.writeFile(wb,'VRT_BOM_'+localDate()+'.xlsx'); toast(t('msg.exported'),'good');
+}
+function exportMaterials(){ let mats=allMaterials();
+  if(MATFILTER.cust)mats=mats.filter(m=>m._cust===MATFILTER.cust); if(MATFILTER.cat)mats=mats.filter(m=>m.category===MATFILTER.cat);
+  const wb=XLSX.utils.book_new(); const aoa=[['Category','Style','Customer','Material','Description','Color','Width','Qty/PCS','Unit','Waste%']];
+  mats.forEach(m=>aoa.push([m.category,m._style,m._cust,m.itemName,m.description,m.color,m.width,m.qtyPcs,m.unit,m.wastePct]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Materials'); XLSX.writeFile(wb,'VRT_Materials_'+localDate()+'.xlsx'); toast(t('msg.exported'),'good'); }
+function exportExplosion(){ const s=styleById(EXP.sid); if(!s)return;
+  const wb=XLSX.utils.book_new(); const aoa=[['Style',s.styleNo,'Order Qty',EXP.qty],[],['Category','Material','Unit','Qty/PCS','Total','Waste%','With Waste']];
+  (s.items||[]).forEach(i=>{ const need=(i.qtyPcs||0)*EXP.qty; aoa.push([i.category,i.itemName,i.unit,i.qtyPcs,need,i.wastePct,need*(1+(i.wastePct||0)/100)]); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Explosion'); XLSX.writeFile(wb,'VRT_Explosion_'+s.styleNo+'.xlsx'); toast(t('msg.exported'),'good'); }
+function printCurrent(){ window.print(); }
+function printMaterials(){ window.print(); }
+
+/* ====================================================================
+   REPORTS
+   ==================================================================== */
+function renderReports(){
+  const cards=[
+    ['bi-people-fill','客戶 BOM 報表','各客戶款式與物料統計','rptCustomer'],
+    ['bi-list-columns','款式 BOM 報表','完整款式物料明細','rptStyle'],
+    ['bi-boxes','物料彙總','全物料出現次數與分類','rptMaterial'],
+    ['bi-layers-fill','布料彙總','主布 / 配布 / 裡布統計','rptFabric'],
+    ['bi-tags-fill','輔料彙總','Trim / 車線 / 包裝','rptTrim'],
+    ['bi-calculator','用量報表','各款式用量明細','rptConsumption']
+  ];
+  MAIN().innerHTML=`<div class="phead"><div><h1>${t('rep.title')}</h1><div class="sub">${t('rep.sub')}</div></div></div>
+   <div class="rptcards">${cards.map(c=>`<div class="rptcard" onclick="${c[3]}()">
+     <div class="ic"><i class="bi ${c[0]}"></i></div><h4>${c[1]}</h4><p>${c[2]}</p></div>`).join('')}</div>`;
+}
+function reportSheet(title,aoa){ const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),title.slice(0,28));
+  XLSX.writeFile(wb,'VRT_'+title.replace(/\s/g,'_')+'_'+localDate()+'.xlsx'); toast('報表已產生','good'); }
+function rptCustomer(){ const aoa=[['Customer','Styles','Total Items','Main Fabric','Trim']];
+  DB.customers.forEach(c=>{ const ss=DB.styles.filter(s=>s.customerCode===c.code); let it=0,mf=0,tr=0;
+    ss.forEach(s=>(s.items||[]).forEach(i=>{ it++; if(i.category==='Main Fabric')mf++; if(i.category==='Trim')tr++; }));
+    aoa.push([c.code,ss.length,it,mf,tr]); }); reportSheet('Customer_BOM',aoa); }
+function rptStyle(){ const aoa=[['Customer','Style','Name','Status','Items','Updated']];
+  DB.styles.forEach(s=>aoa.push([s.customerCode,s.styleNo,s.styleName||'',s.status,(s.items||[]).length,localStamp(s.updatedAt)])); reportSheet('Style_BOM',aoa); }
+function rptMaterial(){ const map={}; DB.styles.forEach(s=>(s.items||[]).forEach(i=>{ const k=i.category+'||'+i.itemName;
+  map[k]=map[k]||{cat:i.category,item:i.itemName,n:0}; map[k].n++; }));
+  const aoa=[['Category','Material','Count']]; Object.values(map).sort((a,b)=>b.n-a.n).forEach(m=>aoa.push([m.cat,m.item,m.n])); reportSheet('Material_Summary',aoa); }
+function rptFabric(){ const aoa=[['Category','Fabric/Item','Style','Composition','Width','Qty/PCS','Unit']];
+  DB.styles.forEach(s=>(s.items||[]).forEach(i=>{ if(['Main Fabric','Contrast Fabric','Lining','Pocketing','Rib','Interlining'].includes(i.category))
+    aoa.push([i.category,i.itemName,s.styleNo,i.composition,i.width,i.qtyPcs,i.unit]); })); reportSheet('Fabric_Summary',aoa); }
+function rptTrim(){ const aoa=[['Category','Item','Style','Color','Qty/PCS','Unit']];
+  DB.styles.forEach(s=>(s.items||[]).forEach(i=>{ if(['Trim','Thread','Packing'].includes(i.category))
+    aoa.push([i.category,i.itemName,s.styleNo,i.color,i.qtyPcs,i.unit]); })); reportSheet('Trim_Summary',aoa); }
+function rptConsumption(){ const aoa=[['Style','Customer','Material','Category','Qty/PCS','Qty/Dozen','Unit','Waste%']];
+  DB.styles.forEach(s=>(s.items||[]).forEach(i=>aoa.push([s.styleNo,s.customerCode,i.itemName,i.category,i.qtyPcs,i.qtyDozen,i.unit,i.wastePct]))); reportSheet('Consumption',aoa); }
+
+/* ====================================================================
+   TELEGRAM
+   ==================================================================== */
+function escTg(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function sendTg(text){ const s=DB.settings; if(!s.tgProxy)throw new Error('未設定 GAS Proxy URL');
+  const body=new URLSearchParams(); body.set('action','sendMessage'); body.set('chat_id',s.tgChat||''); body.set('parse_mode','HTML'); body.set('text',text);
+  const r=await fetch(s.tgProxy,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body.toString()}); return await r.text(); }
+function bomTgText(prefix,st){ const co=DB.settings.companyZh||DB.settings.company||'VRT';
+  return [`<b>${escTg(prefix)}</b>`,`🏭 ${escTg(co)}`,`👤 ${escTg(custName(st.customerCode))}`,
+    `🔖 Style: <code>${escTg(st.styleNo)}</code>`, st.styleName?`📄 ${escTg(st.styleName)}`:'',
+    `🧵 BOM: <b>${(st.items||[]).length}</b> 項`,`🕒 ${escTg(localStamp(st.updatedAt||nowISO()))}`].filter(Boolean).join('\n'); }
+async function notifyTg(event,st){ const s=DB.settings; if(!s.tgEnabled||!s.tgProxy)return; const ev=s.tgEvents||{};
+  if(event==='create'&&!ev.create)return; if(event==='update'&&!ev.update)return; if(event==='delete'&&!ev.delete)return;
+  const label=event==='create'?'🆕 新增 BOM':event==='update'?'✏️ 更新 BOM':'🗑 刪除 BOM';
+  try{ await sendTg(bomTgText(label,st)); }catch(e){ console.warn('TG',e); } }
+function openTelegram(){ const s=DB.settings;
+  openModal(`<div class="mh"><i class="bi bi-send-fill"></i><h3>Telegram 通知</h3><button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="note ${s.tgEnabled?'good':''}" style="margin-bottom:12px">狀態：<b>${s.tgEnabled?'已啟用':'未啟用'}</b>${s.tgProxy?'':' · <span style="color:var(--bad)">未設定 Proxy</span>'}</div>
+     <div class="fld"><label>GAS Proxy URL (/exec)</label><input class="inp" id="tgQProxy" value="${esc(s.tgProxy||'')}" placeholder="https://script.google.com/macros/s/…/exec"></div>
+     <div class="fld"><label>Chat ID / Group ID</label><input class="inp" id="tgQChat" value="${esc(s.tgChat||'')}" placeholder="-100123…"></div>
+     <label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="tgQOn" ${s.tgEnabled?'checked':''}> 啟用通知</label>
+     <div class="muted" style="font-size:12px;margin-top:6px">透過 GAS /exec 代理（text/plain，parse_mode HTML）。Token 僅存於 GAS。</div></div>
+   <div class="mf"><button class="btn" onclick="testTg()"><i class="bi bi-bug"></i> 測試</button><div class="sp" style="flex:1"></div>
+     <button class="btn" onclick="closeModal()">關閉</button><button class="btn dark" onclick="saveTgQuick()">儲存</button></div>`,'md'); }
+function saveTgQuick(){ const g=i=>document.getElementById(i);
+  DB.settings.tgProxy=(g('tgQProxy').value||'').trim(); DB.settings.tgChat=(g('tgQChat').value||'').trim(); DB.settings.tgEnabled=g('tgQOn').checked;
+  markDirty(); persist(); closeModal(); toast('Telegram 設定已儲存','good'); if(CURRENT==='settings')render(); }
+async function testTg(){ const g=i=>document.getElementById(i);
+  if(g('tgQProxy')){ DB.settings.tgProxy=(g('tgQProxy').value||'').trim(); DB.settings.tgChat=(g('tgQChat').value||'').trim(); }
+  if(!DB.settings.tgProxy){ toast('請先填入 Proxy URL','warn'); return; }
+  toast('傳送測試…',''); try{ await sendTg(`<b>✅ VRT BOM 測試</b>\n🏭 ${escTg(DB.settings.companyZh||DB.settings.company)}\n🕒 ${escTg(localStamp(nowISO()))}`); toast('已送出','good'); }
+  catch(e){ toast('失敗：'+e.message,'bad'); } }
+
+/* ====================================================================
+   CLOUD SYNC (GAS /exec, meta+chunk, merge)
+   ==================================================================== */
+async function gasPost(url,payload){ const body=new URLSearchParams();
+  Object.keys(payload).forEach(k=>body.set(k, typeof payload[k]==='object'?JSON.stringify(payload[k]):payload[k]));
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body.toString()});
+  const txt=await r.text(); try{ return JSON.parse(txt); }catch(e){ return {ok:false,raw:txt}; } }
+function dedupKey(s){ return (s.customerCode||'')+'|'+(s.styleNo||''); }
+async function cloudPush(){ const url=DB.settings.cloudProxy; if(!url){ toast('請先設定 Cloud URL','warn'); go('settings'); return; }
+  setCloudTag('dirty'); toast('上傳中…',''); try{
+    const styles=DB.styles; const chunks=[]; for(let i=0;i<styles.length;i+=CHUNK_SIZE)chunks.push(styles.slice(i,i+CHUNK_SIZE));
+    await gasPost(url,{action:'pushMeta',system:'vrt_bom2',rev:DB.meta.rev||0,chunks:chunks.length,customers:DB.customers,savedAt:nowISO()});
+    for(let i=0;i<chunks.length;i++) await gasPost(url,{action:'pushChunk',system:'vrt_bom2',index:i,total:chunks.length,data:chunks[i]});
+    if(!chunks.length) await gasPost(url,{action:'pushChunk',system:'vrt_bom2',index:0,total:0,data:[]});
+    DB.meta.lastSync=nowISO(); markDirty(); persist(); setCloudTag('synced'); toast('已上傳雲端 ('+styles.length+')','good'); if(CURRENT==='settings')render();
+  }catch(e){ setCloudTag('local'); toast('上傳失敗：'+e.message,'bad'); } }
+async function cloudPull(){ const url=DB.settings.cloudProxy; if(!url){ toast('請先設定 Cloud URL','warn'); go('settings'); return; }
+  toast('下載中…',''); try{
+    const meta=await gasPost(url,{action:'pullMeta',system:'vrt_bom2'}); const total=(meta&&meta.chunks)||0; let styles=[];
+    for(let i=0;i<total;i++){ const c=await gasPost(url,{action:'pullChunk',system:'vrt_bom2',index:i}); if(c&&Array.isArray(c.data))styles=styles.concat(c.data); }
+    snapshot(); const map={}; DB.styles.forEach(s=>map[dedupKey(s)]=s);
+    styles.forEach(s=>{ const k=dedupKey(s); map[k]=Object.assign({},map[k]||{},coerceStyle(Object.assign({},s,{allowEmpty:true}))||s); });
+    DB.styles=Object.values(map);
+    if(meta&&Array.isArray(meta.customers))meta.customers.forEach(c=>{ if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c)); });
+    DB.meta.lastSync=nowISO(); markDirty(); persist(); setCloudTag('synced'); logAct('雲端下載',styles.length+' 款式'); toast('已合併 '+styles.length+' 款式','good'); render();
+  }catch(e){ toast('下載失敗：'+e.message,'bad'); } }
+
+/* ====================================================================
+   BACKUP
+   ==================================================================== */
+function downloadFile(name,content,mime){ const blob=content instanceof Blob?content:new Blob([content],{type:mime||'application/octet-stream'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },200); }
+function openBackup(){ const last=DB.meta.savedAt?localStamp(DB.meta.savedAt):'—';
+  openModal(`<div class="mh"><i class="bi bi-hdd-fill"></i><h3>備份 / 還原</h3><button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><div class="kpis" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-bottom:14px">
+       <div class="kpi c-blue"><div class="ttl">款式</div><div class="val">${DB.styles.length}</div></div>
+       <div class="kpi c-green"><div class="ttl">客戶</div><div class="val">${DB.customers.length}</div></div>
+       <div class="kpi c-gray"><div class="ttl">Rev</div><div class="val">${DB.meta.rev||0}</div></div>
+       <div class="kpi c-amber"><div class="ttl">最後儲存</div><div class="val" style="font-size:12px">${esc(last)}</div></div></div>
+     <div class="grid2"><button class="btn dark" onclick="downloadBackup()"><i class="bi bi-download"></i> 下載備份 (.json)</button>
+       <button class="btn" onclick="pickBackup()"><i class="bi bi-upload"></i> 還原備份</button></div>
+     <div class="hr"></div><button class="btn danger" style="width:100%" onclick="wipeAll()"><i class="bi bi-exclamation-triangle"></i> 清除所有資料</button>
+     <div class="muted" style="font-size:12px;margin-top:9px">備份含全部 BOM、客戶、設定與紀錄；還原採合併（相同 客戶+款式 以備份為準）。</div></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${t('common.close')}</button></div>`,'md'); }
+function downloadBackup(){ const p={_app:'VRT_BOM',_ver:2,_exported:nowISO(),customers:DB.customers,styles:DB.styles,settings:DB.settings,activity:DB.activity,meta:DB.meta};
+  downloadFile('VRT_BOM_Backup_'+localDate().replace(/-/g,'')+'.json',JSON.stringify(p,null,2),'application/json'); toast('備份已下載','good'); }
+function restoreBackup(file){ if(!file)return; const fr=new FileReader();
+  fr.onload=()=>{ try{ const d=JSON.parse(fr.result); const styles=(d.styles||[]).map(s=>coerceStyle(Object.assign({},s,{allowEmpty:true}))).filter(Boolean);
+    confirmBox(`合併 ${styles.length} 款式與 ${(d.customers||[]).length} 客戶？`,()=>{ snapshot();
+      (d.customers||[]).forEach(c=>{ if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c)); });
+      const map={}; DB.styles.forEach(s=>map[dedupKey(s)]=s); styles.forEach(s=>map[dedupKey(s)]=s); DB.styles=Object.values(map);
+      if(d.settings)DB.settings=Object.assign({},DB.settings,d.settings); markDirty(); persist(); logAct('還原備份',styles.length+' 款式');
+      toast('還原完成','good'); closeModal(); render();
+    },{danger:false,ok:'合併還原'});
+  }catch(e){ toast('檔案錯誤：'+e.message,'bad'); } }; fr.readAsText(file); }
+function wipeAll(){ confirmBox('永久刪除所有 BOM、客戶與紀錄，無法復原（保留通知/雲端設定）。確定？',()=>{
+  DB={customers:[],styles:[],settings:Object.assign({},DEFAULT_SETTINGS,{tgProxy:DB.settings.tgProxy,tgChat:DB.settings.tgChat,cloudProxy:DB.settings.cloudProxy}),activity:[],meta:{rev:0,pdfImported:0,excelImported:0}};
+  UNDO=[];REDO=[]; persist(); toast('已清除全部','warn'); closeModal(); go('dashboard'); },{ok:'全部清除'}); }
+
+/* ====================================================================
+   SETTINGS · ACTIVITY · HELP
+   ==================================================================== */
+function renderSettings(){ const s=DB.settings;
+  const ev=s.tgEvents||{};
+  MAIN().innerHTML=`<div class="phead"><div><h1>${t('set.title')}</h1><div class="sub">${t('set.sub')}</div></div><div class="sp"></div>
+     <button class="btn dark" onclick="saveSettings()"><i class="bi bi-save"></i> ${t('common.save')}</button></div>
+   <div class="grid2">
+     <div class="card"><div class="ch"><i class="bi bi-building"></i><h3>公司 / 工廠</h3></div><div class="cb">
+       <div class="fld"><label>公司名稱</label><input class="inp" id="setCompany" value="${esc(s.company)}"></div>
+       <div class="fld"><label>公司中文</label><input class="inp" id="setCompanyZh" value="${esc(s.companyZh||'')}"></div>
+       <div class="fld"><label>工廠</label><input class="inp" id="setFactory" value="${esc(s.factory||'')}"></div>
+       <div class="fld"><label>部門</label><input class="inp" id="setDept" value="${esc(s.dept||'')}"></div>
+       <div class="grid2"><div class="fld"><label>預設客戶</label><select class="inp" id="setDefCust">${DB.customers.map(c=>`<option value="${c.code}" ${s.defaultCustomer===c.code?'selected':''}>${esc(c.code)}</option>`).join('')}</select></div>
+         <div class="fld"><label>預設損耗 %</label><input class="inp" type="number" id="setWaste" value="${s.defaultWaste}"></div></div>
+       <div class="fld"><label>預設單位</label><select class="inp" id="setUnit">${UNITS.map(u=>`<option ${s.defaultUnit===u?'selected':''}>${u}</option>`).join('')}</select></div>
+       <div class="fld"><label>自動儲存</label><select class="inp" id="setAuto"><option value="1" ${s.autosave?'selected':''}>開啟</option><option value="0" ${!s.autosave?'selected':''}>關閉</option></select></div>
+     </div></div>
+     <div class="card"><div class="ch"><i class="bi bi-send"></i><h3>Telegram 通知</h3></div><div class="cb">
+       <label style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><input type="checkbox" id="setTgOn" ${s.tgEnabled?'checked':''}> 啟用 Telegram</label>
+       <div class="fld"><label>GAS Proxy URL (/exec)</label><input class="inp" id="setTgProxy" value="${esc(s.tgProxy||'')}" placeholder="…/exec"></div>
+       <div class="fld"><label>Chat ID</label><input class="inp" id="setTgChat" value="${esc(s.tgChat||'')}"></div>
+       <label style="font-size:12px;color:var(--ink2);font-weight:600">通知事件</label>
+       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">
+         <label><input type="checkbox" id="tgE_create" ${ev.create?'checked':''}> 新增</label>
+         <label><input type="checkbox" id="tgE_update" ${ev.update?'checked':''}> 更新</label>
+         <label><input type="checkbox" id="tgE_delete" ${ev.delete?'checked':''}> 刪除</label>
+         <label><input type="checkbox" id="tgE_daily" ${ev.daily?'checked':''}> 每日</label></div>
+       <div class="hr"></div>
+       <div class="ch" style="padding:0 0 8px"><i class="bi bi-cloud"></i><h3 style="font-size:14px">雲端同步</h3></div>
+       <div class="fld"><label>GAS Cloud URL (/exec)</label><input class="inp" id="setCloud" value="${esc(s.cloudProxy||'')}" placeholder="…/exec"></div>
+       <div style="display:flex;gap:8px"><button class="btn sm" onclick="testTg()">測試 TG</button>
+         <button class="btn sm" onclick="cloudPush()">上傳</button><button class="btn sm" onclick="cloudPull()">下載</button></div>
+     </div></div>
+   </div>
+   <div class="card" style="margin-top:16px"><div class="ch"><i class="bi bi-info-circle"></i><h3>關於</h3></div><div class="cb">
+     <div class="muted" style="font-size:13px;line-height:1.8">VRT BOM Management AI · v2.0 — 單檔離線優先 ERP。資料儲存於本機 LocalStorage + IndexedDB（支援 2,000+ 款式、100,000+ 物料）。部署於 saintdou-weng.github.io。</div></div></div>`;
+}
+function saveSettings(){ const g=i=>document.getElementById(i); const s=DB.settings;
+  if(g('setCompany')){ s.company=g('setCompany').value; s.companyZh=g('setCompanyZh').value; s.factory=g('setFactory').value; s.dept=g('setDept').value;
+    s.defaultCustomer=g('setDefCust').value; s.defaultWaste=parseNum(g('setWaste').value); s.defaultUnit=g('setUnit').value; s.autosave=g('setAuto').value==='1'; }
+  if(g('setTgOn')){ s.tgEnabled=g('setTgOn').checked; s.tgProxy=g('setTgProxy').value.trim(); s.tgChat=g('setTgChat').value.trim();
+    s.tgEvents={create:g('tgE_create').checked,update:g('tgE_update').checked,delete:g('tgE_delete').checked,daily:g('tgE_daily').checked}; }
+  if(g('setCloud'))s.cloudProxy=g('setCloud').value.trim();
+  markDirty(); persist(); toast(t('msg.saved'),'good'); }
+
+function renderActivityPage(){ const rows=DB.activity.slice(0,200).map(a=>`<div class="actrow">
+  <div class="ai"><i class="bi bi-${a.action.includes('刪除')?'trash':a.action.includes('匯入')?'box-arrow-in-down':a.action.includes('新增')?'plus-lg':'pencil'}"></i></div>
+  <div><b>${esc(a.action)}</b> ${a.target?'· '+esc(a.target):''}<div class="muted" style="font-size:11px">${esc(a.user)}</div></div>
+  <div class="at">${esc(localStamp(a.ts))}</div></div>`).join('')||`<div class="empty">${t('msg.nodata')}</div>`;
+  return `<div class="card"><div class="ch"><i class="bi bi-clock-history"></i><h3>操作紀錄 · Activity Log</h3></div><div class="cb"><div class="actlog">${rows}</div></div></div>`;
+}
+function renderHelp(){
+  MAIN().innerHTML=`<div class="phead"><div><h1>${t('help.title')}</h1><div class="sub">${t('help.sub')}</div></div></div>
+   <div class="grid2">
+     <div class="card"><div class="ch"><i class="bi bi-robot"></i><h3>AI PDF 匯入（最重要）</h3></div><div class="cb">
+       <p style="line-height:1.9;color:var(--ink2)">至「匯入」頁拖放 PDF（支援批次），系統用 PDF.js 自動辨識表格、款號、客戶與物料分類。匯入前可左右分割預覽：左為原始 PDF、右為可編輯的辨識結果。款式已存在時可選擇「新版本 / 覆蓋 / 合併」。</p></div></div>
+     <div class="card"><div class="ch"><i class="bi bi-clock-history"></i><h3>版本控制與比對</h3></div><div class="cb">
+       <p style="line-height:1.9;color:var(--ink2)">每次儲存自動建立版本快照（V1, V2…），可隨時還原。「分析 → 版本比對」以綠（新增）/黃（修改）/紅（刪除）標示兩款式差異。「匯入 → PDF 比對」可比對新舊 PDF。</p></div></div>
+     <div class="card"><div class="ch"><i class="bi bi-diagram-3"></i><h3>展料與成本</h3></div><div class="cb">
+       <p style="line-height:1.9;color:var(--ink2)">輸入訂單數量，自動計算各物料總需求與含損耗用量。成本頁依「單價 × 用量」估算布料 / 輔料 / 包裝成本。</p></div></div>
+     <div class="card"><div class="ch"><i class="bi bi-cloud"></i><h3>儲存與雲端</h3></div><div class="cb">
+       <p style="line-height:1.9;color:var(--ink2)">資料存於本機（IndexedDB + LocalStorage），離線可用。可下載 JSON 備份、上傳/下載 GAS 雲端、Telegram 推播 BOM 異動。</p></div></div>
+   </div>
+   <div style="margin-top:16px">${renderActivityPage()}</div>`;
+}
+/* ====================================================================
+   PART 8 — Charts · Toast/Confirm · CSV · Search · INIT
+   ==================================================================== */
+
+/* ---------- Toast ---------- */
+function toast(msg,type){ const w=document.getElementById('toasts'); if(!w)return;
+  const el=document.createElement('div'); el.className='toast'+(type?' '+type:'');
+  const ic=type==='good'?'check-circle':type==='bad'?'x-circle':type==='warn'?'exclamation-triangle':'info-circle';
+  el.innerHTML=`<i class="bi bi-${ic}"></i>${esc(msg)}`; w.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(8px)'; },2600);
+  setTimeout(()=>el.remove(),3000); }
+
+/* ---------- Confirm ---------- */
+function confirmBox(msg,onYes,opts){ opts=opts||{}; const danger=opts.danger!==false;
+  openModal(`<div class="mh"><i class="bi bi-question-circle"></i><h3>${esc(opts.title||'確認')}</h3><button class="x" onclick="closeModal()">×</button></div>
+   <div class="mb"><p style="line-height:1.7;margin:2px 0">${esc(msg)}</p></div>
+   <div class="mf"><button class="btn" onclick="closeModal()">${esc(opts.cancel||t('common.cancel'))}</button>
+     <button class="btn ${danger?'danger':'dark'}" id="cfYes">${esc(opts.ok||t('common.ok'))}</button></div>`,'sm');
+  const y=document.getElementById('cfYes'); if(y)y.onclick=()=>{ closeModal(); try{ onYes&&onYes(); }catch(e){ console.error(e); toast('操作失敗：'+e.message,'bad'); } }; }
+
+/* ---------- CSV helpers ---------- */
+function csvCell(v){ v=v==null?'':String(v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function splitCSV(line){ const out=[]; let cur='',q=false;
+  for(let i=0;i<line.length;i++){ const ch=line[i];
+    if(q){ if(ch==='"'){ if(line[i+1]==='"'){ cur+='"'; i++; } else q=false; } else cur+=ch; }
+    else { if(ch==='"')q=true; else if(ch===','){ out.push(cur); cur=''; } else cur+=ch; } }
+  out.push(cur); return out.map(s=>s.trim()); }
+
+/* ---------- Global search ---------- */
+function onGlobalSearch(v){ v=(v||'').trim(); FILTER={cust:'',status:'',q:v};
+  if(CURRENT!=='bom')go('bom'); else renderBoms(); }
+
+/* ---------- Charts ---------- */
+let CH={};
+const PALETTE=['#4a90d9','#8e7cc3','#4aa4a4','#4ea787','#d9a441','#7b8aa0','#d36b6b','#c45b9b','#5a72c4','#6aa84f'];
+function killChart(id){ if(CH[id]){ try{ CH[id].destroy(); }catch(e){} CH[id]=null; } }
+function makeChart(id,cfg){ const cv=document.getElementById(id); if(!cv||typeof Chart==='undefined')return; killChart(id); CH[id]=new Chart(cv.getContext('2d'),cfg); }
+function drawDashCharts(){
+  const byCat={}; CATS.forEach(c=>byCat[c]=0); DB.styles.forEach(s=>(s.items||[]).forEach(i=>{ byCat[i.category]=(byCat[i.category]||0)+1; }));
+  const labels=CATS.filter(c=>byCat[c]>0), vals=labels.map(c=>byCat[c]);
+  makeChart('chMat',{type:'doughnut',data:{labels:labels.map(catLabel),datasets:[{data:vals,backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}}}}});
+  const byCust={}; DB.styles.forEach(s=>{ byCust[s.customerCode]=(byCust[s.customerCode]||0)+1; }); const cu=Object.keys(byCust);
+  makeChart('chCust',{type:'bar',data:{labels:cu.map(custName),datasets:[{label:'款式',data:cu.map(c=>byCust[c]),backgroundColor:'#4a90d9',borderRadius:7,maxBarThickness:46}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+function drawAnalysisCharts(byCat,byCust){
+  const cats=Object.keys(byCat||{}).filter(c=>byCat[c]>0);
+  makeChart('aCat',{type:'pie',data:{labels:cats.map(catLabel),datasets:[{data:cats.map(c=>byCat[c]),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}}}}});
+  const cu=Object.keys(byCust||{});
+  makeChart('aCust',{type:'bar',data:{labels:cu.map(custName),datasets:[{label:'BOM 項目',data:cu.map(c=>byCust[c]),backgroundColor:'#8e7cc3',borderRadius:7,maxBarThickness:46}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+
+/* ---------- Seed ---------- */
+function seedDefaults(){
+  [{code:'ADI',name:'ADI',nameZh:'ADI',active:true},
+   {code:'LECHNER',name:'Lechner',nameZh:'Lechner',active:true},
+   {code:'AMERICAN DAWN',name:'American Dawn',active:true}].forEach(c=>{ if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c)); });
+  let raw=[]; try{ raw=JSON.parse(document.getElementById('seedData').textContent||'[]'); }catch(e){ raw=[]; }
+  raw.forEach(r=>{ const st=coerceStyle(Object.assign({},r,{allowEmpty:true,source:'seed'}));
+    if(st){ st.status='Active';
+      st.versions=[{ver:1,ts:nowISO(),editor:'seed',comment:'初始匯入',items:st.items.length,snapshot:JSON.stringify(st.items)}];
+      if(!custByCode(st.customerCode))DB.customers.push({id:uid('cu'),code:st.customerCode,name:st.customerCode,active:true});
+      DB.styles.push(st); } });
+  DB.activity.unshift({ts:nowISO(),action:'系統初始化 · 載入 '+DB.styles.length+' 個範例 BOM',target:'',user:'system'});
+}
+
+/* ---------- INIT ---------- */
+let _inited=false;
+async function init(){
+  if(_inited)return; _inited=true;
+  document.querySelectorAll('#langs button').forEach(b=>b.classList.toggle('on',b.dataset.l===LANG));
+  document.documentElement.lang=LANG==='zh'?'zh-Hant':(LANG==='km'?'km':'en');
+  const existed=await loadState();
+  if(!existed || !DB.styles || DB.styles.length===0){ DB.styles=DB.styles||[]; DB.customers=DB.customers||[]; seedDefaults(); await persist(); }
+  buildRibbon1(); setFabs(); go('dashboard');
+  setCloudTag(DB.meta&&DB.meta.lastSync?'synced':'local');
+  let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(CURRENT==='dashboard')drawDashCharts(); else if(CURRENT==='analysis')render(); },250); });
+}
+document.addEventListener('DOMContentLoaded',init);
+if(document.readyState!=='loading')init();
+</script>
+
+</body>
+</html>

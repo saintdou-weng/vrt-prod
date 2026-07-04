@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT 機修零件管理系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f7; --ink:#1e2640; --sub:#6b7a9e; --line:#e2e6f0;
+  --vrt:#1e3a5f; --vrt2:#2d4d7a; --amber:#f59e0b; --amber2:#d97706;
+  --card:#fff; --soft:#f7f8fc;
+}
+body{font-family:"Microsoft JhengHei","Noto Sans TC","Khmer OS",sans-serif;background:var(--bg);color:var(--ink)}
+body.dark{--bg:#0f1422;--ink:#e6eaf5;--sub:#9aa6c4;--line:#28304a;--card:#161d2e;--soft:#1b2335}
+/* Header */
+.header{background:linear-gradient(135deg,var(--vrt),var(--vrt2));padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:relative}
+.logo{width:35px;height:35px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.h-title{font-size:16px;font-weight:700;color:#fff}
+.h-sub{font-size:11px;color:#9fb3d6;margin-top:1px;letter-spacing:.04em}
+.h-stats{margin-left:auto;display:flex;gap:16px}
+.hstat{text-align:right}
+.hstat-v{font-size:17px;font-weight:700;color:#7dd3fc;font-family:monospace}
+.hstat-l{font-size:10px;color:#9fb3d6}
+.h-tools{display:flex;gap:6px;align-items:center;margin-left:14px}
+.htool{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:8px;width:34px;height:32px;
+  display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;cursor:pointer;transition:.15s}
+.htool:hover{background:rgba(255,255,255,.3)}
+.langbtn{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:20px;padding:5px 13px;
+  font-size:12px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit}
+.cloud-dot{font-size:10px;color:#cbd5e1;display:flex;align-items:center;gap:4px;margin-left:6px}
+/* Toolbar */
+.toolbar{background:var(--card);border-bottom:1px solid var(--line);padding:9px 20px;display:flex;gap:8px;
+  flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:50}
+.tb-group{display:flex;gap:4px;align-items:center}
+.tb-lbl{font-size:11px;color:var(--sub);font-weight:600;margin-right:2px}
+.chip{padding:5px 11px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--sub);font-family:inherit}
+.chip.on{background:var(--vrt);color:#fff;border-color:var(--vrt)}
+.tb-search{flex:1;min-width:150px;display:flex;justify-content:flex-end}
+.tb-search input{width:100%;max-width:260px;border:1px solid var(--line);border-radius:18px;padding:6px 14px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink)}
+/* Tabs */
+.tabs{background:var(--card);border-bottom:2px solid var(--line);display:flex;padding:0 14px;overflow-x:auto}
+.tab{padding:12px 14px;font-size:13px;cursor:pointer;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:.15s;user-select:none}
+.tab:hover{color:var(--ink);background:var(--soft)}
+.tab.on{color:var(--amber2);border-bottom-color:var(--amber);background:var(--soft)}
+.sec{display:none;padding:18px 20px}
+.sec.on{display:block}
+/* Card */
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.ct::before{content:'';width:3px;height:11px;background:var(--amber);border-radius:2px}
+/* Grids */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+/* KPI */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px;text-align:center;box-shadow:0 1px 3px rgba(30,38,64,.04);border-top:3px solid var(--line)}
+.kpi.k-blue{border-top-color:#0ea5e9}.kpi.k-green{border-top-color:#059669}.kpi.k-amber{border-top-color:#d97706}
+.kpi.k-red{border-top-color:#dc2626}.kpi.k-violet{border-top-color:#7c3aed}.kpi.k-slate{border-top-color:#64748b}
+.kpi-n{font-size:24px;font-weight:700;font-family:monospace;line-height:1.1;color:var(--ink)}
+.kpi-u{font-size:11px;color:var(--sub);font-weight:400}
+.kpi-l{font-size:10px;color:var(--sub);margin-top:5px}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:.15s}
+.btn-y{background:var(--amber);color:#1c1200}.btn-y:hover{background:var(--amber2)}
+.btn-y:disabled{background:var(--line);color:#a0aabf;cursor:not-allowed}
+.btn-b{background:var(--vrt);color:#fff}.btn-b:hover{background:var(--vrt2)}
+.btn-g{background:var(--card);color:#4a5578;border:1px solid var(--line)}.btn-g:hover{background:var(--soft)}
+.btn-r{background:#fff5f5;color:#dc2626;border:1px solid #fecaca}
+.btn-sm{padding:4px 9px;font-size:12px}
+/* Table */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;color:var(--sub);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--line);background:var(--soft);white-space:nowrap;position:sticky;top:0;cursor:pointer}
+td{padding:7px 10px;border-bottom:1px solid var(--line);color:var(--ink);white-space:nowrap}
+tr:hover td{background:var(--soft)}
+.mono{font-family:monospace}
+.num{text-align:right;font-family:monospace}
+/* Badge */
+.b{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:600;font-family:monospace}
+.bok{background:#d1fae5;color:#065f46}.bwn{background:#fef3c7;color:#92400e}.bbd{background:#fee2e2;color:#991b1b}.bn{background:#e5e7eb;color:#374151}
+/* Alert */
+.al{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#e0f2fe;border:1px solid #7dd3fc;color:#0369a1}
+/* Filter row */
+.frow{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+select,input[type=text],input[type=number],input[type=date]{background:var(--card);border:1px solid var(--line);color:var(--ink);padding:6px 10px;border-radius:6px;font-size:13px;font-family:inherit}
+.empty{text-align:center;padding:50px 20px;color:var(--sub)}
+/* Drop zone */
+.drop{border:2px dashed #c5c9d8;border-radius:10px;padding:26px 20px;text-align:center;cursor:pointer;transition:.2s;position:relative;background:var(--soft)}
+.drop:hover,.drop.drag{border-color:var(--amber);background:#fffbf0}
+.drop.done{border-color:#10b981;border-style:solid;background:#f0fdf8}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+/* Modal */
+.mask{position:fixed;inset:0;background:rgba(15,20,34,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:16px}
+.mask.on{display:flex}
+.modal{background:var(--card);border-radius:12px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.modal h3{font-size:15px;margin-bottom:14px;color:var(--ink)}
+.fld{margin-bottom:10px}
+.fld label{display:block;font-size:11px;color:var(--sub);font-weight:600;margin-bottom:3px}
+.fld input,.fld select,.fld textarea{width:100%}
+.frm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--vrt);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:300;opacity:0;transition:.25s;pointer-events:none}
+.toast.on{opacity:1}
+.spark{display:flex;align-items:flex-end;gap:2px;height:34px}
+.spark i{flex:1;background:#7dd3fc;border-radius:1px;min-height:2px}
+.pill{font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600}
+.up{background:#fee2e2;color:#b91c1c}.down{background:#d1fae5;color:#047857}.flat{background:#e5e7eb;color:#374151}
+/* OCR module */
+.ocr-split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ocr-stage{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:280px;position:relative;overflow:hidden}
+.ocr-canvas-wrap{overflow:auto;max-height:60vh;border-radius:8px;background:#0b1020;display:flex;align-items:center;justify-content:center}
+.ocr-canvas-wrap canvas,.ocr-canvas-wrap img{max-width:none;transition:transform .15s}
+.img-tools{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.itool{width:32px;height:30px;border:1px solid var(--line);background:var(--card);border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.itool:hover{background:var(--soft)}
+.itool.on{background:var(--vrt);color:#fff;border-color:var(--vrt)}
+.slider-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sub);margin-bottom:5px}
+.slider-row input[type=range]{flex:1}
+.conf{font-family:monospace;font-weight:700;font-size:11px;padding:1px 6px;border-radius:4px}
+.conf-hi{background:#d1fae5;color:#065f46}.conf-md{background:#fef3c7;color:#92400e}.conf-lo{background:#fee2e2;color:#991b1b}
+.ocr-tbl input{width:100%;border:1px solid transparent;background:transparent;padding:3px 5px;font-size:12px;border-radius:4px;color:var(--ink)}
+.ocr-tbl input:focus{border-color:var(--vrt);background:var(--card)}
+.ocr-row-warn td{background:#fffbeb}
+.thumb{width:46px;height:46px;border-radius:6px;object-fit:cover;border:1px solid var(--line);cursor:pointer}
+.page-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:14px;border:1px solid var(--line);font-size:12px;cursor:pointer;background:var(--card)}
+.page-pill.on{background:var(--vrt);color:#fff;border-color:var(--vrt)}
+.mode-card{border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;font-size:12px;flex:1;min-width:120px;background:var(--card)}
+.mode-card.on{border-color:var(--vrt);background:#eff6ff}
+.mode-card b{display:block;font-size:13px;color:var(--vrt)}
+.ocr-progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0}
+.ocr-progress i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#0ea5e9);width:0;transition:width .2s}
+@media(max-width:640px){
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .h-stats{display:none}
+  .sec{padding:12px 12px}
+  .frm-grid{grid-template-columns:1fr}
+  .ocr-split{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<div class="header">
+  <div class="logo">🔧</div>
+  <div>
+    <div class="h-title" id="hTitle">Machine Spare Parts Management</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · v1.0</div>
+  </div>
+  <div class="h-stats">
+    <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
+    <div class="hstat"><div class="hstat-v" id="hValue">$0</div><div class="hstat-l" data-zh="庫存值" data-en="Value" data-km="តម្លៃ">庫存值</div></div>
+    <div class="hstat"><div class="hstat-v" id="hLow">0</div><div class="hstat-l" data-zh="低庫存" data-en="Low" data-km="ស្តុកទាប">低庫存</div></div>
+  </div>
+  <div class="h-tools">
+    <div class="htool" onclick="cloudUpload()" title="Cloud Upload">☁️⬆</div>
+    <div class="htool" onclick="cloudDownload()" title="Cloud Download">☁️⬇</div>
+    <div class="htool" onclick="openTelegram()" title="Telegram">📨</div>
+    <div class="htool" onclick="goTab('settings',null)" title="Settings">⚙️</div>
+    <div class="htool" onclick="saveAll(true)" title="Save">💾</div>
+    <button class="langbtn" onclick="toggleLang()" id="langBtn">🌐 EN</button>
+  </div>
+  <div class="cloud-dot" id="cloudDot">⚪ <span data-zh="未連線" data-en="Offline" data-km="គ្មានបណ្ដាញ">未連線</span></div>
+</div>
+
+<!-- ══════════ TOOLBAR ══════════ -->
+<div class="toolbar">
+  <div class="tb-group">
+    <span class="tb-lbl" data-zh="日期" data-en="Date" data-km="កាលបរិច្ឆេទ">日期</span>
+    <span class="chip" data-dt="today" onclick="setDate('today',this)" data-zh="今天" data-en="Today" data-km="ថ្ងៃនេះ">今天</span>
+    <span class="chip" data-dt="week" onclick="setDate('week',this)" data-zh="本週" data-en="Week" data-km="សប្ដាហ៍">本週</span>
+    <span class="chip" data-dt="month" onclick="setDate('month',this)" data-zh="本月" data-en="Month" data-km="ខែ">本月</span>
+    <span class="chip" data-dt="year" onclick="setDate('year',this)" data-zh="今年" data-en="Year" data-km="ឆ្នាំ">今年</span>
+    <span class="chip on" data-dt="all" onclick="setDate('all',this)" data-zh="全部" data-en="All" data-km="ទាំងអស់">全部</span>
+  </div>
+  <div class="tb-group">
+    <span class="tb-lbl" data-zh="倉庫" data-en="Store" data-km="ឃ្លាំង">倉庫</span>
+    <select id="fStore" onchange="applyFilters()"></select>
+  </div>
+  <div class="tb-group">
+    <span class="tb-lbl" data-zh="分類" data-en="Category" data-km="ប្រភេទ">分類</span>
+    <select id="fCat" onchange="applyFilters()"></select>
+  </div>
+  <div class="tb-group">
+    <span class="tb-lbl" data-zh="品牌" data-en="Brand" data-km="ម៉ាក">品牌</span>
+    <select id="fBrand" onchange="applyFilters()"></select>
+  </div>
+  <div class="tb-search">
+    <input type="text" id="fSearch" oninput="applyFilters()" placeholder="🔍 Part No / Name / Spec">
+  </div>
+</div>
+
+<!-- ══════════ TABS ══════════ -->
+<div class="tabs" id="tabBar">
+  <div class="tab on" onclick="goTab('dashboard',this)" data-zh="📊 儀錶板" data-en="📊 Dashboard" data-km="📊 ផ្ទាំង">📊 儀錶板</div>
+  <div class="tab" onclick="goTab('inventory',this)" data-zh="📦 庫存" data-en="📦 Inventory" data-km="📦 ស្តុក">📦 庫存</div>
+  <div class="tab" onclick="goTab('history',this)" data-zh="🔁 進出紀錄" data-en="🔁 In/Out" data-km="🔁 ចូល/ចេញ">🔁 進出紀錄</div>
+  <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月報" data-en="📆 Monthly" data-km="📆 ប្រចាំខែ">📆 月報</div>
+  <div class="tab" onclick="goTab('price',this)" data-zh="💲 價格分析" data-en="💲 Price" data-km="💲 តម្លៃ">💲 價格分析</div>
+  <div class="tab" onclick="goTab('stock',this)" data-zh="📈 庫存分析" data-en="📈 Stock" data-km="📈 វិភាគស្តុក">📈 庫存分析</div>
+  <div class="tab" onclick="goTab('reports',this)" data-zh="📤 報表" data-en="📤 Reports" data-km="📤 របាយការណ៍">📤 報表</div>
+  <div class="tab" onclick="goTab('ocr',this)" data-zh="🤖 智慧OCR" data-en="🤖 Smart OCR" data-km="🤖 OCR ឆ្លាត">🤖 智慧OCR</div>
+  <div class="tab" onclick="goTab('settings',this)" data-zh="⚙️ 設定" data-en="⚙️ Settings" data-km="⚙️ ការកំណត់">⚙️ 設定</div>
+</div>
+
+<div id="app"></div>
+
+<div class="mask" id="mask"><div class="modal" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================ */
+/* ===== 選項常數 ===== */
+const STORES=['Main Store','Machine Room','Maintenance','Electrical','Other'];
+const CATS=['Bearing','Motor','Needle','Knife','Belt','Sensor','Electric','Air','Consumable','Other'];
+const BRANDS=['Brother','Juki','Pegasus','Yamato','Siruba','Mitsubishi','Other'];
+const MTYPES=['Single Needle','Overlock','Flatlock','Bartack','Button Hole','Button Sewing','Cutting','Compressor','Boiler','Generator','Iron Table','Fusing','Other'];
+const UNITS=['PCS','BOX','SET','DRUM','KG','M','ROLL'];
+const CUR_SYM={USD:'$',KHR:'៛',TWD:'NT$'};
+
+/* ===== 狀態 ===== */
+let PARTS=[], TXNS=[], VERSIONS=[], SUPPLIERS=[], INVOICES=[], OCRHIST=[];
+let SET={company:'Vantage River Textiles',currency:'USD',minRule:5,highValue:50,
+  gasUrl:'',cloudTarget:'local',tgToken:'',tgGroups:{Maintenance:'',Warehouse:'',Management:'',AdminCenter:''},
+  tgSend:{daily:true,low:true,newPart:true,price:true,monthly:true},theme:'light',
+  ocrMode:'invoice',ocrLang:'eng+chi_tra',visionUrl:'',visionKey:'',confWarn:90,confBad:80,
+  partRules:{Bearing:'BR',Motor:'MT',Needle:'ND',Knife:'KN',Belt:'BL',Sensor:'SN',Electric:'EL',Air:'AR',Consumable:'CN',Other:'PT'},
+  ocrDict:{}};
+let _lang=localStorage.getItem('vrt_sp_lang')||'zh';
+let FILTER={date:'all',store:'',cat:'',brand:'',q:''};
+let _curTab='dashboard';
+let _sortKey='partNo',_sortDir=1;
+
+/* ===== 工具 ===== */
+const $=id=>document.getElementById(id);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function num(n){n=Number(n)||0;return n.toLocaleString('en-US',{maximumFractionDigits:0});}
+function money(n){n=Number(n)||0;return (CUR_SYM[SET.currency]||'$')+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function pad(n){return n<10?'0'+n:''+n;}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function ym(s){return (s||'').slice(0,7);}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2200);}
+function openModal(html){$('modalBox').innerHTML=html;$('mask').classList.add('on');}
+function closeModal(){$('mask').classList.remove('on');}
+$('mask').addEventListener('click',e=>{if(e.target===$('mask'))closeModal();});
+
+/* 庫存狀態判定 */
+function partStatus(p){
+  const q=Number(p.qty)||0, mn=p.minStock!=null&&p.minStock!==''?Number(p.minStock):SET.minRule;
+  if(q<=0) return 'out';
+  if(q<mn) return 'low';
+  return 'ok';
+}
+function statusBadge(p){
+  const s=partStatus(p);
+  if(s==='out')return '<span class="b bbd">'+t('stOut')+'</span>';
+  if(s==='low')return '<span class="b bwn">'+t('stLow')+'</span>';
+  return '<span class="b bok">'+t('stOk')+'</span>';
+}
+
+/* ===== i18n ===== */
+const I18N={
+ zh:{sysTitle:'機修零件管理系統',
+  stOk:'正常',stLow:'低庫存',stOut:'零庫存',
+  kTotalParts:'總零件數',kInvValue:'目前庫存價值',kInQty:'本月進貨',kOutQty:'本月領料',
+  kLow:'低庫存',kZero:'零庫存',kNew:'本月新增',kAbn:'本月異常',
+  topValue:'高價值零件 Top10',topLow:'低庫存零件',recentTxn:'最近異動',recentNew:'最近新增',
+  colPartNo:'零件編號',colName:'零件名稱',colSpec:'規格',colCat:'分類',colBrand:'品牌',colMtype:'機台類型',
+  colLoc:'倉庫',colUnit:'單位',colQty:'庫存',colPrice:'單價',colValue:'庫存金額',colMin:'最低',colMax:'最高',
+  colStatus:'狀態',colRemark:'備註',colDate:'日期',colType:'類型',colBal:'結存',colSupplier:'供應商',colUser:'經手人',
+  btnAdd:'➕ 新增',btnEdit:'修改',btnDel:'刪除',btnCopy:'複製',btnIn:'進貨',btnOut:'領料',btnSave:'儲存',btnCancel:'取消',
+  invTitle:'目前庫存',histTitle:'進出紀錄',monTitle:'月報統計',priceTitle:'價格分析',stockTitle:'庫存分析',repTitle:'報表匯出',setTitle:'系統設定',
+  inWord:'進貨',outWord:'領料',
+  monIn:'進貨數量',monOut:'出貨數量',monBal:'月底庫存',monAvg:'平均單價',monVal:'月底庫存價值',monMonth:'月份',
+  prSelect:'選擇零件',prJan:'歷史單價',prAvg:'平均',prMax:'最高',prMin:'最低',prLast:'最近',prTrend:'價格趨勢',prCompare:'同規格品牌比較',
+  stTopValue:'庫存金額排行 Top20',stLow:'低庫存',stZero:'零庫存',stOver:'超量庫存',stIdle6:'半年未異動',stIdle12:'一年未異動',stTurn:'庫存週轉率',
+  repExcel:'匯出 Excel',repCsv:'匯出 CSV',repPdf:'列印 / PDF',repImport:'匯入資料',repImportImg:'智慧 AI OCR',
+  setCompany:'公司名稱',setCur:'幣別',setMin:'預設最低庫存',setHigh:'高價值門檻',setTg:'Telegram Bot',setCloud:'雲端同步',setBackup:'備份',setRestore:'還原',setTheme:'深淺模式',setLang:'語言',
+  noData:'尚無資料',
+  importMode:'匯入方式',mAdd:'新增（只加新零件）',mUpdate:'更新（更新已存在）',mOverwrite:'覆蓋（全部取代）',mVersion:'建立歷史版本',
+  cloudConn:'已連線',cloudOff:'未連線',
+  tgTitle:'發送 Telegram',tgGroups:'選擇群組',tgDaily:'每日庫存摘要',tgLow:'低庫存提醒',tgNew:'新增零件',tgPrice:'異常價格',tgMonthly:'月報',tgSend:'發送',
+  confirmDel:'確定刪除？',saved:'已儲存',
+  ocrTitle:'智慧 AI OCR 發票辨識',ocrDrop:'拖入發票照片 / PDF（可多張、多頁、HEIC）',
+  ocrMode:'辨識模式',mFast:'快速 OCR',mBal:'平衡 AI',mHigh:'高精準',mInv:'發票 AI',
+  ocrRun:'開始辨識',ocrReAI:'重新AI整理',ocrReImg:'重新辨識圖片',ocrConfirm:'確認並寫入',ocrReview:'請先人工確認再寫入',
+  hdrInvNo:'發票號',hdrSupplier:'供應商',hdrDate:'日期',hdrCur:'幣別',hdrRate:'匯率',hdrBuyer:'採購人',hdrDept:'部門',hdrRemark:'備註',hdrTotal:'總計',
+  colAmount:'金額',conf:'可信度',
+  ocrExists:'已存在',updPrice:'更新價格',updQty:'更新數量',addTx:'新增交易',skipIt:'略過',
+  invDup:'此發票已存在',updateQ:'更新？',cancelQ:'取消',amtAbn:'金額異常',
+  ocrHistTab:'OCR 歷史',ocrDashTab:'OCR 儀表板',
+  dSuccess:'OCR 成功率',dAvgConf:'平均可信度',dToday:'今日辨識',dPending:'待確認',dCompleted:'已完成',dRejected:'已拒絕',
+  iZin:'放大',iZout:'縮小',iRot:'旋轉',iCrop:'裁切',iBri:'亮度',iCon:'對比',iReset:'重設',
+  learnSaved:'已記入 OCR 字典',engLoad:'載入辨識引擎…',
+  autoSup:'自動建立供應商',autoPart:'自動產生料號',autoCat:'自動分類',
+  ocrFlow:'拍照→OCR→AI整理→人工確認→供應商→庫存→交易→價格→雲端→Telegram',
+  page:'頁',supplierTab:'供應商',
+ },
+ en:{sysTitle:'Machine Spare Parts Management',
+  stOk:'OK',stLow:'Low',stOut:'Out',
+  kTotalParts:'Total Parts',kInvValue:'Inventory Value',kInQty:'In (Month)',kOutQty:'Out (Month)',
+  kLow:'Low Stock',kZero:'Out of Stock',kNew:'New (Month)',kAbn:'Abnormal',
+  topValue:'Top10 High Value',topLow:'Low Stock Parts',recentTxn:'Recent Movement',recentNew:'Recently Added',
+  colPartNo:'Part No',colName:'Part Name',colSpec:'Spec',colCat:'Category',colBrand:'Brand',colMtype:'Machine Type',
+  colLoc:'Store',colUnit:'Unit',colQty:'Qty',colPrice:'Unit Price',colValue:'Value',colMin:'Min',colMax:'Max',
+  colStatus:'Status',colRemark:'Remark',colDate:'Date',colType:'Type',colBal:'Balance',colSupplier:'Supplier',colUser:'User',
+  btnAdd:'➕ Add',btnEdit:'Edit',btnDel:'Delete',btnCopy:'Copy',btnIn:'In',btnOut:'Out',btnSave:'Save',btnCancel:'Cancel',
+  invTitle:'Current Inventory',histTitle:'In / Out History',monTitle:'Monthly Summary',priceTitle:'Price Analysis',stockTitle:'Stock Analysis',repTitle:'Reports',setTitle:'Settings',
+  inWord:'IN',outWord:'OUT',
+  monIn:'In Qty',monOut:'Out Qty',monBal:'Month-End Bal',monAvg:'Avg Price',monVal:'Month-End Value',monMonth:'Month',
+  prSelect:'Select Part',prJan:'Price History',prAvg:'Avg',prMax:'Max',prMin:'Min',prLast:'Latest',prTrend:'Price Trend',prCompare:'Brand Comparison (same spec)',
+  stTopValue:'Top20 by Value',stLow:'Low Stock',stZero:'Out of Stock',stOver:'Over Stock',stIdle6:'Idle 6 Months',stIdle12:'Idle 12 Months',stTurn:'Inventory Turnover',
+  repExcel:'Export Excel',repCsv:'Export CSV',repPdf:'Print / PDF',repImport:'Import Data',repImportImg:'Smart AI OCR',
+  setCompany:'Company',setCur:'Currency',setMin:'Default Min Stock',setHigh:'High-Value Threshold',setTg:'Telegram Bot',setCloud:'Cloud Sync',setBackup:'Backup',setRestore:'Restore',setTheme:'Theme',setLang:'Language',
+  noData:'No data yet',
+  importMode:'Import Mode',mAdd:'Add (new only)',mUpdate:'Update (existing)',mOverwrite:'Overwrite (replace all)',mVersion:'Save as version',
+  cloudConn:'Connected',cloudOff:'Offline',
+  tgTitle:'Send Telegram',tgGroups:'Select Groups',tgDaily:'Daily Summary',tgLow:'Low Stock Alert',tgNew:'New Part',tgPrice:'Abnormal Price',tgMonthly:'Monthly Report',tgSend:'Send',
+  confirmDel:'Delete this item?',saved:'Saved',
+  ocrTitle:'Smart AI OCR — Invoice Recognition',ocrDrop:'Drop invoice photo / PDF (multi-image, multi-page, HEIC)',
+  ocrMode:'Mode',mFast:'Fast OCR',mBal:'Balanced AI',mHigh:'High Accuracy',mInv:'Invoice AI',
+  ocrRun:'Run OCR',ocrReAI:'Re-parse AI',ocrReImg:'Re-OCR Image',ocrConfirm:'Confirm & Import',ocrReview:'Review before import',
+  hdrInvNo:'Invoice No',hdrSupplier:'Supplier',hdrDate:'Date',hdrCur:'Currency',hdrRate:'Exch. Rate',hdrBuyer:'Buyer',hdrDept:'Department',hdrRemark:'Remark',hdrTotal:'Total',
+  colAmount:'Amount',conf:'Conf',
+  ocrExists:'Exists',updPrice:'Update price',updQty:'Update qty',addTx:'Add txn',skipIt:'Skip',
+  invDup:'Invoice already exists',updateQ:'Update?',cancelQ:'Cancel',amtAbn:'Amount mismatch',
+  ocrHistTab:'OCR History',ocrDashTab:'OCR Dashboard',
+  dSuccess:'OCR Success Rate',dAvgConf:'Avg Confidence',dToday:'Today OCR',dPending:'Pending Review',dCompleted:'Completed',dRejected:'Rejected',
+  iZin:'Zoom in',iZout:'Zoom out',iRot:'Rotate',iCrop:'Crop',iBri:'Brightness',iCon:'Contrast',iReset:'Reset',
+  learnSaved:'Saved to OCR dictionary',engLoad:'Loading OCR engine…',
+  autoSup:'Auto-create supplier',autoPart:'Auto Part No',autoCat:'Auto category',
+  ocrFlow:'Photo→OCR→AI→Review→Supplier→Inventory→History→Price→Cloud→Telegram',
+  page:'Page',supplierTab:'Suppliers',
+ },
+ km:{sysTitle:'ប្រព័ន្ធគ្រប់គ្រងគ្រឿងបន្លាស់',
+  stOk:'ធម្មតា',stLow:'ស្តុកទាប',stOut:'អស់ស្តុក',
+  kTotalParts:'គ្រឿងបន្លាស់សរុប',kInvValue:'តម្លៃស្តុក',kInQty:'ចូល(ខែ)',kOutQty:'ចេញ(ខែ)',
+  kLow:'ស្តុកទាប',kZero:'អស់ស្តុក',kNew:'ថ្មី(ខែ)',kAbn:'មិនប្រក្រតី',
+  topValue:'តម្លៃខ្ពស់ Top10',topLow:'គ្រឿងស្តុកទាប',recentTxn:'ចលនាថ្មីៗ',recentNew:'បន្ថែមថ្មីៗ',
+  colPartNo:'លេខកូដ',colName:'ឈ្មោះ',colSpec:'លក្ខណៈ',colCat:'ប្រភេទ',colBrand:'ម៉ាក',colMtype:'ប្រភេទម៉ាស៊ីន',
+  colLoc:'ឃ្លាំង',colUnit:'ឯកតា',colQty:'ស្តុក',colPrice:'តម្លៃ',colValue:'តម្លៃស្តុក',colMin:'អប្បបរមា',colMax:'អតិបរមា',
+  colStatus:'ស្ថានភាព',colRemark:'កំណត់',colDate:'កាលបរិច្ឆេទ',colType:'ប្រភេទ',colBal:'នៅសល់',colSupplier:'អ្នកផ្គត់ផ្គង់',colUser:'អ្នកធ្វើ',
+  btnAdd:'➕ បន្ថែម',btnEdit:'កែ',btnDel:'លុប',btnCopy:'ចម្លង',btnIn:'ចូល',btnOut:'ចេញ',btnSave:'រក្សាទុក',btnCancel:'បោះបង់',
+  invTitle:'ស្តុកបច្ចុប្បន្ន',histTitle:'កំណត់ត្រាចូល/ចេញ',monTitle:'សង្ខេបប្រចាំខែ',priceTitle:'វិភាគតម្លៃ',stockTitle:'វិភាគស្តុក',repTitle:'របាយការណ៍',setTitle:'ការកំណត់',
+  inWord:'ចូល',outWord:'ចេញ',
+  monIn:'បរិមាណចូល',monOut:'បរិមាណចេញ',monBal:'នៅសល់ចុងខែ',monAvg:'តម្លៃមធ្យម',monVal:'តម្លៃចុងខែ',monMonth:'ខែ',
+  prSelect:'ជ្រើសគ្រឿង',prJan:'ប្រវត្តិតម្លៃ',prAvg:'មធ្យម',prMax:'អតិបរមា',prMin:'អប្បបរមា',prLast:'ចុងក្រោយ',prTrend:'និន្នាការតម្លៃ',prCompare:'ប្រៀបធៀបម៉ាក',
+  stTopValue:'តម្លៃខ្ពស់ Top20',stLow:'ស្តុកទាប',stZero:'អស់ស្តុក',stOver:'លើសស្តុក',stIdle6:'គ្មានចលនា៦ខែ',stIdle12:'គ្មានចលនា១ឆ្នាំ',stTurn:'អត្រាបង្វិលស្តុក',
+  repExcel:'នាំចេញ Excel',repCsv:'នាំចេញ CSV',repPdf:'បោះពុម្ព / PDF',repImport:'នាំចូល',repImportImg:'Smart AI OCR',
+  setCompany:'ក្រុមហ៊ុន',setCur:'រូបិយប័ណ្ណ',setMin:'ស្តុកអប្បបរមាលំនាំ',setHigh:'កម្រិតតម្លៃខ្ពស់',setTg:'Telegram Bot',setCloud:'ធ្វើសមកាលកម្ម',setBackup:'បម្រុងទុក',setRestore:'ស្ដារ',setTheme:'ពន្លឺ/ងងឹត',setLang:'ភាសា',
+  noData:'គ្មានទិន្នន័យ',
+  importMode:'របៀបនាំចូល',mAdd:'បន្ថែម(ថ្មីតែប៉ុណ្ណោះ)',mUpdate:'ធ្វើបច្ចុប្បន្នភាព',mOverwrite:'សរសេរជាន់ទាំងអស់',mVersion:'រក្សាជាកំណែ',
+  cloudConn:'បានភ្ជាប់',cloudOff:'គ្មានបណ្ដាញ',
+  tgTitle:'ផ្ញើ Telegram',tgGroups:'ជ្រើសក្រុម',tgDaily:'សង្ខេបប្រចាំថ្ងៃ',tgLow:'ការជូនដំណឹងស្តុកទាប',tgNew:'គ្រឿងថ្មី',tgPrice:'តម្លៃមិនប្រក្រតី',tgMonthly:'របាយការណ៍ខែ',tgSend:'ផ្ញើ',
+  confirmDel:'លុបមែនទេ?',saved:'បានរក្សាទុក',
+  ocrTitle:'Smart AI OCR — ស្គាល់វិក្កយបត្រ',ocrDrop:'ទម្លាក់រូប/PDF វិក្កយបត្រ (ច្រើនរូប ច្រើនទំព័រ HEIC)',
+  ocrMode:'របៀប',mFast:'OCR លឿន',mBal:'AI តុល្យភាព',mHigh:'ភាពជាក់លាក់ខ្ពស់',mInv:'Invoice AI',
+  ocrRun:'ចាប់ផ្ដើម OCR',ocrReAI:'វិភាគ AI ឡើងវិញ',ocrReImg:'OCR រូបឡើងវិញ',ocrConfirm:'បញ្ជាក់ & នាំចូល',ocrReview:'ពិនិត្យមុននាំចូល',
+  hdrInvNo:'លេខវិក្កយបត្រ',hdrSupplier:'អ្នកផ្គត់ផ្គង់',hdrDate:'កាលបរិច្ឆេទ',hdrCur:'រូបិយប័ណ្ណ',hdrRate:'អត្រាប្ដូរ',hdrBuyer:'អ្នកទិញ',hdrDept:'ផ្នែក',hdrRemark:'កំណត់',hdrTotal:'សរុប',
+  colAmount:'ទឹកប្រាក់',conf:'ទំនុក',
+  ocrExists:'មានរួច',updPrice:'ធ្វើបច្ចុប្បន្នភាពតម្លៃ',updQty:'ធ្វើបច្ចុប្បន្នភាពចំនួន',addTx:'បន្ថែមប្រតិបត្តិការ',skipIt:'រំលង',
+  invDup:'វិក្កយបត្រនេះមានរួច',updateQ:'ធ្វើបច្ចុប្បន្នភាព?',cancelQ:'បោះបង់',amtAbn:'ទឹកប្រាក់មិនត្រូវ',
+  ocrHistTab:'ប្រវត្តិ OCR',ocrDashTab:'ផ្ទាំង OCR',
+  dSuccess:'អត្រាជោគជ័យ OCR',dAvgConf:'ទំនុកជាមធ្យម',dToday:'OCR ថ្ងៃនេះ',dPending:'រង់ចាំ',dCompleted:'បានបញ្ចប់',dRejected:'បានបដិសេធ',
+  iZin:'ពង្រីក',iZout:'បង្រួម',iRot:'បង្វិល',iCrop:'កាត់',iBri:'ពន្លឺ',iCon:'កុងត្រាស្ត',iReset:'កំណត់ឡើងវិញ',
+  learnSaved:'រក្សាទុកក្នុងវចនានុក្រម OCR',engLoad:'កំពុងផ្ទុកម៉ាស៊ីន OCR…',
+  autoSup:'បង្កើតអ្នកផ្គត់ផ្គង់ស្វ័យ',autoPart:'លេខកូដស្វ័យ',autoCat:'ប្រភេទស្វ័យ',
+  ocrFlow:'រូប→OCR→AI→ពិនិត្យ→អ្នកផ្គត់ផ្គង់→ស្តុក→ប្រវត្តិ→តម្លៃ→Cloud→Telegram',
+  page:'ទំព័រ',supplierTab:'អ្នកផ្គត់ផ្គង់',
+ }
+};
+function t(k){return (I18N[_lang]||I18N.zh)[k]||I18N.zh[k]||I18N.en[k]||k;}
+
+function applyLang(){
+  document.documentElement.lang=_lang==='zh'?'zh-TW':_lang;
+  const btn=$('langBtn'); if(btn)btn.textContent=_lang==='zh'?'🌐 EN':_lang==='en'?'🌐 ខ្មែរ':'🌐 中文';
+  $('hTitle').textContent=t('sysTitle');
+  document.querySelectorAll('[data-zh][data-en][data-km]').forEach(el=>{
+    el.textContent = _lang==='en'?el.dataset.en : _lang==='km'?el.dataset.km : el.dataset.zh;
+  });
+  renderTab(_curTab);
+}
+function toggleLang(){_lang=_lang==='zh'?'en':_lang==='en'?'km':'zh';localStorage.setItem('vrt_sp_lang',_lang);applyLang();}
+
+/* ===== IndexedDB 儲存層 ===== */
+const IDB_NAME='vrt_spareparts', IDB_VER=2;
+function openDB(){return new Promise((res,rej)=>{
+  const req=indexedDB.open(IDB_NAME,IDB_VER);
+  req.onupgradeneeded=e=>{const db=e.target.result;
+    if(!db.objectStoreNames.contains('parts'))db.createObjectStore('parts',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('txns'))db.createObjectStore('txns',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('versions'))db.createObjectStore('versions',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta',{keyPath:'k'});
+    if(!db.objectStoreNames.contains('suppliers'))db.createObjectStore('suppliers',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('invoices'))db.createObjectStore('invoices',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('ocrhist'))db.createObjectStore('ocrhist',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'id'});
+  };
+  req.onsuccess=e=>res(e.target.result); req.onerror=e=>rej(e);
+});}
+async function idbPutAll(store,arr){const db=await openDB();return new Promise((res,rej)=>{
+  const tx=db.transaction(store,'readwrite');const os=tx.objectStore(store);os.clear();
+  arr.forEach(o=>os.put(o));tx.oncomplete=()=>res();tx.onerror=e=>rej(e);});}
+async function idbGetAll(store){const db=await openDB();return new Promise((res,rej)=>{
+  const tx=db.transaction(store,'readonly');const q=tx.objectStore(store).getAll();
+  q.onsuccess=()=>res(q.result||[]);q.onerror=e=>rej(e);});}
+async function idbPutMeta(k,v){const db=await openDB();return new Promise(res=>{
+  const tx=db.transaction('meta','readwrite');tx.objectStore('meta').put({k,v});tx.oncomplete=()=>res();});}
+async function idbGetMeta(k){const db=await openDB();return new Promise(res=>{
+  const tx=db.transaction('meta','readonly');const q=tx.objectStore('meta').get(k);
+  q.onsuccess=()=>res(q.result?q.result.v:null);q.onerror=()=>res(null);});}
+async function idbPutImage(id,dataUrl){const db=await openDB();return new Promise(res=>{
+  const tx=db.transaction('images','readwrite');tx.objectStore('images').put({id,dataUrl});tx.oncomplete=()=>res();});}
+async function idbGetImage(id){const db=await openDB();return new Promise(res=>{
+  const tx=db.transaction('images','readonly');const q=tx.objectStore('images').get(id);
+  q.onsuccess=()=>res(q.result?q.result.dataUrl:null);q.onerror=()=>res(null);});}
+
+async function saveAll(showToast){
+  try{
+    await idbPutAll('parts',PARTS);
+    await idbPutAll('txns',TXNS);
+    await idbPutAll('versions',VERSIONS);
+    await idbPutAll('suppliers',SUPPLIERS);
+    await idbPutAll('invoices',INVOICES);
+    await idbPutAll('ocrhist',OCRHIST);
+    await idbPutMeta('settings',SET);
+    localStorage.setItem('vrt_sp_set',JSON.stringify(SET));
+    if(showToast)toast(t('saved'));
+    updateHeaderStats();
+  }catch(e){console.error(e);toast('Save error');}
+}
+async function loadAll(){
+  try{
+    PARTS=await idbGetAll('parts'); TXNS=await idbGetAll('txns'); VERSIONS=await idbGetAll('versions');
+    SUPPLIERS=await idbGetAll('suppliers'); INVOICES=await idbGetAll('invoices'); OCRHIST=await idbGetAll('ocrhist');
+    const s=await idbGetMeta('settings'); if(s)SET=Object.assign(SET,s);
+    else{const ls=localStorage.getItem('vrt_sp_set');if(ls)SET=Object.assign(SET,JSON.parse(ls));}
+  }catch(e){console.error(e);}
+  if(!PARTS.length) seedDemo();
+}
+
+/* ===== 示範資料 ===== */
+function seedDemo(){
+  const seed=[
+    ['BR-6202','6202 軸承 Bearing','6202 2RS','Bearing','SKF','Overlock','Machine Room','PCS',24,2.20,8,40],
+    ['BR-6202N','6202 軸承 Bearing','6202 2RS','Bearing','NTN','Overlock','Machine Room','PCS',12,2.05,8,40],
+    ['BR-608','608 軸承 Bearing','608 ZZ','Bearing','NSK','Single Needle','Machine Room','PCS',30,1.10,10,50],
+    ['MT-90W','伺服馬達 Servo Motor','550W 220V','Motor','Mitsubishi','Single Needle','Electrical','PCS',3,68.00,2,8],
+    ['ND-DB14','機針 DB×1 #14','DBx1 #14','Needle','Juki','Single Needle','Main Store','BOX',25,2.80,10,60],
+    ['ND-DC27','機針 DC×27','DCx27 #11','Needle','Juki','Overlock','Main Store','BOX',8,3.20,8,40],
+    ['KN-UP','拷克上刀 Upper Knife','MO-6714','Knife','Pegasus','Overlock','Maintenance','PCS',6,4.50,8,30],
+    ['KN-LO','拷克下刀 Lower Knife','MO-6714','Knife','Pegasus','Overlock','Maintenance','PCS',16,7.80,8,30],
+    ['BL-M39','皮帶 V-Belt M','M-39','Belt','Mitsubishi','Single Needle','Main Store','PCS',24,2.20,8,40],
+    ['SN-PROX','近接感測器 Sensor','PNP NO','Sensor','Other','Bartack','Electrical','PCS',5,9.50,4,16],
+    ['EL-SOL','電磁閥 Solenoid','220V','Electric','Other','Iron Table','Electrical','PCS',8,12.00,4,16],
+    ['AR-FLT','空壓濾芯 Air Filter','75kW','Air','Other','Compressor','Maintenance','PCS',2,18.00,3,10],
+    ['CN-OIL','縫紉機油 Sewing Oil','18L','Consumable','Other','Single Needle','Main Store','DRUM',6,68.00,2,8],
+    ['CN-LED','機台 LED 燈','220V','Consumable','Other','Single Needle','Main Store','PCS',0,3.20,10,40],
+    ['BR-6203','6203 軸承 Bearing','6203 2RS','Bearing','Koyo','Flatlock','Machine Room','PCS',18,2.60,8,40],
+  ];
+  const now=Date.now();
+  PARTS=seed.map((r,i)=>({id:uid(),partNo:r[0],name:r[1],spec:r[2],category:r[3],brand:r[4],machineType:r[5],
+    location:r[6],unit:r[7],qty:r[8],unitPrice:r[9],minStock:r[10],maxStock:r[11],remark:'',
+    createdAt:todayStr(),updatedAt:todayStr()}));
+  // 幾筆進出與不同月份單價（供價格分析）
+  const tx=[
+    ['2026-01-10','BR-6202','IN',12,2.10,'Local'],['2026-02-08','BR-6202','IN',12,2.05,'Local'],
+    ['2026-03-12','BR-6202','IN',12,2.30,'Local'],['2026-04-15','BR-6202','OUT',12,2.30,''],
+    ['2026-05-06','ND-DB14','IN',40,2.80,'Juki'],['2026-06-03','ND-DB14','OUT',2,2.80,''],
+    ['2026-06-05','KN-LO','IN',20,7.80,'Pegasus'],['2026-06-12','KN-UP','OUT',2,4.50,''],
+    ['2026-06-18','AR-FLT','OUT',1,18.00,''],['2026-06-20','BL-M39','IN',24,2.20,'Mitsuboshi'],
+  ];
+  TXNS=tx.map(r=>({id:uid(),date:r[0],partNo:r[1],type:r[2],qty:r[3],unitPrice:r[4],supplier:r[5],
+    user:'倉管',remark:'',balance:0,ts:now}));
+}
+
+/* ===== 篩選 ===== */
+function setDate(d,el){FILTER.date=d;document.querySelectorAll('.chip[data-dt]').forEach(c=>c.classList.remove('on'));
+  if(el)el.classList.add('on');else document.querySelector('.chip[data-dt="'+d+'"]')?.classList.add('on');renderTab(_curTab);}
+function applyFilters(){FILTER.store=$('fStore').value;FILTER.cat=$('fCat').value;FILTER.brand=$('fBrand').value;FILTER.q=$('fSearch').value.trim().toLowerCase();renderTab(_curTab);}
+function inDateRange(dstr){
+  if(FILTER.date==='all'||!dstr)return true;
+  const d=new Date(dstr+'T00:00:00'),now=new Date();
+  if(FILTER.date==='today')return dstr===todayStr();
+  if(FILTER.date==='year')return d.getFullYear()===now.getFullYear();
+  if(FILTER.date==='month')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  if(FILTER.date==='week'){const wd=(now.getDay()+6)%7;const mon=new Date(now);mon.setDate(now.getDate()-wd);mon.setHours(0,0,0,0);return d>=mon;}
+  return true;
+}
+function filteredParts(){
+  return PARTS.filter(p=>{
+    if(FILTER.store&&p.location!==FILTER.store)return false;
+    if(FILTER.cat&&p.category!==FILTER.cat)return false;
+    if(FILTER.brand&&p.brand!==FILTER.brand)return false;
+    if(FILTER.q){const s=(p.partNo+' '+p.name+' '+p.spec).toLowerCase();if(!s.includes(FILTER.q))return false;}
+    return true;
+  });
+}
+function filteredTxns(){
+  return TXNS.filter(x=>{
+    const p=PARTS.find(z=>z.partNo===x.partNo)||{};
+    if(FILTER.store&&p.location!==FILTER.store)return false;
+    if(FILTER.cat&&p.category!==FILTER.cat)return false;
+    if(FILTER.brand&&p.brand!==FILTER.brand)return false;
+    if(FILTER.q){const s=(x.partNo+' '+(p.name||'')).toLowerCase();if(!s.includes(FILTER.q))return false;}
+    if(!inDateRange(x.date))return false;
+    return true;
+  });
+}
+
+/* ===== 下拉填充 ===== */
+function fillFilterSelects(){
+  const opt=(arr,all)=>'<option value="">'+all+'</option>'+arr.map(a=>'<option>'+a+'</option>').join('');
+  $('fStore').innerHTML=opt(STORES,_lang==='en'?'All Stores':_lang==='km'?'ឃ្លាំងទាំងអស់':'全部倉庫');
+  $('fCat').innerHTML=opt(CATS,_lang==='en'?'All Categories':_lang==='km'?'ប្រភេទទាំងអស់':'全部分類');
+  $('fBrand').innerHTML=opt(BRANDS,_lang==='en'?'All Brands':_lang==='km'?'ម៉ាកទាំងអស់':'全部品牌');
+}
+
+/* ===== Tab 路由 ===== */
+function goTab(name,el){
+  _curTab=name;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  if(el)el.classList.add('on');
+  else{const m={dashboard:0,inventory:1,history:2,monthly:3,price:4,stock:5,reports:6,ocr:7,settings:8};
+       document.querySelectorAll('.tab')[m[name]]?.classList.add('on');}
+  renderTab(name);
+}
+function renderTab(name){
+  const fn={dashboard:renderDashboard,inventory:renderInventory,history:renderHistory,
+    monthly:renderMonthly,price:renderPrice,stock:renderStock,reports:renderReports,ocr:renderOCR,settings:renderSettings}[name];
+  if(fn)fn();
+}
+function updateHeaderStats(){
+  $('hParts').textContent=num(PARTS.length);
+  const val=PARTS.reduce((s,p)=>s+(Number(p.qty)||0)*(Number(p.unitPrice)||0),0);
+  $('hValue').textContent=money(val).replace(/\.\d+$/,'');
+  $('hLow').textContent=num(PARTS.filter(p=>partStatus(p)!=='ok').length);
+}
+
+/* ========== DASHBOARD ========== */
+function monthTxns(){const m=todayStr().slice(0,7);return TXNS.filter(x=>ym(x.date)===m);}
+function renderDashboard(){
+  fillFilterSelects();
+  const ps=filteredParts();
+  const invVal=ps.reduce((s,p)=>s+(Number(p.qty)||0)*(Number(p.unitPrice)||0),0);
+  const mtx=monthTxns();
+  const inQ=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0),0);
+  const outQ=mtx.filter(x=>x.type==='OUT').reduce((s,x)=>s+(+x.qty||0),0);
+  const low=ps.filter(p=>partStatus(p)==='low').length;
+  const zero=ps.filter(p=>partStatus(p)==='out').length;
+  const newM=ps.filter(p=>ym(p.createdAt)===todayStr().slice(0,7)).length;
+  const abn=priceAbnormalCount();
+  const kpi=(n,u,l,cls)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+  let h=`<div class="sec on"><div class="kpi-strip">
+    ${kpi(num(ps.length),'','📦 '+t('kTotalParts'),'k-blue')}
+    ${kpi(money(invVal).replace(/\.\d+$/,''),'','💰 '+t('kInvValue'),'k-green')}
+    ${kpi(num(inQ),'','⬆ '+t('kInQty'),'k-blue')}
+    ${kpi(num(outQ),'','⬇ '+t('kOutQty'),'k-amber')}
+    ${kpi(num(low),'','🟡 '+t('kLow'),'k-amber')}
+    ${kpi(num(zero),'','🔴 '+t('kZero'),'k-red')}
+    ${kpi(num(newM),'','✨ '+t('kNew'),'k-violet')}
+    ${kpi(num(abn),'','⚠ '+t('kAbn'),'k-slate')}
+  </div>`;
+  // Top10 高價值
+  const topV=[...ps].map(p=>({p,v:(+p.qty||0)*(+p.unitPrice||0)})).sort((a,b)=>b.v-a.v).slice(0,10);
+  h+=`<div class="g2"><div class="card"><div class="ct">🏆 ${t('topValue')}</div><div class="tw"><table><thead><tr>
+      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th class="num">${t('colValue')}</th></tr></thead><tbody>`;
+  h+=topV.map(o=>`<tr><td class="mono">${escapeHtml(o.p.partNo)}</td><td>${escapeHtml(o.p.name)}</td><td class="num">${num(o.p.qty)}</td><td class="num">${money(o.v)}</td></tr>`).join('')||emptyRow(4);
+  h+=`</tbody></table></div></div>`;
+  // 低庫存
+  const lowList=ps.filter(p=>partStatus(p)!=='ok').sort((a,b)=>(a.qty-a.minStock)-(b.qty-b.minStock)).slice(0,10);
+  h+=`<div class="card"><div class="ct">🟡 ${t('topLow')}</div><div class="tw"><table><thead><tr>
+      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th>${t('colStatus')}</th></tr></thead><tbody>`;
+  h+=lowList.map(p=>`<tr><td class="mono">${escapeHtml(p.partNo)}</td><td>${escapeHtml(p.name)}</td><td class="num">${num(p.qty)}</td><td>${statusBadge(p)}</td></tr>`).join('')||emptyRow(4);
+  h+=`</tbody></table></div></div></div>`;
+  // 最近異動 + 最近新增
+  const recent=[...TXNS].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
+  h+=`<div class="g2"><div class="card"><div class="ct">🔁 ${t('recentTxn')}</div><div class="tw"><table><thead><tr>
+      <th>${t('colDate')}</th><th>${t('colPartNo')}</th><th>${t('colType')}</th><th class="num">${t('colQty')}</th></tr></thead><tbody>`;
+  h+=recent.map(x=>`<tr><td class="mono">${x.date}</td><td class="mono">${escapeHtml(x.partNo)}</td><td>${x.type==='IN'?'<span class="b bok">'+t('inWord')+'</span>':'<span class="b bwn">'+t('outWord')+'</span>'}</td><td class="num">${num(x.qty)}</td></tr>`).join('')||emptyRow(4);
+  h+=`</tbody></table></div></div>`;
+  const newest=[...PARTS].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
+  h+=`<div class="card"><div class="ct">✨ ${t('recentNew')}</div><div class="tw"><table><thead><tr>
+      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th>${t('colBrand')}</th><th class="num">${t('colPrice')}</th></tr></thead><tbody>`;
+  h+=newest.map(p=>`<tr><td class="mono">${escapeHtml(p.partNo)}</td><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.brand)}</td><td class="num">${money(p.unitPrice)}</td></tr>`).join('')||emptyRow(4);
+  h+=`</tbody></table></div></div></div></div>`;
+  $('app').innerHTML=h; updateHeaderStats();
+}
+function emptyRow(c){return `<tr><td colspan="${c}" class="empty">${t('noData')}</td></tr>`;}
+
+/* 價格異常：同零件最近單價與前次相差 >20% */
+function priceAbnormalCount(){
+  let c=0;
+  PARTS.forEach(p=>{const h=priceHistory(p.partNo);if(h.length>=2){const a=h[h.length-1].price,b=h[h.length-2].price;if(b&&Math.abs(a-b)/b>0.2)c++;}});
+  return c;
+}
+function priceHistory(partNo){
+  return TXNS.filter(x=>x.partNo===partNo&&x.type==='IN'&&x.unitPrice).map(x=>({date:x.date,price:+x.unitPrice}))
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+
+/* ========== INVENTORY ========== */
+function renderInventory(){
+  fillFilterSelects();
+  let ps=filteredParts();
+  ps.sort((a,b)=>{let r=0;const k=_sortKey;
+    if(['qty','unitPrice','minStock','maxStock'].includes(k))r=(+a[k]||0)-(+b[k]||0);
+    else if(k==='value')r=((+a.qty||0)*(+a.unitPrice||0))-((+b.qty||0)*(+b.unitPrice||0));
+    else r=String(a[k]||'').localeCompare(String(b[k]||''));return r*_sortDir;});
+  const th=(k,lbl,cls)=>`<th class="${cls||''}" onclick="sortBy('${k}')">${lbl}${_sortKey===k?(_sortDir>0?' ▲':' ▼'):''}</th>`;
+  let h=`<div class="sec on"><div class="card"><div class="ct" style="justify-content:space-between">
+    <span>📦 ${t('invTitle')} (${ps.length})</span>
+    <span><button class="btn btn-y btn-sm" onclick="editPart()">${t('btnAdd')}</button></span></div>
+    <div class="tw"><table><thead><tr>
+    ${th('partNo',t('colPartNo'))}${th('name',t('colName'))}${th('spec',t('colSpec'))}${th('category',t('colCat'))}
+    ${th('brand',t('colBrand'))}${th('location',t('colLoc'))}${th('unit',t('colUnit'))}
+    ${th('qty',t('colQty'),'num')}${th('unitPrice',t('colPrice'),'num')}${th('value',t('colValue'),'num')}
+    ${th('minStock',t('colMin'),'num')}<th>${t('colStatus')}</th><th></th></tr></thead><tbody>`;
+  h+=ps.map(p=>{const val=(+p.qty||0)*(+p.unitPrice||0);
+    return `<tr><td class="mono">${escapeHtml(p.partNo)}</td><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.spec)}</td>
+      <td>${escapeHtml(p.category)}</td><td>${escapeHtml(p.brand)}</td><td>${escapeHtml(p.location)}</td><td>${escapeHtml(p.unit)}</td>
+      <td class="num">${num(p.qty)}</td><td class="num">${money(p.unitPrice)}</td><td class="num">${money(val)}</td>
+      <td class="num">${num(p.minStock)}</td><td>${statusBadge(p)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-g btn-sm" onclick="quickMove('${p.id}','IN')">＋</button>
+        <button class="btn btn-g btn-sm" onclick="quickMove('${p.id}','OUT')">－</button>
+        <button class="btn btn-g btn-sm" onclick="editPart('${p.id}')">✎</button>
+        <button class="btn btn-g btn-sm" onclick="copyPart('${p.id}')">⎘</button>
+        ${p.invoiceImg?`<button class="btn btn-g btn-sm" onclick="viewImage('${p.invoiceImg}')" title="Invoice">🧾</button>`:''}
+        <button class="btn btn-r btn-sm" onclick="delPart('${p.id}')">🗑</button>
+      </td></tr>`;}).join('')||emptyRow(13);
+  h+=`</tbody></table></div></div></div>`;
+  $('app').innerHTML=h;
+}
+function sortBy(k){if(_sortKey===k)_sortDir=-_sortDir;else{_sortKey=k;_sortDir=1;}renderInventory();}
+
+function editPart(id){
+  const p=id?PARTS.find(x=>x.id===id):{};
+  const sel=(arr,v)=>arr.map(a=>`<option ${a===v?'selected':''}>${a}</option>`).join('');
+  openModal(`<h3>${id?'✎ '+t('btnEdit'):t('btnAdd')}</h3>
+    <div class="frm-grid">
+      <div class="fld"><label>${t('colPartNo')}</label><input id="m_partNo" value="${escapeHtml(p.partNo||'')}"></div>
+      <div class="fld"><label>${t('colName')}</label><input id="m_name" value="${escapeHtml(p.name||'')}"></div>
+      <div class="fld"><label>${t('colSpec')}</label><input id="m_spec" value="${escapeHtml(p.spec||'')}"></div>
+      <div class="fld"><label>${t('colCat')}</label><select id="m_cat">${sel(CATS,p.category)}</select></div>
+      <div class="fld"><label>${t('colBrand')}</label><select id="m_brand">${sel(BRANDS,p.brand)}</select></div>
+      <div class="fld"><label>${t('colMtype')}</label><select id="m_mt">${sel(MTYPES,p.machineType)}</select></div>
+      <div class="fld"><label>${t('colLoc')}</label><select id="m_loc">${sel(STORES,p.location)}</select></div>
+      <div class="fld"><label>${t('colUnit')}</label><select id="m_unit">${sel(UNITS,p.unit)}</select></div>
+      <div class="fld"><label>${t('colQty')}</label><input id="m_qty" type="number" value="${p.qty!=null?p.qty:0}"></div>
+      <div class="fld"><label>${t('colPrice')}</label><input id="m_price" type="number" step="0.01" value="${p.unitPrice!=null?p.unitPrice:0}"></div>
+      <div class="fld"><label>${t('colMin')}</label><input id="m_min" type="number" value="${p.minStock!=null?p.minStock:SET.minRule}"></div>
+      <div class="fld"><label>${t('colMax')}</label><input id="m_max" type="number" value="${p.maxStock!=null?p.maxStock:''}"></div>
+      <div class="fld" style="grid-column:1/3"><label>${t('colRemark')}</label><input id="m_remark" value="${escapeHtml(p.remark||'')}"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button>
+      <button class="btn btn-y" onclick="savePart('${id||''}')">${t('btnSave')}</button>
+    </div>`);
+}
+function savePart(id){
+  const g=x=>$('m_'+x).value;
+  const obj={partNo:g('partNo').trim(),name:g('name').trim(),spec:g('spec').trim(),category:g('cat'),brand:g('brand'),
+    machineType:g('mt'),location:g('loc'),unit:g('unit'),qty:+g('qty')||0,unitPrice:+g('price')||0,
+    minStock:+g('min')||0,maxStock:g('max')===''?'':+g('max'),remark:g('remark').trim()};
+  if(!obj.partNo){toast('Part No?');return;}
+  if(id){const p=PARTS.find(x=>x.id===id);Object.assign(p,obj);p.updatedAt=todayStr();}
+  else{obj.id=uid();obj.createdAt=todayStr();obj.updatedAt=todayStr();PARTS.push(obj);
+    if(SET.tgSend.newPart)/*opt*/0;}
+  saveAll();closeModal();renderInventory();
+}
+function copyPart(id){const p=PARTS.find(x=>x.id===id);if(!p)return;
+  const c=Object.assign({},p);c.id=uid();c.partNo=p.partNo+'-COPY';c.createdAt=todayStr();c.updatedAt=todayStr();
+  PARTS.push(c);saveAll();renderInventory();toast('Copied');}
+function delPart(id){const p=PARTS.find(x=>x.id===id);if(!p)return;
+  if(!confirm(t('confirmDel')+'\n'+p.partNo))return;
+  PARTS=PARTS.filter(x=>x.id!==id);saveAll();renderInventory();}
+
+function quickMove(id,type){
+  const p=PARTS.find(x=>x.id===id);if(!p)return;
+  openModal(`<h3>${type==='IN'?'⬆ '+t('btnIn'):'⬇ '+t('btnOut')} — ${escapeHtml(p.partNo)}</h3>
+    <div class="frm-grid">
+      <div class="fld"><label>${t('colDate')}</label><input id="q_date" type="date" value="${todayStr()}"></div>
+      <div class="fld"><label>${t('colQty')}</label><input id="q_qty" type="number" value="1"></div>
+      <div class="fld"><label>${t('colPrice')}</label><input id="q_price" type="number" step="0.01" value="${p.unitPrice||0}"></div>
+      <div class="fld"><label>${t('colSupplier')}</label><input id="q_sup" value=""></div>
+      <div class="fld"><label>${t('colUser')}</label><input id="q_user" value=""></div>
+      <div class="fld"><label>${t('colRemark')}</label><input id="q_remark" value=""></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button>
+      <button class="btn btn-y" onclick="doMove('${id}','${type}')">${t('btnSave')}</button>
+    </div>`);
+}
+function doMove(id,type){
+  const p=PARTS.find(x=>x.id===id);if(!p)return;
+  const q=+$('q_qty').value||0,price=+$('q_price').value||0;
+  if(q<=0){toast('Qty?');return;}
+  p.qty=(+p.qty||0)+(type==='IN'?q:-q);
+  if(type==='IN'&&price)p.unitPrice=price;
+  p.updatedAt=todayStr();
+  TXNS.push({id:uid(),date:$('q_date').value||todayStr(),partNo:p.partNo,type,qty:q,unitPrice:price,
+    supplier:$('q_sup').value.trim(),user:$('q_user').value.trim(),remark:$('q_remark').value.trim(),balance:p.qty,ts:Date.now()});
+  saveAll();closeModal();renderInventory();
+  if(type==='OUT'&&partStatus(p)!=='ok'&&SET.tgSend.low)/*opt auto*/0;
+}
+
+/* ========== HISTORY ========== */
+function renderHistory(){
+  fillFilterSelects();
+  const xs=filteredTxns().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.ts-a.ts);
+  let h=`<div class="sec on"><div class="card"><div class="ct" style="justify-content:space-between">
+    <span>🔁 ${t('histTitle')} (${xs.length})</span></div><div class="tw"><table><thead><tr>
+    <th>${t('colDate')}</th><th>${t('colPartNo')}</th><th>${t('colName')}</th><th>${t('colType')}</th>
+    <th class="num">${t('colQty')}</th><th class="num">${t('colBal')}</th><th class="num">${t('colPrice')}</th>
+    <th>${t('colSupplier')}</th><th>${t('colUser')}</th><th>${t('colRemark')}</th><th></th></tr></thead><tbody>`;
+  h+=xs.map(x=>{const p=PARTS.find(z=>z.partNo===x.partNo)||{};
+    return `<tr><td class="mono">${x.date||''}</td><td class="mono">${escapeHtml(x.partNo)}</td><td>${escapeHtml(p.name||'')}</td>
+      <td>${x.type==='IN'?'<span class="b bok">'+t('inWord')+'</span>':'<span class="b bwn">'+t('outWord')+'</span>'}</td>
+      <td class="num">${num(x.qty)}</td><td class="num">${x.balance!=null?num(x.balance):''}</td><td class="num">${x.unitPrice?money(x.unitPrice):''}</td>
+      <td>${escapeHtml(x.supplier||'')}</td><td>${escapeHtml(x.user||'')}</td><td>${escapeHtml(x.remark||'')}</td>
+      <td><button class="btn btn-r btn-sm" onclick="delTxn('${x.id}')">🗑</button></td></tr>`;}).join('')||emptyRow(11);
+  h+=`</tbody></table></div></div></div>`;
+  $('app').innerHTML=h;
+}
+function delTxn(id){if(!confirm(t('confirmDel')))return;TXNS=TXNS.filter(x=>x.id!==id);saveAll();renderHistory();}
+
+/* ========== MONTHLY SUMMARY ========== */
+function balanceAtMonthEnd(partNo,yearMonth){
+  // 月底 = 該 yyyy-mm 之最後一天；以該零件目前 qty 反推當時結存：用 txn 累積到月底
+  const end=yearMonth+'-31';
+  const ins=TXNS.filter(x=>x.partNo===partNo&&x.date&&x.date<=end);
+  // 用 IN-OUT 累積（假設期初0；若有目前 qty 與 txn 不符，以 txn 為準近似）
+  return ins.reduce((s,x)=>s+(x.type==='IN'?+x.qty:-+x.qty),0);
+}
+function renderMonthly(){
+  fillFilterSelects();
+  const year=(new Date()).getFullYear();
+  const months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
+  let rows=months.map(m=>{
+    const mtx=TXNS.filter(x=>ym(x.date)===m);
+    const inQ=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0),0);
+    const outQ=mtx.filter(x=>x.type==='OUT').reduce((s,x)=>s+(+x.qty||0),0);
+    // 月底各零件結存與價值
+    let bal=0,val=0,priceSum=0,priceN=0;
+    PARTS.forEach(p=>{const b=balanceAtMonthEnd(p.partNo,m);if(b>0){bal+=b;val+=b*(+p.unitPrice||0);}});
+    const prices=mtx.filter(x=>x.type==='IN'&&x.unitPrice).map(x=>+x.unitPrice);
+    const avg=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
+    return {m,inQ,outQ,bal,avg,val};
+  });
+  const mlbl=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')} — ${year}</div><div class="tw"><table><thead><tr>
+    <th>${t('monMonth')}</th><th class="num">${t('monIn')}</th><th class="num">${t('monOut')}</th>
+    <th class="num">${t('monBal')}</th><th class="num">${t('monAvg')}</th><th class="num">${t('monVal')}</th></tr></thead><tbody>`;
+  let tIn=0,tOut=0,tVal=0;
+  h+=rows.map((r,i)=>{tIn+=r.inQ;tOut+=r.outQ;tVal+=r.val;
+    return `<tr><td>${mlbl[i]}</td><td class="num">${num(r.inQ)}</td><td class="num">${num(r.outQ)}</td>
+      <td class="num">${num(r.bal)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.val)}</td></tr>`;}).join('');
+  h+=`<tr style="font-weight:700;background:var(--soft)"><td>Grand Total</td><td class="num">${num(tIn)}</td><td class="num">${num(tOut)}</td>
+    <td class="num">-</td><td class="num">-</td><td class="num">${money(tVal)}</td></tr>`;
+  h+=`</tbody></table></div>
+   <div class="al al-i" style="margin-top:12px">${_lang==='en'?'Month-end balance is accumulated from In/Out records (opening assumed 0).':_lang==='km'?'នៅសល់ចុងខែគណនាពីកំណត់ត្រាចូល/ចេញ។':'月底庫存由進出紀錄累積計算（期初假設為 0）。'}</div>
+   </div></div>`;
+  $('app').innerHTML=h;
+}
+
+/* ========== PRICE ANALYSIS ========== */
+function renderPrice(){
+  fillFilterSelects();
+  // 有兩筆以上 IN 價的零件
+  const parts=PARTS.filter(p=>priceHistory(p.partNo).length>=1);
+  const sel=$('priceSel')?$('priceSel').value:(parts[0]?parts[0].partNo:'');
+  let h=`<div class="sec on"><div class="card"><div class="frow">
+    <span class="tb-lbl">${t('prSelect')}</span>
+    <select id="priceSel" onchange="renderPrice()">${parts.map(p=>`<option value="${escapeHtml(p.partNo)}" ${p.partNo===sel?'selected':''}>${escapeHtml(p.partNo)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
+  </div>`;
+  const hist=priceHistory(sel);
+  if(hist.length){
+    const prices=hist.map(x=>x.price);
+    const avg=prices.reduce((a,b)=>a+b,0)/prices.length, mx=Math.max(...prices), mn=Math.min(...prices), last=prices[prices.length-1];
+    const first=prices[0], chg=first?((last-first)/first*100):0;
+    const pill=chg>0.5?`<span class="pill up">▲ ${chg.toFixed(1)}%</span>`:chg<-0.5?`<span class="pill down">▼ ${Math.abs(chg).toFixed(1)}%</span>`:`<span class="pill flat">≈ 0%</span>`;
+    h+=`<div class="kpi-strip">
+      <div class="kpi k-blue"><div class="kpi-n">${money(last)}</div><div class="kpi-l">${t('prLast')} ${pill}</div></div>
+      <div class="kpi k-green"><div class="kpi-n">${money(avg)}</div><div class="kpi-l">${t('prAvg')}</div></div>
+      <div class="kpi k-red"><div class="kpi-n">${money(mx)}</div><div class="kpi-l">${t('prMax')}</div></div>
+      <div class="kpi k-slate"><div class="kpi-n">${money(mn)}</div><div class="kpi-l">${t('prMin')}</div></div></div>`;
+    // sparkline
+    const max=mx||1;
+    h+=`<div class="ct">${t('prTrend')}</div><div class="spark" style="margin-bottom:14px">`+
+       hist.map(x=>`<i style="height:${Math.max(6,x.price/max*34)}px" title="${x.date}: ${money(x.price)}"></i>`).join('')+`</div>`;
+    h+=`<div class="tw"><table><thead><tr><th>${t('colDate')}</th><th class="num">${t('colPrice')}</th><th class="num">Δ%</th></tr></thead><tbody>`;
+    h+=hist.map((x,i)=>{const prev=i>0?hist[i-1].price:0;const d=prev?((x.price-prev)/prev*100):0;
+      const dp=i===0?'-':d>0.5?`<span class="pill up">▲${d.toFixed(1)}</span>`:d<-0.5?`<span class="pill down">▼${Math.abs(d).toFixed(1)}</span>`:`<span class="pill flat">0</span>`;
+      return `<tr><td class="mono">${x.date}</td><td class="num">${money(x.price)}</td><td class="num">${dp}</td></tr>`;}).join('');
+    h+=`</tbody></table></div>`;
+  }else h+=`<div class="empty">${t('noData')}</div>`;
+  h+=`</div>`;
+  // 同規格不同品牌比較
+  const cur=PARTS.find(p=>p.partNo===sel);
+  if(cur){
+    const same=PARTS.filter(p=>p.spec&&p.spec===cur.spec);
+    if(same.length>1){
+      h+=`<div class="card"><div class="ct">⚖ ${t('prCompare')} — ${escapeHtml(cur.spec)}</div><div class="tw"><table><thead><tr>
+        <th>${t('colBrand')}</th><th>${t('colPartNo')}</th><th class="num">${t('colPrice')}</th><th class="num">${t('colQty')}</th></tr></thead><tbody>`;
+      h+=same.sort((a,b)=>a.unitPrice-b.unitPrice).map(p=>`<tr><td><b>${escapeHtml(p.brand)}</b></td><td class="mono">${escapeHtml(p.partNo)}</td><td class="num">${money(p.unitPrice)}</td><td class="num">${num(p.qty)}</td></tr>`).join('');
+      h+=`</tbody></table></div></div>`;
+    }
+  }
+  h+=`</div>`;
+  $('app').innerHTML=h;
+}
+
+/* ========== STOCK ANALYSIS ========== */
+function lastMoveDate(partNo){const xs=TXNS.filter(x=>x.partNo===partNo&&x.date);if(!xs.length)return null;return xs.map(x=>x.date).sort().pop();}
+function daysSince(d){if(!d)return 99999;return Math.floor((Date.now()-new Date(d+'T00:00:00'))/86400000);}
+function renderStock(){
+  fillFilterSelects();
+  const ps=filteredParts();
+  const withVal=ps.map(p=>({p,v:(+p.qty||0)*(+p.unitPrice||0)}));
+  const top=[...withVal].sort((a,b)=>b.v-a.v).slice(0,20);
+  const low=ps.filter(p=>partStatus(p)==='low');
+  const zero=ps.filter(p=>partStatus(p)==='out');
+  const over=ps.filter(p=>p.maxStock!==''&&p.maxStock!=null&&(+p.qty)> (+p.maxStock));
+  const idle6=ps.filter(p=>daysSince(lastMoveDate(p.partNo))>180&&(+p.qty>0));
+  const idle12=ps.filter(p=>daysSince(lastMoveDate(p.partNo))>365&&(+p.qty>0));
+  // 週轉率：年度 OUT 數量 / 平均庫存（近似=目前庫存）
+  const outYr=TXNS.filter(x=>x.type==='OUT'&&(new Date(x.date)).getFullYear()===(new Date()).getFullYear()).reduce((s,x)=>s+(+x.qty||0),0);
+  const avgInv=ps.reduce((s,p)=>s+(+p.qty||0),0)||1;
+  const turn=(outYr/avgInv);
+  const tbl=(title,list,valcol)=>{
+    let s=`<div class="card"><div class="ct">${title} (${list.length})</div><div class="tw"><table><thead><tr>
+      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th>${valcol?`<th class="num">${valcol}</th>`:''}<th>${t('colStatus')}</th></tr></thead><tbody>`;
+    s+=list.slice(0,30).map(o=>{const p=o.p||o;const extra=valcol==='value'?`<td class="num">${money((+p.qty||0)*(+p.unitPrice||0))}</td>`:valcol?`<td class="num">${num(daysSince(lastMoveDate(p.partNo)))}d</td>`:'';
+      return `<tr><td class="mono">${escapeHtml(p.partNo)}</td><td>${escapeHtml(p.name)}</td><td class="num">${num(p.qty)}</td>${extra}<td>${statusBadge(p)}</td></tr>`;}).join('')||emptyRow(valcol?5:4);
+    s+=`</tbody></table></div></div>`;return s;};
+  let h=`<div class="sec on"><div class="kpi-strip">
+    <div class="kpi k-green"><div class="kpi-n">${turn.toFixed(2)}</div><div class="kpi-l">🔄 ${t('stTurn')}</div></div>
+    <div class="kpi k-amber"><div class="kpi-n">${num(low.length)}</div><div class="kpi-l">🟡 ${t('stLow')}</div></div>
+    <div class="kpi k-red"><div class="kpi-n">${num(zero.length)}</div><div class="kpi-l">🔴 ${t('stZero')}</div></div>
+    <div class="kpi k-violet"><div class="kpi-n">${num(over.length)}</div><div class="kpi-l">📦 ${t('stOver')}</div></div>
+    <div class="kpi k-slate"><div class="kpi-n">${num(idle6.length)}</div><div class="kpi-l">💤 ${t('stIdle6')}</div></div>
+    <div class="kpi k-slate"><div class="kpi-n">${num(idle12.length)}</div><div class="kpi-l">🕸 ${t('stIdle12')}</div></div>
+  </div>`;
+  h+=tbl('🏆 '+t('stTopValue'),top,'value');
+  h+=`<div class="g2">`+tbl('🟡 '+t('stLow'),low,'value')+tbl('🔴 '+t('stZero'),zero,'value')+`</div>`;
+  h+=`<div class="g2">`+tbl('📦 '+t('stOver'),over,'value')+tbl('💤 '+t('stIdle6'),idle6,'days')+`</div>`;
+  h+=tbl('🕸 '+t('stIdle12'),idle12,'days');
+  h+=`</div>`;
+  $('app').innerHTML=h;
+}
+
+/* ========== REPORTS ========== */
+function renderReports(){
+  let h=`<div class="sec on">
+   <div class="card"><div class="ct">📤 ${t('repTitle')}</div>
+    <div class="frow">
+      <button class="btn btn-b" onclick="exportExcel()">⬇ ${t('repExcel')}</button>
+      <button class="btn btn-g" onclick="exportCSV()">⬇ ${t('repCsv')}</button>
+      <button class="btn btn-g" onclick="printReport()">🖨 ${t('repPdf')}</button>
+    </div>
+   </div>
+   <div class="card"><div class="ct">📥 ${t('repImport')}</div>
+    <div class="drop" id="impDrop">
+      <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(this.files[0])">
+      <div style="font-size:30px">📄</div>
+      <div style="font-size:13px;margin-top:6px">Excel / CSV — Part No · Name · Spec · Category · Brand · Qty · Unit Price · Min · Max</div>
+    </div>
+   </div>
+   <div class="card"><div class="ct">🤖 ${t('repImportImg')}</div>
+    <div class="al al-i">${_lang==='en'?'Invoice & parts photo/PDF recognition has moved to the new Smart OCR tab.':_lang==='km'?'ការស្គាល់វិក្កយបត្របានផ្លាស់ទៅផ្ទាំង Smart OCR ថ្មី។':'發票與零件照片／PDF 辨識已升級至全新「🤖 智慧OCR」分頁。'}</div>
+    <button class="btn btn-b" onclick="goTab('ocr',null)">🤖 ${_lang==='en'?'Open Smart OCR':_lang==='km'?'បើក Smart OCR':'開啟智慧 OCR'}</button>
+   </div>
+   ${VERSIONS.length?`<div class="card"><div class="ct">🗂 ${_lang==='en'?'Import History (Versions)':_lang==='km'?'ប្រវត្តិនាំចូល':'匯入歷史版本'}</div>
+     <div class="tw"><table><thead><tr><th>${_lang==='en'?'Label':'版本'}</th><th class="num">${t('colQty')}</th><th></th></tr></thead><tbody>`+
+     VERSIONS.map(v=>`<tr><td>${escapeHtml(v.label)}</td><td class="num">${num(v.parts.length)}</td><td><button class="btn btn-g btn-sm" onclick="restoreVersion('${v.id}')">↩ ${_lang==='en'?'Restore':'回復'}</button></td></tr>`).join('')+
+     `</tbody></table></div></div>`:''}
+  </div>`;
+  $('app').innerHTML=h;
+}
+function sheetData(){
+  return PARTS.map((p,i)=>({No:i+1,'Part No':p.partNo,'Part Name':p.name,Spec:p.spec,Category:p.category,Brand:p.brand,
+    'Machine Type':p.machineType,Store:p.location,Unit:p.unit,Qty:p.qty,'Unit Price':p.unitPrice,
+    Value:(+p.qty||0)*(+p.unitPrice||0),Min:p.minStock,Max:p.maxStock,Status:partStatus(p),Remark:p.remark}));
+}
+function exportExcel(){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetData()),'Inventory');
+  const tx=TXNS.map(x=>({Date:x.date,'Part No':x.partNo,Type:x.type,Qty:x.qty,Balance:x.balance,'Unit Price':x.unitPrice,Supplier:x.supplier,User:x.user,Remark:x.remark}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(tx),'History');
+  XLSX.writeFile(wb,'VRT_SpareParts_'+todayStr()+'.xlsx');
+}
+function exportCSV(){
+  const rows=sheetData();const head=Object.keys(rows[0]||{No:''});
+  const csv=[head.join(',')].concat(rows.map(r=>head.map(k=>`"${String(r[k]==null?'':r[k]).replace(/"/g,'""')}"`).join(','))).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='VRT_SpareParts_'+todayStr()+'.csv';a.click();
+}
+function printReport(){
+  const rows=sheetData();
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>VRT Spare Parts</title><style>
+    body{font-family:Arial;padding:20px;color:#1e2640}h2{color:#1e3a5f}
+    table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #ccc;padding:5px 7px;text-align:left}
+    th{background:#1e3a5f;color:#fff}</style></head><body>
+    <h2>${escapeHtml(SET.company)} — Machine Spare Parts Inventory</h2><p>${todayStr()}</p>
+    <table><thead><tr>${Object.keys(rows[0]||{}).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${Object.values(r).map(v=>`<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    </body></html>`);
+  w.document.close();setTimeout(()=>w.print(),300);
+}
+function restoreVersion(id){const v=VERSIONS.find(x=>x.id===id);if(!v)return;if(!confirm('Restore '+v.label+'?'))return;
+  PARTS=JSON.parse(JSON.stringify(v.parts));saveAll();renderReports();toast('Restored');}
+
+/* ===== Excel/CSV 匯入 ===== */
+let _pendingImport=null;
+function importExcel(file){
+  if(!file)return;const rd=new FileReader();
+  rd.onload=e=>{try{
+    const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    const norm=k=>String(k).toLowerCase().replace(/[^a-z]/g,'');
+    const map=rows.map(r=>{const o={};Object.keys(r).forEach(k=>o[norm(k)]=r[k]);
+      return {partNo:String(o.partno||o.partcode||o.code||'').trim(),name:String(o.partname||o.name||'').trim(),
+        spec:String(o.spec||o.specification||'').trim(),category:String(o.category||o.cat||'Other').trim(),
+        brand:String(o.brand||'Other').trim(),machineType:String(o.machinetype||o.mtype||'Other').trim(),
+        location:String(o.store||o.location||'Main Store').trim(),unit:String(o.unit||'PCS').trim(),
+        qty:+o.qty||+o.currentqty||0,unitPrice:+o.unitprice||+o.price||0,
+        minStock:+o.min||+o.minstock||SET.minRule,maxStock:o.max!==''?(+o.max||+o.maxstock||''):'',remark:String(o.remark||'').trim()};
+    }).filter(r=>r.partNo);
+    if(!map.length){toast('No valid rows');return;}
+    _pendingImport=map;askImportMode(map.length);
+  }catch(err){console.error(err);toast('Parse error');}};
+  rd.readAsArrayBuffer(file);
+}
+function askImportMode(n){
+  openModal(`<h3>📥 ${t('importMode')} (${n})</h3>
+    <div style="display:grid;gap:8px">
+      <button class="btn btn-g" onclick="runImport('add')">➕ ${t('mAdd')}</button>
+      <button class="btn btn-g" onclick="runImport('update')">♻ ${t('mUpdate')}</button>
+      <button class="btn btn-g" onclick="runImport('overwrite')">⛔ ${t('mOverwrite')}</button>
+      <button class="btn btn-g" onclick="runImport('version')">🗂 ${t('mVersion')}</button>
+    </div>
+    <div style="text-align:right;margin-top:10px"><button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button></div>`);
+}
+function runImport(mode){
+  const rows=_pendingImport||[];const now=todayStr();
+  if(mode==='version'){
+    VERSIONS.push({id:uid(),label:ym(now)+' Inventory ('+now+')',parts:rows.map(r=>Object.assign({id:uid(),createdAt:now,updatedAt:now},r)),ts:Date.now()});
+  }else if(mode==='overwrite'){
+    PARTS=rows.map(r=>Object.assign({id:uid(),createdAt:now,updatedAt:now},r));
+  }else{
+    rows.forEach(r=>{const ex=PARTS.find(p=>p.partNo===r.partNo);
+      if(ex){if(mode==='update'||mode==='add'&&false){Object.assign(ex,r);ex.updatedAt=now;}}
+      else{PARTS.push(Object.assign({id:uid(),createdAt:now,updatedAt:now},r));}});
+  }
+  saveAll();closeModal();toast(t('saved'));goTab('inventory',null);
+}
+
+/* ===== 圖片/PDF：人工修正匯入（OCR 占位，辨識失敗可人工輸入） ===== */
+function importImage(file){
+  if(!file)return;
+  // 提供可編輯空白列，使用者依圖片人工填寫（OCR 服務可於此接入）
+  let rowsHtml='';
+  for(let i=0;i<8;i++)rowsHtml+=`<tr>
+    <td><input class="oc" data-f="partNo" style="width:90px"></td>
+    <td><input class="oc" data-f="name" style="width:130px"></td>
+    <td><input class="oc" data-f="qty" type="number" style="width:60px"></td>
+    <td><input class="oc" data-f="unitPrice" type="number" step="0.01" style="width:70px"></td></tr>`;
+  openModal(`<h3>🖼 ${t('repImportImg')}</h3>
+    <div class="al al-i">${_lang==='en'?'Auto-OCR needs an OCR service; below you can enter/correct rows from the image manually, then import.':_lang==='km'?'OCR ស្វ័យប្រវត្តិត្រូវការសេវា; សូមបញ្ចូល/កែដោយដៃខាងក្រោម។':'自動 OCR 需接辨識服務；可依圖片於下方人工輸入或修正後匯入。'}</div>
+    <div class="tw"><table><thead><tr><th>Part No</th><th>Name</th><th>Qty</th><th>Price</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button>
+      <button class="btn btn-y" onclick="commitImageRows()">${t('btnSave')}</button></div>`);
+}
+function commitImageRows(){
+  const trs=document.querySelectorAll('#modalBox tbody tr');const rows=[];
+  trs.forEach(tr=>{const o={};tr.querySelectorAll('.oc').forEach(inp=>o[inp.dataset.f]=inp.value.trim());
+    if(o.partNo)rows.push({partNo:o.partNo,name:o.name||o.partNo,spec:'',category:'Other',brand:'Other',machineType:'Other',
+      location:'Main Store',unit:'PCS',qty:+o.qty||0,unitPrice:+o.unitPrice||0,minStock:SET.minRule,maxStock:'',remark:'OCR'});});
+  if(!rows.length){toast('No rows');return;}
+  _pendingImport=rows;askImportMode(rows.length);
+}
+
+/* ========== SETTINGS ========== */
+function renderSettings(){
+  const opt=(arr,v)=>arr.map(a=>`<option ${a===v?'selected':''}>${a}</option>`).join('');
+  let h=`<div class="sec on"><div class="card"><div class="ct">⚙️ ${t('setTitle')}</div>
+    <div class="frm-grid">
+      <div class="fld"><label>${t('setCompany')}</label><input id="s_company" value="${escapeHtml(SET.company)}"></div>
+      <div class="fld"><label>${t('setCur')}</label><select id="s_cur">${opt(['USD','KHR','TWD'],SET.currency)}</select></div>
+      <div class="fld"><label>${t('setMin')}</label><input id="s_min" type="number" value="${SET.minRule}"></div>
+      <div class="fld"><label>${t('setHigh')}</label><input id="s_high" type="number" value="${SET.highValue}"></div>
+      <div class="fld"><label>${t('setTheme')}</label><select id="s_theme">${opt(['light','dark'],SET.theme)}</select></div>
+      <div class="fld"><label>${t('setLang')}</label><select id="s_lang">${[['zh','繁中'],['en','English'],['km','ខ្មែរ']].map(a=>`<option value="${a[0]}" ${a[0]===_lang?'selected':''}>${a[1]}</option>`).join('')}</select></div>
+    </div>
+    <div style="margin-top:10px"><button class="btn btn-y" onclick="saveSettings()">${t('btnSave')}</button></div>
+   </div>
+   <div class="card"><div class="ct">☁️ ${t('setCloud')}</div>
+    <div class="frm-grid">
+      <div class="fld"><label>Cloud Target</label><select id="s_cloud">${opt(['local','gas','github','onedrive','drive'],SET.cloudTarget)}</select></div>
+      <div class="fld"><label>GAS / Endpoint URL</label><input id="s_gas" value="${escapeHtml(SET.gasUrl)}" placeholder="https://script.google.com/.../exec"></div>
+    </div>
+    <div class="frow" style="margin-top:8px">
+      <button class="btn btn-g" onclick="backupLocal()">💾 ${t('setBackup')}</button>
+      <label class="btn btn-g" style="position:relative;overflow:hidden">📥 ${t('setRestore')}<input type="file" accept=".json" onchange="restoreLocal(this.files[0])" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+      <button class="btn btn-b" onclick="cloudUpload()">☁️⬆ Upload</button>
+      <button class="btn btn-b" onclick="cloudDownload()">☁️⬇ Download</button>
+    </div>
+    <div class="al al-i" style="margin-top:10px">${_lang==='en'?'Local backup/restore & GAS (Google Sheet) sync work out-of-the-box. GitHub/OneDrive/Drive need their endpoint URL/token.':_lang==='km'?'បម្រុង/ស្ដារ និង GAS ដំណើរការ; GitHub/OneDrive/Drive ត្រូវការ URL/Token។':'本機備份／還原與 GAS（Google Sheet）同步可直接使用；GitHub／OneDrive／Drive 需填入對應網址或 Token。'}</div>
+   </div>
+   <div class="card"><div class="ct">📨 ${t('setTg')}</div>
+    <div class="fld"><label>Bot Token</label><input id="s_tgtoken" value="${escapeHtml(SET.tgToken)}" placeholder="123456:ABC..."></div>
+    <div class="frm-grid">
+      ${['Maintenance','Warehouse','Management','AdminCenter'].map(g=>`<div class="fld"><label>${g} chat_id</label><input id="s_tg_${g}" value="${escapeHtml(SET.tgGroups[g]||'')}"></div>`).join('')}
+    </div>
+    <div style="margin-top:8px"><button class="btn btn-y" onclick="saveSettings()">${t('btnSave')}</button>
+      <button class="btn btn-g" onclick="openTelegram()">📨 ${t('tgTitle')}</button></div>
+   </div>
+   <div class="card"><div class="ct">🤖 OCR / AI</div>
+    <div class="frm-grid">
+      <div class="fld"><label>${t('ocrMode')}</label><select id="s_ocrmode">${['fast','bal','high','invoice'].map(m=>`<option value="${m}" ${SET.ocrMode===m?'selected':''}>${t('m'+m.charAt(0).toUpperCase()+m.slice(1))}</option>`).join('')}</select></div>
+      <div class="fld"><label>OCR Language</label><input id="s_ocrlang" value="${escapeHtml(SET.ocrLang)}" placeholder="eng+chi_tra"></div>
+      <div class="fld"><label>${t('conf')} ⚠ (%)</label><input id="s_confwarn" type="number" value="${SET.confWarn}"></div>
+      <div class="fld"><label>${t('conf')} ✖ (%)</label><input id="s_confbad" type="number" value="${SET.confBad}"></div>
+      <div class="fld"><label>Vision API URL (${_lang==='en'?'optional':'選填'})</label><input id="s_visurl" value="${escapeHtml(SET.visionUrl)}" placeholder="https://.../vision"></div>
+      <div class="fld"><label>Vision API Key</label><input id="s_viskey" value="${escapeHtml(SET.visionKey)}" placeholder="(optional)"></div>
+    </div>
+    <div class="fld" style="margin-top:8px"><label>${t('autoPart')} — ${_lang==='en'?'Prefix rules':'料號前綴規則'}</label>
+      <input id="s_partrules" value="${escapeHtml(Object.entries(SET.partRules).map(([k,v])=>k+':'+v).join(', '))}" placeholder="Bearing:BR, Needle:ND, ...">
+    </div>
+    <div class="al al-i" style="margin-top:8px;font-size:12px">${_lang==='en'?'OCR runs locally with Tesseract.js (eng+chi_tra). Set a Vision API URL to use external AI invoice parsing.':_lang==='km'?'OCR ដំណើរការក្នុងម៉ាស៊ីនជាមួយ Tesseract.js។':'OCR 預設使用瀏覽器內 Tesseract.js（eng+chi_tra）離線辨識；填入 Vision API URL 可改用外接 AI 發票解析。'}</div>
+    <div style="margin-top:8px"><button class="btn btn-y" onclick="saveSettings()">${t('btnSave')}</button>
+      <span style="font-size:12px;color:var(--sub);margin-left:8px">OCR Dictionary: ${Object.keys(SET.ocrDict||{}).length} ${_lang==='en'?'entries':'筆'}</span></div>
+   </div>
+   <div class="card"><div class="ct">🗑 Data</div>
+    <button class="btn btn-r" onclick="clearAll()">🗑 ${_lang==='en'?'Clear All Data':_lang==='km'?'លុបទាំងអស់':'清除所有資料'}</button>
+   </div></div>`;
+  $('app').innerHTML=h;
+}
+function saveSettings(){
+  SET.company=$('s_company').value.trim();SET.currency=$('s_cur').value;SET.minRule=+$('s_min').value||0;
+  SET.highValue=+$('s_high').value||0;SET.theme=$('s_theme').value;
+  if($('s_cloud'))SET.cloudTarget=$('s_cloud').value;
+  if($('s_gas'))SET.gasUrl=$('s_gas').value.trim();
+  if($('s_tgtoken'))SET.tgToken=$('s_tgtoken').value.trim();
+  ['Maintenance','Warehouse','Management','AdminCenter'].forEach(g=>{const el=$('s_tg_'+g);if(el)SET.tgGroups[g]=el.value.trim();});
+  if($('s_ocrmode'))SET.ocrMode=$('s_ocrmode').value;
+  if($('s_ocrlang'))SET.ocrLang=$('s_ocrlang').value.trim()||'eng+chi_tra';
+  if($('s_confwarn'))SET.confWarn=+$('s_confwarn').value||90;
+  if($('s_confbad'))SET.confBad=+$('s_confbad').value||80;
+  if($('s_visurl'))SET.visionUrl=$('s_visurl').value.trim();
+  if($('s_viskey'))SET.visionKey=$('s_viskey').value.trim();
+  if($('s_partrules')){const r={};$('s_partrules').value.split(',').forEach(pair=>{const[a,b]=pair.split(':').map(x=>(x||'').trim());if(a&&b)r[a]=b;});if(Object.keys(r).length)SET.partRules=Object.assign(SET.partRules,r);}
+  const nl=$('s_lang').value;
+  applyTheme();saveAll(true);updateCloudDot();
+  if(nl!==_lang){_lang=nl;localStorage.setItem('vrt_sp_lang',_lang);applyLang();}
+  else renderSettings();
+}
+function applyTheme(){document.body.classList.toggle('dark',SET.theme==='dark');}
+function clearAll(){if(!confirm(t('confirmDel')))return;PARTS=[];TXNS=[];VERSIONS=[];saveAll();seedDemo();saveAll();goTab('dashboard',null);}
+
+/* ===== 本機備份 / 還原 ===== */
+function backupLocal(){
+  const blob=new Blob([JSON.stringify({parts:PARTS,txns:TXNS,versions:VERSIONS,settings:SET,ts:Date.now()},null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='VRT_SpareParts_Backup_'+todayStr()+'.json';a.click();
+}
+function restoreLocal(file){if(!file)return;const rd=new FileReader();
+  rd.onload=e=>{try{const d=JSON.parse(e.target.result);
+    if(d.parts)PARTS=d.parts;if(d.txns)TXNS=d.txns;if(d.versions)VERSIONS=d.versions;if(d.settings)SET=Object.assign(SET,d.settings);
+    saveAll(true);applyTheme();goTab('dashboard',null);}catch(err){toast('Restore error');}};
+  rd.readAsText(file);}
+
+/* ===== 雲端（GAS text/plain；其他標記需設定） ===== */
+function updateCloudDot(){
+  const ok=(SET.cloudTarget==='gas'&&SET.gasUrl)||SET.cloudTarget==='local';
+  const dot=$('cloudDot');
+  if(SET.cloudTarget==='gas'&&SET.gasUrl)dot.innerHTML='🟢 <span>'+t('cloudConn')+'</span>';
+  else if(SET.cloudTarget==='local')dot.innerHTML='🔵 <span>Local</span>';
+  else dot.innerHTML='⚪ <span>'+t('cloudOff')+'</span>';
+}
+async function cloudUpload(){
+  if(SET.cloudTarget==='local'||!SET.gasUrl){backupLocal();toast(_lang==='en'?'Saved local backup':'已下載本機備份');return;}
+  try{
+    const res=await fetch(SET.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'push',tool:'spareparts',data:{parts:PARTS,txns:TXNS,versions:VERSIONS}})});
+    await res.text();toast('☁️ Uploaded');
+  }catch(e){console.error(e);toast('Upload failed — check URL/CORS');}
+}
+async function cloudDownload(){
+  if(SET.cloudTarget==='local'||!SET.gasUrl){toast(_lang==='en'?'Use Restore for local':'本機請用還原');return;}
+  try{
+    const res=await fetch(SET.gasUrl+'?action=pull&tool=spareparts',{redirect:'follow'});
+    const d=await res.json();
+    if(d&&d.parts){PARTS=d.parts;TXNS=d.txns||[];VERSIONS=d.versions||[];saveAll(true);goTab('dashboard',null);toast('☁️ Downloaded');}
+    else toast('No cloud data');
+  }catch(e){console.error(e);toast('Download failed');}
+}
+
+/* ===== Telegram ===== */
+function openTelegram(){
+  const chk=(k,l)=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" id="tg_${k}" checked> ${l}</label>`;
+  const grp=(g)=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" id="tgg_${g}" ${SET.tgGroups[g]?'checked':''} ${SET.tgGroups[g]?'':'disabled'}> ${g} ${SET.tgGroups[g]?'':'<span style="color:#dc2626">(no id)</span>'}</label>`;
+  openModal(`<h3>📨 ${t('tgTitle')}</h3>
+    <div class="ct">${t('tgGroups')}</div>${['Maintenance','Warehouse','Management','AdminCenter'].map(grp).join('')}
+    <div class="ct" style="margin-top:10px">${_lang==='en'?'Content':'內容'}</div>
+    ${chk('daily',t('tgDaily'))}${chk('low',t('tgLow'))}${chk('monthly',t('tgMonthly'))}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button>
+      <button class="btn btn-y" onclick="sendTelegram()">${t('tgSend')}</button></div>`);
+}
+function buildTgMessage(){
+  const ps=PARTS;const val=ps.reduce((s,p)=>s+(+p.qty||0)*(+p.unitPrice||0),0);
+  const low=ps.filter(p=>partStatus(p)!=='ok');
+  let m=`<b>🔧 ${escapeHtml(SET.company)} — Spare Parts</b>\n${todayStr()}\n`;
+  if($('tg_daily')&&$('tg_daily').checked)m+=`\n📦 Parts: <b>${ps.length}</b>\n💰 Value: <b>${money(val)}</b>\n`;
+  if($('tg_low')&&$('tg_low').checked){m+=`\n🟡 Low/Out (${low.length}):\n`+low.slice(0,15).map(p=>`• ${escapeHtml(p.partNo)} = ${num(p.qty)}`).join('\n');}
+  if($('tg_monthly')&&$('tg_monthly').checked){const mt=monthTxns();const i=mt.filter(x=>x.type==='IN').reduce((s,x)=>s+ +x.qty,0);const o=mt.filter(x=>x.type==='OUT').reduce((s,x)=>s+ +x.qty,0);m+=`\n\n📆 This Month — IN ${i} / OUT ${o}`;}
+  return m;
+}
+async function sendTelegram(){
+  if(!SET.tgToken){toast('Set Bot Token in Settings');return;}
+  const groups=['Maintenance','Warehouse','Management','AdminCenter'].filter(g=>{const el=$('tgg_'+g);return el&&el.checked&&SET.tgGroups[g];});
+  if(!groups.length){toast('Select a group with chat_id');return;}
+  const msg=buildTgMessage();let okN=0;
+  for(const g of groups){try{
+    const r=await fetch(`https://api.telegram.org/bot${SET.tgToken}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:SET.tgGroups[g],text:msg,parse_mode:'HTML',disable_web_page_preview:true})});
+    const d=await r.json();if(d.ok)okN++;}catch(e){console.error(e);}}
+  closeModal();toast(okN?('📨 Sent to '+okN):'Send failed (token/CORS)');
+}
+
+/* ===== INIT ===== */
+
+/* ════════════════════════════════════════════════════════════════
+   SMART AI OCR  V2  —  發票辨識模組
+   流程：拍照→OCR→AI整理→人工確認→供應商→庫存→交易→價格→雲端→Telegram
+   ════════════════════════════════════════════════════════════════ */
+let _ocr={pages:[],cur:0,header:{},lines:[],img:{zoom:1,rot:0,bri:100,con:100},busy:false,prog:0,raw:''};
+let _tessWorker=null, _cropMode=false;
+
+const OCR_MODES=[
+  {k:'fast',ico:'⚡',psm:6},
+  {k:'bal',ico:'⚖',psm:4},
+  {k:'high',ico:'🎯',psm:11},
+  {k:'invoice',ico:'🧾',psm:6}
+];
+const CAT_KW=[
+  [/bearing|軸承|6\d{3}|608|626/i,'Bearing'],[/motor|馬達|servo|伺服/i,'Motor'],
+  [/knife|刀|blade|拷克.*刀/i,'Knife'],[/needle|機針|針|db.?x|dc.?x|uy\d/i,'Needle'],
+  [/oil|油|grease|潤滑/i,'Consumable'],[/belt|皮帶|v-?belt/i,'Belt'],
+  [/sensor|感測|proximity|光電/i,'Sensor'],[/valve|電磁|solenoid|閥/i,'Electric'],
+  [/filter|濾|air|空壓|壓縮/i,'Air'],[/led|燈|cloth|布|消耗/i,'Consumable']
+];
+
+/* ========== OCR 主畫面 ========== */
+function renderOCR(){
+  const todayN=OCRHIST.filter(o=>o.date===todayStr()).length;
+  const done=OCRHIST.filter(o=>o.status==='completed').length;
+  const rej=OCRHIST.filter(o=>o.status==='rejected').length;
+  const pend=OCRHIST.filter(o=>o.status==='pending').length;
+  const confs=OCRHIST.map(o=>o.confidence).filter(x=>x>0);
+  const avgC=confs.length?Math.round(confs.reduce((a,b)=>a+b,0)/confs.length):0;
+  const succ=OCRHIST.length?Math.round(done/OCRHIST.length*100):0;
+  const k=(n,u,l,c)=>`<div class="kpi ${c}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+  let h=`<div class="sec on">
+   <div class="card"><div class="ct">📊 ${t('ocrDashTab')}</div><div class="kpi-strip">
+     ${k(succ,'%','✅ '+t('dSuccess'),'k-green')}
+     ${k(avgC,'%','🎯 '+t('dAvgConf'),'k-blue')}
+     ${k(todayN,'','📅 '+t('dToday'),'k-violet')}
+     ${k(pend,'','⏳ '+t('dPending'),'k-amber')}
+     ${k(done,'','✔ '+t('dCompleted'),'k-green')}
+     ${k(rej,'','✖ '+t('dRejected'),'k-red')}
+   </div></div>`;
+
+  // 模式 + 拖放
+  h+=`<div class="card"><div class="ct">🤖 ${t('ocrTitle')}</div>
+    <div class="al al-i" style="font-size:12px">${t('ocrFlow')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+    ${OCR_MODES.map(m=>`<div class="mode-card ${SET.ocrMode===m.k?'on':''}" onclick="setOcrMode('${m.k}')"><b>${m.ico} ${t('m'+m.k.charAt(0).toUpperCase()+m.k.slice(1))}</b></div>`).join('')}
+    </div>
+    <div class="drop" id="ocrDrop" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="ocrDropHandler(event)">
+      <input type="file" accept="image/*,.pdf,.heic" multiple onchange="ocrFiles(this.files)">
+      <div style="font-size:32px">📷</div>
+      <div style="font-size:13px;margin-top:6px">${t('ocrDrop')}</div>
+    </div>
+    ${_ocr.pages.length?renderPagePills():''}
+   </div>`;
+
+  // Google Lens 雙欄
+  if(_ocr.pages.length){
+    h+=`<div class="card"><div class="ocr-split">
+      <div class="ocr-stage">
+        <div class="img-tools">
+          <div class="itool" onclick="imgZoom(0.2)" title="${t('iZin')}">➕</div>
+          <div class="itool" onclick="imgZoom(-0.2)" title="${t('iZout')}">➖</div>
+          <div class="itool" onclick="imgRot(90)" title="${t('iRot')} 90°">↻</div>
+          <div class="itool" onclick="imgRot(180)" title="180°">⤺</div>
+          <div class="itool" onclick="imgRot(270)" title="270°">↺</div>
+          <div class="itool ${_cropMode?'on':''}" onclick="toggleCrop()" title="${t('iCrop')}">✂</div>
+          <div class="itool" onclick="imgReset()" title="${t('iReset')}">⟲</div>
+        </div>
+        <div class="slider-row">☀ ${t('iBri')}<input type="range" min="50" max="180" value="${_ocr.img.bri}" oninput="imgFilter('bri',this.value)"></div>
+        <div class="slider-row">◑ ${t('iCon')}<input type="range" min="50" max="200" value="${_ocr.img.con}" oninput="imgFilter('con',this.value)"></div>
+        <div class="ocr-canvas-wrap" id="ocrWrap" style="position:relative">
+          <img id="ocrImg" src="${_ocr.pages[_ocr.cur].dataUrl}" style="${imgStyle()}">
+          <div id="cropBox" style="display:none;position:absolute;border:2px dashed #38bdf8;background:rgba(56,189,248,.15)"></div>
+        </div>
+      </div>
+      <div class="ocr-stage" style="background:var(--card)">
+        ${renderOcrPanel()}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-b" id="btnRunOcr" onclick="runOCR()">${_ocr.busy?'⏳ '+t('engLoad'):'🔍 '+t('ocrRun')}</button>
+      <button class="btn btn-g" onclick="reparseAI()">🧠 ${t('ocrReAI')}</button>
+      <button class="btn btn-g" onclick="runOCR()">🔁 ${t('ocrReImg')}</button>
+      <button class="btn btn-y" style="margin-left:auto" onclick="commitOCR()">✅ ${t('ocrConfirm')}</button>
+    </div>
+    ${_ocr.busy?`<div class="ocr-progress"><i style="width:${_ocr.prog}%"></i></div>`:''}
+    </div>`;
+  }
+
+  // OCR 歷史
+  h+=`<div class="card"><div class="ct">🗂 ${t('ocrHistTab')}</div><div class="tw"><table><thead><tr>
+    <th>${t('hdrDate')}</th><th>${t('hdrSupplier')}</th><th>${t('hdrInvNo')}</th><th class="num">${t('conf')}</th><th>Status</th><th></th></tr></thead><tbody>`;
+  h+=[...OCRHIST].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,20).map(o=>{
+    const cc=o.confidence>=SET.confWarn?'conf-hi':o.confidence>=SET.confBad?'conf-md':'conf-lo';
+    return `<tr><td class="mono">${o.date}</td><td>${escapeHtml(o.supplier||'')}</td><td class="mono">${escapeHtml(o.invNo||'')}</td>
+      <td class="num"><span class="conf ${cc}">${o.confidence||0}%</span></td>
+      <td>${o.status==='completed'?'<span class="b bok">✔</span>':o.status==='rejected'?'<span class="b bbd">✖</span>':'<span class="b bwn">⏳</span>'}</td>
+      <td>${o.imgId?`<button class="btn btn-g btn-sm" onclick="viewImage('${o.imgId}')">🖼</button>`:''}</td></tr>`;
+  }).join('')||emptyRow(6);
+  h+=`</tbody></table></div></div>`;
+
+  // 供應商
+  h+=`<div class="card"><div class="ct">🏢 ${t('supplierTab')} (${SUPPLIERS.length})</div><div class="tw"><table><thead><tr>
+    <th>${t('hdrSupplier')}</th><th>${t('hdrCur')}</th><th class="num">Invoices</th></tr></thead><tbody>`;
+  h+=SUPPLIERS.map(s=>`<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.currency||'')}</td><td class="num">${INVOICES.filter(i=>i.supplier===s.name).length}</td></tr>`).join('')||emptyRow(3);
+  h+=`</tbody></table></div></div></div>`;
+  $('app').innerHTML=h;
+}
+function renderPagePills(){
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">`+
+    _ocr.pages.map((p,i)=>`<span class="page-pill ${i===_ocr.cur?'on':''}" onclick="ocrGoPage(${i})">📄 ${t('page')} ${i+1}</span>`).join('')+`</div>`;
+}
+function setOcrMode(k){SET.ocrMode=k;saveAll();renderOCR();}
+function imgStyle(){const m=_ocr.img;return `transform:scale(${m.zoom}) rotate(${m.rot}deg);filter:brightness(${m.bri}%) contrast(${m.con}%);`;}
+function applyImgStyle(){const el=$('ocrImg');if(el)el.style.cssText=imgStyle();}
+function imgZoom(d){_ocr.img.zoom=Math.max(0.3,Math.min(5,_ocr.img.zoom+d));applyImgStyle();}
+function imgRot(deg){_ocr.img.rot=(deg)%360;applyImgStyle();}
+function imgFilter(k,v){_ocr.img[k]=+v;applyImgStyle();}
+function imgReset(){_ocr.img={zoom:1,rot:0,bri:100,con:100};applyImgStyle();_cropMode=false;const cb=$('cropBox');if(cb)cb.style.display='none';}
+function ocrGoPage(i){_ocr.cur=i;imgReset();renderOCR();}
+
+/* ========== 檔案載入（圖片 / PDF 多頁 / 多張） ========== */
+function ocrDropHandler(e){e.preventDefault();e.currentTarget.classList.remove('drag');ocrFiles(e.dataTransfer.files);}
+async function ocrFiles(files){
+  if(!files||!files.length)return;
+  toast(_lang==='en'?'Loading files…':'載入檔案中…');
+  for(const f of files){
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    if(ext==='pdf'){await loadPdf(f);}
+    else{const url=await fileToDataUrl(f);_ocr.pages.push({dataUrl:url,name:f.name});}
+  }
+  _ocr.cur=0;renderOCR();
+}
+function fileToDataUrl(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});}
+async function loadPdf(f){
+  try{
+    if(!window.pdfjsLib){toast('PDF engine missing');return;}
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const buf=await f.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    for(let p=1;p<=pdf.numPages;p++){
+      const page=await pdf.getPage(p);
+      const vp=page.getViewport({scale:2});
+      const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
+      await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+      _ocr.pages.push({dataUrl:cv.toDataURL('image/png'),name:f.name+' p'+p});
+    }
+  }catch(e){console.error(e);toast('PDF load failed');}
+}
+
+/* ========== 裁切 ========== */
+function toggleCrop(){
+  _cropMode=!_cropMode;
+  if(_cropMode){imgReset();_cropMode=true;}
+  const box=$('cropBox');if(box)box.style.display='none';
+  bindCrop();renderCropState();
+}
+function renderCropState(){const el=document.querySelector('.itool[onclick="toggleCrop()"]');if(el)el.classList.toggle('on',_cropMode);}
+function bindCrop(){
+  const wrap=$('ocrWrap'),box=$('cropBox');if(!wrap||!box)return;
+  let sx,sy,drawing=false;
+  wrap.onmousedown=e=>{if(!_cropMode)return;const r=wrap.getBoundingClientRect();sx=e.clientX-r.left+wrap.scrollLeft;sy=e.clientY-r.top+wrap.scrollTop;drawing=true;box.style.display='block';box.style.left=sx+'px';box.style.top=sy+'px';box.style.width='0px';box.style.height='0px';};
+  wrap.onmousemove=e=>{if(!drawing)return;const r=wrap.getBoundingClientRect();const cx=e.clientX-r.left+wrap.scrollLeft,cy=e.clientY-r.top+wrap.scrollTop;box.style.left=Math.min(sx,cx)+'px';box.style.top=Math.min(sy,cy)+'px';box.style.width=Math.abs(cx-sx)+'px';box.style.height=Math.abs(cy-sy)+'px';};
+  wrap.onmouseup=()=>{if(!drawing)return;drawing=false;applyCrop(box);};
+}
+function applyCrop(box){
+  const img=$('ocrImg');if(!img)return;
+  const dispW=img.clientWidth,dispH=img.clientHeight;
+  const natW=img.naturalWidth,natH=img.naturalHeight;
+  const sx=parseFloat(box.style.left)/dispW*natW, sy=parseFloat(box.style.top)/dispH*natH;
+  const sw=parseFloat(box.style.width)/dispW*natW, sh=parseFloat(box.style.height)/dispH*natH;
+  if(sw<8||sh<8){box.style.display='none';return;}
+  const cv=document.createElement('canvas');cv.width=sw;cv.height=sh;
+  cv.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,sw,sh);
+  _ocr.pages[_ocr.cur].dataUrl=cv.toDataURL('image/png');
+  _cropMode=false;renderOCR();toast(_lang==='en'?'Cropped':'已裁切');
+}
+
+/* ========== OCR 引擎（Tesseract / 可選 Vision API） ========== */
+async function ensureTess(){
+  if(_tessWorker)return _tessWorker;
+  if(!window.Tesseract)throw new Error('Tesseract not loaded');
+  _tessWorker=await Tesseract.createWorker(SET.ocrLang||'eng',1,{logger:m=>{
+    if(m.status==='recognizing text'){_ocr.prog=Math.round(m.progress*100);const bar=document.querySelector('.ocr-progress i');if(bar)bar.style.width=_ocr.prog+'%';}
+  }});
+  return _tessWorker;
+}
+async function runOCR(){
+  if(!_ocr.pages.length){toast('No image');return;}
+  _ocr.busy=true;_ocr.prog=0;renderOCR();
+  try{
+    if(SET.visionUrl){ // 可選：外接 Vision AI
+      await runVision();
+    }else{
+      const worker=await ensureTess();
+      const psm=(OCR_MODES.find(m=>m.k===SET.ocrMode)||{}).psm||6;
+      try{await worker.setParameters({tessedit_pageseg_mode:String(psm)});}catch(_){}
+      const {data}=await worker.recognize(_ocr.pages[_ocr.cur].dataUrl);
+      _ocr.raw=data.text||'';
+      parseFromTess(data);
+    }
+  }catch(e){console.error(e);toast('OCR error: '+e.message);}
+  _ocr.busy=false;renderOCR();
+}
+async function runVision(){
+  try{
+    const res=await fetch(SET.visionUrl,{method:'POST',headers:{'Content-Type':'application/json',...(SET.visionKey?{'Authorization':'Bearer '+SET.visionKey}:{})},
+      body:JSON.stringify({image:_ocr.pages[_ocr.cur].dataUrl,task:'invoice'})});
+    const d=await res.json();
+    if(d.header)_ocr.header=d.header;
+    if(d.lines)_ocr.lines=d.lines.map(normLine);
+    _ocr.raw=d.raw||'';
+  }catch(e){console.error(e);toast('Vision API failed → fallback');const w=await ensureTess();const {data}=await w.recognize(_ocr.pages[_ocr.cur].dataUrl);parseFromTess(data);}
+}
+
+/* ========== AI 整理：把 OCR 文字結構化 ========== */
+function dictFix(s){let r=s||'';Object.keys(SET.ocrDict||{}).forEach(k=>{r=r.split(k).join(SET.ocrDict[k]);});return r;}
+function parseFromTess(data){
+  const overall=Math.round(data.confidence||0);
+  const lines=(data.lines&&data.lines.length)?data.lines:(data.text||'').split('\n').map(tx=>({text:tx,confidence:overall}));
+  const txtLines=lines.map(l=>({text:dictFix((l.text||'').trim()),conf:Math.round(l.confidence||overall)})).filter(l=>l.text);
+  _ocr.header=parseHeader(txtLines);
+  _ocr.lines=parseItems(txtLines);
+  if(!_ocr.lines.length)_ocr.lines=[blankLine()];
+}
+function reparseAI(){ if(_ocr.raw){const fake={text:_ocr.raw,confidence:_ocr._oc||80,lines:_ocr.raw.split('\n').map(tx=>({text:tx,confidence:_ocr._oc||80}))};parseFromTess(fake);renderOCR();toast('🧠 '+t('ocrReAI'));} }
+
+function parseHeader(L){
+  const all=L.map(l=>l.text).join('\n');
+  const h={invNo:'',supplier:'',date:'',currency:SET.currency,rate:'',buyer:'',dept:'Maintenance',remark:'',total:''};
+  // 供應商：先比對既有，再取含英文字母且長度>4的前幾行
+  const known=SUPPLIERS.find(s=>all.toUpperCase().includes((s.name||'').toUpperCase().slice(0,6)));
+  if(known)h.supplier=known.name;
+  else{for(const l of L.slice(0,4)){if(/[A-Za-z\u4e00-\u9fff]{4,}/.test(l.text)&&!/invoice|發票/i.test(l.text)){h.supplier=l.text.replace(/\s{2,}/g,' ').trim();break;}}}
+  const inv=all.match(/no\.?\s*[:#]?\s*(\d{4,})/i)||all.match(/(\d{6})/);if(inv)h.invNo=inv[1];
+  const dm=all.match(/(\d{1,2})\s*[.\/\-]\s*(\d{1,2})\s*[.\/\-]\s*(\d{2,4})/);
+  if(dm){let[_,d,mo,y]=dm;y=y.length===2?'20'+y:y;h.date=y+'-'+pad(+mo)+'-'+pad(+d);}
+  else{const dm2=all.match(/(20\d{2})\s*[.\/\-]\s*(\d{1,2})\s*[.\/\-]\s*(\d{1,2})/);if(dm2)h.date=dm2[1]+'-'+pad(+dm2[2])+'-'+pad(+dm2[3]);}
+  if(/usd|\$/i.test(all))h.currency='USD';else if(/khr|៛|riel/i.test(all))h.currency='KHR';else if(/twd|ntd|nt\$/i.test(all))h.currency='TWD';
+  const tot=all.match(/total[^\d]*(\d+(?:\.\d+)?)/i);if(tot)h.total=tot[1];
+  if(!h.date)h.date=todayStr();
+  return h;
+}
+function blankLine(){return {partNo:'',name:'',spec:'',qty:0,unitPrice:0,amount:0,category:'Other',conf:0,raw:''};}
+function normLine(o){return Object.assign(blankLine(),o);}
+function parseItems(L){
+  const items=[];
+  L.forEach(l=>{
+    const txt=l.text;
+    if(/invoice|發票|name of goods|品名|^\s*total|總|supplier|^\s*name\b|\bdate\b|單價|unit\s*price|數量|\bqty\b/i.test(txt))return;
+    if(/\d{1,2}\s*[.\/\-]\s*\d{1,2}\s*[.\/\-]\s*\d{2,4}/.test(txt))return; // 日期行
+    const nums=(txt.match(/\d+(?:\.\d+)?/g)||[]).map(Number);
+    if(nums.length<2)return; // 需至少 數量+價 或 價+額
+    let qty=0,price=0,amount=0;
+    if(nums.length>=3){qty=nums[nums.length-3];price=nums[nums.length-2];amount=nums[nums.length-1];}
+    else{price=nums[nums.length-2];amount=nums[nums.length-1];qty=price?Math.round(amount/price):nums[0];}
+    let desc=txt.replace(/\d+(?:\.\d+)?/g,' ').replace(/[|=:]/g,' ').replace(/\s{2,}/g,' ').trim();
+    desc=desc.replace(/^no\.?\s*/i,'').trim();
+    if(!desc&&!amount)return;
+    const cat=catFromText(desc);
+    items.push({partNo:genPartNo(desc,cat),name:desc||('Item '+(items.length+1)),spec:'',qty:qty||0,unitPrice:price||0,amount:amount||0,category:cat,conf:l.conf,raw:txt});
+  });
+  return items;
+}
+function catFromText(s){for(const[re,c]of CAT_KW)if(re.test(s))return c;return 'Other';}
+function genPartNo(name,cat){
+  const prefix=(SET.partRules||{})[cat]||'PT';
+  let tok='';const m=(name||'').match(/[A-Za-z0-9][A-Za-z0-9\-]{1,}/g);
+  if(m){tok=(m.find(x=>/\d/.test(x))||m[0]).toUpperCase().replace(/[^A-Z0-9\-]/g,'');}
+  if(!tok)tok=Math.random().toString(36).slice(2,6).toUpperCase();
+  let base=prefix+'-'+tok,no=base,i=2;
+  while(PARTS.some(p=>p.partNo===no)&&!_ocr.lines.some(l=>l.partNo===no))no=base+'-'+(i++);
+  return no;
+}
+
+/* ========== 右側可編輯面板 ========== */
+function renderOcrPanel(){
+  if(!_ocr.lines.length&&!_ocr.header.invNo)
+    return `<div class="empty">${_lang==='en'?'Run OCR to extract invoice':'按「開始辨識」擷取發票'}</div>`;
+  const H=_ocr.header;
+  const fld=(k,lbl,val)=>`<div class="fld"><label>${lbl}</label><input id="oh_${k}" value="${escapeHtml(val||'')}" oninput="onHeaderEdit('${k}',this.value)"></div>`;
+  let h=`<div style="font-size:11px;font-weight:700;color:var(--sub);margin-bottom:8px">🧾 ${t('hdrTotal')} / Header</div>
+   <div class="frm-grid">
+    ${fld('invNo',t('hdrInvNo'),H.invNo)}${fld('supplier',t('hdrSupplier'),H.supplier)}
+    ${fld('date',t('hdrDate'),H.date)}${fld('currency',t('hdrCur'),H.currency)}
+    ${fld('rate',t('hdrRate'),H.rate)}${fld('dept',t('hdrDept'),H.dept)}
+    ${fld('total',t('hdrTotal'),H.total)}${fld('remark',t('hdrRemark'),H.remark)}
+   </div>
+   <div style="font-size:11px;font-weight:700;color:var(--sub);margin:10px 0 6px">📋 ${t('repImport')} (${_ocr.lines.length})
+     <button class="btn btn-g btn-sm" style="float:right" onclick="addOcrLine()">＋</button></div>
+   <div class="tw ocr-tbl"><table><thead><tr>
+     <th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th>
+     <th class="num">${t('colPrice')}</th><th class="num">${t('colAmount')}</th><th>${t('colCat')}</th><th class="num">${t('conf')}</th><th></th></tr></thead><tbody>`;
+  h+=_ocr.lines.map((ln,i)=>{
+    const cc=ln.conf>=SET.confWarn?'conf-hi':ln.conf>=SET.confBad?'conf-md':'conf-lo';
+    const calc=(+ln.qty||0)*(+ln.unitPrice||0);
+    const mismatch=ln.amount&&Math.abs(calc-ln.amount)>Math.max(0.5,ln.amount*0.02);
+    const exists=findExisting(ln);
+    return `<tr class="${mismatch?'ocr-row-warn':''}">
+      <td><input value="${escapeHtml(ln.partNo)}" oninput="onLineEdit(${i},'partNo',this.value)"></td>
+      <td><input value="${escapeHtml(ln.name)}" oninput="onLineEdit(${i},'name',this.value)"></td>
+      <td class="num"><input type="number" value="${ln.qty}" oninput="onLineEdit(${i},'qty',this.value)" style="text-align:right"></td>
+      <td class="num"><input type="number" step="0.01" value="${ln.unitPrice}" oninput="onLineEdit(${i},'unitPrice',this.value)" style="text-align:right"></td>
+      <td class="num"><input type="number" step="0.01" value="${ln.amount}" oninput="onLineEdit(${i},'amount',this.value)" style="text-align:right;${mismatch?'color:#dc2626;font-weight:700':''}" title="${mismatch?t('amtAbn')+' ('+money(calc)+')':''}"></td>
+      <td><select onchange="onLineEdit(${i},'category',this.value)">${CATS.map(c=>`<option ${c===ln.category?'selected':''}>${c}</option>`).join('')}</select></td>
+      <td class="num"><span class="conf ${cc}">${ln.conf||0}%</span></td>
+      <td>${exists?`<span class="b bwn" title="${exists.partNo}">${t('ocrExists')}</span>`:''}<button class="btn btn-r btn-sm" onclick="delOcrLine(${i})">🗑</button></td></tr>`;
+  }).join('');
+  h+=`</tbody></table></div>`;
+  return h;
+}
+function onHeaderEdit(k,v){_ocr.header[k]=v;}
+function onLineEdit(i,k,v){
+  const ln=_ocr.lines[i];const old=ln[k];
+  ln[k]=(k==='qty'||k==='unitPrice'||k==='amount')?(+v||0):v;
+  if(k==='name'&&ln.raw&&v&&v!==old){learnDict(ln.raw,v);}
+  if(k==='qty'||k==='unitPrice'){ln.amount=(+ln.qty||0)*(+ln.unitPrice||0);}
+  // 重繪面板（保留左圖）
+  const panel=document.querySelector('.ocr-split .ocr-stage:last-child');if(panel)panel.innerHTML=renderOcrPanel();
+}
+function addOcrLine(){_ocr.lines.push(blankLine());const panel=document.querySelector('.ocr-split .ocr-stage:last-child');if(panel)panel.innerHTML=renderOcrPanel();}
+function delOcrLine(i){_ocr.lines.splice(i,1);const panel=document.querySelector('.ocr-split .ocr-stage:last-child');if(panel)panel.innerHTML=renderOcrPanel();}
+
+/* OCR 字典自學習 */
+function learnDict(raw,fixed){
+  const a=(raw||'').match(/[A-Za-z0-9]{2,}/g)||[],b=(fixed||'').match(/[A-Za-z0-9]{2,}/g)||[];
+  if(a.length&&b.length){const k=a[0],val=b[0];if(k&&val&&k!==val&&k.length<=12){SET.ocrDict[k]=val;saveAll();}}
+}
+/* 比對既有零件 */
+function findExisting(ln){
+  if(ln.partNo){const e=PARTS.find(p=>p.partNo.toUpperCase()===ln.partNo.toUpperCase());if(e)return e;}
+  const key=(ln.name||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(key.length<3)return null;
+  return PARTS.find(p=>{const pk=(p.name+' '+p.spec).toUpperCase().replace(/[^A-Z0-9]/g,'');return pk.includes(key)||key.includes((p.partNo||'').toUpperCase().replace(/[^A-Z0-9]/g,''));})||null;
+}
+
+/* ========== 寫入流程 ========== */
+async function commitOCR(){
+  const H=_ocr.header;
+  const lines=_ocr.lines.filter(l=>l.name||l.partNo);
+  if(!lines.length){toast('No lines');return;}
+  // 發票去重
+  const dupKey=(H.supplier||'')+'|'+(H.invNo||'')+'|'+(H.date||'');
+  const dup=INVOICES.find(iv=>(iv.supplier+'|'+iv.invNo+'|'+iv.date)===dupKey&&H.invNo);
+  if(dup){ if(!confirm(t('invDup')+'\n'+dupKey+'\n'+t('updateQ'))){toast(t('cancelQ'));return;} }
+  // 供應商自動建立
+  if(H.supplier&&!SUPPLIERS.find(s=>s.name===H.supplier))
+    SUPPLIERS.push({id:uid(),name:H.supplier,currency:H.currency||SET.currency,createdAt:todayStr()});
+  // 圖片永久保存
+  const imgId=uid();
+  try{await idbPutImage(imgId,_ocr.pages[_ocr.cur].dataUrl);}catch(_){}
+  // 逐列寫入庫存 + 交易 + 價格
+  let added=0,updated=0;
+  lines.forEach(ln=>{
+    const ex=findExisting(ln);
+    if(ex){
+      if(ln.unitPrice)ex.unitPrice=+ln.unitPrice;
+      ex.qty=(+ex.qty||0)+(+ln.qty||0);
+      ex.updatedAt=todayStr();updated++;
+      TXNS.push({id:uid(),date:H.date,partNo:ex.partNo,type:'IN',qty:+ln.qty||0,unitPrice:+ln.unitPrice||0,
+        supplier:H.supplier,user:H.buyer||'OCR',remark:'Inv '+(H.invNo||''),balance:ex.qty,ts:Date.now()});
+    }else{
+      const np={id:uid(),partNo:ln.partNo||genPartNo(ln.name,ln.category),name:ln.name||ln.partNo,spec:ln.spec||'',
+        category:ln.category||'Other',brand:'Other',machineType:'Other',location:'Main Store',unit:'PCS',
+        qty:+ln.qty||0,unitPrice:+ln.unitPrice||0,minStock:SET.minRule,maxStock:'',remark:'OCR Inv '+(H.invNo||''),
+        invoiceImg:imgId,createdAt:todayStr(),updatedAt:todayStr()};
+      PARTS.push(np);added++;
+      TXNS.push({id:uid(),date:H.date,partNo:np.partNo,type:'IN',qty:np.qty,unitPrice:np.unitPrice,
+        supplier:H.supplier,user:H.buyer||'OCR',remark:'Inv '+(H.invNo||''),balance:np.qty,ts:Date.now()});
+    }
+  });
+  // 發票記錄
+  INVOICES.push({id:uid(),invNo:H.invNo,supplier:H.supplier,date:H.date,currency:H.currency,total:H.total,
+    lines:lines.length,imgId,ts:Date.now()});
+  // OCR 歷史
+  const avgConf=Math.round(lines.reduce((s,l)=>s+(+l.conf||0),0)/lines.length);
+  OCRHIST.push({id:uid(),date:H.date||todayStr(),supplier:H.supplier,invNo:H.invNo,confidence:avgConf,
+    status:'completed',imgId,lines:lines.length,ts:Date.now()});
+  await saveAll(true);
+  toast(`✅ +${added} / ↻${updated}`);
+  // 重置工作區
+  _ocr={pages:[],cur:0,header:{},lines:[],img:{zoom:1,rot:0,bri:100,con:100},busy:false,prog:0,raw:''};
+  // 雲端 + Telegram（依設定）
+  if(SET.cloudTarget==='gas'&&SET.gasUrl)cloudUpload();
+  goTab('inventory',null);
+}
+
+/* 影像檢視 */
+async function viewImage(id){
+  const url=await idbGetImage(id);
+  if(!url){toast('No image');return;}
+  openModal(`<h3>🖼 Invoice Image</h3><img src="${url}" style="width:100%;border-radius:8px">
+    <div style="text-align:right;margin-top:10px"><button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button></div>`);
+}
+
+(async function init(){
+  await loadAll();
+  applyTheme();fillFilterSelects();applyLang();updateCloudDot();updateHeaderStats();
+  goTab('dashboard',null);
+})();
+</script>
+</body>
+</html>

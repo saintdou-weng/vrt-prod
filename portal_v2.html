@@ -41,6 +41,11 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 .mc-ship .mcard-stripe{background:linear-gradient(90deg,#3b82f6,transparent)}
 .mc-prod .mcard-stripe{background:linear-gradient(90deg,#a78bfa,transparent)}
 .mc-smv  .mcard-stripe{background:linear-gradient(90deg,#ef4444,transparent)}
+.mc-cutplan .mcard-stripe{background:linear-gradient(90deg,#ec4899,transparent)}
+.mc-pod  .mcard-stripe{background:linear-gradient(90deg,#06b6d4,transparent)}
+.mc-bom  .mcard-stripe{background:linear-gradient(90deg,#f97316,transparent)}
+.mc-fg   .mcard-stripe{background:linear-gradient(90deg,#14b8a6,transparent)}
+.mc-sp   .mcard-stripe{background:linear-gradient(90deg,#84cc16,transparent)}
 
 .mc-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .mc-icon{font-size:24px;width:40px;text-align:center}
@@ -102,6 +107,23 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 
   <div class="grid">
 
+    <!-- 生產總覽 -->
+    <div class="mcard mc-prod">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📊</div>
+        <div class="mc-info">
+          <div class="mc-title">生產總覽</div>
+          <div class="mc-sub">production_v4.html · 讀取車縫＋裁剪</div>
+        </div>
+        <span class="mc-badge badge-auto">自動讀取</span>
+      </div>
+      <div class="mc-sync" style="color:#3b82f6">先拉取車縫＋裁剪，再開啟即可</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='production_v4.html'" style="flex:1">📊 開啟總覽</button>
+      </div>
+    </div>
+
     <!-- 車縫 -->
     <div class="mcard mc-sew">
       <div class="mcard-stripe"></div>
@@ -140,6 +162,25 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
       </div>
     </div>
 
+    <!-- 裁剪計劃 -->
+    <div class="mcard mc-cutplan">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📅</div>
+        <div class="mc-info">
+          <div class="mc-title">裁剪計劃</div>
+          <div class="mc-sub">cutting_plan_v2.html · localStorage: cutting_plan_v1</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-cuttingplan">--</span>
+      </div>
+      <div class="mc-sync" id="st-cuttingplan">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='cutting_plan_v2.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-cuttingplan" onclick="push('cuttingplan')">☁ 推送</button>
+        <button class="btn-pull" id="pl-cuttingplan" onclick="pull('cuttingplan')">⬇ 拉取</button>
+      </div>
+    </div>
+
     <!-- 訂單 -->
     <div class="mcard mc-ord">
       <div class="mcard-stripe"></div>
@@ -156,6 +197,25 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-open" onclick="location.href='orders_v3.html'">📂 開啟</button>
         <button class="btn-push" id="pp-orders" onclick="push('orders')">☁ 推送</button>
         <button class="btn-pull" id="pl-orders" onclick="pull('orders')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- PO 交期中心 -->
+    <div class="mcard mc-pod">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🚚</div>
+        <div class="mc-info">
+          <div class="mc-title">PO 交期中心</div>
+          <div class="mc-sub">VRT_PO_Delivery_Control_Center.html · IndexedDB: vrt_pocc_db</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-podelivery">--</span>
+      </div>
+      <div class="mc-sync" id="st-podelivery">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='VRT_PO_Delivery_Control_Center.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-podelivery" onclick="push('podelivery')">☁ 推送</button>
+        <button class="btn-pull" id="pl-podelivery" onclick="pull('podelivery')">⬇ 拉取</button>
       </div>
     </div>
 
@@ -177,23 +237,6 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
       </div>
     </div>
 
-    <!-- 生產總覽 -->
-    <div class="mcard mc-prod">
-      <div class="mcard-stripe"></div>
-      <div class="mc-head">
-        <div class="mc-icon">📊</div>
-        <div class="mc-info">
-          <div class="mc-title">生產總覽</div>
-          <div class="mc-sub">production_v4.html · 讀取車縫＋裁剪</div>
-        </div>
-        <span class="mc-badge badge-auto">自動讀取</span>
-      </div>
-      <div class="mc-sync" style="color:#3b82f6">先拉取車縫＋裁剪，再開啟即可</div>
-      <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='production_v4.html'" style="flex:1">📊 開啟總覽</button>
-      </div>
-    </div>
-
     <!-- SMV -->
     <div class="mcard mc-smv">
       <div class="mcard-stripe"></div>
@@ -210,6 +253,63 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-open" onclick="location.href='smv_manager_v5_final.html'">📂 開啟</button>
         <button class="btn-push" id="pp-smv" onclick="push('smv')">☁ 推送</button>
         <button class="btn-pull" id="pl-smv" onclick="pull('smv')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- BOM 管理 -->
+    <div class="mcard mc-bom">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🧵</div>
+        <div class="mc-info">
+          <div class="mc-title">BOM 管理</div>
+          <div class="mc-sub">VRT_BOM_Management_v2_AI.html · IndexedDB: vrt_bom2_v1</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-bom">--</span>
+      </div>
+      <div class="mc-sync" id="st-bom">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='VRT_BOM_Management_v2_AI.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-bom" onclick="push('bom')">☁ 推送</button>
+        <button class="btn-pull" id="pl-bom" onclick="pull('bom')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- FG 成品倉 -->
+    <div class="mcard mc-fg">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📦</div>
+        <div class="mc-info">
+          <div class="mc-title">FG 成品庫存</div>
+          <div class="mc-sub">VRT_FG_Inventory_Management_v1.html · IndexedDB: VRT_FGInventory</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-fg">--</span>
+      </div>
+      <div class="mc-sync" id="st-fg">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='VRT_FG_Inventory_Management_v1.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-fg" onclick="push('fg')">☁ 推送</button>
+        <button class="btn-pull" id="pl-fg" onclick="pull('fg')">⬇ 拉取</button>
+      </div>
+    </div>
+
+    <!-- 零件倉 -->
+    <div class="mcard mc-sp">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🔧</div>
+        <div class="mc-info">
+          <div class="mc-title">零件備品</div>
+          <div class="mc-sub">vrt_spare_parts_v2.html · IndexedDB: vrt_spareparts</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-spareparts">--</span>
+      </div>
+      <div class="mc-sync" id="st-spareparts">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='vrt_spare_parts_v2.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-spareparts" onclick="push('spareparts')">☁ 推送</button>
+        <button class="btn-pull" id="pl-spareparts" onclick="pull('spareparts')">⬇ 拉取</button>
       </div>
     </div>
 
@@ -301,6 +401,95 @@ const TOOLS = {
       return 0;
     }
   },
+  cuttingplan: {
+    read: async () => {
+      const raw  = localStorage.getItem('cutting_plan_v1') || '[]';
+      const recs = JSON.parse(raw);
+      if (!recs.length) return null;
+      return { tool:'cuttingplan', recordCount: recs.length, records: recs };
+    },
+    write: async (data) => {
+      let recs = [];
+      if (Array.isArray(data.records)) recs = data.records;
+      else if (data.lsKeys && data.lsKeys.cutting_plan_v1) recs = JSON.parse(data.lsKeys.cutting_plan_v1);
+      if (!recs.length) return 0;
+      // 完整資料寫入模組自己的 Cloud IDB，localStorage 只留最近 5000 筆（與模組行為一致）
+      try { await idbPutAll('CuttingCloudPlan', 1, 'cloud_records', recs); } catch(e) {}
+      try { localStorage.setItem('cutting_plan_v1', JSON.stringify(recs.slice(-5000))); } catch(e) {}
+      return recs.length;
+    }
+  },
+  podelivery: {
+    read: async () => {
+      let recs = await idbGetAll('vrt_pocc_db', 1, 'records');
+      if (!recs.length) recs = JSON.parse(localStorage.getItem('vrt_pocc_records') || '[]');
+      if (!recs.length) return null;
+      return { tool:'podelivery', recordCount: recs.length, records: recs };
+    },
+    write: async (data) => {
+      const recs = Array.isArray(data.records) ? data.records : [];
+      if (!recs.length) return 0;
+      await idbPutAll('vrt_pocc_db', 1, 'records', recs);
+      try { localStorage.setItem('vrt_pocc_records', JSON.stringify(recs)); } catch(e) {}
+      return recs.length;
+    }
+  },
+  bom: {
+    read: async () => {
+      let raw = await idbKvGet('vrt_bom2_v1', 1, 'kv', 'state');
+      if (!raw) {
+        const ls = localStorage.getItem('vrt_bom2_state');
+        if (ls && ls.indexOf('_idbOnly') < 0) raw = ls;
+      }
+      if (!raw) return null;
+      let cnt = 1;
+      try {
+        const st = JSON.parse(raw);
+        cnt = (st.boms && st.boms.length) || (st.items && st.items.length) || Object.keys(st).length;
+      } catch(e) {}
+      return { tool:'bom', recordCount: cnt, bomState: raw };
+    },
+    write: async (data) => {
+      const raw = data.bomState;
+      if (!raw) return 0;
+      await idbKvPut('vrt_bom2_v1', 1, 'kv', 'state', raw);
+      try {
+        if (raw.length < 4500000) localStorage.setItem('vrt_bom2_state', raw);
+      } catch(e) {}
+      return data.recordCount || 1;
+    }
+  },
+  fg: {
+    read: async () => {
+      const recs = await idbGetAll('VRT_FGInventory', 1, 'fg_records');
+      if (!recs.length) return null;
+      return { tool:'fg', recordCount: recs.length, records: recs };
+    },
+    write: async (data) => {
+      const recs = Array.isArray(data.records) ? data.records : [];
+      if (!recs.length) return 0;
+      await idbPutAll('VRT_FGInventory', 1, 'fg_records', recs);
+      try { localStorage.setItem('vrt_fg_record_count', String(recs.length)); } catch(e) {}
+      return recs.length;
+    }
+  },
+  spareparts: {
+    read: async () => {
+      const parts    = await idbGetAll('vrt_spareparts', 2, 'parts');
+      const txns     = await idbGetAll('vrt_spareparts', 2, 'txns');
+      const versions = await idbGetAll('vrt_spareparts', 2, 'versions');
+      if (!parts.length && !txns.length) return null;
+      // 與 vrt_spare_parts_v2 內建雲端格式一致：data:{parts,txns,versions}
+      return { tool:'spareparts', recordCount: parts.length, data: { parts, txns, versions } };
+    },
+    write: async (data) => {
+      const d = data.data || data;
+      if (Array.isArray(d.parts)    && d.parts.length)    await idbPutAll('vrt_spareparts', 2, 'parts',    d.parts);
+      if (Array.isArray(d.txns)     && d.txns.length)     await idbPutAll('vrt_spareparts', 2, 'txns',     d.txns);
+      if (Array.isArray(d.versions) && d.versions.length) await idbPutAll('vrt_spareparts', 2, 'versions', d.versions);
+      return (d.parts || []).length;
+    }
+  },
 };
 
 // ─── INIT ───────────────────────────────────────────────
@@ -346,7 +535,7 @@ async function fetchStatus() {
     const d = await r.json();
     if (!d.ok) return;
     const data = d.data || {};
-    ['sewing','cutting','orders','shipping','smv'].forEach(t => {
+    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts'].forEach(t => {
       const info = data[t];
       const stEl = document.getElementById('st-' + t);
       const bdEl = document.getElementById('bd-' + t);
@@ -388,7 +577,7 @@ async function push(tool) {
 
     if (chunks === 1) {
       // 單批直接推
-      const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload), redirect:'follow' });
+      const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), redirect:'follow' });
       const d = await r.json();
       if (!d.ok) throw new Error(d.error);
       log(`✓ ${tool} 推送完成（${total} 筆）`, 'ok');
@@ -399,7 +588,7 @@ async function push(tool) {
         const isLast = i === chunks - 1;
         const chunk  = { tool, chunk: i, totalChunks: chunks, recordCount: total, records: slice,
           ...(isLast ? { summary: payload.summary || {} } : {}) };
-        const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(chunk), redirect:'follow' });
+        const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(chunk), redirect:'follow' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error);
         log(`第 ${i+1}/${chunks} 批完成`, 'info');
@@ -462,6 +651,44 @@ function idbPutAll(dbName, ver, store, records) {
       const os = tx.objectStore(store);
       records.forEach(r => os.put(r));
       tx.oncomplete = () => res(records.length);
+      tx.onerror    = rej;
+    };
+  });
+}
+
+// kv 型 store（out-of-line key，例如 BOM 的 vrt_bom2_v1/kv）
+function idbKvGet(dbName, ver, store, key) {
+  return new Promise((res) => {
+    const req = indexedDB.open(dbName, ver);
+    req.onerror = () => res(null);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
+    };
+    req.onsuccess = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(store)) { res(null); return; }
+      const q = db.transaction(store,'readonly').objectStore(store).get(key);
+      q.onsuccess = () => res(q.result || null);
+      q.onerror   = () => res(null);
+    };
+  });
+}
+
+function idbKvPut(dbName, ver, store, key, value) {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(dbName, ver);
+    req.onerror = rej;
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
+    };
+    req.onsuccess = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(store)) { res(false); return; }
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(value, key);
+      tx.oncomplete = () => res(true);
       tx.onerror    = rej;
     };
   });
