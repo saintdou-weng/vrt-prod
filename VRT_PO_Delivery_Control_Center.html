@@ -878,6 +878,103 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
   if(!loaded||!loaded.length){ DATA=SEED.slice(); await dbSaveAll(DATA); } else DATA=loaded;
   renderActions(); setLang(LANG); goTab(DATA.length?'dashboard':'import');
 })();
+
+/* ===================== 雲端同步（tool=podelivery，與 Portal 同協定） ===================== */
+(function(){
+  const css=document.createElement('style');
+  css.textContent=`
+  #vcFab{position:fixed;right:18px;bottom:18px;width:52px;height:52px;border-radius:50%;background:#0f172a;border:1px solid #334155;color:#93c5fd;font-size:22px;cursor:pointer;z-index:9998;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  #vcPanel{position:fixed;right:18px;bottom:80px;width:320px;max-width:92vw;background:#0b1220;border:1px solid #24344d;border-radius:14px;padding:14px;z-index:9999;color:#e2e8f0;font-size:13px;display:none;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  #vcPanel h4{margin:0 0 8px;font-size:14px;color:#93c5fd}
+  #vcPanel .vrow{display:flex;gap:8px;margin:8px 0}
+  #vcPanel button{flex:1;padding:9px;border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit}
+  #vcPushBtn2{background:#3a2c07;border:1px solid #b45309;color:#fcd34d}
+  #vcPullBtn2{background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd}
+  #vcUrl{flex:1;padding:8px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:12px}
+  #vcSave{flex:none;padding:8px 12px;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius:8px}
+  #vcLogBox{max-height:110px;overflow:auto;background:#060b14;border-radius:8px;padding:8px;margin-top:8px;font-family:monospace;font-size:11.5px;line-height:1.6}
+  #vcStat{color:#fbbf24;margin:4px 0}`;
+  document.head.appendChild(css);
+
+  const fab=document.createElement('button'); fab.id='vcFab'; fab.textContent='☁'; document.body.appendChild(fab);
+  const panel=document.createElement('div'); panel.id='vcPanel';
+  panel.innerHTML=`<h4>☁ 雲端同步 — PO 交期</h4>
+    <div id="vcStat">--</div>
+    <div class="vrow"><button id="vcPushBtn2">☁ 推送</button><button id="vcPullBtn2">⬇ 拉取</button></div>
+    <div style="color:#64748b;font-size:11px;margin-top:4px">GAS URL</div>
+    <div class="vrow"><input id="vcUrl" placeholder="https://script.google.com/.../exec"><button id="vcSave">存</button></div>
+    <div id="vcLogBox"></div>`;
+  document.body.appendChild(panel);
+
+  const LS_META='vrt_pocc_sync_meta';
+  const getUrl=()=>((SET.gas||localStorage.getItem('vrt_portal_gas_url')||'').trim());
+  function vcLog(m,k){ const b=document.getElementById('vcLogBox');
+    const c=k==='err'?'#f87171':(k==='ok'?'#4ade80':'#93c5fd');
+    b.innerHTML+=`<div style="color:${c}">[${new Date().toTimeString().slice(0,8)}] ${m}</div>`; b.scrollTop=b.scrollHeight; }
+  function vcStat(){ const el=document.getElementById('vcStat');
+    let meta=null; try{meta=JSON.parse(localStorage.getItem(LS_META)||'null');}catch(e){}
+    const ago=meta?Math.round((Date.now()-meta.ts)/3600000)+'小時前':'尚未同步';
+    el.textContent=`本機 ${DATA.length} 筆 · 上次同步 ${meta?ago:'尚未同步'}`; }
+  function vcBusy(on){ document.getElementById('vcPushBtn2').disabled=on; document.getElementById('vcPullBtn2').disabled=on; }
+
+  fab.onclick=()=>{ const p=document.getElementById('vcPanel');
+    const show=p.style.display!=='block'; p.style.display=show?'block':'none';
+    if(show){ document.getElementById('vcUrl').value=getUrl(); vcStat(); } };
+
+  document.getElementById('vcSave').onclick=()=>{
+    const u=document.getElementById('vcUrl').value.trim();
+    SET.gas=u; localStorage.setItem(SET_KEY,JSON.stringify(SET));
+    try{ localStorage.setItem('vrt_portal_gas_url',u); }catch(e){}
+    vcLog('✓ GAS URL 已儲存','ok'); };
+
+  document.getElementById('vcPushBtn2').onclick=async function(){
+    const url=getUrl(); if(!url){ vcLog('請先填入 GAS URL','err'); return; }
+    vcBusy(true);
+    try{
+      const recs=DATA||[]; const CHUNK=2000; const total=recs.length;
+      const chunks=Math.max(Math.ceil(total/CHUNK),1);
+      vcLog(`開始推送 ${total} 筆（共 ${chunks} 批）...`,'i');
+      for(let i=0;i<chunks;i++){
+        const slice=recs.slice(i*CHUNK,(i+1)*CHUNK);
+        const payload= chunks>1
+          ? { tool:'podelivery', chunk:i, totalChunks:chunks, recordCount:total, records:slice }
+          : { tool:'podelivery', recordCount:total, records:recs };
+        const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
+        const d=await r.json(); if(!d.ok) throw new Error(d.error||'GAS error');
+        if(chunks>1) vcLog(`第 ${i+1}/${chunks} 批完成`,'i');
+      }
+      localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:total}));
+      vcLog(`✓ 推送完成（${total} 筆）`,'ok'); vcStat();
+    }catch(e){ vcLog('✗ 推送失敗：'+(e.message||e),'err'); }
+    finally{ vcBusy(false); }
+  };
+
+  document.getElementById('vcPullBtn2').onclick=async function(){
+    const url=getUrl(); if(!url){ vcLog('請先填入 GAS URL','err'); return; }
+    if(!confirm('拉取會覆蓋本機 PO 交期資料，確定嗎？')) return;
+    vcBusy(true); vcLog('拉取中...','i');
+    try{
+      const metaR=await fetch(`${url}?action=pull&meta=1&tool=podelivery`,{redirect:'follow'});
+      const metaD=await metaR.json(); if(!metaD.ok) throw new Error(metaD.error||'GAS error');
+      const d=metaD.data;
+      if(!d||(!d.chunked&&!d.data)){ vcLog('雲端尚無 PO 交期資料','err'); return; }
+      let allRecs=[];
+      if(d.chunked&&d.meta&&d.meta.totalChunks){
+        const tc=d.meta.totalChunks; vcLog(`分批拉取，共 ${tc} 批...`,'i');
+        for(let i=0;i<tc;i++){ vcLog(`拉取第 ${i+1}/${tc} 批...`,'i');
+          const cr=await fetch(`${url}?action=pull&tool=podelivery&chunk=${i}`,{redirect:'follow'});
+          const cd=await cr.json();
+          if(cd.ok&&cd.data&&Array.isArray(cd.data.records)) allRecs=allRecs.concat(cd.data.records); }
+      }else if(!d.chunked&&d.data){ allRecs=d.data.records||[]; }
+      if(!allRecs.length){ vcLog('雲端資料為空（0筆）','err'); return; }
+      DATA=allRecs; await dbSaveAll(DATA);
+      localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length}));
+      vcLog(`✓ 拉取完成（${allRecs.length} 筆），資料已更新`,'ok');
+      vcStat(); renderTabs&&renderTabs(); render();
+    }catch(e){ vcLog('✗ 拉取失敗：'+(e.message||e),'err'); }
+    finally{ vcBusy(false); }
+  };
+})();
 </script>
 </body>
 </html>

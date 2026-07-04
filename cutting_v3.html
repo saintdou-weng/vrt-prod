@@ -506,18 +506,27 @@ const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:1
 const LRE=/^(LINE|Line)\s+[A-Z]?\d+$/;
 const isDailyRec=r=>r.src!=='ref'&&r.src!=='summary'&&r.lineNo!=='Weekly Report'&&r.lineNo!=='Monthly Summary'&&r.lineNo!=='Summary'&&r.pieces>0;
 
-// ── IDB: CuttingProd (cutting_v2 only) ────────────────────
-function openIDB(){return new Promise((res,rej)=>{
-  if(_idb){res(_idb);return;}
-  const req=indexedDB.open("CuttingProd",1);
-  req.onupgradeneeded=e=>{
-    const db=e.target.result;
-    if(!db.objectStoreNames.contains("cutting_records"))db.createObjectStore("cutting_records",{keyPath:"id"});
-    if(!db.objectStoreNames.contains("sewing_cache"))db.createObjectStore("sewing_cache",{keyPath:"id"});
-  };
-  req.onsuccess=e=>{_idb=e.target.result;res(_idb);};
-  req.onerror=e=>rej(e.target.error);
+// ── IDB: CuttingProd（v2 與 cutting_plan 共用；含自我修復） ────────────────────
+const CUTPROD_STORES=["cutting_records","sewing_cache","plan_records","variance_records","history_records"];
+function _cutBuild(db){ CUTPROD_STORES.forEach(s=>{ if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:"id"}); }); }
+function _cutTryOpen(ver){ return new Promise((res,rej)=>{
+  const req=ver?indexedDB.open("CuttingProd",ver):indexedDB.open("CuttingProd");
+  req.onupgradeneeded=e=>_cutBuild(e.target.result);
+  req.onblocked=()=>console.warn("[CuttingProd] 升級被封鎖：請關閉其他裁剪分頁後重新整理");
+  req.onsuccess=e=>res(e.target.result);
+  req.onerror=()=>rej(req.error);
 });}
+function openIDB(){
+  if(_idb)return Promise.resolve(_idb);
+  // 版本衝突改不帶版本開啟；缺 store 升版補建（自我修復）
+  return _cutTryOpen(2)
+    .catch(err=>{ if(err&&err.name==="VersionError") return _cutTryOpen(null); throw err; })
+    .then(db=>{
+      if(CUTPROD_STORES.every(s=>db.objectStoreNames.contains(s))){ _idb=db; return _idb; }
+      const nv=db.version+1; db.close();
+      return _cutTryOpen(nv).then(db2=>{ _idb=db2; return _idb; });
+    });
+}
 const CUT_ST="cutting_records";
 function idbAll(st){return new Promise((r,j)=>{const q=st.getAll();q.onsuccess=e=>r(e.target.result);q.onerror=j;});}
 function idbClr(st){return new Promise((r,j)=>{const q=st.clear();q.onsuccess=r;q.onerror=j;});}
@@ -2800,37 +2809,26 @@ async function scanAllFolders(silent=false){
     };
   }
 
-  // IDB helpers（cutting 的 openIDB 已在頁面定義，但這裡用獨立版避免衝突）
+  // IDB helpers（改走頁面的自我修復 openIDB，避免版本衝突在手機上失敗）
   function vcIdbGetAll(dbName, ver, store){
-    return new Promise(res => {
-      const req = indexedDB.open(dbName, ver);
-      req.onerror = () => res([]);
-      req.onupgradeneeded = () => {};
-      req.onsuccess = e => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(store)){ res([]); return; }
-        const q = db.transaction(store,'readonly').objectStore(store).getAll();
-        q.onsuccess = () => res(q.result || []);
-        q.onerror   = () => res([]);
-      };
-    });
+    return openIDB().then(db => new Promise(res => {
+      if (!db.objectStoreNames.contains(store)){ res([]); return; }
+      const q = db.transaction(store,'readonly').objectStore(store).getAll();
+      q.onsuccess = () => res(q.result || []);
+      q.onerror   = () => res([]);
+    })).catch(() => []);
   }
 
   function vcIdbPutAll(dbName, ver, store, records){
-    return new Promise((res, rej) => {
-      const req = indexedDB.open(dbName, ver);
-      req.onerror = rej;
-      req.onsuccess = e => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(store)){ res(0); return; }
-        const tx = db.transaction(store, 'readwrite');
-        const os = tx.objectStore(store);
-        os.clear();
-        records.forEach(r => os.put(r));
-        tx.oncomplete = () => res(records.length);
-        tx.onerror    = rej;
-      };
-    });
+    return openIDB().then(db => new Promise((res, rej) => {
+      if (!db.objectStoreNames.contains(store)){ res(0); return; }
+      const tx = db.transaction(store, 'readwrite');
+      const os = tx.objectStore(store);
+      os.clear();
+      records.forEach(r => os.put(r));
+      tx.oncomplete = () => res(records.length);
+      tx.onerror    = rej;
+    }));
   }
 
   function vcSetBusy(on){

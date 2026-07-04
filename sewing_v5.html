@@ -853,26 +853,36 @@ const MAIN_IDB_NAME = 'VRT_SewingProduction';
 const MAIN_IDB_VER  = 2;
 let _mainIDB = null;
 
+const MAIN_STORES=['daily_records','eff_records','system_meta','analysis_history','analytics_monthly'];
+function _mainBuild(db){
+  if(!db.objectStoreNames.contains('daily_records'))
+    db.createObjectStore('daily_records',{keyPath:'id'});
+  if(!db.objectStoreNames.contains('eff_records'))
+    db.createObjectStore('eff_records',{keyPath:'id'});
+  if(!db.objectStoreNames.contains('system_meta'))
+    db.createObjectStore('system_meta',{keyPath:'key'});
+  if(!db.objectStoreNames.contains('analysis_history'))
+    db.createObjectStore('analysis_history',{keyPath:'analysisDate'});
+  if(!db.objectStoreNames.contains('analytics_monthly'))
+    db.createObjectStore('analytics_monthly',{keyPath:'yearMonth'});
+}
+function _mainTryOpen(ver){ return new Promise((res,rej)=>{
+  const req=ver?indexedDB.open(MAIN_IDB_NAME,ver):indexedDB.open(MAIN_IDB_NAME);
+  req.onupgradeneeded=e=>_mainBuild(e.target.result);
+  req.onblocked=()=>console.warn('[SewingProduction] 升級被封鎖：請關閉其他車縫分頁後重新整理');
+  req.onsuccess=e=>res(e.target.result);
+  req.onerror=()=>rej(req.error);
+});}
 function openMainIDB(){
   if(_mainIDB) return Promise.resolve(_mainIDB);
-  return new Promise((res,rej)=>{
-    const req=indexedDB.open(MAIN_IDB_NAME,MAIN_IDB_VER);
-    req.onupgradeneeded=e=>{
-      const db=e.target.result;
-      if(!db.objectStoreNames.contains('daily_records'))
-        db.createObjectStore('daily_records',{keyPath:'id'});
-      if(!db.objectStoreNames.contains('eff_records'))
-        db.createObjectStore('eff_records',{keyPath:'id'});
-      if(!db.objectStoreNames.contains('system_meta'))
-        db.createObjectStore('system_meta',{keyPath:'key'});
-      if(!db.objectStoreNames.contains('analysis_history'))
-        db.createObjectStore('analysis_history',{keyPath:'analysisDate'});
-      if(!db.objectStoreNames.contains('analytics_monthly'))
-        db.createObjectStore('analytics_monthly',{keyPath:'yearMonth'});
-    };
-    req.onsuccess=e=>{ _mainIDB=e.target.result; res(_mainIDB); };
-    req.onerror=rej;
-  });
+  // 自我修復：版本衝突改不帶版本開啟；缺 store 升版補建
+  return _mainTryOpen(MAIN_IDB_VER)
+    .catch(err=>{ if(err&&err.name==='VersionError') return _mainTryOpen(null); throw err; })
+    .then(db=>{
+      if(MAIN_STORES.every(s=>db.objectStoreNames.contains(s))){ _mainIDB=db; return _mainIDB; }
+      const nv=db.version+1; db.close();
+      return _mainTryOpen(nv).then(db2=>{ _mainIDB=db2; return _mainIDB; });
+    });
 }
 async function saveToMainIDB(){
   const db=await openMainIDB();
@@ -1034,12 +1044,18 @@ const CLOUD_IDB_NAME  = 'SewingCloudProd';
 const CLOUD_IDB_STORE = 'cloud_records';
 
 function openCloudIDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(CLOUD_IDB_NAME, 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore(CLOUD_IDB_STORE, { keyPath:'id', autoIncrement:true });
+  const build = db => { if (!db.objectStoreNames.contains(CLOUD_IDB_STORE)) db.createObjectStore(CLOUD_IDB_STORE, { keyPath:'id', autoIncrement:true }); };
+  const tryOpen = ver => new Promise((res, rej) => {
+    const req = ver ? indexedDB.open(CLOUD_IDB_NAME, ver) : indexedDB.open(CLOUD_IDB_NAME);
+    req.onupgradeneeded = e => build(e.target.result);
     req.onsuccess = e => res(e.target.result);
-    req.onerror   = rej;
+    req.onerror   = () => rej(req.error);
   });
+  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+  return tryOpen(1)
+    .catch(err => { if (err && err.name === 'VersionError') return tryOpen(null); throw err; })
+    .then(db => { if (db.objectStoreNames.contains(CLOUD_IDB_STORE)) return db;
+      const nv = db.version + 1; db.close(); return tryOpen(nv); });
 }
 async function saveToCloudIDB(recs) {
   const db = await openCloudIDB();
@@ -4447,29 +4463,27 @@ async function loadCuttingData(){
   if(CUT_DATA !== null) return CUT_DATA;
   // Try multiple DB names/stores used by different cutting versions
   const attempts = [
-    {db:"CuttingProd", ver:1, store:"cutting_records"},  // cutting_v2 latest
-    {db:"SewingProd",  ver:4, store:"cutting_records"},  // older cutting version
+    {db:"CuttingProd", store:"cutting_records"},  // cutting v3/v4（v1 或 v2 皆可讀）
+    {db:"SewingProd",  store:"cutting_records"},  // older cutting version
   ];
-  for(const {db,ver,store} of attempts){
+  for(const {db,store} of attempts){
     try{
       const p = await new Promise((res)=>{
-        const req = indexedDB.open(db, ver);
-        req.onupgradeneeded = e => {
-          const d = e.target.result;
-          if(!d.objectStoreNames.contains(store)) d.createObjectStore(store,{keyPath:"id"});
-        };
+        const req = indexedDB.open(db);   // 不帶版本：讀既有版本，避免版本衝突
+        // 資料庫不存在時取消建立，避免留下空庫影響裁剪系統
+        req.onupgradeneeded = e => { try{ e.target.transaction.abort(); }catch(_){} };
         req.onsuccess = e => {
           const d = e.target.result;
-          if(!d.objectStoreNames.contains(store)){ res([]); return; }
+          if(!d.objectStoreNames.contains(store)){ d.close(); res([]); return; }
           try{
             const tx = d.transaction(store,"readonly");
             const all = [];
             const cursor = tx.objectStore(store).openCursor();
             cursor.onsuccess = ev => {
               if(ev.target.result){ all.push(ev.target.result.value); ev.target.result.continue(); }
-              else res(all);
+              else { d.close(); res(all); }
             };
-            cursor.onerror = () => res([]);
+            cursor.onerror = () => { d.close(); res([]); };
           }catch(e2){ res([]); }
         };
         req.onerror = () => res([]);
@@ -5233,7 +5247,7 @@ async function scanAllFolders(silent=false){
         };
         vcLog(`推送第 ${i+1}/${chunks} 批（${slice.length} 筆）...`, 'i');
         const r = await fetch(gasUrl, {
-          method:'POST', headers:{'Content-Type':'text/plain'},
+          method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
           body: JSON.stringify(payload), redirect:'follow',
         });
         const d = await r.json();
@@ -5364,6 +5378,8 @@ async function loadAttIDBData(force) {
   try {
     const rows = await new Promise(res => {
       const req = indexedDB.open('AC_HRA_Attendance');
+      // 資料庫不存在時取消建立，避免留下空庫影響考勤系統
+      req.onupgradeneeded = e => { try { e.target.transaction.abort(); } catch(_) {} };
       req.onerror = () => res([]);
       req.onsuccess = e => {
         const d = e.target.result;
