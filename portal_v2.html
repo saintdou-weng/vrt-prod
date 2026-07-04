@@ -625,73 +625,99 @@ async function pull(tool) {
 }
 
 // ─── IDB HELPERS ────────────────────────────────────────
-function idbGetAll(dbName, ver, store) {
-  return new Promise((res) => {
-    const req = indexedDB.open(dbName, ver);
-    req.onerror = () => res([]);
-    req.onupgradeneeded = () => {};
-    req.onsuccess = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(store)) { res([]); return; }
-      const q = db.transaction(store,'readonly').objectStore(store).getAll();
-      q.onsuccess = () => res(q.result || []);
-      q.onerror   = () => res([]);
-    };
+// ═══════════════════════════════════════════════════════════
+// IndexedDB helpers — 帶完整 schema + 自我修復
+// 重要：開啟時一律建齊該資料庫應有的全部 store（與各模組一致），
+// 避免 Portal 先開而建出「空資料庫」害模組打不開自己的資料表；
+// 若發現資料庫已存在但缺 store（先前已壞），自動升版補建修復。
+// ═══════════════════════════════════════════════════════════
+const IDB_SCHEMAS = {
+  'CuttingProd':      { ver: 2, stores: { cutting_records:{keyPath:'id'}, sewing_cache:{keyPath:'id'}, plan_records:{keyPath:'id'}, variance_records:{keyPath:'id'}, history_records:{keyPath:'id'} } },
+  'CuttingCloudPlan': { ver: 1, stores: { cloud_records:{keyPath:'id', autoIncrement:true} } },
+  'vrt_pocc_db':      { ver: 1, stores: { records:{keyPath:'id'} } },
+  'VRT_FGInventory':  { ver: 1, stores: { fg_records:{keyPath:'id'}, system_meta:{keyPath:'key'} } },
+  'vrt_bom2_v1':      { ver: 1, stores: { kv:null } },
+  'vrt_spareparts':   { ver: 2, stores: { parts:{keyPath:'id'}, txns:{keyPath:'id'}, versions:{keyPath:'id'}, meta:{keyPath:'k'}, suppliers:{keyPath:'id'}, invoices:{keyPath:'id'}, ocrhist:{keyPath:'id'}, images:{keyPath:'id'} } },
+};
+
+function _buildStores(db, schema) {
+  Object.keys(schema.stores).forEach(name => {
+    if (!db.objectStoreNames.contains(name)) {
+      const opt = schema.stores[name];
+      if (opt) db.createObjectStore(name, opt);
+      else     db.createObjectStore(name);
+    }
   });
 }
 
+function openHealedDB(dbName) {
+  const schema = IDB_SCHEMAS[dbName];
+  if (!schema) return Promise.reject(new Error('未知資料庫：' + dbName));
+  const needed = Object.keys(schema.stores);
+
+  function tryOpen(ver) {
+    return new Promise((res, rej) => {
+      const req = ver ? indexedDB.open(dbName, ver) : indexedDB.open(dbName);
+      req.onupgradeneeded = e => _buildStores(e.target.result, schema);
+      req.onblocked = () => log('⚠ ' + dbName + ' 升級被封鎖，請關閉其他使用中的模組分頁後重試', 'err');
+      req.onsuccess = e => res(e.target.result);
+      req.onerror   = () => rej(req.error);
+    });
+  }
+
+  return tryOpen(schema.ver)
+    .catch(err => {
+      // VersionError：既有版本比 schema 高 → 不帶版本開啟
+      if (err && err.name === 'VersionError') return tryOpen(null);
+      throw err;
+    })
+    .then(db => {
+      if (needed.every(s => db.objectStoreNames.contains(s))) return db;
+      // 缺 store（先前被建成空庫）→ 升一版補建，資料不會遺失
+      const nextVer = db.version + 1;
+      db.close();
+      return tryOpen(nextVer);
+    });
+}
+
+function idbGetAll(dbName, ver, store) {
+  return openHealedDB(dbName).then(db => new Promise((res) => {
+    if (!db.objectStoreNames.contains(store)) { db.close(); res([]); return; }
+    const q = db.transaction(store, 'readonly').objectStore(store).getAll();
+    q.onsuccess = () => { const r = q.result || []; db.close(); res(r); };
+    q.onerror   = () => { db.close(); res([]); };
+  })).catch(() => []);
+}
+
 function idbPutAll(dbName, ver, store, records) {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(dbName, ver);
-    req.onerror = rej;
-    req.onsuccess = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(store)) { res(0); return; }
-      const tx = db.transaction(store, 'readwrite');
-      const os = tx.objectStore(store);
-      records.forEach(r => os.put(r));
-      tx.oncomplete = () => res(records.length);
-      tx.onerror    = rej;
-    };
-  });
+  return openHealedDB(dbName).then(db => new Promise((res, rej) => {
+    if (!db.objectStoreNames.contains(store)) { db.close(); res(0); return; }
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    records.forEach(r => os.put(r));
+    tx.oncomplete = () => { db.close(); res(records.length); };
+    tx.onerror    = e  => { db.close(); rej(e); };
+  }));
 }
 
 // kv 型 store（out-of-line key，例如 BOM 的 vrt_bom2_v1/kv）
 function idbKvGet(dbName, ver, store, key) {
-  return new Promise((res) => {
-    const req = indexedDB.open(dbName, ver);
-    req.onerror = () => res(null);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
-    };
-    req.onsuccess = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(store)) { res(null); return; }
-      const q = db.transaction(store,'readonly').objectStore(store).get(key);
-      q.onsuccess = () => res(q.result || null);
-      q.onerror   = () => res(null);
-    };
-  });
+  return openHealedDB(dbName).then(db => new Promise((res) => {
+    if (!db.objectStoreNames.contains(store)) { db.close(); res(null); return; }
+    const q = db.transaction(store, 'readonly').objectStore(store).get(key);
+    q.onsuccess = () => { const r = q.result || null; db.close(); res(r); };
+    q.onerror   = () => { db.close(); res(null); };
+  })).catch(() => null);
 }
 
 function idbKvPut(dbName, ver, store, key, value) {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(dbName, ver);
-    req.onerror = rej;
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
-    };
-    req.onsuccess = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(store)) { res(false); return; }
-      const tx = db.transaction(store, 'readwrite');
-      tx.objectStore(store).put(value, key);
-      tx.oncomplete = () => res(true);
-      tx.onerror    = rej;
-    };
-  });
+  return openHealedDB(dbName).then(db => new Promise((res, rej) => {
+    if (!db.objectStoreNames.contains(store)) { db.close(); res(false); return; }
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(value, key);
+    tx.oncomplete = () => { db.close(); res(true); };
+    tx.onerror    = e  => { db.close(); rej(e); };
+  }));
 }
 
 // ─── UI HELPERS ─────────────────────────────────────────

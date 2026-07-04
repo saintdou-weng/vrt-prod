@@ -704,9 +704,15 @@ async function connectDataFile(){
 
 // ── Cloud IDB (full history, no size cap) ──
 const CLOUD_IDB_NAME='CuttingCloudPlan', CLOUD_IDB_STORE='cloud_records';
-function openCloudIDB(){ return new Promise((res,rej)=>{ const req=indexedDB.open(CLOUD_IDB_NAME,1);
-  req.onupgradeneeded=e=>e.target.result.createObjectStore(CLOUD_IDB_STORE,{keyPath:'id',autoIncrement:true});
-  req.onsuccess=e=>res(e.target.result); req.onerror=rej; }); }
+function openCloudIDB(){
+  const build=db=>{ if(!db.objectStoreNames.contains(CLOUD_IDB_STORE)) db.createObjectStore(CLOUD_IDB_STORE,{keyPath:'id',autoIncrement:true}); };
+  const tryOpen=ver=>new Promise((res,rej)=>{ const req=ver?indexedDB.open(CLOUD_IDB_NAME,ver):indexedDB.open(CLOUD_IDB_NAME);
+    req.onupgradeneeded=e=>build(e.target.result);
+    req.onsuccess=e=>res(e.target.result); req.onerror=()=>rej(req.error); });
+  return tryOpen(1)
+    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(db=>{ if(db.objectStoreNames.contains(CLOUD_IDB_STORE)) return db;
+      const nv=db.version+1; db.close(); return tryOpen(nv); }); }
 async function saveToCloudIDB(recs){ const db=await openCloudIDB();
   const tx=db.transaction(CLOUD_IDB_STORE,'readwrite'); const os=tx.objectStore(CLOUD_IDB_STORE);
   await new Promise((res,rej)=>{ const q=os.clear(); q.onsuccess=res; q.onerror=rej; });
@@ -1745,13 +1751,24 @@ const PVA_SOURCE='PLAN';
 let _hubDb=null;
 function hubOpen(){return new Promise(function(res,rej){
   if(_hubDb)return res(_hubDb);
-  const req=indexedDB.open('CuttingProd',2);
-  req.onupgradeneeded=function(e){const db=e.target.result;
-    ['cutting_records','sewing_cache','plan_records','variance_records','history_records'].forEach(function(s){
-      if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'id'});});};
-  req.onblocked=function(){console.warn('[HUB] 資料庫升級被封鎖：請關閉其他 VRT 裁剪分頁後重新整理');};
-  req.onsuccess=function(e){_hubDb=e.target.result;res(_hubDb);};
-  req.onerror=function(e){rej(e.target.error);};});}
+  const HUB_STORES=['cutting_records','sewing_cache','plan_records','variance_records','history_records'];
+  const build=function(db){ HUB_STORES.forEach(function(s){
+    if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'id'});});};
+  const tryOpen=function(ver){return new Promise(function(r2,j2){
+    const req=ver?indexedDB.open('CuttingProd',ver):indexedDB.open('CuttingProd');
+    req.onupgradeneeded=function(e){build(e.target.result);};
+    req.onblocked=function(){console.warn('[HUB] 資料庫升級被封鎖：請關閉其他 VRT 裁剪分頁後重新整理');};
+    req.onsuccess=function(e){r2(e.target.result);};
+    req.onerror=function(){j2(req.error);};});};
+  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+  tryOpen(2)
+    .catch(function(err){ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(function(db){
+      if(HUB_STORES.every(function(s){return db.objectStoreNames.contains(s);})){_hubDb=db;return res(db);}
+      const nv=db.version+1; db.close();
+      return tryOpen(nv).then(function(db2){_hubDb=db2;res(db2);});
+    })
+    .catch(function(e){rej(e);});});}
 function planToShared(r){return Object.assign({},r,{
   date:normalizeDate(r.date),section:r.section||'Cutting',
   fabric:clean(r.erpFab||r.fabric||''),marker:clean(r.markerSize||''),

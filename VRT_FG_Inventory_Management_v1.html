@@ -664,17 +664,25 @@ let _fgIDB=null;
 
 function openFgIDB(){
   if(_fgIDB) return Promise.resolve(_fgIDB);
-  return new Promise((res,rej)=>{
-    const req=indexedDB.open(FG_IDB_NAME,FG_IDB_VER);
-    req.onupgradeneeded=e=>{
-      const db=e.target.result;
-      if(!db.objectStoreNames.contains(FG_ST)) db.createObjectStore(FG_ST,{keyPath:'id'});
-      if(!db.objectStoreNames.contains('system_meta')) db.createObjectStore('system_meta',{keyPath:'key'});
-      // [EXT] 未來模組預留 Store：packing_records / finishing_records / qa_records / booking_records
-    };
-    req.onsuccess=e=>{ _fgIDB=e.target.result; res(_fgIDB); };
-    req.onerror=rej;
+  const build=db=>{
+    if(!db.objectStoreNames.contains(FG_ST)) db.createObjectStore(FG_ST,{keyPath:'id'});
+    if(!db.objectStoreNames.contains('system_meta')) db.createObjectStore('system_meta',{keyPath:'key'});
+    // [EXT] 未來模組預留 Store：packing_records / finishing_records / qa_records / booking_records
+  };
+  const tryOpen=ver=>new Promise((res,rej)=>{
+    const req=ver?indexedDB.open(FG_IDB_NAME,ver):indexedDB.open(FG_IDB_NAME);
+    req.onupgradeneeded=e=>build(e.target.result);
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=()=>rej(req.error);
   });
+  // 自我修復：若資料庫曾被其他程式建成「沒有 store 的空庫」，自動升版補建
+  return tryOpen(FG_IDB_VER)
+    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(db=>{
+      if(db.objectStoreNames.contains(FG_ST)&&db.objectStoreNames.contains('system_meta')){ _fgIDB=db; return db; }
+      const nv=db.version+1; db.close();
+      return tryOpen(nv).then(db2=>{ _fgIDB=db2; return db2; });
+    });
 }
 async function saveFG(){
   const db=await openFgIDB();
@@ -702,11 +710,14 @@ async function loadFG(){
   }catch(e){ FG=[]; }
 }
 
-// ── 只讀外部資料庫（open 不帶版本號，避免觸發 upgrade 影響對方系統） ─────────
+// ── 只讀外部資料庫（不帶版本號；若資料庫不存在，立即中止避免建立空庫） ─────────
 function readExternalStore(dbName, storeName){
   return new Promise(res=>{
     let req;
     try{ req=indexedDB.open(dbName); }catch(e){ res([]); return; }
+    // 關鍵：對「不存在的資料庫」open 會觸發 upgradeneeded(oldVersion=0)，
+    // 此時 abort 交易可取消建立，避免留下空庫害對方系統打不開自己的 store
+    req.onupgradeneeded=e=>{ try{ e.target.transaction.abort(); }catch(_){} };
     req.onerror=()=>res([]);
     req.onsuccess=e=>{
       const d=e.target.result;

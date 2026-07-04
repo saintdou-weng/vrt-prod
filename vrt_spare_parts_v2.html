@@ -393,9 +393,9 @@ function toggleLang(){_lang=_lang==='zh'?'en':_lang==='en'?'km':'zh';localStorag
 
 /* ===== IndexedDB 儲存層 ===== */
 const IDB_NAME='vrt_spareparts', IDB_VER=2;
-function openDB(){return new Promise((res,rej)=>{
-  const req=indexedDB.open(IDB_NAME,IDB_VER);
-  req.onupgradeneeded=e=>{const db=e.target.result;
+const SP_STORES=['parts','txns','versions','meta','suppliers','invoices','ocrhist','images'];
+function openDB(){
+  const build=db=>{
     if(!db.objectStoreNames.contains('parts'))db.createObjectStore('parts',{keyPath:'id'});
     if(!db.objectStoreNames.contains('txns'))db.createObjectStore('txns',{keyPath:'id'});
     if(!db.objectStoreNames.contains('versions'))db.createObjectStore('versions',{keyPath:'id'});
@@ -405,8 +405,17 @@ function openDB(){return new Promise((res,rej)=>{
     if(!db.objectStoreNames.contains('ocrhist'))db.createObjectStore('ocrhist',{keyPath:'id'});
     if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'id'});
   };
-  req.onsuccess=e=>res(e.target.result); req.onerror=e=>rej(e);
-});}
+  const tryOpen=ver=>new Promise((res,rej)=>{
+    const req=ver?indexedDB.open(IDB_NAME,ver):indexedDB.open(IDB_NAME);
+    req.onupgradeneeded=e=>build(e.target.result);
+    req.onsuccess=e=>res(e.target.result); req.onerror=()=>rej(req.error);
+  });
+  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+  return tryOpen(IDB_VER)
+    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(db=>{ if(SP_STORES.every(s=>db.objectStoreNames.contains(s))) return db;
+      const nv=db.version+1; db.close(); return tryOpen(nv); });
+}
 async function idbPutAll(store,arr){const db=await openDB();return new Promise((res,rej)=>{
   const tx=db.transaction(store,'readwrite');const os=tx.objectStore(store);os.clear();
   arr.forEach(o=>os.put(o));tx.oncomplete=()=>res();tx.onerror=e=>rej(e);});}
@@ -444,6 +453,9 @@ async function loadAll(){
     SUPPLIERS=await idbGetAll('suppliers'); INVOICES=await idbGetAll('invoices'); OCRHIST=await idbGetAll('ocrhist');
     const s=await idbGetMeta('settings'); if(s)SET=Object.assign(SET,s);
     else{const ls=localStorage.getItem('vrt_sp_set');if(ls)SET=Object.assign(SET,JSON.parse(ls));}
+    // GAS URL 未設定時，自動沿用 Portal 共用 URL（vrt_portal_gas_url）
+    if(!SET.gasUrl){const pu=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+      if(pu){SET.gasUrl=pu;SET.cloudTarget='gas';}}
   }catch(e){console.error(e);}
   if(!PARTS.length) seedDemo();
 }
@@ -1102,8 +1114,13 @@ async function cloudDownload(){
   if(SET.cloudTarget==='local'||!SET.gasUrl){toast(_lang==='en'?'Use Restore for local':'本機請用還原');return;}
   try{
     const res=await fetch(SET.gasUrl+'?action=pull&tool=spareparts',{redirect:'follow'});
-    const d=await res.json();
-    if(d&&d.parts){PARTS=d.parts;TXNS=d.txns||[];VERSIONS=d.versions||[];saveAll(true);goTab('dashboard',null);toast('☁️ Downloaded');}
+    const j=await res.json();
+    // GAS 回應層級：{ok,data:{tool,chunked,data:PAYLOAD}}；PAYLOAD 內 parts 可能在 data 下
+    let pay=(j&&j.ok&&j.data)?j.data:j;
+    if(pay&&pay.data&&!pay.parts) pay=pay.data;           // 剝 {tool,chunked,data}
+    let box=pay;
+    if(box&&box.data&&box.data.parts) box=box.data;        // 剝 {action,tool,data:{parts..}}
+    if(box&&box.parts){PARTS=box.parts;TXNS=box.txns||[];VERSIONS=box.versions||[];saveAll(true);goTab('dashboard',null);toast('☁️ Downloaded ('+PARTS.length+')');}
     else toast('No cloud data');
   }catch(e){console.error(e);toast('Download failed');}
 }

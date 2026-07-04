@@ -605,11 +605,19 @@ const DEFAULT_SETTINGS={
 /* ---------------- IndexedDB (chunked for large datasets) ---------------- */
 let idb=null;
 function openIDB(){ return new Promise(res=>{
-  try{ const r=indexedDB.open(IDB_NAME,1);
-    r.onupgradeneeded=e=>{ const d=e.target.result; if(!d.objectStoreNames.contains(IDB_STORE)) d.createObjectStore(IDB_STORE); };
-    r.onsuccess=e=>{ idb=e.target.result; res(idb); };
-    r.onerror=()=>{ idb=null; res(null); };
-  }catch(e){ res(null); } }); }
+  try{
+    const build=d=>{ if(!d.objectStoreNames.contains(IDB_STORE)) d.createObjectStore(IDB_STORE); };
+    const tryOpen=ver=>new Promise((r2,j2)=>{ const r=ver?indexedDB.open(IDB_NAME,ver):indexedDB.open(IDB_NAME);
+      r.onupgradeneeded=e=>build(e.target.result);
+      r.onsuccess=e=>r2(e.target.result); r.onerror=()=>j2(r.error); });
+    // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+    tryOpen(1)
+      .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+      .then(d=>{ if(d.objectStoreNames.contains(IDB_STORE)){ idb=d; return res(idb); }
+        const nv=d.version+1; d.close();
+        return tryOpen(nv).then(d2=>{ idb=d2; res(idb); }); })
+      .catch(()=>{ idb=null; res(null); });
+  }catch(e){ idb=null; res(null); } }); }
 function idbGet(k){ return new Promise(res=>{ if(!idb)return res(null);
   try{ const rq=idb.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(k);
     rq.onsuccess=()=>res(rq.result); rq.onerror=()=>res(null); }catch(e){ res(null); } }); }
@@ -636,9 +644,29 @@ async function loadState(){
   if(raw){ try{ const d=JSON.parse(raw);
     DB=Object.assign({customers:[],styles:[],settings:{},activity:[],meta:{rev:0}}, d);
     DB.meta=Object.assign({rev:0,pdfImported:0,excelImported:0},DB.meta);
-    DB.settings=Object.assign({},DEFAULT_SETTINGS,DB.settings); return true; }catch(e){} }
+    DB.settings=Object.assign({},DEFAULT_SETTINGS,DB.settings); mergeCfg(); return true; }catch(e){} }
   DB.settings=Object.assign({},DEFAULT_SETTINGS);
+  mergeCfg();
   return false;
+}
+// 重要設定（URL/Chat ID）另存獨立小 key，不受大 state 儲存失敗影響而遺失
+function mergeCfg(){
+  try{
+    const c=JSON.parse(localStorage.getItem('vrt_bom2_cfg')||'{}');
+    if(c.tgProxy&&!DB.settings.tgProxy) DB.settings.tgProxy=c.tgProxy;
+    if(c.tgChat&&!DB.settings.tgChat) DB.settings.tgChat=c.tgChat;
+    if(c.cloudProxy&&!DB.settings.cloudProxy) DB.settings.cloudProxy=c.cloudProxy;
+    if(typeof c.tgEnabled==='boolean'&&DB.settings.tgEnabled===undefined) DB.settings.tgEnabled=c.tgEnabled;
+  }catch(e){}
+  // 仍然沒有雲端 URL 時，自動沿用 Portal 共用 URL
+  const pu=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(pu){ if(!DB.settings.cloudProxy) DB.settings.cloudProxy=pu;
+          if(!DB.settings.tgProxy)    DB.settings.tgProxy=pu; }
+}
+function saveCfg(){
+  try{ localStorage.setItem('vrt_bom2_cfg',JSON.stringify({
+    tgProxy:DB.settings.tgProxy||'', tgChat:DB.settings.tgChat||'',
+    cloudProxy:DB.settings.cloudProxy||'', tgEnabled:!!DB.settings.tgEnabled })); }catch(e){}
 }
 function setCloudTag(state){
   const el=document.getElementById('cloudTag'), tx=document.getElementById('cloudTxt'); if(!el)return;
@@ -1809,7 +1837,7 @@ function openTelegram(){ const s=DB.settings;
      <button class="btn" onclick="closeModal()">關閉</button><button class="btn dark" onclick="saveTgQuick()">儲存</button></div>`,'md'); }
 function saveTgQuick(){ const g=i=>document.getElementById(i);
   DB.settings.tgProxy=(g('tgQProxy').value||'').trim(); DB.settings.tgChat=(g('tgQChat').value||'').trim(); DB.settings.tgEnabled=g('tgQOn').checked;
-  markDirty(); persist(); closeModal(); toast('Telegram 設定已儲存','good'); if(CURRENT==='settings')render(); }
+  saveCfg(); markDirty(); persist(); closeModal(); toast('Telegram 設定已儲存','good'); if(CURRENT==='settings')render(); }
 async function testTg(){ const g=i=>document.getElementById(i);
   if(g('tgQProxy')){ DB.settings.tgProxy=(g('tgQProxy').value||'').trim(); DB.settings.tgChat=(g('tgQChat').value||'').trim(); }
   if(!DB.settings.tgProxy){ toast('請先填入 Proxy URL','warn'); return; }
@@ -1920,6 +1948,7 @@ function saveSettings(){ const g=i=>document.getElementById(i); const s=DB.setti
   if(g('setTgOn')){ s.tgEnabled=g('setTgOn').checked; s.tgProxy=g('setTgProxy').value.trim(); s.tgChat=g('setTgChat').value.trim();
     s.tgEvents={create:g('tgE_create').checked,update:g('tgE_update').checked,delete:g('tgE_delete').checked,daily:g('tgE_daily').checked}; }
   if(g('setCloud'))s.cloudProxy=g('setCloud').value.trim();
+  saveCfg();
   markDirty(); persist(); toast(t('msg.saved'),'good'); }
 
 function renderActivityPage(){ const rows=DB.activity.slice(0,200).map(a=>`<div class="actrow">

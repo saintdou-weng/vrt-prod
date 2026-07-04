@@ -688,28 +688,37 @@ let APP={
 
 // ══ DB ══
 function openDB(){
-  return new Promise((res,rej)=>{
-    const r=indexedDB.open(DBNAME,DBVER);
-    r.onupgradeneeded=e=>{
-      const d=e.target.result;
-      const stores=[
-        ['po_headers',{keyPath:'id',autoIncrement:true}],
-        ['po_lines',{keyPath:'id',autoIncrement:true}],
-        ['weekly_snapshots',{keyPath:'id',autoIncrement:true}],
-        ['order_imports',{keyPath:'id',autoIncrement:true}],
-        ['parse_audit',{keyPath:'id',autoIncrement:true}],
-      ];
-      stores.forEach(([name,opts])=>{
-        if(!d.objectStoreNames.contains(name)){
-          const s=d.createObjectStore(name,opts);
-          if(name==='po_lines') ['customer','po_number','sku','style_code','color','size'].forEach(k=>s.createIndex(k,k,{unique:false}));
-          if(name==='weekly_snapshots') s.createIndex('as_of_date','as_of_date',{unique:false});
-        }
-      });
-    };
-    r.onsuccess=e=>{db=e.target.result;res(db)};
+  const build=d=>{
+    const stores=[
+      ['po_headers',{keyPath:'id',autoIncrement:true}],
+      ['po_lines',{keyPath:'id',autoIncrement:true}],
+      ['weekly_snapshots',{keyPath:'id',autoIncrement:true}],
+      ['order_imports',{keyPath:'id',autoIncrement:true}],
+      ['parse_audit',{keyPath:'id',autoIncrement:true}],
+    ];
+    stores.forEach(([name,opts])=>{
+      if(!d.objectStoreNames.contains(name)){
+        const s=d.createObjectStore(name,opts);
+        if(name==='po_lines') ['customer','po_number','sku','style_code','color','size'].forEach(k=>s.createIndex(k,k,{unique:false}));
+        if(name==='weekly_snapshots') s.createIndex('as_of_date','as_of_date',{unique:false});
+      }
+    });
+  };
+  const NEED=['po_headers','po_lines','weekly_snapshots','order_imports','parse_audit'];
+  const tryOpen=ver=>new Promise((res,rej)=>{
+    const r=ver?indexedDB.open(DBNAME,ver):indexedDB.open(DBNAME);
+    r.onupgradeneeded=e=>build(e.target.result);
+    r.onsuccess=e=>res(e.target.result);
     r.onerror=()=>rej(r.error);
   });
+  // 自我修復：版本衝突改不帶版本開啟；缺 store 則升版補建
+  return tryOpen(DBVER)
+    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(d=>{
+      if(NEED.every(s=>d.objectStoreNames.contains(s))){ db=d; return db; }
+      const nv=d.version+1; d.close();
+      return tryOpen(nv).then(d2=>{ db=d2; return db; });
+    });
 }
 const dbAll=s=>new Promise((r,j)=>{const t=db.transaction(s,'readonly');const q=t.objectStore(s).getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
 const dbAdd=(s,d)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite');const q=t.objectStore(s).add(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
@@ -722,11 +731,12 @@ async function readSewingFromLocalStorage(){
   // 優先讀 SewingCloudProd IDB（車縫雲端同步後存這裡，無大小限制）
   try {
     const idbRecs = await new Promise(res => {
-      const req = indexedDB.open('SewingCloudProd', 1);
-      req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
+      const req = indexedDB.open('SewingCloudProd');   // 不帶版本：讀既有版本
+      // 資料庫不存在時取消建立，避免留下空庫影響車縫系統
+      req.onupgradeneeded = e => { try { e.target.transaction.abort(); } catch(_) {} };
       req.onsuccess = e => {
         const db = e.target.result;
-        if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
+        if (!db.objectStoreNames.contains('cloud_records')) { db.close(); res([]); return; }
         const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
         q.onsuccess = () => res(q.result || []);
         q.onerror   = () => res([]);
@@ -747,20 +757,17 @@ async function readSewingFromLocalStorage(){
 function readCuttingFromIDB(){
   return new Promise(res=>{
     try{
-      const req=indexedDB.open('CuttingProd',1);
-      req.onupgradeneeded=e=>{
-        const d=e.target.result;
-        if(!d.objectStoreNames.contains('cutting_records'))
-          d.createObjectStore('cutting_records',{keyPath:'id'});
-      };
+      const req=indexedDB.open('CuttingProd');   // 不帶版本：讀既有版本
+      // 資料庫不存在時取消建立，避免留下空庫影響裁剪系統
+      req.onupgradeneeded=e=>{ try{ e.target.transaction.abort(); }catch(_){} };
       req.onsuccess=e=>{
         try{
           const idb=e.target.result;
-          if(!idb.objectStoreNames.contains('cutting_records')){res([]);return;}
+          if(!idb.objectStoreNames.contains('cutting_records')){idb.close();res([]);return;}
           const t=idb.transaction('cutting_records','readonly');
           const q=t.objectStore('cutting_records').getAll();
-          q.onsuccess=()=>res(q.result||[]);
-          q.onerror=()=>res([]);
+          q.onsuccess=()=>{const r=q.result||[];idb.close();res(r);};
+          q.onerror=()=>{idb.close();res([]);};
         }catch(e2){res([]);}
       };
       req.onerror=()=>res([]);
@@ -2733,19 +2740,25 @@ async function ordCloudPull(){
     }
     // 還原 FactoryDB
     if (payload.idbData) {
-      for (const [storeName, records] of Object.entries(payload.idbData)) {
-        if (!records?.length) continue;
-        await new Promise((res,rej) => {
-          const tx = db.transaction(storeName,'readwrite');
-          const os = tx.objectStore(storeName);
-          os.clear();
-          records.forEach(r => os.put(r));
-          tx.oncomplete = res; tx.onerror = rej;
-        });
+      if (!db) { try { await openDB(); } catch(e) {} }
+      if (!db) {
+        ordLog('本機資料庫無法開啟，已略過 IDB 還原（訂單清單已還原）','err');
+      } else {
+        for (const [storeName, records] of Object.entries(payload.idbData)) {
+          if (!records?.length) continue;
+          if (!db.objectStoreNames.contains(storeName)) { ordLog(`略過 ${storeName}（本機無此資料表）`,'err'); continue; }
+          await new Promise((res,rej) => {
+            const tx = db.transaction(storeName,'readwrite');
+            const os = tx.objectStore(storeName);
+            os.clear();
+            records.forEach(r => os.put(r));
+            tx.oncomplete = res; tx.onerror = rej;
+          });
+        }
+        APP.orders = await dbAll('po_lines');
+        APP.weekly = await dbAll('weekly_snapshots');
+        APP.imports = await dbAll('order_imports');
       }
-      APP.orders = await dbAll('po_lines');
-      APP.weekly = await dbAll('weekly_snapshots');
-      APP.imports = await dbAll('order_imports');
     }
     refreshAll();
     ordLog(`✓ 拉取完成（${APP.orders.length} 筆 PO）`,'ok');

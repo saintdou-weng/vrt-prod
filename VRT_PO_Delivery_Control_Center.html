@@ -318,9 +318,16 @@ function todayLocal(){ const n=new Date(); return new Date(n.getFullYear(),n.get
 
 /* ===================== IndexedDB ===================== */
 const DB_NAME='vrt_pocc_db', STORE='records';
-function openDB(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,1);
-  r.onupgradeneeded=e=>{ const db=e.target.result; if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id'}); };
-  r.onsuccess=e=>res(e.target.result); r.onerror=e=>rej(e); }); }
+function openDB(){
+  const build=db=>{ if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id'}); };
+  const tryOpen=ver=>new Promise((res,rej)=>{ const r=ver?indexedDB.open(DB_NAME,ver):indexedDB.open(DB_NAME);
+    r.onupgradeneeded=e=>build(e.target.result);
+    r.onsuccess=e=>res(e.target.result); r.onerror=()=>rej(r.error); });
+  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+  return tryOpen(1)
+    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(db=>{ if(db.objectStoreNames.contains(STORE)) return db;
+      const nv=db.version+1; db.close(); return tryOpen(nv); }); }
 async function dbSaveAll(arr){ try{ const db=await openDB(); const tx=db.transaction(STORE,'readwrite'),st=tx.objectStore(STORE); st.clear(); arr.forEach(r=>st.put(r)); return new Promise(r=>tx.oncomplete=()=>r(true)); }catch(e){ try{localStorage.setItem('vrt_pocc_records',JSON.stringify(arr));}catch(_){} return true; } }
 async function dbLoadAll(){ try{ const db=await openDB(); const tx=db.transaction(STORE,'readonly'),st=tx.objectStore(STORE); return new Promise(r=>{ const q=st.getAll(); q.onsuccess=()=>r(q.result||[]); q.onerror=()=>r([]); }); }catch(e){ return JSON.parse(localStorage.getItem('vrt_pocc_records')||'[]'); } }
 
