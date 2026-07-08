@@ -6,16 +6,22 @@
 <title>成品倉庫管理系統 · FG Inventory</title>
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
- VRT_FG_Inventory_Management_v1.html
+ VRT_FG_Inventory_Management_v1_1_FG_Inbound.html   (v1.1)
  Factory Finished Goods Tracking System  (Fabric → Cutting → Sewing → Finishing → FG → Shipment)
+ ─── v1.1 新增：成品入庫明細（FG Inbound）整合 ──────────────────────────────
+   · 新增 FG Inbound 解析模式（入庫日期/客戶/自編單號/款式/款式類型/款式名稱/PO/顏色/數量/單價/產值）
+   · 新增「📥 成品入庫」分頁；Dashboard/Daily/Weekly/Monthly/PO/Recon/Export/Telegram 皆吃入庫資料
+   · 工作表1 → PO 交期參考（order_ref，不入庫）；Summary_產量/產值 → 僅驗證，不入庫
+   · record schema 擴充：orderNo/internalOrderNo/styleName/garmentType/unitPrice/amount/dueDate/cancelDate
 ───────────────────────────────────────────────────────────────────────────────
  架構完全對齊 Factory OS 家族：
    · sewing_v5.html   (UI / IDB-primary / Cloud Sync / 三語 / Dashboard 架構)
    · cutting_v3.html  (跨系統 IDB 讀取 / 比對架構)
 
  資料庫（本系統專屬，絕不寫入其他系統）：
-   VRT_FGInventory
+   VRT_FGInventory  (v2)
      ├ fg_records        本系統唯一寫入的 Store（keyPath:'id'）
+     ├ order_ref         PO 交期參考（來源：工作表1，keyPath:'key'）  ← v1.1 新增
      └ system_meta       摘要 / 設定
  只讀外部資料庫（read-only，任何情況下不得寫入）：
    CuttingProd            → cutting_records   （cutting_v3 寫入）
@@ -188,7 +194,7 @@ select{cursor:pointer}
   <div class="logo">📦</div>
   <div>
     <div class="h-title" data-zh="成品倉庫管理系統" data-en="FG Inventory Management" data-km="ប្រព័ន្ធគ្រប់គ្រងឃ្លាំងផលិតផល">成品倉庫管理系統</div>
-    <div class="h-sub">FG INVENTORY · FACTORY OS · v1.0</div>
+    <div class="h-sub">FG INVENTORY · FACTORY OS · v1.1</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
@@ -211,6 +217,7 @@ select{cursor:pointer}
 <div class="tabs">
   <div class="tab on" onclick="goTab('dashboard',this)" data-zh="📊 儀錶板" data-en="📊 Dashboard" data-km="📊 ផ្ទាំង">📊 儀錶板</div>
   <div class="tab" onclick="goTab('upload',this)" data-zh="📥 上傳資料" data-en="📥 Upload" data-km="📥 បញ្ចូល">📥 上傳資料</div>
+  <div class="tab" onclick="goTab('inbound',this)" data-zh="📥 成品入庫" data-en="📥 FG Inbound" data-km="📥 FG ចូលឃ្លាំង">📥 成品入庫</div>
   <div class="tab" onclick="goTab('daily',this)" data-zh="📊 每日FG" data-en="📊 Daily FG" data-km="📊 ប្រចាំថ្ងៃ">📊 每日FG</div>
   <div class="tab" onclick="goTab('weekly',this)" data-zh="📅 週統計" data-en="📅 Weekly" data-km="📅 សប្ដាហ៍">📅 週統計</div>
   <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月統計" data-en="📆 Monthly" data-km="📆 ខែ">📆 月統計</div>
@@ -248,6 +255,10 @@ select{cursor:pointer}
   <div class="card">
     <div class="ct" data-zh="🤖 AI 自動分析" data-en="🤖 AI Auto Analysis" data-km="🤖 វិភាគ AI">🤖 AI 自動分析</div>
     <div id="dashAI"></div>
+  </div>
+  <div class="card">
+    <div class="ct" data-zh="📥 本月成品入庫分析" data-en="📥 Monthly FG Inbound Analysis" data-km="📥 វិភាគ FG ចូល">📥 本月成品入庫分析</div>
+    <div id="dashInbound"></div>
   </div>
 </div>
 
@@ -337,6 +348,52 @@ select{cursor:pointer}
     </div>
     <button class="btn btn-y" onclick="tgSendDaily()" data-zh="📨 發送今日 FG 摘要" data-en="📨 Send Daily Summary" data-km="📨 ផ្ញើសង្ខេប">📨 發送今日 FG 摘要</button>
     <span id="tgStatus" style="font-size:12px;color:#6b7a9e;margin-left:10px"></span>
+  </div>
+</div>
+
+<!-- ══ 2b. FG INBOUND（成品入庫，v1.1 新增） ══ -->
+<div class="sec" id="sec-inbound">
+  <div class="card">
+    <div class="ct" data-zh="📥 成品入庫明細" data-en="📥 FG Inbound Detail" data-km="📥 FG ចូលឃ្លាំង">📥 成品入庫明細</div>
+    <div id="inbMonthNote" style="font-size:12px;color:#6b7a9e;margin-bottom:8px"></div>
+    <div id="inbKpi" class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))"></div>
+    <div class="frow">
+      <input type="date" id="inbFrom" onchange="renderInbound()" title="起始入庫日">
+      <span style="color:#9ca3af">→</span>
+      <input type="date" id="inbTo" onchange="renderInbound()" title="結束入庫日">
+      <select id="inbCust" onchange="renderInbound()"></select>
+      <select id="inbType" onchange="renderInbound()"></select>
+      <input type="text" id="inbSearch" placeholder="🔎 PO / 自編單號 / 款式 / 顏色..." style="min-width:220px" oninput="renderInbound()">
+      <button class="btn btn-g" onclick="inbReset()" data-zh="重設" data-en="Reset" data-km="កំណត់ឡើងវិញ">重設</button>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="ct" data-zh="📅 每日入庫（PCS / USD）" data-en="📅 Daily Inbound" data-km="📅 ចូលប្រចាំថ្ងៃ">📅 每日入庫</div>
+      <div id="inbDaily"></div>
+    </div>
+    <div class="card">
+      <div class="ct" data-zh="👤 客戶入庫統計" data-en="👤 By Customer" data-km="👤 តាមអតិថិជន">👤 客戶入庫統計</div>
+      <div id="inbCustStat"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct" data-zh="🏷 款式類型統計" data-en="🏷 By Garment Type" data-km="🏷 តាមប្រភេទ">🏷 款式類型統計</div>
+    <div id="inbTypeStat"></div>
+  </div>
+  <div class="card">
+    <div class="ct" data-zh="📋 入庫明細" data-en="📋 Inbound Records" data-km="📋 កំណត់ត្រា">📋 入庫明細</div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th data-zh="入庫日期" data-en="Receive Date">入庫日期</th><th>Customer</th>
+        <th data-zh="自編單號" data-en="Order No">自編單號</th><th>PO</th><th>Style</th>
+        <th data-zh="款式名稱" data-en="Style Name">款式名稱</th><th data-zh="款式類型" data-en="Type">款式類型</th>
+        <th>Color</th><th class="r">PCS</th><th class="r" data-zh="單價" data-en="Unit">單價</th>
+        <th class="r" data-zh="產值" data-en="Amount">產值</th><th data-zh="來源" data-en="Source">來源</th><th data-zh="狀態" data-en="Status">狀態</th>
+      </tr></thead>
+      <tbody id="inbBody"></tbody>
+    </table></div>
+    <div id="inbCount" style="font-size:11px;color:#9ca3af;margin-top:6px"></div>
   </div>
 </div>
 
@@ -613,13 +670,19 @@ let _lang = localStorage.getItem('vrt_lang') || 'zh';
 const I18N = {
   zh:{ recv:'收貨', ship:'出貨', pack:'裝箱', insp:'驗貨', hold:'HOLD', ready:'可出貨',
        waiting:'待驗貨', balance:'庫存餘量', noData:'尚無資料', total:'合計',
-       stageFabric:'布料', stageCut:'裁剪', stageSew:'車縫', stageFG:'成品倉', stageShip:'已出貨', done:'完成' },
+       stageFabric:'布料', stageCut:'裁剪', stageSew:'車縫', stageFG:'成品倉', stageShip:'已出貨', done:'完成',
+       inbound:'成品入庫', inDate:'入庫日期', orderNo:'自編單號', gType:'款式類型', styleName:'款式名稱',
+       unitPrice:'單價', amount:'產值', dueRisk:'交期風險', orderQty:'訂單量', inQty:'入庫量', daysLeft:'剩餘天數', dueDate:'交期' },
   en:{ recv:'Receive', ship:'Shipment', pack:'Packing', insp:'Inspection', hold:'HOLD', ready:'Ready to Ship',
        waiting:'Waiting Inspection', balance:'FG Balance', noData:'No data yet', total:'Total',
-       stageFabric:'Fabric', stageCut:'Cutting', stageSew:'Sewing', stageFG:'FG WH', stageShip:'Shipped', done:'Done' },
+       stageFabric:'Fabric', stageCut:'Cutting', stageSew:'Sewing', stageFG:'FG WH', stageShip:'Shipped', done:'Done',
+       inbound:'FG Inbound', inDate:'Receive Date', orderNo:'Order No', gType:'Garment Type', styleName:'Style Name',
+       unitPrice:'Unit Price', amount:'Amount', dueRisk:'Delivery Risk', orderQty:'Order Qty', inQty:'FG Inbound', daysLeft:'Days Left', dueDate:'Due Date' },
   km:{ recv:'ទទួល', ship:'ដឹកចេញ', pack:'វេចខ្ចប់', insp:'ត្រួតពិនិត្យ', hold:'HOLD', ready:'ត្រៀមដឹក',
        waiting:'រង់ចាំពិនិត្យ', balance:'សមតុល្យ', noData:'គ្មានទិន្នន័យ', total:'សរុប',
-       stageFabric:'ក្រណាត់', stageCut:'កាត់', stageSew:'ដេរ', stageFG:'ឃ្លាំង FG', stageShip:'ដឹករួច', done:'រួចរាល់' }
+       stageFabric:'ក្រណាត់', stageCut:'កាត់', stageSew:'ដេរ', stageFG:'ឃ្លាំង FG', stageShip:'ដឹករួច', done:'រួចរាល់',
+       inbound:'FG ចូលឃ្លាំង', inDate:'ថ្ងៃចូលឃ្លាំង', orderNo:'លេខផ្ទៃក្នុង', gType:'ប្រភេទ', styleName:'ឈ្មោះស្ទីល',
+       unitPrice:'តម្លៃឯកតា', amount:'ទឹកប្រាក់', dueRisk:'ហានិភ័យកាលកំណត់', orderQty:'បរិមាណបញ្ជា', inQty:'FG ចូល', daysLeft:'ថ្ងៃនៅសល់', dueDate:'កាលកំណត់' }
 };
 function t(k){ return (I18N[_lang]||I18N.zh)[k] || I18N.zh[k] || k; }
 
@@ -656,33 +719,28 @@ function toast(msg,type){
    外部只讀：CuttingProd/cutting_records、VRT_SewingProduction/daily_records
    ★ 絕不寫入 cutting_records / sewing_records / daily_records
 ═══════════════════════════════════════════════════════════════════════════ */
-const FG_IDB_NAME='VRT_FGInventory', FG_IDB_VER=1, FG_ST='fg_records';
+const FG_IDB_NAME='VRT_FGInventory', FG_IDB_VER=2, FG_ST='fg_records', OR_ST='order_ref';
 let FG=[];            // 主資料（記憶體鏡像，所有 render 讀這裡）
+let ORDER_REF=[];     // PO 交期參考（來源：工作表1，只讀比對用，不算 FG 庫存）
 let CUT=[];           // cutting_v3 資料（只讀快取）
 let SEW=[];           // sewing_v5 資料（只讀快取）
 let _fgIDB=null;
 
 function openFgIDB(){
   if(_fgIDB) return Promise.resolve(_fgIDB);
-  const build=db=>{
-    if(!db.objectStoreNames.contains(FG_ST)) db.createObjectStore(FG_ST,{keyPath:'id'});
-    if(!db.objectStoreNames.contains('system_meta')) db.createObjectStore('system_meta',{keyPath:'key'});
-    // [EXT] 未來模組預留 Store：packing_records / finishing_records / qa_records / booking_records
-  };
-  const tryOpen=ver=>new Promise((res,rej)=>{
-    const req=ver?indexedDB.open(FG_IDB_NAME,ver):indexedDB.open(FG_IDB_NAME);
-    req.onupgradeneeded=e=>build(e.target.result);
-    req.onsuccess=e=>res(e.target.result);
-    req.onerror=()=>rej(req.error);
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(FG_IDB_NAME,FG_IDB_VER);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(FG_ST)) db.createObjectStore(FG_ST,{keyPath:'id'});
+      if(!db.objectStoreNames.contains('system_meta')) db.createObjectStore('system_meta',{keyPath:'key'});
+      // v1→v2：新增 PO 交期參考 Store（工作表1）。既有 fg_records 不受影響。
+      if(!db.objectStoreNames.contains(OR_ST)) db.createObjectStore(OR_ST,{keyPath:'key'});
+      // [EXT] 未來模組預留 Store：packing_records / finishing_records / qa_records / booking_records
+    };
+    req.onsuccess=e=>{ _fgIDB=e.target.result; res(_fgIDB); };
+    req.onerror=rej;
   });
-  // 自我修復：若資料庫曾被其他程式建成「沒有 store 的空庫」，自動升版補建
-  return tryOpen(FG_IDB_VER)
-    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
-    .then(db=>{
-      if(db.objectStoreNames.contains(FG_ST)&&db.objectStoreNames.contains('system_meta')){ _fgIDB=db; return db; }
-      const nv=db.version+1; db.close();
-      return tryOpen(nv).then(db2=>{ _fgIDB=db2; return db2; });
-    });
 }
 async function saveFG(){
   const db=await openFgIDB();
@@ -710,14 +768,34 @@ async function loadFG(){
   }catch(e){ FG=[]; }
 }
 
-// ── 只讀外部資料庫（不帶版本號；若資料庫不存在，立即中止避免建立空庫） ─────────
+// ── PO 交期參考（order_ref）：來源工作表1，只讀比對，不算 FG 庫存 ────────────
+async function saveOrderRef(){
+  try{
+    const db=await openFgIDB();
+    const tx=db.transaction(OR_ST,'readwrite');
+    const os=tx.objectStore(OR_ST);
+    os.clear();
+    ORDER_REF.forEach(r=>os.put(r));
+    await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+    try{ localStorage.setItem('vrt_fg_orderref_count',String(ORDER_REF.length)); }catch(e){}
+  }catch(e){ console.warn('[FG] saveOrderRef 失敗',e); }
+}
+async function loadOrderRef(){
+  try{
+    const db=await openFgIDB();
+    const tx=db.transaction(OR_ST,'readonly');
+    ORDER_REF=await new Promise(res=>{
+      const q=tx.objectStore(OR_ST).getAll();
+      q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([]);
+    });
+  }catch(e){ ORDER_REF=[]; }
+}
+
+// ── 只讀外部資料庫（open 不帶版本號，避免觸發 upgrade 影響對方系統） ─────────
 function readExternalStore(dbName, storeName){
   return new Promise(res=>{
     let req;
     try{ req=indexedDB.open(dbName); }catch(e){ res([]); return; }
-    // 關鍵：對「不存在的資料庫」open 會觸發 upgradeneeded(oldVersion=0)，
-    // 此時 abort 交易可取消建立，避免留下空庫害對方系統打不開自己的 store
-    req.onupgradeneeded=e=>{ try{ e.target.transaction.abort(); }catch(_){} };
     req.onerror=()=>res([]);
     req.onsuccess=e=>{
       const d=e.target.result;
@@ -748,9 +826,12 @@ async function loadExternal(){
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SECTION C — FG 記錄資料模型 / 狀態 / 去重
-   record = { id, customer, po, styleNo, color, size, sku, carton, pcs,
+   record = { id, customer, po, orderNo, internalOrderNo, styleNo, styleName, garmentType,
+              color, size, sku, carton, pcs, unitPrice, amount,
               receiveDate, packingDate, inspectionDate, shipmentDate,
-              etd, eta, containerNo, warehouse, location, hold, remark, src, importedAt }
+              etd, eta, dueDate, cancelDate, containerNo, warehouse, location,
+              hold, remark, src, importedAt }
+   ★ 舊資料無新欄位時一律顯示空白，不報錯（所有 render 皆以 r.field||'' 取值）
 ═══════════════════════════════════════════════════════════════════════════ */
 function recStatus(r){
   if(r.shipmentDate) return 'SHIPPED';
@@ -765,13 +846,14 @@ function statusBadge(r){
   if(s==='READY')   return `<span class="b bok">READY</span>`;
   return `<span class="b bwn">WAITING</span>`;
 }
-// 去重鍵：客戶|PO|款|色|碼|SKU|箱|收貨日|出貨日（同鍵取 pcs 較大者）
+// 去重鍵（v1.1 擴充）：客戶|PO|自編單號|款|色|碼|SKU|箱|收貨日|出貨日|PCS
+// 加入 orderNo → 同 PO 多張自編單不會被誤合併；加入 pcs → 只有完全相同才合併（防同檔重覆匯入）
 function dedupFG(list){
   const map=new Map();
   (list||[]).forEach(r=>{
-    const k=[r.customer,r.po,r.styleNo,r.color,r.size,r.sku,r.carton,r.receiveDate,r.shipmentDate].map(v=>v||'').join('|');
+    const k=[r.customer,r.po,r.orderNo,r.styleNo,r.color,r.size,r.sku,r.carton,r.receiveDate,r.shipmentDate,r.pcs].map(v=>v||'').join('|');
     if(!map.has(k)) map.set(k,r);
-    else{ const ex=map.get(k); if((r.pcs||0)>(ex.pcs||0)) map.set(k,{...ex,...r}); }
+    else{ const ex=map.get(k); map.set(k,{...ex,...r}); } // 完全同鍵：以較完整者補齊欄位，不覆蓋 pcs
   });
   return [...map.values()];
 }
@@ -782,6 +864,7 @@ function dedupFG(list){
    · 欄位自動辨識（HM 表頭字典，中英混用皆可）
 ═══════════════════════════════════════════════════════════════════════════ */
 let pendingRecs=[], pendingFiles=[];
+let pendingOrderRef=[], pendingInStats=null, pendingSummarySheets=[];   // v1.1：入庫解析暫存
 
 // 表頭辨識字典（比對時轉小寫去空白）
 const HM={
@@ -864,12 +947,248 @@ function parseAOA(aoa, srcName){
   return recs;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION D-2 — 成品入庫明細（FG Inbound）專用解析（v1.1 新增）
+   來源分頁：「0601_0630 FG IN QTY」→ FG record
+             「工作表1」            → order_ref（PO 交期參考，不入庫）
+             「Summary_產量/產值」  → 略過（僅供驗證，不入庫）
+═══════════════════════════════════════════════════════════════════════════ */
+// 本地時間戳（禁 toISOString；金邊本地時間）
+function localStamp(){
+  const d=new Date();
+  return `${localDateStr(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+// 安全數字：無效（含 #NAME? / 公式錯誤 / 非數字）回傳 NaN
+function safeNumber(v){
+  if(v===null||v===undefined||v==='') return 0;
+  if(typeof v==='number') return isFinite(v)?v:NaN;
+  let s=String(v).replace(/,/g,'').trim();
+  if(!s) return 0;
+  if(/^#/.test(s) || /(name|div|ref|value|null|n\/a|error)/i.test(s)) return NaN; // Excel 公式錯誤
+  const n=Number(s); return isNaN(n)?NaN:n;
+}
+// 安全金額：{val, err}；err=true 代表原始格為公式錯誤/非數字
+function safeMoney(v){
+  const n=safeNumber(v);
+  if(isNaN(n)) return {val:0, err:true};
+  return {val:n, err:false};
+}
+function normalizePO(v){ return cleanField(v); }
+function normalizeOrderNo(v){ return cleanField(v).replace(/\.0$/,''); }
+// 入庫記錄辨識（供各分頁篩選「成品入庫」子集）
+function isInbound(r){ return !!(r.orderNo || r.garmentType || Number(r.amount)>0); }
+function inboundRecs(){ return FG.filter(isInbound); }
+function num(v){ const n=Number(v); return isNaN(n)?0:n; }
+function sumPcs(list){ return list.reduce((s,r)=>s+num(r.pcs),0); }
+function sumAmt(list){ return list.reduce((s,r)=>s+num(r.amount),0); }
+
+// ── FG Inbound 表頭欄位字典（CJK 走精準比對，避免「款式名稱」被「款式」搶走） ──
+const FG_IN_FIELDS=[
+  ['receiveDate',['入庫日期','入庫日','收貨日期','收貨日']],
+  ['orderNo',    ['自編單號','自編單','內部單號','單號']],
+  ['garmentType',['款式類型','款類','品類','類型']],
+  ['styleName',  ['款式名稱','品名']],
+  ['styleNo',    ['款式','款號','款式代號','style','style no']],
+  ['customer',   ['客戶','客戶名稱','客户','customer']],
+  ['po',         ['po','po no','po number','po#','p/o']],
+  ['color',      ['顏色','色','color','colour']],
+  ['pcs',        ['數量','件數','pcs','qty','quantity']],
+  ['unitPrice',  ['單價','unit price','price']],
+  ['amount',     ['產值','金額','amount','total value']],
+];
+function mapInboundHeader(cells){
+  const H={};
+  const norm=c=>String(c==null?'':c).trim();
+  cells.forEach((c,i)=>{                                   // pass1：精準相等
+    const raw=norm(c), low=raw.toLowerCase();
+    for(const [f,keys] of FG_IN_FIELDS){
+      if(H[f]!==undefined) continue;
+      if(keys.some(k=>raw===k||low===k.toLowerCase())){ H[f]=i; break; }
+    }
+  });
+  cells.forEach((c,i)=>{                                   // pass2：僅英文欄名允許 startsWith
+    const raw=norm(c), low=raw.toLowerCase();
+    for(const [f,keys] of FG_IN_FIELDS){
+      if(H[f]!==undefined) continue;
+      if(keys.some(k=>/^[a-z /#]+$/i.test(k) && k.length>=2 && low.startsWith(k.toLowerCase()))){ H[f]=i; break; }
+    }
+  });
+  return H;
+}
+// 在前 12 列找出成品入庫表頭列；需含 入庫日期 + 數量 + (產值|單價) + (自編單號|款式類型)
+function detectFGInboundSheet(aoa, sheetName){
+  for(let i=0;i<Math.min(12,aoa.length);i++){
+    const H=mapInboundHeader(aoa[i]||[]);
+    if(H.receiveDate!==undefined && H.pcs!==undefined
+       && (H.amount!==undefined||H.unitPrice!==undefined)
+       && (H.orderNo!==undefined||H.garmentType!==undefined)){
+      return {row:i, H};
+    }
+  }
+  return null;
+}
+// 解析成品入庫明細 → { records, stats }
+function parseFGInboundAOA(aoa, srcName){
+  const det=detectFGInboundSheet(aoa);
+  if(!det) return {records:[], stats:null};
+  const {row:hdr, H}=det;
+  const recs=[], st={rows:0,priceErr:0,dateErr:0,poBlank:0,custBlank:0,amtErr:0};
+  for(let i=hdr+1;i<aoa.length;i++){
+    const row=aoa[i]||[];
+    const joined=row.map(c=>String(c==null?'':c)).join('').trim();
+    if(!joined) continue;
+    const lj=joined.toLowerCase();
+    const po=H.po!==undefined?normalizePO(row[H.po]):'';
+    const orderNo=H.orderNo!==undefined?normalizeOrderNo(row[H.orderNo]):'';
+    if(/total|合計|小計|grand|總計|小結/.test(lj) && !po && !orderNo) continue;   // 排除合計列
+    const pcsRaw=H.pcs!==undefined?safeNumber(row[H.pcs]):NaN;
+    const pcsVal=isNaN(pcsRaw)?0:Math.round(pcsRaw);
+    if(pcsVal<=0 && !orderNo && !po) continue;                                    // 無量無單 → 略過
+    const cust=H.customer!==undefined?cleanField(row[H.customer]):'';
+    // 入庫日期（Excel 序號沿用 normalizeDate；轉不出 → 空 + 標記日期錯誤）
+    const rawDate=H.receiveDate!==undefined?row[H.receiveDate]:'';
+    let receiveDate = (rawDate===''||rawDate==null)?'':normalizeDate(rawDate);
+    if(rawDate!=='' && rawDate!=null && !receiveDate) st.dateErr++;
+    // 單價（#NAME? → 0 + priceErr）
+    const upM=H.unitPrice!==undefined?safeMoney(row[H.unitPrice]):{val:0,err:false};
+    const priceErr=upM.err; const unitPrice=priceErr?0:upM.val;
+    if(priceErr) st.priceErr++;
+    // 產值：有效數字直接用；空白/錯 → 用 pcs×unitPrice 試算；單價無效 → 0
+    let amount=0;
+    if(H.amount!==undefined){
+      const amM=safeMoney(row[H.amount]);
+      if(!amM.err && amM.val>0) amount=amM.val;
+      else if(!priceErr && unitPrice>0) amount=+(unitPrice*pcsVal).toFixed(2);
+      else amount=0;
+      if(amM.err) st.amtErr++;
+    } else if(!priceErr && unitPrice>0){ amount=+(unitPrice*pcsVal).toFixed(2); }
+    if(pcsVal>0 && !po) st.poBlank++;
+    if(pcsVal>0 && !cust) st.custBlank++;
+    st.rows++;
+    recs.push({
+      id:uid(), customer:cust, po, orderNo, internalOrderNo:orderNo,
+      styleNo:H.styleNo!==undefined?cleanField(row[H.styleNo]):'',
+      styleName:H.styleName!==undefined?String(row[H.styleName]||'').trim():'',
+      garmentType:H.garmentType!==undefined?String(row[H.garmentType]||'').trim():'',
+      color:H.color!==undefined?String(row[H.color]||'').trim():'',
+      size:'', sku:'', carton:0, pcs:pcsVal,
+      unitPrice:unitPrice, amount:amount||0,
+      receiveDate, packingDate:'', inspectionDate:'', shipmentDate:'',
+      etd:'', eta:'', dueDate:'', cancelDate:'',
+      containerNo:'', warehouse:'', location:'',
+      hold:false, remark:priceErr?'單價公式錯誤':'', src:srcName, importedAt:localStamp(),
+    });
+  }
+  return {records:recs, stats:st};
+}
+
+// ── 工作表1 → PO 交期參考 order_ref（不入庫） ──────────────────────────────
+const OR_FIELDS=[
+  ['orderNo',     ['自編單號','自編單','單號']],
+  ['orderDate',   ['訂單日期','下單日期']],
+  ['salesRep',    ['業務員','業務']],
+  ['group',       ['組別','組']],
+  ['customer',    ['客戶','客戶名稱']],
+  ['styleNo',     ['款式代號','款號','款式']],
+  ['styleName',   ['款式名稱','品名']],
+  ['color',       ['顏色說明','顏色','色']],
+  ['po',          ['po no','po','po number','p/o']],
+  ['unitPrice',   ['單價']],
+  ['dueDate',     ['交期','交貨日期','交貨日']],
+  ['orderQty',    ['訂單量','訂單數量','訂購量']],
+  ['deliveredQty',['已交量','已交數量']],
+  ['pendingQty',  ['未交量','未交數量']],
+  ['amount',      ['金額','總額']],
+  ['closeDate',   ['結案日期','結案日']],
+];
+function mapOrderHeader(cells){
+  const H={}; const norm=c=>String(c==null?'':c).trim();
+  cells.forEach((c,i)=>{
+    const raw=norm(c), low=raw.toLowerCase();
+    for(const [f,keys] of OR_FIELDS){
+      if(H[f]!==undefined) continue;
+      if(keys.some(k=>raw===k||low===k.toLowerCase())){ H[f]=i; break; }
+    }
+  });
+  cells.forEach((c,i)=>{
+    const raw=norm(c), low=raw.toLowerCase();
+    for(const [f,keys] of OR_FIELDS){
+      if(H[f]!==undefined) continue;
+      if(keys.some(k=>/^[a-z /#]+$/i.test(k) && k.length>=2 && low.startsWith(k.toLowerCase()))){ H[f]=i; break; }
+    }
+  });
+  return H;
+}
+function detectOrderRefSheet(aoa){
+  for(let i=0;i<Math.min(12,aoa.length);i++){
+    const H=mapOrderHeader(aoa[i]||[]);
+    if(H.orderNo!==undefined && (H.orderQty!==undefined||H.dueDate!==undefined) && H.receiveDate===undefined){
+      // 需有 訂單量/交期，且不像入庫表（無入庫日期）
+      if(!detectFGInboundSheet(aoa)) return {row:i, H};
+    }
+  }
+  return null;
+}
+function parseOrderReferenceAOA(aoa, srcName){
+  const det=detectOrderRefSheet(aoa);
+  if(!det) return [];
+  const {row:hdr, H}=det; const out=[];
+  for(let i=hdr+1;i<aoa.length;i++){
+    const row=aoa[i]||[];
+    const joined=row.map(c=>String(c==null?'':c)).join('').trim();
+    if(!joined) continue;
+    if(/total|合計|小計|總計/.test(joined.toLowerCase())) continue;
+    const orderNo=H.orderNo!==undefined?normalizeOrderNo(row[H.orderNo]):'';
+    const po=H.po!==undefined?normalizePO(row[H.po]):'';
+    const styleNo=H.styleNo!==undefined?cleanField(row[H.styleNo]):'';
+    if(!orderNo && !po) continue;
+    const orderQty=H.orderQty!==undefined?(safeNumber(row[H.orderQty])||0):0;
+    if(orderQty<=0 && H.orderQty!==undefined && !po) continue;
+    const key = orderNo || (po+'|'+styleNo);
+    out.push({
+      key, orderNo, po, styleNo,
+      styleName:H.styleName!==undefined?String(row[H.styleName]||'').trim():'',
+      color:H.color!==undefined?String(row[H.color]||'').trim():'',
+      customer:H.customer!==undefined?cleanField(row[H.customer]):'',
+      salesRep:H.salesRep!==undefined?String(row[H.salesRep]||'').trim():'',
+      orderDate:H.orderDate!==undefined?normalizeDate(row[H.orderDate]):'',
+      dueDate:H.dueDate!==undefined?normalizeDate(row[H.dueDate]):'',
+      closeDate:H.closeDate!==undefined?normalizeDate(row[H.closeDate]):'',
+      orderQty:Math.round(orderQty),
+      deliveredQty:H.deliveredQty!==undefined?Math.round(safeNumber(row[H.deliveredQty])||0):0,
+      pendingQty:H.pendingQty!==undefined?Math.round(safeNumber(row[H.pendingQty])||0):0,
+      unitPrice:H.unitPrice!==undefined?(safeMoney(row[H.unitPrice]).val||0):0,
+      amount:H.amount!==undefined?(safeMoney(row[H.amount]).val||0):0,
+      src:srcName, importedAt:localStamp(),
+    });
+  }
+  return out;
+}
+function isSummarySheetName(name){
+  return /summary|產量|產值|彙總|summary_/i.test(String(name||''));
+}
+
+// 分頁路由：Summary 略過 / 入庫明細→FG / 工作表1→order_ref / 其他→通用解析
 function parseWorkbook(wb, srcName){
   let all=[];
   wb.SheetNames.forEach(sn=>{
     const ws=wb.Sheets[sn];
     const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
-    all=all.concat(parseAOA(aoa, srcName+' › '+sn));
+    const tag=srcName+' › '+sn;
+    if(isSummarySheetName(sn)){ pendingSummarySheets.push({name:tag, rows:aoa.length}); return; }   // Summary：只驗證
+    const det=detectFGInboundSheet(aoa);
+    if(det){                                                                                        // 成品入庫明細 → FG
+      const {records,stats}=parseFGInboundAOA(aoa, tag);
+      all=all.concat(records);
+      if(stats){
+        if(!pendingInStats) pendingInStats={rows:0,priceErr:0,dateErr:0,poBlank:0,custBlank:0,amtErr:0};
+        Object.keys(stats).forEach(k=>pendingInStats[k]=(pendingInStats[k]||0)+stats[k]);
+      }
+      return;
+    }
+    const ord=parseOrderReferenceAOA(aoa, tag);                                                      // 工作表1 → 交期參考
+    if(ord.length){ pendingOrderRef=pendingOrderRef.concat(ord); return; }
+    all=all.concat(parseAOA(aoa, tag));                                                              // 其他 → 通用
   });
   return all;
 }
@@ -922,6 +1241,7 @@ window.dzSelect=e=>handleFiles([...e.target.files]);
 
 async function handleFiles(files){
   pendingRecs=[]; pendingFiles=[];
+  pendingOrderRef=[]; pendingInStats=null; pendingSummarySheets=[];   // v1.1 重置
   const listEl=document.getElementById('fileList');
   listEl.innerHTML='';
   for(const f of files){
@@ -945,31 +1265,56 @@ async function handleFiles(files){
 }
 function renderPreview(){
   const el=document.getElementById('previewArea');
-  if(!pendingRecs.length){
-    el.innerHTML=`<div class="al al-w">⚠ 未解析出任何記錄。請確認表頭包含 PO / PCS / Style 等欄位。</div>`;
+  const hasInbound = pendingRecs.some(isInbound) || pendingOrderRef.length || pendingSummarySheets.length;
+  if(!pendingRecs.length && !pendingOrderRef.length){
+    el.innerHTML=`<div class="al al-w">⚠ 未解析出任何記錄。請確認表頭包含 PO / PCS / Style 或「入庫日期/數量/產值」等欄位。</div>`;
     return;
   }
-  const pcs=pendingRecs.reduce((s,r)=>s+r.pcs,0);
+  const pcs=pendingRecs.reduce((s,r)=>s+num(r.pcs),0);
+  const usd=pendingRecs.reduce((s,r)=>s+num(r.amount),0);
   const pos=[...new Set(pendingRecs.map(r=>r.po).filter(Boolean))];
+  const custs=[...new Set(pendingRecs.map(r=>r.customer).filter(Boolean))];
+  const dates=pendingRecs.map(r=>r.receiveDate).filter(Boolean).sort();
+  const st=pendingInStats||{};
+  const errLines = hasInbound ? `
+      <div class="preview-lines" style="margin-top:6px">
+        <span class="preview-line" style="background:${st.priceErr?'#fee2e2':'#e0f2fe'};color:${st.priceErr?'#991b1b':'#0369a1'}">單價錯誤 ${st.priceErr||0}</span>
+        <span class="preview-line" style="background:${st.dateErr?'#fee2e2':'#e0f2fe'};color:${st.dateErr?'#991b1b':'#0369a1'}">日期錯誤 ${st.dateErr||0}</span>
+        <span class="preview-line" style="background:${st.poBlank?'#fef3c7':'#e0f2fe'};color:${st.poBlank?'#92400e':'#0369a1'}">PO 空白 ${st.poBlank||0}</span>
+        <span class="preview-line" style="background:${st.custBlank?'#fef3c7':'#e0f2fe'};color:${st.custBlank?'#92400e':'#0369a1'}">客戶空白 ${st.custBlank||0}</span>
+      </div>` : '';
+  const refLine = pendingOrderRef.length ? `<div style="font-size:12px;color:#0369a1;margin-top:4px">📑 工作表1（交期參考）：<b>${fmt(pendingOrderRef.length)}</b> 筆訂單 → 將寫入 PO 交期比對（不計入 FG 庫存）</div>` : '';
+  const sumLine = pendingSummarySheets.length ? `<div style="font-size:12px;color:#6b7a9e;margin-top:4px">📊 Summary 分頁 ${pendingSummarySheets.length} 個 → 僅供驗證，不匯入</div>` : '';
   el.innerHTML=`
     <div class="preview-file">
       ${pendingFiles.map(f=>`<div style="font-size:12px">📄 <b>${escAttr(f.name)}</b> → ${f.count} 筆</div>`).join('')}
       <div class="preview-lines">
         <span class="preview-line">共 ${fmt(pendingRecs.length)} 筆</span>
         <span class="preview-line">${fmt(pcs)} PCS</span>
+        ${usd>0?`<span class="preview-line" style="background:#dcfce7;color:#065f46">$${fmt(Math.round(usd))} USD</span>`:''}
+        <span class="preview-line">${custs.length} 客戶</span>
         <span class="preview-line">${pos.length} PO</span>
-        ${pos.slice(0,8).map(p=>`<span class="preview-line">${escAttr(p)}</span>`).join('')}
+        <span class="preview-line">${dates.length?dates[0]+' ~ '+dates[dates.length-1]:'無日期'}</span>
       </div>
+      ${errLines}${refLine}${sumLine}
     </div>
     <button class="btn btn-y" onclick="confirmImport()">✅ 確認存入（自動去重）</button>
-    <button class="btn btn-g" onclick="pendingRecs=[];document.getElementById('previewArea').innerHTML='';document.getElementById('fileList').innerHTML=''">取消</button>`;
+    <button class="btn btn-g" onclick="pendingRecs=[];pendingOrderRef=[];pendingInStats=null;pendingSummarySheets=[];document.getElementById('previewArea').innerHTML='';document.getElementById('fileList').innerHTML=''">取消</button>`;
 }
 window.confirmImport=async function(){
   const before=FG.length;
   FG=dedupFG(FG.concat(pendingRecs));
   await saveFG();
-  toast(`✅ 已存入 ${fmt(FG.length-before)} 筆（去重後）`,'ok');
-  pendingRecs=[];
+  // v1.1：併入 PO 交期參考（工作表1），以 key 去重（後者覆蓋）
+  if(pendingOrderRef.length){
+    const m=new Map(ORDER_REF.map(r=>[r.key,r]));
+    pendingOrderRef.forEach(r=>m.set(r.key,r));
+    ORDER_REF=[...m.values()];
+    await saveOrderRef();
+  }
+  const refN=pendingOrderRef.length;
+  toast(`✅ 已存入 ${fmt(FG.length-before)} 筆 FG${refN?` · ${fmt(refN)} 筆交期參考`:''}（去重後）`,'ok');
+  pendingRecs=[]; pendingOrderRef=[]; pendingInStats=null; pendingSummarySheets=[];
   document.getElementById('previewArea').innerHTML='';
   document.getElementById('fileList').innerHTML='';
   updateHeader(); renderDashboard(); renderDbCard();
@@ -997,13 +1342,33 @@ window.manualAdd=async function(){
 // ── 匯出 / 匯入 / 清空 ──────────────────────────────────────────────────────
 window.exportXlsx=function(){
   if(!FG.length){ toast(t('noData'),'err'); return; }
-  const rows=FG.map(r=>({Customer:r.customer,PO:r.po,Style:r.styleNo,Color:r.color,Size:r.size,SKU:r.sku,
-    Carton:r.carton,PCS:r.pcs,ReceiveDate:r.receiveDate,PackingDate:r.packingDate,InspectionDate:r.inspectionDate,
-    ShipmentDate:r.shipmentDate,ETD:r.etd,ETA:r.eta,Container:r.containerNo,Warehouse:r.warehouse,Location:r.location,
-    Status:recStatus(r),Remark:r.remark}));
-  const ws=XLSX.utils.json_to_sheet(rows);
+  const col=r=>({Customer:r.customer,PO:r.po,OrderNo:r.orderNo||'',Style:r.styleNo,StyleName:r.styleName||'',
+    GarmentType:r.garmentType||'',Color:r.color,Size:r.size,SKU:r.sku,Carton:r.carton,PCS:r.pcs,
+    UnitPrice:r.unitPrice||'',Amount:r.amount||'',ReceiveDate:r.receiveDate,PackingDate:r.packingDate,
+    InspectionDate:r.inspectionDate,ShipmentDate:r.shipmentDate,DueDate:r.dueDate||'',ETD:r.etd,ETA:r.eta,
+    Container:r.containerNo,Warehouse:r.warehouse,Location:r.location,Status:recStatus(r),Remark:r.remark,Source:r.src||''});
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'FG_Records');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(FG.map(col)),'FG_Records');
+  // 1) 成品入庫明細
+  const inb=inboundRecs();
+  if(inb.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(inb.map(col)),'FG_Inbound_Detail');
+  // 2) 每日入庫彙總
+  const daily=inboundDailyAgg();
+  if(daily.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(
+    daily.map(d=>({Date:d.date,PCS:d.pcs,USD:Math.round(d.usd),Orders:d.orders,POs:d.pos,Styles:d.styles}))),'Daily_Inbound');
+  // 3) 客戶入庫彙總
+  const cust=inboundCustomerAgg();
+  if(cust.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(
+    cust.map(c=>({Customer:c.customer,PCS:c.pcs,USD:Math.round(c.usd),POs:c.pos,Styles:c.styles}))),'Customer_Summary');
+  // 4) PO 交期風險
+  const risk=poRiskRows();
+  if(risk.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(
+    risk.map(r=>({Customer:r.customer,PO:r.po,OrderNo:r.orderNo,Style:r.styleNo,StyleName:r.styleName,Color:r.color,
+      OrderQty:r.orderQty,FGInbound:r.fgIn,Shipment:r.shipQty,Balance:r.balance,DueDate:r.dueDate,DaysLeft:r.daysLeft,Risk:r.riskText}))),'PO_Risk');
+  // 5) 異常勾稽
+  const iss=collectReconIssues();
+  if(iss.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(
+    iss.map(i=>({Severity:i.sev==='e'?'紅 錯誤':i.sev==='w'?'黃 警告':'藍 提示',Type:i.type,Message:i.msg}))),'Recon_Issues');
   XLSX.writeFile(wb,`VRT_FG_Inventory_${TODAY}.xlsx`);
 };
 window.exportJSON=function(){
@@ -1113,6 +1478,43 @@ function currentStage(o){
   return {k:'stageFabric',cls:'bwn'};
 }
 
+/* ── PO 交期比對（order_ref × FG 入庫/出貨），供 PO 追蹤 / Recon / Dashboard 用 ── */
+function inboundByOrderMap(){
+  const m=new Map();
+  inboundRecs().forEach(r=>{ const k=r.orderNo||(cleanField(r.po)+'|'+normStyle(r.styleNo)); if(!m.has(k))m.set(k,[]); m.get(k).push(r); });
+  return m;
+}
+function shipByOrderMap(){
+  const m=new Map();
+  FG.filter(r=>r.shipmentDate).forEach(r=>{ const k=r.orderNo||(cleanField(r.po)+'|'+normStyle(r.styleNo)); if(!m.has(k))m.set(k,[]); m.get(k).push(r); });
+  return m;
+}
+function poRiskRows(){
+  if(!ORDER_REF.length) return [];
+  const inMap=inboundByOrderMap(), shipMap=shipByOrderMap();
+  return ORDER_REF.map(ref=>{
+    const k=ref.orderNo||(cleanField(ref.po)+'|'+normStyle(ref.styleNo));
+    const fgIn=sumPcs(inMap.get(k)||[]);
+    const shipQty=sumPcs(shipMap.get(k)||[]) || num(ref.deliveredQty);   // 若已有出貨紀錄用之，否則參考工作表1已交量
+    const orderQty=num(ref.orderQty);
+    const balance=orderQty-shipQty;
+    const dueDate=ref.dueDate||'';
+    const daysLeft=dueDate?daysBetween(TODAY,dueDate):null;
+    let risk,riskText,cls;
+    if(orderQty>0 && shipQty>=orderQty){ risk='done'; riskText='✅ Completed'; cls='bgy'; }
+    else if(dueDate && dueDate<TODAY){ risk='overdue'; riskText='🚨 Overdue'; cls='bbd'; }
+    else if(orderQty>0 && fgIn===0){ risk='noin'; riskText='🚨 未入庫'; cls='bbd'; }
+    else if(dueDate && daysLeft!=null && daysLeft<=7 && fgIn<orderQty){ risk='short'; riskText='⚠️ FG入庫不足'; cls='bwn'; }
+    else if(orderQty>0 && fgIn>=orderQty && shipQty===0){ risk='notship'; riskText='⚠️ 已入庫未出貨'; cls='bwn'; }
+    else { risk='ok'; riskText='進行中'; cls='bin'; }
+    return {customer:ref.customer,po:ref.po,orderNo:ref.orderNo,styleNo:ref.styleNo,styleName:ref.styleName,color:ref.color,
+      orderQty,fgIn,shipQty,balance,dueDate,daysLeft,risk,riskText,cls};
+  }).sort((a,b)=>{
+    const rank={overdue:0,noin:1,short:2,notship:3,ok:4,done:5};
+    return (rank[a.risk]-rank[b.risk]) || ((a.daysLeft??9999)-(b.daysLeft??9999));
+  });
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    SECTION F — 各分頁 Render
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -1168,7 +1570,7 @@ function renderDashboard(){
   document.getElementById('dashAlerts').innerHTML=alerts.join('');
   document.getElementById('dashMeta').textContent=`資料 ${fmt(FG.length)} 筆 · Cutting 連動 ${fmt(CUT.length)} 筆 · Sewing 連動 ${fmt(SEW.length)} 筆 · ${new Date().toLocaleString()}`;
 
-  renderDashTrend(); renderDashPie(); renderDashAI(flow);
+  renderDashTrend(); renderDashPie(); renderDashAI(flow); renderDashInbound();
 }
 // 近14日 收/出 雙色長條（CSS bars，同 sewing_v5 不引 Chart.js）
 function renderDashTrend(){
@@ -1225,6 +1627,219 @@ function renderDashAI(flow){
   document.getElementById('dashAI').innerHTML=out.join('')||`<div class="al al-ok">✅ 目前無異常訊號。</div>`;
 }
 
+// ── 1b) FG Inbound（成品入庫）彙總與畫面 ─────────────────────────────────────
+// 入庫資料的月份清單（YYYY-MM），新→舊
+function inboundMonths(){
+  return [...new Set(inboundRecs().map(r=>r.receiveDate).filter(Boolean).map(d=>d.slice(0,7)))].sort().reverse();
+}
+// 最新有入庫資料的月份；資料多在上月，避免「本月」空白
+function latestInboundMonth(){ const m=inboundMonths(); return m.length?m[0]:THIS_MONTH; }
+// 依入庫日彙總 PCS/USD/單數/PO數/款式數
+function inboundDailyAgg(list){
+  const src=list||inboundRecs(); const map={};
+  src.forEach(r=>{ if(!r.receiveDate) return;
+    const o=map[r.receiveDate]=map[r.receiveDate]||{date:r.receiveDate,pcs:0,usd:0,_o:new Set(),_p:new Set(),_s:new Set()};
+    o.pcs+=num(r.pcs); o.usd+=num(r.amount);
+    if(r.orderNo)o._o.add(r.orderNo); if(r.po)o._p.add(r.po); if(r.styleNo)o._s.add(r.styleNo);
+  });
+  return Object.values(map).map(o=>({date:o.date,pcs:o.pcs,usd:o.usd,orders:o._o.size,pos:o._p.size,styles:o._s.size}))
+    .sort((a,b)=>a.date<b.date?-1:1);
+}
+// 依客戶彙總
+function inboundCustomerAgg(list){
+  const src=list||inboundRecs(); const map={};
+  src.forEach(r=>{ const c=r.customer||'(未標客戶)';
+    const o=map[c]=map[c]||{customer:c,pcs:0,usd:0,_p:new Set(),_s:new Set()};
+    o.pcs+=num(r.pcs); o.usd+=num(r.amount); if(r.po)o._p.add(r.po); if(r.styleNo)o._s.add(r.styleNo);
+  });
+  return Object.values(map).map(o=>({customer:o.customer,pcs:o.pcs,usd:o.usd,pos:o._p.size,styles:o._s.size}))
+    .sort((a,b)=>b.pcs-a.pcs);
+}
+// 依款式類型彙總
+function inboundGarmentAgg(list){
+  const src=list||inboundRecs(); const map={};
+  src.forEach(r=>{ const g=r.garmentType||'(未分類)';
+    const o=map[g]=map[g]||{type:g,pcs:0,usd:0,_s:new Set()};
+    o.pcs+=num(r.pcs); o.usd+=num(r.amount); if(r.styleNo)o._s.add(r.styleNo);
+  });
+  return Object.values(map).map(o=>({type:o.type,pcs:o.pcs,usd:o.usd,styles:o._s.size}))
+    .sort((a,b)=>b.pcs-a.pcs);
+}
+// Dashboard：本月（最新資料月）成品入庫分析
+function renderDashInbound(){
+  const box=document.getElementById('dashInbound'); if(!box) return;
+  const inb=inboundRecs();
+  if(!inb.length){ box.innerHTML=`<div class="al al-i">ℹ️ 尚未匯入成品入庫明細——請至「📥 上傳資料」拖入「0601_0630 成品入庫明細.xlsx」。</div>`; return; }
+  const mon=latestInboundMonth();
+  const list=inb.filter(r=>r.receiveDate&&r.receiveDate.slice(0,7)===mon);
+  const totPcs=sumPcs(list), totUsd=sumAmt(list);
+  const daily=inboundDailyAgg(list);
+  const days=daily.length, avg=days?Math.round(totPcs/days):0;
+  const maxDay=daily.reduce((a,b)=>b.pcs>(a?a.pcs:-1)?b:a,null);
+  const cust=inboundCustomerAgg(list).slice(0,5);
+  const poMap={}; list.forEach(r=>{ if(r.po) poMap[r.po]=(poMap[r.po]||0)+num(r.pcs); });
+  const topPo=Object.entries(poMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const styMap={}; list.forEach(r=>{ if(r.styleNo) styMap[r.styleNo]=(styMap[r.styleNo]||0)+num(r.pcs); });
+  const topSty=Object.entries(styMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxBar=Math.max(...daily.map(d=>d.pcs),1);
+  // 分析：未出貨大 PO、接近交期入庫不足、資料異常
+  const risks=poRiskRows();
+  const notship=risks.filter(r=>r.risk==='notship').slice(0,5);
+  const shortPo=risks.filter(r=>r.risk==='short'||r.risk==='overdue'||r.risk==='noin').slice(0,5);
+  const priceErr=inb.filter(r=>(r.remark||'').includes('單價公式錯誤')).length;
+  const poBlank=inb.filter(r=>num(r.pcs)>0&&!cleanField(r.po)).length;
+  const lowDays=daily.filter(d=>d.pcs>0&&d.pcs<avg*0.4).map(d=>d.date.slice(5));
+
+  const kpi=
+    kpiCell(totPcs,`${mon} 入庫 PCS`,'#1d4ed8','pcs')+
+    kpiCell('$'+fmt(Math.round(totUsd)),`${mon} 入庫 USD`,'#059669','')+
+    kpiCell(avg,'平均每日 PCS','#0369a1','pcs')+
+    kpiCell(maxDay?maxDay.date.slice(5):'—','最大入庫日',maxDay?'#7c3aed':'#9ca3af','');
+  const bars=`<div style="font-size:10px;color:#6b7a9e;margin:6px 0 2px"><span style="color:#3b82f6">■</span> ${mon} 每日入庫 PCS</div>
+    <div class="bars">${daily.map(d=>`<div style="flex:1;display:flex;align-items:flex-end;height:100%">
+      <div class="bar blue" style="height:${Math.max(d.pcs/maxBar*100,d.pcs?3:0)}%" title="${d.date} ${fmt(d.pcs)} PCS / $${fmt(Math.round(d.usd))}"></div></div>`).join('')}</div>
+    <div class="bar-x">${daily.map(d=>`<div>${d.date.slice(8)}</div>`).join('')}</div>`;
+  const top=(title,arr,fn)=>`<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:3px">${title}</div>
+    ${arr.length?arr.map(fn).join(''):'<div style="font-size:11px;color:#9ca3af">—</div>'}</div>`;
+  const barRow=(label,val,max,color)=>`<div style="display:flex;align-items:center;gap:6px;margin:2px 0">
+    <div style="width:34%;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escAttr(label)}</div>
+    <div style="flex:1;background:#eef1f7;border-radius:3px;height:12px"><div style="width:${Math.round(val/max*100)}%;background:${color};height:100%;border-radius:3px"></div></div>
+    <div class="mono" style="width:64px;text-align:right;font-size:11px">${fmt(val)}</div></div>`;
+  const cMax=Math.max(...cust.map(c=>c.pcs),1), pMax=Math.max(...topPo.map(p=>p[1]),1), sMax=Math.max(...topSty.map(s=>s[1]),1);
+
+  const notes=[];
+  if(cust.length) notes.push(`🏆 入庫最多客戶：<b>${escAttr(cust[0].customer)}</b>（${fmt(cust[0].pcs)} PCS）`);
+  if(lowDays.length) notes.push(`📉 入庫偏低日：${lowDays.slice(0,6).join('、')}${lowDays.length>6?' …':''}`);
+  if(notship.length) notes.push(`⚠️ 已入庫未出貨 PO：${notship.map(r=>escAttr(r.po||r.orderNo)).join('、')}`);
+  if(shortPo.length) notes.push(`🚨 接近交期／入庫不足 PO：${shortPo.map(r=>escAttr(r.po||r.orderNo)).join('、')}`);
+  if(priceErr) notes.push(`❗ 單價公式錯誤：${priceErr} 筆（詳見「🔍 異常勾稽」）`);
+  if(poBlank) notes.push(`❗ PO 空白但有入庫：${poBlank} 筆`);
+  if(!ORDER_REF.length) notes.push(`ℹ️ 尚未匯入「工作表1」訂單參考，交期風險分析待補。`);
+
+  box.innerHTML=`<div id="dashInbKpi" class="kpi-strip" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">${kpi}</div>
+    ${bars}
+    <div class="g2" style="margin-top:8px">
+      <div>${top('Top 5 客戶（PCS）',cust,c=>barRow(c.customer,c.pcs,cMax,'#3b82f6'))}</div>
+      <div>${top('Top 5 PO（PCS）',topPo,p=>barRow(p[0],p[1],pMax,'#10b981'))}</div>
+    </div>
+    ${top('Top 5 款式（PCS）',topSty,s=>barRow(s[0],s[1],sMax,'#8b5cf6'))}
+    <div style="margin-top:10px">${notes.map(n=>`<div class="al al-i" style="margin:3px 0">${n}</div>`).join('')||'<div class="al al-ok">✅ 入庫資料無明顯異常。</div>'}</div>`;
+}
+
+// ── 1c) FG Inbound 分頁 ─────────────────────────────────────────────────────
+let _inbFiltInit=false;
+function populateInbFilters(){
+  const cs=document.getElementById('inbCust'), ts=document.getElementById('inbType');
+  const cCur=cs.value, tCur=ts.value;
+  const custs=[...new Set(inboundRecs().map(r=>r.customer).filter(Boolean))].sort();
+  const types=[...new Set(inboundRecs().map(r=>r.garmentType).filter(Boolean))].sort();
+  cs.innerHTML=`<option value="">全部客戶 All Customers</option>`+custs.map(c=>`<option value="${escAttr(c)}">${escAttr(c)}</option>`).join('');
+  ts.innerHTML=`<option value="">全部類型 All Types</option>`+types.map(g=>`<option value="${escAttr(g)}">${escAttr(g)}</option>`).join('');
+  if(custs.includes(cCur))cs.value=cCur;
+  if(types.includes(tCur))ts.value=tCur;
+}
+window.inbReset=function(){
+  ['inbCust','inbType'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('inbSearch').value='';
+  const inb=inboundRecs().filter(r=>r.receiveDate).map(r=>r.receiveDate).sort();
+  document.getElementById('inbFrom').value=inb.length?inb[0]:'';
+  document.getElementById('inbTo').value=inb.length?inb[inb.length-1]:'';
+  renderInbound();
+};
+function renderInbound(){
+  const inb=inboundRecs();
+  populateInbFilters();
+  // 首次進入：日期預設為資料實際範圍（樣本多為上月，避免空白）
+  const dates=inb.filter(r=>r.receiveDate).map(r=>r.receiveDate).sort();
+  const fEl=document.getElementById('inbFrom'), tEl=document.getElementById('inbTo');
+  if(!_inbFiltInit && dates.length){ fEl.value=dates[0]; tEl.value=dates[dates.length-1]; _inbFiltInit=true; }
+  const from=fEl.value, to=tEl.value;
+  const cust=document.getElementById('inbCust').value;
+  const type=document.getElementById('inbType').value;
+  const q=document.getElementById('inbSearch').value.trim().toUpperCase();
+
+  let list=inb.filter(r=>{
+    if(from && (!r.receiveDate||r.receiveDate<from)) return false;
+    if(to && (!r.receiveDate||r.receiveDate>to)) return false;
+    if(cust && r.customer!==cust) return false;
+    if(type && r.garmentType!==type) return false;
+    if(q){ const hay=((r.po||'')+(r.orderNo||'')+(r.styleNo||'')+(r.styleName||'')+(r.color||'')).toUpperCase(); if(!hay.includes(q)) return false; }
+    return true;
+  });
+
+  const note=document.getElementById('inbMonthNote');
+  if(!inb.length){ note.textContent='尚未匯入成品入庫明細。'; }
+  else { const rng=dates.length?`${dates[0]} ~ ${dates[dates.length-1]}`:'—'; note.textContent=`資料涵蓋範圍：${rng}（共 ${fmt(inb.length)} 筆入庫）· 目前顯示 ${fmt(list.length)} 筆`; }
+
+  const totPcs=sumPcs(list), totUsd=sumAmt(list);
+  const custN=new Set(list.map(r=>r.customer).filter(Boolean)).size;
+  const poN=new Set(list.map(r=>r.po).filter(Boolean)).size;
+  const styN=new Set(list.map(r=>r.styleNo).filter(Boolean)).size;
+  const daily=inboundDailyAgg(list);
+  const avg=daily.length?Math.round(totPcs/daily.length):0;
+  const maxDay=daily.reduce((a,b)=>b.pcs>(a?a.pcs:-1)?b:a,null);
+  document.getElementById('inbKpi').innerHTML=
+    kpiCell(totPcs,'入庫 PCS','#1d4ed8','pcs')+
+    kpiCell('$'+fmt(Math.round(totUsd)),'入庫 USD','#059669','')+
+    kpiCell(list.length,'入庫筆數','#1e2640','')+
+    kpiCell(custN,'客戶數','#0369a1','')+
+    kpiCell(poN,'PO 數','#0369a1','')+
+    kpiCell(styN,'款式數','#7c3aed','')+
+    kpiCell(avg,'平均每日 PCS','#0369a1','pcs')+
+    kpiCell(maxDay?maxDay.date.slice(5):'—','最大入庫日',maxDay?'#7c3aed':'#9ca3af','');
+
+  // 每日統計
+  const dMax=Math.max(...daily.map(d=>d.pcs),1);
+  document.getElementById('inbDaily').innerHTML=daily.length?`<div class="tw"><table><thead><tr>
+    <th>${t('inDate')}</th><th class="r">PCS</th><th class="r">USD</th><th class="r">PO</th><th class="r">${t('styleName')||'Style'}</th><th style="width:34%"></th></tr></thead><tbody>
+    ${daily.slice().reverse().map(d=>`<tr><td class="mono" style="font-weight:700">${d.date}</td>
+      <td class="r mono" style="color:#1d4ed8">${fmt(d.pcs)}</td><td class="r mono" style="color:#059669">$${fmt(Math.round(d.usd))}</td>
+      <td class="r mono">${d.pos}</td><td class="r mono">${d.styles}</td>
+      <td><div style="background:#eef1f7;border-radius:3px;height:12px"><div style="width:${Math.round(d.pcs/dMax*100)}%;background:#3b82f6;height:100%;border-radius:3px"></div></div></td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">${t('noData')}</div>`;
+
+  // 客戶統計
+  const cust2=inboundCustomerAgg(list);
+  document.getElementById('inbCustStat').innerHTML=cust2.length?`<div class="tw"><table><thead><tr>
+    <th>Customer</th><th class="r">PCS</th><th class="r">USD</th><th class="r">PO</th><th class="r">Style</th></tr></thead><tbody>
+    ${cust2.map(c=>`<tr><td>${escAttr(c.customer)}</td><td class="r mono" style="color:#1d4ed8">${fmt(c.pcs)}</td>
+      <td class="r mono" style="color:#059669">$${fmt(Math.round(c.usd))}</td><td class="r mono">${c.pos}</td><td class="r mono">${c.styles}</td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">${t('noData')}</div>`;
+
+  // 款式類型統計
+  const gt=inboundGarmentAgg(list);
+  document.getElementById('inbTypeStat').innerHTML=gt.length?`<div class="tw"><table><thead><tr>
+    <th>${t('gType')}</th><th class="r">PCS</th><th class="r">USD</th><th class="r">Style</th><th class="r">%</th></tr></thead><tbody>
+    ${gt.map(g=>`<tr><td>${escAttr(g.type)}</td><td class="r mono" style="color:#1d4ed8">${fmt(g.pcs)}</td>
+      <td class="r mono" style="color:#059669">$${fmt(Math.round(g.usd))}</td><td class="r mono">${g.styles}</td>
+      <td class="r mono">${totPcs?Math.round(g.pcs/totPcs*100):0}%</td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">${t('noData')}</div>`;
+
+  // 明細表
+  const rows=list.slice().sort((a,b)=>(b.receiveDate||'').localeCompare(a.receiveDate||''));
+  document.getElementById('inbBody').innerHTML=rows.length?rows.map(r=>{
+    const err=(r.remark||'').includes('單價公式錯誤');
+    const noPo=num(r.pcs)>0&&!cleanField(r.po);
+    const badDate=!r.receiveDate;
+    return `<tr>
+      <td class="mono">${escAttr(r.receiveDate)||'<span class="b bbd">日期?</span>'}</td>
+      <td>${escAttr(r.customer)||'-'}</td>
+      <td class="mono">${escAttr(r.orderNo)||'-'}</td>
+      <td class="mono">${escAttr(r.po)||(noPo?'<span class="b bwn">PO?</span>':'-')}</td>
+      <td class="mono">${escAttr(r.styleNo)||'-'}</td>
+      <td>${escAttr(r.styleName)||'-'}</td>
+      <td>${escAttr(r.garmentType)||'-'}</td>
+      <td>${escAttr(r.color)||'-'}</td>
+      <td class="r mono" style="font-weight:700;color:#1d4ed8">${fmt(r.pcs)}</td>
+      <td class="r mono">${err?'<span class="b bbd">#ERR</span>':(r.unitPrice?r.unitPrice:'-')}</td>
+      <td class="r mono" style="color:#059669">${r.amount?'$'+fmt(Math.round(r.amount)):'-'}</td>
+      <td class="mono" style="font-size:11px">${escAttr(r.src)||'-'}</td>
+      <td>${err?'<span class="b bbd">單價錯誤</span>':badDate?'<span class="b bbd">日期錯誤</span>':'<span class="b bok">OK</span>'}</td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="13" class="empty">${t('noData')}</td></tr>`;
+  document.getElementById('inbCount').textContent=`顯示 ${fmt(rows.length)} / 共 ${fmt(inb.length)} 筆入庫明細 · 總 ${fmt(totPcs)} PCS · $${fmt(Math.round(totUsd))}`;
+}
+
 // ── 2) Daily ────────────────────────────────────────────────────────────────
 function allDates(){
   return [...new Set(FG.flatMap(r=>[r.receiveDate,r.shipmentDate]).filter(Boolean))].sort().reverse();
@@ -1251,6 +1866,7 @@ function renderDaily(){
   const rv=FG.filter(r=>r.receiveDate===d), sp=FG.filter(r=>r.shipmentDate===d);
   document.getElementById('dailyKpi').innerHTML=
     kpiCell(rv.reduce((s,r)=>s+r.pcs,0),t('recv')+' PCS','#059669')+
+    kpiCell('$'+fmt(Math.round(rv.reduce((s,r)=>s+num(r.amount),0))),t('recv')+' USD','#059669','')+
     kpiCell(rv.reduce((s,r)=>s+(r.carton||0),0),t('recv')+' CTN','#059669')+
     kpiCell(sp.reduce((s,r)=>s+r.pcs,0),t('ship')+' PCS','#d97706')+
     kpiCell(sp.reduce((s,r)=>s+(r.carton||0),0),t('ship')+' CTN','#d97706')+
@@ -1269,15 +1885,15 @@ function renderDaily(){
 function periodTable(keyFn,labelFn){
   const map={};
   FG.forEach(r=>{
-    if(r.receiveDate){ const k=keyFn(r.receiveDate); (map[k]=map[k]||{rv:0,sp:0,rvC:0,spC:0}).rv+=r.pcs; map[k].rvC+=r.carton||0; }
-    if(r.shipmentDate){ const k=keyFn(r.shipmentDate); (map[k]=map[k]||{rv:0,sp:0,rvC:0,spC:0}).sp+=r.pcs; map[k].spC+=r.carton||0; }
+    if(r.receiveDate){ const k=keyFn(r.receiveDate); (map[k]=map[k]||{rv:0,sp:0,rvC:0,spC:0,usd:0}).rv+=r.pcs; map[k].rvC+=r.carton||0; map[k].usd+=num(r.amount); }
+    if(r.shipmentDate){ const k=keyFn(r.shipmentDate); (map[k]=map[k]||{rv:0,sp:0,rvC:0,spC:0,usd:0}).sp+=r.pcs; map[k].spC+=r.carton||0; }
   });
   const keys=Object.keys(map).sort().reverse();
   if(!keys.length) return `<div class="empty">${t('noData')}</div>`;
-  return `<div class="tw"><table><thead><tr><th>Period</th><th class="r">${t('recv')} PCS</th><th class="r">${t('recv')} CTN</th>
+  return `<div class="tw"><table><thead><tr><th>Period</th><th class="r">${t('recv')} PCS</th><th class="r">${t('recv')} USD</th><th class="r">${t('recv')} CTN</th>
     <th class="r">${t('ship')} PCS</th><th class="r">${t('ship')} CTN</th><th class="r" data-zh="淨變動" data-en="Net">淨變動</th></tr></thead><tbody>
     ${keys.map(k=>{const o=map[k];const net=o.rv-o.sp;return `<tr><td class="mono" style="font-weight:700">${labelFn(k)}</td>
-      <td class="r mono" style="color:#059669">${fmt(o.rv)}</td><td class="r mono">${fmt(o.rvC)}</td>
+      <td class="r mono" style="color:#059669">${fmt(o.rv)}</td><td class="r mono" style="color:#059669">$${fmt(Math.round(o.usd))}</td><td class="r mono">${fmt(o.rvC)}</td>
       <td class="r mono" style="color:#d97706">${fmt(o.sp)}</td><td class="r mono">${fmt(o.spC)}</td>
       <td class="r mono" style="font-weight:700;color:${net>=0?'#1d4ed8':'#dc2626'}">${net>=0?'+':''}${fmt(net)}</td></tr>`;}).join('')}
     </tbody></table></div>`;
@@ -1424,7 +2040,32 @@ function renderPO(){
   if(sort==='fg') list.sort((a,b)=>b[1].fg-a[1].fg);
   else if(sort==='po') list.sort((a,b)=>a[0].localeCompare(b[0]));
   else list.sort((a,b)=>(a[1].ordered?a[1].ship/a[1].ordered:0)-(b[1].ordered?b[1].ship/b[1].ordered:0));
-  document.getElementById('poWrap').innerHTML=`<div class="g2">`+list.map(([po,o])=>{
+  // ── 交期風險表（需工作表1訂單參考）──────────────────────────
+  let riskHtml='';
+  const risks=poRiskRows();
+  if(risks.length){
+    riskHtml=`<div class="card" style="margin-bottom:12px">
+      <div class="ct" data-zh="🚦 交期風險 / PO Delivery Risk" data-en="🚦 PO Delivery Risk" data-km="🚦 ហានិភ័យកាលកំណត់">🚦 交期風險 / PO Delivery Risk</div>
+      <div class="tw"><table><thead><tr>
+        <th>Customer</th><th>PO</th><th data-zh="自編單號" data-en="Order No">自編單號</th><th>Style</th>
+        <th data-zh="款式名稱" data-en="Style Name">款式名稱</th><th>Color</th>
+        <th class="r" data-zh="訂單量" data-en="Order Qty">訂單量</th><th class="r">FG 入庫</th><th class="r" data-zh="出貨" data-en="Ship">出貨</th>
+        <th class="r" data-zh="未交" data-en="Balance">未交</th><th data-zh="交期" data-en="Due Date">交期</th><th class="r" data-zh="剩餘天" data-en="Days">剩餘天</th>
+        <th data-zh="風險" data-en="Risk">風險</th></tr></thead><tbody>
+      ${risks.map(r=>`<tr>
+        <td>${escAttr(r.customer)||'-'}</td><td class="mono">${escAttr(r.po)||'-'}</td><td class="mono">${escAttr(r.orderNo)||'-'}</td>
+        <td class="mono">${escAttr(r.styleNo)||'-'}</td><td>${escAttr(r.styleName)||'-'}</td><td>${escAttr(r.color)||'-'}</td>
+        <td class="r mono">${fmt(r.orderQty)}</td><td class="r mono" style="color:#10b981;font-weight:700">${fmt(r.fgIn)}</td>
+        <td class="r mono" style="color:#f59e0b">${fmt(r.shipQty)}</td>
+        <td class="r mono" style="color:${r.balance>0?'#dc2626':'#059669'}">${fmt(r.balance)}</td>
+        <td class="mono" style="font-size:11px">${escAttr(r.dueDate)||'-'}</td>
+        <td class="r mono" style="${r.daysLeft!=null&&r.daysLeft<=7?'color:#dc2626;font-weight:700':''}">${r.daysLeft!=null?r.daysLeft:'-'}</td>
+        <td><span class="b ${r.cls}">${r.riskText}</span></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  } else {
+    riskHtml=`<div class="al al-i" style="margin-bottom:12px">ℹ️ 交期風險分析需要訂單資料——請於「📥 上傳資料」一併匯入「工作表1」（訂單/結案）分頁，即可比對訂單量、交期與 FG 入庫。以下為製程流程進度。</div>`;
+  }
+  document.getElementById('poWrap').innerHTML=riskHtml+`<div class="g2">`+list.map(([po,o])=>{
     const bal=o.fg-o.ship;
     return `<div class="card" style="margin-bottom:0">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -1438,8 +2079,8 @@ function renderPO(){
       ${flowBar('FG',o.fg,o.ordered,'#10b981')}
       ${flowBar('Ship',o.ship,o.ordered,'#f59e0b')}
     </div>`;
-  }).join('')+`</div>`||`<div class="empty">${t('noData')}</div>`;
-  if(!list.length) document.getElementById('poWrap').innerHTML=`<div class="empty">${t('noData')}——匯入 FG 資料或確認 Cutting/Sewing 資料庫存在後重試</div>`;
+  }).join('')+`</div>`;
+  if(!list.length) document.getElementById('poWrap').innerHTML=riskHtml+`<div class="empty">${t('noData')}——匯入 FG 資料或確認 Cutting/Sewing 資料庫存在後重試</div>`;
 }
 
 // ── 9) Style Tracking ───────────────────────────────────────────────────────
@@ -1541,7 +2182,8 @@ function renderBalance(){
 }
 
 // ── 13) Reconciliation ──────────────────────────────────────────────────────
-function renderRecon(){
+// 蒐集所有異常項目（供 renderRecon 顯示 & exportXlsx 匯出共用）
+function collectReconIssues(){
   const flow=buildFlow(); const issues=[];
   const add=(sev,type,msg)=>issues.push({sev,type,msg}); // sev: e=紅 w=黃 i=藍
   flow.po.forEach((o,po)=>{
@@ -1559,20 +2201,56 @@ function renderRecon(){
     if(seen.has(k)) add('e','重覆 Carton',`${r.po} ${r.styleNo} CTN:${r.carton}（${r.receiveDate}）疑似重覆入帳`);
     else seen.set(k,1);
   });
-  // Missing 欄位
+  // ── 成品入庫專屬檢查 ──────────────────────────────────
+  const inb=inboundRecs();
+  let priceErr=0,amtErr=0,poBlank=0,dateErr=0,custBlank=0;
+  inb.forEach(r=>{
+    if((r.remark||'').includes('單價公式錯誤')) priceErr++;
+    // 產值錯誤：amount 與 pcs×unitPrice 差異 >1%
+    if(num(r.amount)>0&&num(r.unitPrice)>0){
+      const calc=num(r.pcs)*num(r.unitPrice);
+      if(calc>0&&Math.abs(num(r.amount)-calc)/num(r.amount)>0.01) amtErr++;
+    }
+    if(num(r.pcs)>0&&!cleanField(r.po)) poBlank++;
+    if(!r.receiveDate) dateErr++;
+    if(num(r.pcs)>0&&!cleanField(r.customer)) custBlank++;
+  });
+  if(priceErr) add('e','單價公式錯誤',`${fmt(priceErr)} 筆入庫的單價為 #NAME? / 公式錯誤，已存為 0，請於來源 Excel 修正`);
+  if(amtErr)   add('w','產值錯誤',`${fmt(amtErr)} 筆產值與「數量 × 單價」差異超過 1%，請核對`);
+  if(poBlank)  add('w','PO 空白',`${fmt(poBlank)} 筆有入庫數量但 PO 空白`);
+  if(dateErr)  add('e','入庫日期錯誤',`${fmt(dateErr)} 筆入庫日期無法轉換`);
+  if(custBlank)add('w','客戶空白',`${fmt(custBlank)} 筆有入庫數量但客戶空白`);
+  // 同 PO 多款式（資訊）
+  const poStyles=new Map();
+  inb.forEach(r=>{ if(!cleanField(r.po))return; if(!poStyles.has(r.po))poStyles.set(r.po,new Set()); poStyles.get(r.po).add(r.styleNo||''); });
+  const multi=[...poStyles.entries()].filter(([,s])=>s.size>1);
+  if(multi.length) add('i','同 PO 多款式',`${fmt(multi.length)} 個 PO 含多個款式（如 ${multi.slice(0,5).map(([p])=>p).join('、')}）——非必為錯誤，請留意`);
+  // 訂單比對（需工作表1）：入庫超過訂單量 / 接近交期入庫不足
+  if(ORDER_REF.length){
+    const risks=poRiskRows();
+    risks.forEach(r=>{
+      if(r.orderQty>0&&r.fgIn>r.orderQty) add('w','入庫超過訂單量',`${r.po||r.orderNo}：入庫 ${fmt(r.fgIn)} > 訂單 ${fmt(r.orderQty)}`);
+      if(r.risk==='short') add('e','接近交期入庫不足',`${r.po||r.orderNo}：交期 ${r.dueDate}（剩 ${r.daysLeft} 天），入庫 ${fmt(r.fgIn)} < 訂單 ${fmt(r.orderQty)}`);
+    });
+  }
+  // Missing 欄位（僅針對整體 FG，不含入庫已列者）
   const miss=(field,label)=>{
     const n=FG.filter(r=>!r[field]).length;
     if(n) add('w','Missing '+label,`${fmt(n)} 筆記錄缺 ${label}`);
   };
-  miss('sku','SKU'); miss('color','Color'); miss('size','Size'); miss('po','PO'); miss('styleNo','Style');
+  miss('sku','SKU'); miss('color','Color'); miss('size','Size'); miss('styleNo','Style');
   // 數量異常（單筆超大 / 每箱件數異常）
   FG.forEach(r=>{
     if(r.pcs>50000) add('w','數量異常',`${r.po||'(無PO)'} ${r.styleNo||''} 單筆 ${fmt(r.pcs)} PCS，請確認非合計列`);
     if(r.carton>0&&r.pcs/r.carton>500) add('w','數量異常',`${r.po||'(無PO)'} 每箱 ${Math.round(r.pcs/r.carton)} pcs/ctn 偏高`);
   });
-  const CLS={e:'al-e',w:'al-w',i:'al-i'};
   const order={e:0,w:1,i:2};
   issues.sort((a,b)=>order[a.sev]-order[b.sev]);
+  return issues;
+}
+function renderRecon(){
+  const issues=collectReconIssues();
+  const CLS={e:'al-e',w:'al-w',i:'al-i'};
   document.getElementById('reconWrap').innerHTML=
     (issues.length?`<div class="al ${issues.some(i=>i.sev==='e')?'al-e':'al-w'}">共發現 <b>${issues.length}</b> 項需勾稽項目（🔴 ${issues.filter(i=>i.sev==='e').length}　🟡 ${issues.filter(i=>i.sev==='w').length}　🔵 ${issues.filter(i=>i.sev==='i').length}）</div>`:'')+
     (issues.map(i=>`<div class="al ${CLS[i.sev]}"><b>[${i.type}]</b> ${i.msg}</div>`).join('')
@@ -1634,6 +2312,7 @@ function renderRecs(){
 window._rendered=false;
 function reRenderCurrent(name){
   if(name==='dashboard') renderDashboard();
+  if(name==='inbound') renderInbound();
   if(name==='daily'){ populateDailySel(); renderDaily(); }
   if(name==='weekly') renderWeekly();
   if(name==='monthly') renderMonthly();
@@ -1691,6 +2370,29 @@ window.tgSendDaily=async function(){
   if(!token||!chat){ toast('請先填入 Bot Token 與 Chat ID','err'); return; }
   const rv=FG.filter(r=>r.receiveDate===TODAY), sp=FG.filter(r=>r.shipmentDate===TODAY);
   const bal=unshipped().reduce((s,r)=>s+r.pcs,0);
+  // 入庫摘要：今日若無入庫，改用最近一個有入庫的日期並標註
+  const inb=inboundRecs();
+  let inDate=TODAY, inList=inb.filter(r=>r.receiveDate===TODAY), fallback=false;
+  if(!inList.length && inb.length){
+    const ds=[...new Set(inb.map(r=>r.receiveDate).filter(Boolean))].sort();
+    inDate=ds[ds.length-1]; inList=inb.filter(r=>r.receiveDate===inDate); fallback=true;
+  }
+  const inPcs=sumPcs(inList), inUsd=sumAmt(inList);
+  const inCust=[...new Set(inList.map(r=>r.customer).filter(Boolean))];
+  const inPo=[...new Set(inList.map(r=>r.po).filter(Boolean))];
+  const topCust=inboundCustomerAgg(inList).slice(0,5);
+  const reconN=collectReconIssues().filter(i=>i.sev==='e').length;
+  const riskN=poRiskRows().filter(r=>r.risk==='overdue'||r.risk==='noin'||r.risk==='short').length;
+  let inboundBlock='';
+  if(inb.length){
+    inboundBlock=`\n━━━━━━━━━━━━━━\n`+
+      `📥 <b>成品入庫${fallback?'（最近：'+escapeHtml(inDate)+'）':''}</b>\n`+
+      `　PCS：<b>${fmt(inPcs)}</b>　USD：<b>$${fmt(Math.round(inUsd))}</b>\n`+
+      `　客戶 ${inCust.length}　PO ${inPo.length}\n`+
+      (topCust.length?`　Top客戶：${topCust.map(c=>escapeHtml(c.customer)+' '+fmt(c.pcs)).join('、')}\n`:'')+
+      (reconN?`⚠️ 入庫異常（單價/日期）：<b>${reconN}</b> 筆\n`:'')+
+      (riskN?`🚦 交期風險 PO：<b>${riskN}</b> 張\n`:'');
+  }
   const msg=
     `📦 <b>VRT FG 每日摘要</b> ${escapeHtml(TODAY)}\n`+
     `━━━━━━━━━━━━━━\n`+
@@ -1698,6 +2400,7 @@ window.tgSendDaily=async function(){
     `🚢 今日出貨：<b>${fmt(sp.reduce((s,r)=>s+r.pcs,0))}</b> pcs / ${fmt(sp.reduce((s,r)=>s+(r.carton||0),0))} ctn\n`+
     `📊 FG 庫存餘量：<b>${fmt(bal)}</b> pcs\n`+
     `⏳ 庫齡&gt;30天：<b>${fmt(unshipped().filter(r=>agingDays(r)>30).reduce((s,r)=>s+r.pcs,0))}</b> pcs\n`+
+    inboundBlock+
     (sp.length?`\n🚢 出貨明細：\n${[...new Set(sp.map(r=>`· ${escapeHtml(r.po)} ${escapeHtml(r.styleNo)} ${fmt(r.pcs)}pcs`))].slice(0,10).join('\n')}`:'');
   const el=document.getElementById('tgStatus');
   el.textContent='發送中…';
@@ -1844,6 +2547,7 @@ window.tgSendDaily=async function(){
 ═══════════════════════════════════════════════════════════════════════════ */
 (async function init(){
   await loadFG();                 // 1. 本系統 IDB
+  await loadOrderRef();           // 1b. 訂單參考（工作表1）
   await loadExternal();           // 2. Cutting / Sewing 只讀連動
   // 3. 還原 Telegram 設定
   document.getElementById('tgToken').value=localStorage.getItem('vrt_fg_tg_token')||'';
