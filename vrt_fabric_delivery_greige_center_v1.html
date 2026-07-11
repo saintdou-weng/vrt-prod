@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<!-- VRT Fabric Delivery & Greige Inventory Summary Center v1
+     VRT 布料交期與胚布庫存分析中心
+     家族一致風格：底 #eef1f7 / header #1e2640→#2d3658 / amber #f59e0b
+     慣例：GAS POST text/plain;charset=utf-8｜日期一律本地時區 getters｜Telegram parse_mode HTML + escapeHtml｜SheetJS cellDates:false,raw:true｜onclick 全部 window-scoped -->
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT Fabric Delivery & Greige Inventory Summary Center</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",sans-serif;background:#eef1f7;color:#1e2640;font-size:13px;-webkit-text-size-adjust:100%}
+.header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:11px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:40}
+.logo{width:36px;height:36px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:0 2px 8px rgba(245,158,11,.35)}
+.h-title{color:#fff;font-size:15px;font-weight:700}.h-title b{color:#fbbf24}
+.h-sub{font-size:10.5px;color:#8b95b8;margin-top:1px}
+.hgrow{flex:1}
+.hstat{text-align:right;padding:0 4px}
+.hstat-v{font-size:15px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace;line-height:1}
+.hstat-l{font-size:9px;color:#8b95b8;margin-top:2px}
+.hicons{display:flex;gap:5px;flex-wrap:wrap}
+.hicon{min-width:31px;height:31px;padding:0 6px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);border-radius:7px;cursor:pointer;font-size:14px;transition:.15s;color:#dfe4f0}
+.hicon:hover{background:rgba(245,158,11,.25);border-color:#f59e0b}
+.hicon.on{background:#f59e0b;color:#1c1200;border-color:#f59e0b;font-weight:700}
+.tabbar{background:#263049;padding:6px 14px;display:flex;gap:4px;flex-wrap:wrap;position:sticky;top:58px;z-index:39;border-bottom:1px solid #0d1424}
+.tabbar button{background:transparent;border:1px solid transparent;color:#c4cbe0;padding:6px 11px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.tabbar button.on{background:#f59e0b;color:#1c1200}
+.tabbar button:hover:not(.on){background:rgba(255,255,255,.08)}
+.wrap{padding:14px;max-width:1500px;margin:0 auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.card{background:#fff;border-radius:11px;padding:12px 13px;box-shadow:0 1px 4px rgba(30,38,64,.08);border-left:4px solid #cbd2e4;cursor:default}
+.card .cv{font-size:20px;font-weight:800;font-family:ui-monospace,monospace;line-height:1.1}
+.card .cl{font-size:10.5px;color:#6b7594;margin-top:4px;font-weight:600}
+.card .cs{font-size:10px;color:#98a1bd;margin-top:2px}
+.card.ok{border-left-color:#10b981}.card.ok .cv{color:#059669}
+.card.warn{border-left-color:#f59e0b}.card.warn .cv{color:#d97706}
+.card.bad{border-left-color:#ef4444}.card.bad .cv{color:#dc2626}
+.card.na{border-left-color:#94a3b8}.card.na .cv{color:#64748b}
+.card.info{border-left-color:#3b82f6}.card.info .cv{color:#2563eb}
+.panel{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(30,38,64,.08);padding:14px;margin-bottom:14px}
+.panel h3{font-size:13.5px;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.panel h3 .tag{font-size:10px;background:#eef1f7;color:#6b7594;border-radius:5px;padding:2px 7px;font-weight:600}
+.fbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.fbar input,.fbar select{border:1px solid #d5dbea;border-radius:7px;padding:6px 9px;font-size:12px;font-family:inherit;background:#f8fafd;color:#1e2640}
+.fbar input:focus,.fbar select:focus{outline:none;border-color:#f59e0b}
+.fbar .grow{flex:1}
+.btn{border:0;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn.amber{background:#f59e0b;color:#1c1200}.btn.amber:hover{background:#d97706}
+.btn.navy{background:#1e2640;color:#fff}.btn.navy:hover{background:#2d3658}
+.btn.line{background:#fff;border:1px solid #d5dbea;color:#1e2640}.btn.line:hover{border-color:#f59e0b}
+.btn.red{background:#ef4444;color:#fff}
+.btn.green{background:#10b981;color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.tblwrap{overflow-x:auto;border:1px solid #e4e8f2;border-radius:9px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{background:#f4f6fb;color:#4a5578;text-align:left;padding:7px 9px;font-size:11px;white-space:nowrap;border-bottom:1px solid #e4e8f2;position:sticky;top:0;cursor:pointer;user-select:none}
+th:hover{color:#d97706}
+td{padding:6px 9px;border-bottom:1px solid #eef1f7;white-space:nowrap;vertical-align:top}
+tr:hover td{background:#fbf7ee}
+td.num{text-align:right;font-family:ui-monospace,monospace}
+th.num{text-align:right}
+.pill{display:inline-block;border-radius:20px;padding:2px 9px;font-size:10.5px;font-weight:700}
+.pill.low{background:#d1fae5;color:#047857}
+.pill.med{background:#fef3c7;color:#b45309}
+.pill.high{background:#fee2e2;color:#b91c1c}
+.pill.crit{background:#1e2640;color:#fca5a5}
+.pill.na{background:#e2e8f0;color:#475569}
+.pill.grs{background:#ede9fe;color:#6d28d9}
+.pill.ld{background:#ffedd5;color:#c2410c}
+.diff-add{background:#d1fae5}.diff-del{background:#fee2e2}.diff-chg{background:#fef3c7}
+.chgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.chbox{background:#fff;border:1px solid #e4e8f2;border-radius:10px;padding:12px;min-height:250px}
+.chbox h4{font-size:12px;color:#4a5578;margin-bottom:8px}
+.chbox canvas{max-height:240px}
+.modal{position:fixed;inset:0;background:rgba(20,26,48,.55);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:24px 12px;overflow:auto}
+.modal.on{display:flex}
+.mbox{background:#fff;border-radius:13px;max-width:1100px;width:100%;padding:16px;box-shadow:0 12px 44px rgba(0,0,0,.3)}
+.mbox h3{font-size:14px;margin-bottom:10px}
+.mbox textarea{width:100%;min-height:150px;border:1px solid #d5dbea;border-radius:8px;padding:9px;font-family:ui-monospace,monospace;font-size:11.5px;background:#f8fafd}
+.mbox label{font-size:11.5px;color:#4a5578;font-weight:600;display:block;margin:9px 0 4px}
+.mbox input[type=text],.mbox input[type=number],.mbox input[type=password],.mbox select{width:100%;border:1px solid #d5dbea;border-radius:7px;padding:7px 9px;font-size:12px;font-family:inherit;background:#f8fafd}
+.mrow{display:flex;gap:9px;flex-wrap:wrap}.mrow>div{flex:1;min-width:140px}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:13px;flex-wrap:wrap}
+td[contenteditable]{background:#fffbea;outline:1px dashed #f0d48a}
+td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
+.hint{font-size:11px;color:#8b95b8;margin:6px 0}
+.err{color:#b91c1c;font-size:11px}
+.okc{color:#047857}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1e2640;color:#fff;border-radius:9px;padding:10px 18px;font-size:12.5px;z-index:200;display:none;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#6b7594;margin:8px 0}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+.subtabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.subtabs button{background:#eef1f7;border:0;border-radius:7px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:#4a5578;font-family:inherit}
+.subtabs button.on{background:#1e2640;color:#fbbf24}
+@media(max-width:640px){.h-sub{display:none}.hstat{display:none}.wrap{padding:9px}.card .cv{font-size:17px}}
+@media print{.header,.tabbar,.fbar,.btn,.hicons{display:none!important}body{background:#fff}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">🧵</div>
+  <div>
+    <div class="h-title">VRT <b>Fabric Delivery & Greige Inventory</b> Summary Center</div>
+    <div class="h-sub" id="hSub">布料交期與胚布庫存分析中心 · Fabric Material Control Center</div>
+  </div>
+  <div class="hgrow"></div>
+  <div class="hstat"><div class="hstat-v" id="hsDemand">-</div><div class="hstat-l" data-i18n="totalDemand">總需求 yds</div></div>
+  <div class="hstat"><div class="hstat-v" id="hsStock">-</div><div class="hstat-l" data-i18n="greigeStock">胚布庫存 yds</div></div>
+  <div class="hstat"><div class="hstat-v" id="hsRisk" style="color:#fca5a5">-</div><div class="hstat-l" data-i18n="highRisk">高風險項</div></div>
+  <div class="hicons">
+    <div class="hicon" title="Import PDF" onclick="openImport('pdf')">📥</div>
+    <div class="hicon" title="Import Excel / CSV" onclick="openImport('excel')">📗</div>
+    <div class="hicon" title="Paste data 手動貼上" onclick="openImport('paste')">📋</div>
+    <div class="hicon" title="Export Excel" onclick="exportExcel()">📤</div>
+    <div class="hicon" title="Export PDF Summary" onclick="exportPDF()">📄</div>
+    <div class="hicon" title="Upload to Cloud" onclick="gasUpload()">☁️</div>
+    <div class="hicon" title="Download from Cloud" onclick="gasDownload()">⬇️</div>
+    <div class="hicon" title="Save Local 儲存" onclick="saveLocal(true)">💾</div>
+    <div class="hicon" title="Compare Version" onclick="showTab('version')">🔄</div>
+    <div class="hicon" title="Telegram Summary" onclick="sendTG()">📲</div>
+    <div class="hicon" title="Settings" onclick="showTab('settings')">⚙️</div>
+    <div class="hicon" id="langBtn" title="Language" onclick="cycleLang()">中</div>
+  </div>
+</div>
+
+<div class="tabbar" id="tabbar">
+  <button data-tab="dash" class="on" onclick="showTab('dash')" data-i18n="tabDash">📊 Dashboard</button>
+  <button data-tab="orders" onclick="showTab('orders')" data-i18n="tabOrders">📦 訂單需求</button>
+  <button data-tab="byship" onclick="showTab('byship')" data-i18n="tabByShip">🗓️ 依交期</button>
+  <button data-tab="byfabric" onclick="showTab('byfabric')" data-i18n="tabByFabric">🧵 依布種</button>
+  <button data-tab="greige" onclick="showTab('greige')" data-i18n="tabGreige">🏭 胚布庫存</button>
+  <button data-tab="tachiang" onclick="showTab('tachiang')" data-i18n="tabTC">🚢 大江交期</button>
+  <button data-tab="outsource" onclick="showTab('outsource')" data-i18n="tabOS">🌐 外購交期</button>
+  <button data-tab="risk" onclick="showTab('risk')" data-i18n="tabRisk">⚠️ 風險分析</button>
+  <button data-tab="version" onclick="showTab('version')" data-i18n="tabVer">🔄 版本比較</button>
+  <button data-tab="mapping" onclick="showTab('mapping')" data-i18n="tabMap">🔗 布種對應</button>
+  <button data-tab="settings" onclick="showTab('settings')" data-i18n="tabSet">⚙️ 系統設定</button>
+</div>
+
+<div class="wrap">
+  <div id="pg-dash"></div>
+  <div id="pg-orders" style="display:none"></div>
+  <div id="pg-byship" style="display:none"></div>
+  <div id="pg-byfabric" style="display:none"></div>
+  <div id="pg-greige" style="display:none"></div>
+  <div id="pg-tachiang" style="display:none"></div>
+  <div id="pg-outsource" style="display:none"></div>
+  <div id="pg-risk" style="display:none"></div>
+  <div id="pg-version" style="display:none"></div>
+  <div id="pg-mapping" style="display:none"></div>
+  <div id="pg-settings" style="display:none"></div>
+</div>
+
+<!-- Import modal -->
+<div class="modal" id="mImport"><div class="mbox">
+  <h3 id="mImpTitle">📥 Import</h3>
+  <div class="mrow">
+    <div><label data-i18n="impType">資料類型 Data Type</label>
+      <select id="impType">
+        <option value="orders">訂單需求 Order Demand (PDF/貼上)</option>
+        <option value="tachiang">大江交期 Ta Chiang Leadtime</option>
+        <option value="outsource">外購交期 Out Source Leadtime</option>
+        <option value="greige">胚布庫存 Greige Inventory (Excel)</option>
+      </select></div>
+    <div><label data-i18n="impFile">選擇檔案 File</label><input type="file" id="impFile" accept=".pdf,.xlsx,.xls,.csv,.txt"></div>
+  </div>
+  <label data-i18n="impRaw">原始文字 / 手動校正區（可直接修改後重新解析）</label>
+  <textarea id="impRaw" placeholder="PDF 解析後的原始文字會顯示在這裡，可手動修正錯誤行；或直接貼上表格資料（Tab / 逗號分隔）"></textarea>
+  <div class="mfoot">
+    <button class="btn line" onclick="closeModal('mImport')" data-i18n="cancel">取消</button>
+    <button class="btn navy" onclick="reparseRaw()" data-i18n="parse">🔍 解析 Parse</button>
+  </div>
+  <div id="impPrevWrap" style="display:none">
+    <label data-i18n="impPrev">解析預覽（黃底欄位可直接點擊修改；確認無誤才會合併進主資料）</label>
+    <div class="tblwrap" style="max-height:320px;overflow:auto" id="impPrevTbl"></div>
+    <div id="impErrs" class="err" style="margin-top:6px"></div>
+    <div class="mrow" style="margin-top:9px">
+      <div><label data-i18n="mergeMode">合併方式 Merge Mode</label>
+        <select id="mergeMode"><option value="replace">取代全部（保留舊版本快照）Replace</option><option value="append">附加 Append</option></select></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn green" onclick="confirmMerge()" data-i18n="mergeBtn">✅ 確認合併 Merge into Master</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Edit row modal -->
+<div class="modal" id="mEdit"><div class="mbox" style="max-width:560px">
+  <h3 id="mEditTitle">✏️ Edit</h3>
+  <div id="mEditBody"></div>
+  <div class="mfoot">
+    <button class="btn line" onclick="closeModal('mEdit')" data-i18n="cancel">取消</button>
+    <button class="btn red" id="mEditDel" onclick="editDelete()">🗑️ 刪除</button>
+    <button class="btn green" onclick="editSave()" data-i18n="save">💾 儲存</button>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<script>
+/* ================= i18n ================= */
+const L={
+zh:{totalDemand:"總需求 yds",greigeStock:"胚布庫存 yds",highRisk:"高風險項",tabDash:"📊 儀表板",tabOrders:"📦 訂單需求",tabByShip:"🗓️ 依交期",tabByFabric:"🧵 依布種",tabGreige:"🏭 胚布庫存",tabTC:"🚢 大江交期",tabOS:"🌐 外購交期",tabRisk:"⚠️ 風險分析",tabVer:"🔄 版本比較",tabMap:"🔗 布種對應",tabSet:"⚙️ 系統設定",
+cTotal:"總訂單碼數",cJul:"7月需求",cAug:"8月需求",cSep:"9月需求",cGreige:"胚布總庫存",cMatched:"已匹配庫存",cShort:"缺料風險項",cDelay:"交期風險項",cLD:"待色樣核可",cGRS:"GRS 待確認",cUnmatch:"未匹配布種",
+search:"搜尋…",allMonth:"全部月份",allRisk:"全部風險",allPO:"全部 PO",allOZ:"全部布重",allWidth:"全部布寬",allColor:"全部顏色",exportCur:"📤 匯出目前篩選",
+shipDate:"交期",totalQty:"總碼數",poCount:"PO 數",fabricCount:"布種數",maxFabric:"最大布種",risk:"風險",
+demand:"需求量",stock:"胚布庫存",balance:"庫存餘量",shortage:"缺口",coverage:"覆蓋率",supplier:"供應來源",leadtime:"Leadtime",estReady:"預估完成",estArrival:"預估到廠",action:"建議行動",
+riskLow:"正常",riskMed:"注意",riskHigh:"高風險",riskCrit:"重大",riskNA:"待確認",
+cancel:"取消",save:"儲存",parse:"🔍 解析",mergeBtn:"✅ 確認合併",
+verNew:"新增 PO",verDel:"取消 PO",verUp:"數量增加",verDown:"數量減少",verEarly:"交期提前",verLate:"交期延後",verShortNew:"新增缺料",verShortFix:"缺料解除",verGUp:"胚布增加",verGDown:"胚布減少",
+noData:"目前沒有資料，請由右上角匯入 PDF / Excel。",unmatchedHint:"以下布種無法自動匹配胚布，請手動建立對應（別名）：",
+tgOK:"Telegram 已送出",tgFail:"Telegram 送出失敗",gasOK:"雲端同步完成",gasFail:"雲端同步失敗，請檢查設定",saved:"已儲存",needCfg:"請先到 ⚙️ 系統設定填入設定"},
+en:{totalDemand:"Total Demand yds",greigeStock:"Greige Stock yds",highRisk:"High Risk",tabDash:"📊 Dashboard",tabOrders:"📦 Order Demand",tabByShip:"🗓️ By Ship Date",tabByFabric:"🧵 By Fabric",tabGreige:"🏭 Greige Inventory",tabTC:"🚢 Ta Chiang LT",tabOS:"🌐 Out Source LT",tabRisk:"⚠️ Risk Analysis",tabVer:"🔄 Version Compare",tabMap:"🔗 Fabric Mapping",tabSet:"⚙️ Settings",
+cTotal:"Total Order Qty",cJul:"July Demand",cAug:"August Demand",cSep:"September Demand",cGreige:"Greige Stock Total",cMatched:"Matched Stock",cShort:"Shortage Risk",cDelay:"Delay Risk",cLD:"Need LD Approval",cGRS:"GRS Pending",cUnmatch:"Unmatched Fabric",
+search:"Search…",allMonth:"All Months",allRisk:"All Risk",allPO:"All PO",allOZ:"All OZ",allWidth:"All Width",allColor:"All Colors",exportCur:"📤 Export Filtered",
+shipDate:"Ship Date",totalQty:"Total Qty",poCount:"PO Count",fabricCount:"Fabric Count",maxFabric:"Top Fabric",risk:"Risk",
+demand:"Demand",stock:"Greige Stock",balance:"Balance",shortage:"Shortage",coverage:"Coverage",supplier:"Supplier",leadtime:"Leadtime",estReady:"Est. Ready",estArrival:"Est. Arrival",action:"Action Needed",
+riskLow:"Low",riskMed:"Medium",riskHigh:"High",riskCrit:"Critical",riskNA:"Pending",
+cancel:"Cancel",save:"Save",parse:"🔍 Parse",mergeBtn:"✅ Merge into Master",
+verNew:"New PO",verDel:"Cancelled PO",verUp:"Qty Increased",verDown:"Qty Decreased",verEarly:"Date Earlier",verLate:"Date Later",verShortNew:"New Shortage",verShortFix:"Shortage Resolved",verGUp:"Greige Up",verGDown:"Greige Down",
+noData:"No data yet. Import PDF / Excel from the top-right toolbar.",unmatchedHint:"These fabrics could not be auto-matched to greige. Please create a mapping alias:",
+tgOK:"Telegram sent",tgFail:"Telegram send failed",gasOK:"Cloud sync done",gasFail:"Cloud sync failed, check settings",saved:"Saved",needCfg:"Please fill in ⚙️ Settings first"},
+km:{totalDemand:"តម្រូវការសរុប yds",greigeStock:"ស្តុកក្រណាត់ឆៅ yds",highRisk:"ហានិភ័យខ្ពស់",tabDash:"📊 ផ្ទាំងគ្រប់គ្រង",tabOrders:"📦 តម្រូវការបញ្ជាទិញ",tabByShip:"🗓️ តាមកាលដឹកជញ្ជូន",tabByFabric:"🧵 តាមប្រភេទក្រណាត់",tabGreige:"🏭 ស្តុកក្រណាត់ឆៅ",tabTC:"🚢 Ta Chiang LT",tabOS:"🌐 Out Source LT",tabRisk:"⚠️ វិភាគហានិភ័យ",tabVer:"🔄 ប្រៀបធៀបកំណែ",tabMap:"🔗 ការផ្គូផ្គង",tabSet:"⚙️ ការកំណត់",
+cTotal:"បរិមាណបញ្ជាទិញសរុប",cJul:"តម្រូវការខែកក្កដា",cAug:"តម្រូវការខែសីហា",cSep:"តម្រូវការខែកញ្ញា",cGreige:"ស្តុកសរុប",cMatched:"ស្តុកដែលផ្គូផ្គង",cShort:"ហានិភ័យខ្វះក្រណាត់",cDelay:"ហានិភ័យយឺត",cLD:"រង់ចាំ LD",cGRS:"GRS រង់ចាំ",cUnmatch:"មិនផ្គូផ្គង",
+search:"ស្វែងរក…",allMonth:"គ្រប់ខែ",allRisk:"គ្រប់ហានិភ័យ",allPO:"គ្រប់ PO",allOZ:"គ្រប់ OZ",allWidth:"គ្រប់ទទឹង",allColor:"គ្រប់ពណ៌",exportCur:"📤 នាំចេញ",
+shipDate:"កាលដឹកជញ្ជូន",totalQty:"បរិមាណសរុប",poCount:"ចំនួន PO",fabricCount:"ចំនួនក្រណាត់",maxFabric:"ក្រណាត់ធំបំផុត",risk:"ហានិភ័យ",
+demand:"តម្រូវការ",stock:"ស្តុក",balance:"សមតុល្យ",shortage:"ខ្វះ",coverage:"គ្របដណ្តប់",supplier:"អ្នកផ្គត់ផ្គង់",leadtime:"Leadtime",estReady:"ប៉ាន់ស្មានរួចរាល់",estArrival:"ប៉ាន់ស្មានមកដល់",action:"សកម្មភាព",
+riskLow:"ធម្មតា",riskMed:"ប្រយ័ត្ន",riskHigh:"ខ្ពស់",riskCrit:"ធ្ងន់ធ្ងរ",riskNA:"រង់ចាំ",
+cancel:"បោះបង់",save:"រក្សាទុក",parse:"🔍 វិភាគ",mergeBtn:"✅ បញ្ចូល",
+verNew:"PO ថ្មី",verDel:"PO លុបចោល",verUp:"បរិមាណឡើង",verDown:"បរិមាណចុះ",verEarly:"កាលបរិច្ឆេទមុន",verLate:"កាលបរិច្ឆេទយឺត",verShortNew:"ខ្វះថ្មី",verShortFix:"ដោះស្រាយ",verGUp:"ស្តុកឡើង",verGDown:"ស្តុកចុះ",
+noData:"មិនទាន់មានទិន្នន័យ សូមនាំចូល PDF / Excel",unmatchedHint:"ក្រណាត់ខាងក្រោមមិនអាចផ្គូផ្គងស្វ័យប្រវត្តិ សូមបង្កើត alias:",
+tgOK:"Telegram បានផ្ញើ",tgFail:"Telegram បរាជ័យ",gasOK:"Cloud OK",gasFail:"Cloud បរាជ័យ",saved:"បានរក្សាទុក",needCfg:"សូមបំពេញ ⚙️ Settings មុន"}};
+function t(k){return (L[S.cfg.lang]||L.zh)[k]||L.zh[k]||k}
+
+/* ================= 樣本資料（來自 115/7/6 訂單進度 + 20260701 交期表 + 20260706 胚布庫存）================= */
+const SEED_ORDERS=[
+["4/21","8-26",7.1,67.5,386,"MVS12-RC","ALSW001 GREEN",30900,"7/2",""],
+["4/29","26-26",6.14,66,326,"MVS12/300D","NAVY K153",6400,"7/9",""],
+["4/29","26-26",6.14,66,326,"MVS12/300D","MAROON#1861",19500,"7/16",""],
+["6/17","28-26",6.14,66,326,"MVS12/300D","F GREEN K594",5000,"7/9",""],
+["5/18","29-26",6.14,66,326,"MVS12/300D","RED K797",1500,"7/16",""],
+["6/17","30-26",6.14,66,326,"MVS12/300D","NAVY K153",5100,"7/16",""],
+["6/17","30-26",6.14,66,326,"MVS12/300D","W BLUE K156",1700,"7/16",""],
+["6/17","30-26",6.14,66,326,"MVS12/300D","F GREEN K594",1500,"7/16",""],
+["6/17","30-26",6.14,66,326,"MVS12/300D","SANDALWOOD K258",1650,"7/16",""],
+["5/28","30-26",6.35,73,373,"MVS12/300D","NAVY BLUE-WPL",1000,"7/9",""],
+["6/17","32-26",6.14,66,326,"MVS12/300D","NAVY K153",1900,"7/16",""],
+["6/17","32-26",6.14,66,326,"MVS12/300D","W BLUE K156",3200,"7/16",""],
+["6/25","32-26",5,66,266,"MVS26/300D","F GREEN K594",1500,"7/23",""],
+["6/2","32-26",7.1,65,372,"MVS12","RED K797",1500,"7/9",""],
+["6/17","33-26",6.14,66,326,"MVS12/300D","MAROON#1861",3800,"7/16",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","F GREEN K594",2800,"7/23",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","S GREEN K380",1500,"7/23",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","W BLUE K156",3450,"7/23",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","NAVY K153",2800,"7/23",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","RED K797",1500,"7/23",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","P8020 TAN",1500,"7/23",""],
+["6/25","34-26",6.14,66,326,"MVS12/300D","MAROON#1861",1600,"7/23",""],
+["7/3","34-26",5,66,266,"MVS26/300D","BLACK K397",1500,"8/6",""],
+["7/3","34-26",5,66,266,"MVS26/300D","P8020 TAN",1500,"8/6",""],
+["7/3","34-26",4.5,72.5,262,"MVS26","BLACK#800",1800,"8/6",""],
+["6/17","34-26",7.3,66,388,"MVS12*SP10","BLACK#800",1500,"7/9",""],
+["6/25","35-26",7.1,72.5,414,"MVS12","BLACK#6283",3500,"7/23",""],
+["","35-26",4.5,72.5,262,"MVS26","BLACK#800",1500,"8/20",""],
+["7/3","35-26",4.5,72.5,262,"MVS26","CHARCOAL LCN",1500,"8/6",""],
+["6/25","35-26",5.5,66.5,295,"MVS20","NAVY GS875",3000,"7/23",""],
+["6/25","35-26",5.5,66.5,295,"MVS20/300D","NAVY GS875",1500,"7/23",""],
+["","36-26",4.5,72.5,262,"MVS26","NAVY #9885",3800,"8/20",""],
+["","36-26",4.5,72.5,262,"MVS26","BLACK#800",2300,"8/20",""],
+["","36-26",5,66,266,"MVS26/300D","GOLD K942",1500,"8/27",""],
+["6/25","36-26",6.14,66,326,"MVS12/300D","BROWN K964",1700,"7/23",""],
+["6/25","36-26",6.14,66,326,"MVS12/300D","BLACK K397",1500,"7/23",""],
+["6/25","36-26",6.14,66,326,"MVS12/300D","W BLUE K156",1900,"7/23",""],
+["6/25","36-26",6.14,66,326,"MVS12/300D","GOLD K942",1500,"7/23",""],
+["","36-26",7.1,65,372,"MVS12","UNI TAN ADI013",1500,"8/27",""],
+["","36-26",7.1,64.5,369,"MVS12","BLACK#6283",11500,"8/27",""],
+["6/25","36-26",6.14,66,326,"300D/SP12","(6.1OZ FHOSS YELLOW 代)",2400,"7/23",""],
+["4/29","26-26",6.14,66,326,"MVS12/300D","M. GREY K396",1600,"","Need LD app"],
+["5/18","29-26",6.14,66,326,"MVS12/300D","M. GREY K396",1500,"","Need LD app"],
+["6/17","30-26",6.14,66,326,"MVS12/300D","M. GREY K396",1500,"","Need LD app"],
+["6/25","34-26",6.14,66,326,"MVS12/300D","M GREY K396",1600,"","Need LD app"],
+["","36-26",5,66,266,"MVS26/300D","NAVY K855",2300,"","Need LD app"],
+["4/8","17-26",7.1,55.5,319,"MVS12-RC","ALSCO WHITE",16500,"7/9",""],
+["5/26","30-26",4.5,72.5,262,"MVS26","ALSCO WHITE",5300,"7/9",""],
+["5/26","30-26",6.14,66,326,"MVS12/300D","AR WHITE",15300,"7/9",""],
+["6/2","32-26",6.14,66,326,"MVS12/300D","AR WHITE",20150,"7/9",""],
+["6/16","34-26",6.14,66,326,"MVS12/300D","AR WHITE",14200,"7/16",""],
+["6/16","34-26",4.5,72.5,262,"MVS26","ALSCO WHITE",1500,"8/27",""],
+["6/16","34-26",7.1,64.5,369,"MVS12","ALSCO WHITE",5400,"7/9",""],
+["6/24","35-26",4.5,72.5,262,"MVS26","ALSCO WHITE",4800,"8/27",""],
+["6/24","36-26",4.5,72.5,262,"MVS26","ALSCO WHITE",7100,"8/27",""],
+["6/24","36-26",6.14,66,326,"MVS12/300D","AR WHITE",15400,"7/16",""],
+["6/24","36-26",7.1,64.5,369,"MVS12","ALSCO WHITE",33300,"7/23",""],
+["6/24","36-26",6.5,67,351,"MVS14白/RING14BK/WH CHCK","黑(原抽黑)",5500,"7/9",""],
+["6/24","36-26",6.35,54,278,"MVS12/300D","WHITE AA",6100,"7/23",""],
+["6/24","36-26",6.35,62.5,320,"MVS12/300D","WHITE AA",9300,"8/13",""],
+["6/24","36-26",6.35,73,373,"MVS12/300D","WHITE AA",2300,"7/9",""],
+["","37-26",6.14,66,326,"MVS12/300D","AR WHITE",12600,"7/23",""],
+["5/29","30-26",6.35,121.5,615,"MVS12/300D","NAVY BLUE-WPL",1000,"7/16",""],
+["5/29","30-26",6.35,126,638,"MVS12/300D","NAVY BLUE-WPL",1000,"7/16",""],
+["","36-26",6.35,87,443,"MVS12/300D","WHITE AA",4700,"8/27",""],
+["","25-26",5.75,58.5,272,"T/C21*T/C21 2/1 TWILL-RC","WHITE BAR18",13000,"9/10",""],
+["","25-26",5.75,58.5,272,"T/C21*T/C21 2/1 TWILL-RC","BLACK 433C",8600,"9/10",""],
+["","28-26",9.2,72,533,"T/C60/40 10S/1*8S/1 3/1 TWILL","WHITE 9680",6400,"7/21",""],
+["","31-26",4.27,54,187,"75d*100d","BLACK MS黑",1900,"7/16",""],
+["","32-26",5.75,58.5,272,"T/C21*T/C21 2/1 TWILL","WHITE BAR18",2600,"7/9",""],
+["","32-26",9.2,72,533,"T/C60/40 10S/1*8S/1 3/1 TWILL","WHITE 9680",7600,"7/30",""],
+["","33-26",5.75,58.5,272,"T/C21*T/C21 2/1 TWILL","WHITE BAR18",3800,"7/9",""],
+["","33-26",5,66,266,"T30*T300D(80%P/20%C)","WHITE 9680",7000,"7/23",""],
+["","35-26",4.1,60,199,"EYE MESH DOUBLE KNIT(RECYCLE)","NAVY#9885",1700,"8/10",""],
+["","35-26",6.9,58.5,326,"T/C21*T/C21 2/1TWILL","NU2405 ORANGE",10600,"8/24",""],
+["","36-26",5.75,58.5,272,"T/C21*T/C21 2/1TWILL","WHITE BAR18",1500,"7/9",""],
+["","36-26",6.9,58.5,326,"T/C21*T/C21 2/1TWILL","WHITE BAR18",1500,"8/24",""],
+["","37-26",4.5,58,211,"30/1*30/1 T/C65/35","NAVY GS",3000,"",""],
+["","37-26",6.9,58.5,326,"T/C21*T/C12 D","NAVY 425",1500,"8/27",""]];
+const SEED_TC=[ /* [oz, yarn, width, mcq, greigeReady, noSafety, transit] */
+[3.5,"30'S*T100D",67,1500,21,65,14],[4.4,"26'S*T200D",70.5,1500,21,65,14],[4.5,"26'S*26'S",72.5,1500,21,65,14],
+[5,"26'S*T300D",66.5,1500,21,65,14],[5.5,"20'S*20'S",66.5,1500,21,65,14],[5.5,"20'S*300D",66.5,1500,21,65,14],
+[6.14,"12'S*300D",66,1500,21,55,14],[6.14,"12'S*300D",68,1500,21,55,14],
+[6.35,"12'S*T300D",54,1500,21,55,14],[6.35,"12'S*T300D",62.5,1500,21,55,14],[6.35,"12'S*T300D",64.5,1500,21,55,14],[6.35,"12'S*T300D",73,1500,21,55,14],
+[6.35,"12'S*T300D",87,1000,30,75,14],[6.35,"12'S*T300D",92,1000,30,75,14],[6.35,"12'S*T300D",109.5,1000,30,75,14],[6.35,"12'S*T300D",121,1000,30,75,14],[6.35,"12'S*T300D",126,1000,30,75,14],
+[7.1,"12'S*12'S",55.5,1500,21,55,14],[7.1,"12'S*12'S",64.5,1500,21,55,14],[7.1,"12'S*450D",64.5,1500,21,55,14],[7.1,"12'S*12'S",67.5,1500,21,55,14],[7.1,"12'S*12'S",72.5,1500,21,55,14],
+[7.1,"12'S*12'S",92.5,1000,30,75,14],[7.1,"12'S*12'S",111,1000,30,75,14],[7.1,"12'S*12'S",121,1000,30,75,14],[7.1,"12'S*12'S",126,1000,30,75,14],
+[7.3,"12'S*12'S 2/1 Twill",66,1500,21,55,14],
+[6.5,"14'S*14'S B/W plain Rip-stop",67,5000,10,60,14],
+[7.1,"12'S*12'S 3/1 twill B/W stripe",67,5000,10,60,14]];
+const SEED_OS=[ /* [content, oz, compose, width, moq, mcq, leadDays(null=PS另議), transit] */
+["100% Polyester Mechanical Stretch",3.5,"188T*86T*54\"",54,20000,1500,75,14],
+["100% Polyester Knit mesh",4.1,"Knit mesh",null,5000,1000,45,14],
+["100% RCY Polyester Knit mesh",4.1,"Knit mesh",null,5000,1000,45,14],
+["100% Polyester Mechanical Stretch",4.27,"188T*102T*54\"",54,40000,1500,75,14],
+["T/C",4.5,"128T*54T*58\"",58,6800,1500,45,14],
+["T/C",5,"106T*49T*66\"",66,7000,2000,60,14],
+["T/C (RC)",5.75,"110T*56T*58.5\"-RC",58.5,14000,1620,null,14],
+["T/C",5.75,"110T*56T*58.5\"",58.5,1620,1620,60,14],
+["T/C",6.2,"110T*58T*55.5\"",55.5,1620,1620,60,14],
+["T/C",6.2,"110T*58T*59\"",59,6800,1500,75,14],
+["T/C",6.9,"110T*52T*58.5\"",58.5,5000,1500,60,14],
+["T/C",9.2,"78T*50T*72\"",72,6400,1000,75,14]];
+const SEED_GREIGE=[ /* [sheet, spec, finWidth, yarn, oz, stock, recommend, remark] */
+["VRT","99*50*72\"","67\"","MVS30*T100D",3.5,5672,0,""],
+["VRT","99*46*72\"","67\"","MVS30*T100D",3.5,7910,0,""],
+["VRT","101*42*76\"","70.5\"","MVS26*T200D",4.4,8384,0,""],
+["VRT","98*41*78\"","72.5\"","MVS26*MVS26",4.5,0,15000,""],
+["VRT","78*55*70\"","66.5\"","MVS20*MVS20",5.5,8216,15000,""],
+["VRT","77*51*71.5\"","66.5\"","MVS20*T300D",5.5,8566,0,""],
+["VRT","93*41*71.5\"","66\"","MVS26*T300D",5,0,0,""],
+["VRT","65*33*71\"","66\"","MVS12*T300D",6.14,0,60000,""],
+["VRT","63*40*73\"","68\"","MVS12*T300D",6.14,7892,0,""],
+["VRT","66.5*47*70.5\"","65.5\"","T300D*SD12",6.1,26257,0,""],
+["VRT","68*34*58.5\"","54\"","MVS12*T300D",6.35,0,0,""],
+["VRT","68*35*67.5\"","62.5\"","MVS12*T300D",6.35,0,0,""],
+["VRT","66*39*78.5\"","73\"","MVS12*T300D",6.35,4374,0,""],
+["VRT","67*36*93\"","86.5\"/87\"","MVS12*T300D",6.35,0,0,""],
+["VRT","62*42*126\"","121.5\"","MVS12*T300D",6.35,1436,0,"1,436Y greige: only could be dyed White shade"],
+["VRT","62*42*134\"","126\"/132\"","MVS12*T300D",6.35,7653,0,"367Y greige: only could be dyed Black shade"],
+["VRT","60*36*66\"","63.5\"","MVS12*MVS12",6.4,1437,0,""],
+["VRT","66*34*60\"","55.5\"","MVS12*MVS12",7.1,9954,0,""],
+["VRT","67*38*68.5\"","65\"","MVS12*T450D",7.1,607,0,""],
+["VRT","66*33*69.5\"","64.5\"","MVS12*MVS12",7.1,0,30000,""],
+["VRT","67*32*78\"","72.5\"","MVS12*MVS12",7.1,5432,0,""],
+["VRT","63*38*99\"","92.5\"","MVS12*MVS12",7.1,874,0,""],
+["VRT","63*39*118\"","111\"","MVS12*MVS12",7.1,6132,0,"755yds only Black / 770Y only White; MOQ:5000yds per PO; MOQ per color:1000yds"],
+["VRT","64*38*127.5\"","121\"","MVS12*MVS12",7.1,10897,0,"MOQ:5000yds per PO; MOQ per color:1000yds"],
+["VRT","64*38*134\"","132\"","MVS12*MVS12",7.1,7126,0,"563Y only Black / 146Y only White; MOQ:5500yds per PO; MOQ per color:1000yds"],
+["VRT","66*30*71\"","66\"","MVS12*SP10",7.3,4125,0,""],
+["VRT","102*50*70\"","","SD30",3.9,63,0,"雜項"],
+["VRT","102*65*75\"","","OB26*T150D",4.5,62,0,"雜項"],
+["VRT","102*55*75\"","","OB26*OB26",4.8,110,0,"雜項"],
+["VRT","100*45*59\"","","SD20/SD16",6,70,0,"雜項"],
+["VRT","60*35*68\"","","SD12*SD12",6.1,232,0,"雜項"],
+["VRT","90*55*59.5","","300D/SP20",6.2,150,0,"雜項"],
+["VRT","62*44*68.5\"","","OB12*T300D 10%環保",6.35,399,0,"雜項"],
+["VRT","58.7*36*68.5\"","","OB12*OB12",6.4,75,0,"雜項"],
+["VRT","64*37*68.5\"","","SD12*SD12",6.4,61,0,"雜項"],
+["VRT","60*37*58\"","","OB12*OB12",6.5,0,0,"雜項"],
+["VRT","72*62*64\"","56\"","T300D*T300D 2/2 TWILL",6.5,1487,0,"雜項"],
+["VRT","75*62*70\"","63.5\"","T300D*T300D",6.5,1051,0,"雜項"],
+["YD","70*48*70\"","67\"","SP14黑白格",6.5,11860,0,"Y/D"],
+["YD","66.5*39*71.5\"","67\"","藍白條",7.1,0,0,"Y/D"]];
+const SEED_ALIASES=[
+{id:"al1",orderKey:"6.14|66|300D/SP12",greigeKey:"6.1|65.5|T300D*SD12",supplierKey:"",fabricName:"6.1oz 65.5\" T300D*SD12（FHOSS 代用）"},
+{id:"al2",orderKey:"6.5|67|MVS14白/RING14BK/WH CHCK",greigeKey:"6.5|67|SP14黑白格",supplierKey:"tc:27",fabricName:"6.5oz 67\" B/W Rip-stop 黑白格"}];
+
+/* ================= 狀態 ================= */
+const LS_KEY="vrt_fabric_center_v1";
+let S={orders:[],tachiang:[],outsource:[],greige:[],aliases:[],versions:[],cfg:{gasEndpoint:"",gasToken:"",tgToken:"",tgChat:"",year:2026,lang:"zh"}};
+let FAB=[],SHIP=[],curTab="dash",charts={},sortState={},previewData=null,editCtx=null;
+
+/* ================= 小工具 ================= */
+const $=id=>document.getElementById(id);
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function escapeHtml(s){return esc(s)}
+function fmtN(n){return n==null||isNaN(n)?"-":Number(n).toLocaleString("en-US")}
+function pad2(n){return String(n).padStart(2,"0")}
+function fmtD(d){return d?d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()):"-"}
+function todayD(){const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())}
+function nowStr(){const n=new Date();return fmtD(n)+" "+pad2(n.getHours())+":"+pad2(n.getMinutes())}
+function parseMD(s){if(!s)return null;const m=String(s).trim().match(/^(\d{1,2})\/(\d{1,2})$/);if(!m)return null;return new Date(S.cfg.year||2026,+m[1]-1,+m[2])}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
+function widthNum(s){if(s==null||s==="")return null;const m=String(s).match(/[\d.]+/);return m?parseFloat(m[0]):null}
+function near(a,b,tol){return a!=null&&b!=null&&Math.abs(a-b)<=tol}
+function uid(){return "id"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function toast(msg){const el=$("toast");el.textContent=msg;el.style.display="block";clearTimeout(el._t);el._t=setTimeout(()=>el.style.display="none",2600)}
+function closeModal(id){$(id).classList.remove("on")}
+window.closeModal=closeModal;
+
+/* ================= 布種標準化與匹配 ================= */
+function normYarn(raw){
+  if(!raw)return{tokens:[],grs:false,family:"",str:""};
+  let s=String(raw).toUpperCase().replace(/[＊×]/g,"*").replace(/[〞″]/g,'"').replace(/'/g,"'").replace(/\s+/g," ").trim();
+  const grs=/(-RC\b|\(RC\)|RECYCLE|GRS|\bRCY\b)/.test(s);
+  s=s.replace(/-RC\b/g," ").replace(/\(RECYCLE\)/g," ").replace(/RECYCLE/g," ");
+  s=s.replace(/[23]\/[12]\s*TWILL/g," ").replace(/TWILL/g," ").replace(/RIP-?STOP/g," ").replace(/PLAIN/g," ");
+  let family="";
+  if(/T\/C|(^|[^A-Z])TC\d/.test(s))family="TC";
+  if(/MESH/.test(s))family="MESH";
+  if(/MECHANICAL|STRETCH/.test(s))family="MS";
+  s=s.replace(/T\/C/g,"TC");
+  let toks=s.split(/[*\/\s,()"%]+/).filter(Boolean).map(tk=>{
+    let m;
+    if(m=tk.match(/^MVS(\d+)$/))return m[1]+"S";
+    if(m=tk.match(/^(\d+)['']?S$/))return m[1]+"S";
+    if(m=tk.match(/^T?(\d+)D$/))return m[1]+"D";
+    if(m=tk.match(/^SD(\d+)/))return "SD"+m[1];
+    if(m=tk.match(/^SP(\d+)/))return "SP"+m[1];
+    if(m=tk.match(/^OB(\d+)/))return "OB"+m[1];
+    if(m=tk.match(/^RING(\d+)/))return "RING"+m[1];
+    if(m=tk.match(/^TC(\d+)/))return "TC"+m[1];
+    if(/^\d+(\.\d+)?$/.test(tk))return null;
+    if(/^(B|W|BK|WH|D|CHCK|白|黑白格|藍白條|黑)$/.test(tk))return null;
+    return tk;
+  }).filter(Boolean);
+  toks=[...new Set(toks)].sort();
+  return{tokens:toks,grs,family,str:toks.join("*")};
+}
+function sameTokens(a,b){if(!a.length||!b.length)return false;if(a.length!==b.length)return false;return a.every((v,i)=>v===b[i])}
+function decorate(){
+  S.orders.forEach(o=>{o._yn=normYarn(o.yarn);o._ship=parseMD(o.estiShipDay);o._needLD=/LD/i.test(o.remark||"");o.key=o.weightOz+"|"+o.width+"|"+o.yarn.trim();});
+  S.greige.forEach(g=>{g._yn=normYarn(g.yarn);g._w=widthNum(g.finishedWidth);g._key=g.weightOz+"|"+(g._w==null?"":g._w)+"|"+g.yarn.trim();});
+  S.tachiang.forEach((r,i)=>{r._yn=normYarn(r.compose);r._id="tc:"+i;});
+  S.outsource.forEach((r,i)=>{r._yn=normYarn(r.content+" "+r.compose);r._id="os:"+i;});
+}
+function greigeMatch(fabKey,oz,width,yn){
+  const als=S.aliases.filter(a=>a.orderKey===fabKey);
+  const rows=[];
+  S.greige.forEach(g=>{
+    if(als.some(a=>a.greigeKey===g._key)){rows.push(g);return}
+    if(near(oz,g.weightOz,0.055)&&near(width,g._w,0.5)&&sameTokens(yn.tokens,g._yn.tokens))rows.push(g);
+  });
+  return rows;
+}
+function supplierMatch(fabKey,oz,width,yn){
+  const al=S.aliases.find(a=>a.orderKey===fabKey&&a.supplierKey);
+  if(al){const [k,i]=al.supplierKey.split(":");
+    if(k==="tc"&&S.tachiang[+i])return{type:"TC",row:S.tachiang[+i]};
+    if(k==="os"&&S.outsource[+i])return{type:"OS",row:S.outsource[+i]};}
+  let hit=null;
+  S.tachiang.forEach(r=>{if(!hit&&near(oz,r.weightOz,0.055)&&near(width,r.width,0.75)&&sameTokens(yn.tokens,r._yn.tokens))hit={type:"TC",row:r}});
+  if(hit)return hit;
+  S.outsource.forEach(r=>{
+    if(hit)return;
+    const wOK=r.width==null||near(width,r.width,0.75);
+    const famOK=yn.family&&yn.family===famOf(r);
+    if(famOK&&near(oz,r.weightOz,0.055)&&wOK)hit={type:"OS",row:r};});
+  if(hit)return hit;
+  S.outsource.forEach(r=>{ /* 寬鬆備援：無 family 時以 oz+width 對外購 */
+    if(hit)return;
+    if(!yn.family&&r.width!=null&&near(oz,r.weightOz,0.055)&&near(width,r.width,0.75))hit={type:"OS",row:r};});
+  return hit;
+}
+function famOf(r){const c=(r.content||"").toUpperCase();if(/T\/C/.test(c))return"TC";if(/MESH/.test(c))return"MESH";if(/MECHANICAL|STRETCH/.test(c))return"MS";return""}
+
+/* ================= 彙總計算 ================= */
+function calcAll(){
+  decorate();
+  const map={};
+  S.orders.forEach(o=>{
+    const k=o.key;
+    if(!map[k])map[k]={fabricKey:k,weightOz:o.weightOz,width:o.width,yarn:o.yarn,yn:o._yn,poList:new Set(),colors:new Set(),totalDemandQty:0,needLDQty:0,rows:[],nearestShip:null,latestShip:null,newColor:false};
+    const f=map[k];
+    f.poList.add(o.poNo);f.colors.add(o.color);f.rows.push(o);
+    f.totalDemandQty+=(+o.qty||0);
+    if(o._needLD)f.needLDQty+=(+o.qty||0);
+    if(o.newColor)f.newColor=true;
+    if(o._ship){if(!f.nearestShip||o._ship<f.nearestShip)f.nearestShip=o._ship;if(!f.latestShip||o._ship>f.latestShip)f.latestShip=o._ship;}
+  });
+  const today=todayD();
+  FAB=Object.values(map).map(f=>{
+    const gRows=greigeMatch(f.fabricKey,f.weightOz,f.width,f.yn);
+    const stock=gRows.reduce((s,g)=>s+(+g.stockQty||0),0);
+    const matched=gRows.length>0;
+    f.greigeRows=gRows;
+    f.matchedGreigeStockQty=matched?stock:null;
+    f.stockBalance=matched?stock-f.totalDemandQty:null;
+    f.shortageQty=matched?Math.max(f.totalDemandQty-stock,0):f.totalDemandQty;
+    f.coverage=matched&&f.totalDemandQty>0?stock/f.totalDemandQty:null;
+    const sup=supplierMatch(f.fabricKey,f.weightOz,f.width,f.yn);
+    f.sup=sup;
+    f.supplierType=sup?(sup.type==="TC"?"大江 Ta Chiang":"外購 Out Source"):null;
+    f.grs=f.yn.grs;
+    f.needLD=f.needLDQty>0;
+    let lead=null,transit=null,leadLabel="";
+    if(sup){
+      transit=sup.row.normalTransitDays;
+      if(sup.type==="TC"){
+        const enough=matched&&stock>=f.totalDemandQty;
+        lead=enough?sup.row.greigeReadyDays:sup.row.noSafetyStockDays;
+        leadLabel=enough?"Greige Ready "+lead+"d":"No Safety Stock "+lead+"d";
+      }else{
+        lead=sup.row.leadtimeDays;
+        leadLabel=lead==null?"PS 另議":"OS "+lead+"d";
+      }
+    }
+    f.leadtimeDays=lead;f.transitDays=transit;f.leadLabel=leadLabel;
+    if(lead!=null){
+      let ready=addDays(today,lead+(f.newColor?7:0));
+      f.estimatedReadyDate=ready;
+      f.estimatedArrivalDate=addDays(ready,transit||0);
+    }else{f.estimatedReadyDate=null;f.estimatedArrivalDate=null;}
+    /* 風險 */
+    let lvl="low",reasons=[],act=[];
+    const lateVsNeed=f.estimatedArrivalDate&&f.nearestShip&&f.estimatedArrivalDate>f.nearestShip;
+    if(f.stockBalance!=null&&f.stockBalance>=0){lvl="low";}
+    else if(matched){
+      lvl=lateVsNeed?"high":"med";
+      reasons.push("缺口 "+fmtN(f.shortageQty)+" yds");
+      if(f.coverage!=null&&f.coverage<0.5){lvl="high";reasons.push("覆蓋率 <50%");}
+      if(lateVsNeed)reasons.push("預估到廠晚於需求交期");
+      act.push(lvl==="high"?"立即下胚布/追料":"安排補胚布");
+    }else{
+      lvl="high";reasons.push("胚布未匹配");act.push("至『布種對應』建立別名或確認採購");
+    }
+    if(!sup){
+      if(f.stockBalance!=null&&f.stockBalance>=0){reasons.push("無供應商交期資料（庫存足夠，暫不影響）");}
+      else{lvl="crit";reasons.push("無供應商交期資料");act.push("向台北/供應商確認 leadtime");}
+    }
+    if(sup&&sup.type==="OS"&&sup.row.leadtimeDays==null){lvl="crit";reasons.push("Leadtime 另議 (PS)");}
+    if(f.grs){lvl="crit";reasons.push("GRS/RC 客製：Pending Yarn Mill Confirmation");act.push("等紗廠回覆交期");}
+    if(f.needLD){lvl="crit";reasons.push("Need LD approval ("+fmtN(f.needLDQty)+" yds)");act.push("追客戶色樣核可");}
+    f.riskLevel=lvl;f.riskReason=reasons.join("；");f.actionNeeded=act.join("；")||"—";
+    f.poArr=[...f.poList];f.colorArr=[...f.colors];
+    return f;
+  }).sort((a,b)=>b.totalDemandQty-a.totalDemandQty);
+  /* 依交期 */
+  const sm={};
+  S.orders.forEach(o=>{
+    const k=o.estiShipDay||"(Need LD / 未定)";
+    if(!sm[k])sm[k]={ship:k,date:o._ship,qty:0,pos:new Set(),fabs:new Set(),maxFab:"",maxQ:0,risk:"low"};
+    const g=sm[k];g.qty+=(+o.qty||0);g.pos.add(o.poNo);g.fabs.add(o.key);
+  });
+  const rank={low:0,med:1,high:2,crit:3};
+  Object.values(sm).forEach(g=>{
+    g.fabs.forEach(fk=>{
+      const f=FAB.find(x=>x.fabricKey===fk);
+      if(f){if(rank[f.riskLevel]>rank[g.risk])g.risk=f.riskLevel;
+        const q=f.rows.filter(r=>(r.estiShipDay||"(Need LD / 未定)")===g.ship).reduce((s,r)=>s+(+r.qty||0),0);
+        if(q>g.maxQ){g.maxQ=q;g.maxFab=f.weightOz+"oz/"+f.width+'"/'+f.yarn;}}
+    });
+  });
+  SHIP=Object.values(sm).sort((a,b)=>{if(!a.date)return 1;if(!b.date)return -1;return a.date-b.date});
+}
+function metrics(){
+  const m={total:0,jul:0,aug:0,sep:0,ld:0,ldQty:0};
+  S.orders.forEach(o=>{const q=+o.qty||0;m.total+=q;
+    if(o._needLD){m.ld++;m.ldQty+=q;}
+    if(o._ship){const mo=o._ship.getMonth()+1;if(mo===7)m.jul+=q;else if(mo===8)m.aug+=q;else if(mo===9)m.sep+=q;}});
+  m.greigeTotal=S.greige.reduce((s,g)=>s+(+g.stockQty||0),0);
+  m.matchedStock=FAB.reduce((s,f)=>s+(f.matchedGreigeStockQty||0),0);
+  m.shortItems=FAB.filter(f=>f.shortageQty>0&&f.greigeRows.length).length;
+  m.delayItems=FAB.filter(f=>f.estimatedArrivalDate&&f.nearestShip&&f.estimatedArrivalDate>f.nearestShip&&f.shortageQty>0).length;
+  m.grsItems=FAB.filter(f=>f.grs).length;
+  m.unmatched=FAB.filter(f=>!f.greigeRows.length).length;
+  m.highItems=FAB.filter(f=>f.riskLevel==="high"||f.riskLevel==="crit").length;
+  return m;
+}
+/* ================= 分頁切換與渲染 ================= */
+function showTab(tab){curTab=tab;
+  document.querySelectorAll("#tabbar button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
+  ["dash","orders","byship","byfabric","greige","tachiang","outsource","risk","version","mapping","settings"].forEach(x=>$("pg-"+x).style.display=x===tab?"":"none");
+  renderTab();
+}
+window.showTab=showTab;
+function renderTab(){
+  calcAll();const m=metrics();
+  $("hsDemand").textContent=fmtN(m.total);$("hsStock").textContent=fmtN(m.greigeTotal);$("hsRisk").textContent=m.highItems;
+  ({dash:renderDash,orders:renderOrders,byship:renderByShip,byfabric:renderByFabric,greige:renderGreige,tachiang:renderTC,outsource:renderOS,risk:renderRisk,version:renderVersion,mapping:renderMapping,settings:renderSettings})[curTab]();
+}
+function pill(lvl){const map={low:["low",t("riskLow")],med:["med",t("riskMed")],high:["high",t("riskHigh")],crit:["crit",t("riskCrit")],na:["na",t("riskNA")]};const p=map[lvl]||map.na;return '<span class="pill '+p[0]+'">'+p[1]+'</span>'}
+function fabName(f){return f.weightOz+'oz / '+f.width+'" / '+esc(f.yarn)}
+
+/* ---------- Dashboard ---------- */
+function renderDash(){
+  const m=metrics();
+  const cards=[
+    ["cTotal",fmtN(m.total)+" yds",m.total>0?"info":"na",""],
+    ["cJul",fmtN(m.jul)+" yds","info",""],
+    ["cAug",fmtN(m.aug)+" yds","info",""],
+    ["cSep",fmtN(m.sep)+" yds","info",""],
+    ["cGreige",fmtN(m.greigeTotal)+" yds","ok",""],
+    ["cMatched",fmtN(m.matchedStock)+" yds",m.matchedStock>0?"ok":"na",""],
+    ["cShort",m.shortItems,m.shortItems?"bad":"ok",""],
+    ["cDelay",m.delayItems,m.delayItems?"bad":"ok",""],
+    ["cLD",m.ld+" / "+fmtN(m.ldQty)+"y",m.ld?"warn":"ok",""],
+    ["cGRS",m.grsItems,m.grsItems?"warn":"ok",""],
+    ["cUnmatch",m.unmatched,m.unmatched?"na":"ok",""]
+  ];
+  let h='<div class="cards">'+cards.map(c=>'<div class="card '+c[2]+'"><div class="cv">'+c[1]+'</div><div class="cl">'+t(c[0])+'</div></div>').join("")+'</div>';
+  h+='<div class="chgrid">'
+   +'<div class="chbox"><h4>📊 各交期需求碼數 Demand by Ship Date</h4><canvas id="chShip"></canvas><div id="chShipFb"></div></div>'
+   +'<div class="chbox"><h4>🧵 布種需求 vs 胚布庫存 Demand vs Greige (Top 12)</h4><canvas id="chCmp"></canvas><div id="chCmpFb"></div></div>'
+   +'<div class="chbox"><h4>⚠️ 風險分布 Risk Distribution</h4><canvas id="chRisk"></canvas><div id="chRiskFb"></div></div>'
+   +'<div class="chbox"><h4>📈 月份需求趨勢 Monthly Demand Trend</h4><canvas id="chMon"></canvas><div id="chMonFb"></div></div>'
+   +'</div>';
+  /* Top10 */
+  h+='<div class="panel" style="margin-top:14px"><h3>🏆 Top 10 Demand Fabric</h3><div class="tblwrap"><table><thead><tr><th>#</th><th>Fabric</th><th class="num">'+t("demand")+'</th><th class="num">'+t("stock")+'</th><th class="num">'+t("shortage")+'</th><th>'+t("risk")+'</th></tr></thead><tbody>';
+  FAB.slice(0,10).forEach((f,i)=>{h+='<tr><td>'+(i+1)+'</td><td>'+fabName(f)+'</td><td class="num">'+fmtN(f.totalDemandQty)+'</td><td class="num">'+(f.greigeRows.length?fmtN(f.matchedGreigeStockQty):'<span class="pill na">未匹配</span>')+'</td><td class="num">'+(f.shortageQty?'<b style="color:#dc2626">'+fmtN(f.shortageQty)+'</b>':"0")+'</td><td>'+pill(f.riskLevel)+'</td></tr>'});
+  h+='</tbody></table></div></div>';
+  $("pg-dash").innerHTML=h;
+  drawCharts();
+}
+function killCharts(){Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}});charts={}}
+function drawCharts(){
+  killCharts();
+  const hasChart=typeof Chart!=="undefined";
+  const shipRows=SHIP.filter(s=>s.date);
+  if(!hasChart){ /* 離線 fallback 表格 */
+    $("chShipFb").innerHTML="<table><tbody>"+shipRows.map(s=>"<tr><td>"+s.ship+"</td><td class='num'>"+fmtN(s.qty)+"</td></tr>").join("")+"</tbody></table>";
+    return;
+  }
+  charts.ship=new Chart($("chShip"),{type:"bar",data:{labels:shipRows.map(s=>s.ship),datasets:[{label:"yds",data:shipRows.map(s=>s.qty),backgroundColor:"#f59e0b"}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmtN(v)}}}}});
+  const top=FAB.slice(0,12);
+  charts.cmp=new Chart($("chCmp"),{type:"bar",data:{labels:top.map(f=>f.weightOz+"oz/"+f.width+'"'),datasets:[
+    {label:"需求 Demand",data:top.map(f=>f.totalDemandQty),backgroundColor:"#3b82f6"},
+    {label:"胚布 Greige",data:top.map(f=>f.matchedGreigeStockQty||0),backgroundColor:"#10b981"}]},
+    options:{scales:{y:{ticks:{callback:v=>fmtN(v)}}}}});
+  const rc={low:0,med:0,high:0,crit:0};FAB.forEach(f=>rc[f.riskLevel]++);
+  charts.risk=new Chart($("chRisk"),{type:"doughnut",data:{labels:[t("riskLow"),t("riskMed"),t("riskHigh"),t("riskCrit")],datasets:[{data:[rc.low,rc.med,rc.high,rc.crit],backgroundColor:["#10b981","#f59e0b","#ef4444","#1e2640"]}]}});
+  const mon={};S.orders.forEach(o=>{if(o._ship){const k=(o._ship.getMonth()+1)+"月";mon[k]=(mon[k]||0)+(+o.qty||0)}});
+  const mk=Object.keys(mon).sort((a,b)=>parseInt(a)-parseInt(b));
+  charts.mon=new Chart($("chMon"),{type:"line",data:{labels:mk,datasets:[{label:"yds",data:mk.map(k=>mon[k]),borderColor:"#f59e0b",backgroundColor:"rgba(245,158,11,.15)",fill:true,tension:.3}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmtN(v)}}}}});
+}
+
+/* ---------- 通用篩選列 ---------- */
+function fbarHTML(id,opts){ /* opts: {month,po,oz,width,color,risk} */
+  let h='<div class="fbar"><input class="grow" id="'+id+'q" placeholder="'+t("search")+'" oninput="renderTab()">';
+  if(opts.month){const ms=[...new Set(S.orders.filter(o=>o._ship).map(o=>o._ship.getMonth()+1))].sort((a,b)=>a-b);
+    h+='<select id="'+id+'m" onchange="renderTab()"><option value="">'+t("allMonth")+'</option>'+ms.map(m=>'<option'+(gv(id+"m")==String(m)?" selected":"")+'>'+m+'</option>').join("")+'</select>';}
+  if(opts.po){const ps=[...new Set(S.orders.map(o=>o.poNo))].sort();
+    h+='<select id="'+id+'p" onchange="renderTab()"><option value="">'+t("allPO")+'</option>'+ps.map(p=>'<option'+(gv(id+"p")==p?" selected":"")+'>'+p+'</option>').join("")+'</select>';}
+  if(opts.oz){const os=[...new Set(S.orders.map(o=>o.weightOz))].sort((a,b)=>a-b);
+    h+='<select id="'+id+'o" onchange="renderTab()"><option value="">'+t("allOZ")+'</option>'+os.map(o=>'<option'+(gv(id+"o")==String(o)?" selected":"")+'>'+o+'</option>').join("")+'</select>';}
+  if(opts.width){const ws=[...new Set(S.orders.map(o=>o.width))].sort((a,b)=>a-b);
+    h+='<select id="'+id+'w" onchange="renderTab()"><option value="">'+t("allWidth")+'</option>'+ws.map(w=>'<option'+(gv(id+"w")==String(w)?" selected":"")+'>'+w+'</option>').join("")+'</select>';}
+  if(opts.risk)h+='<select id="'+id+'r" onchange="renderTab()"><option value="">'+t("allRisk")+'</option>'+["low","med","high","crit"].map(r=>'<option value="'+r+'"'+(gv(id+"r")==r?" selected":"")+'>'+t("risk"+({low:"Low",med:"Med",high:"High",crit:"Crit"})[r])+'</option>').join("")+'</select>';
+  h+='<button class="btn line" onclick="exportCurrent(\''+id+'\')">'+t("exportCur")+'</button></div>';
+  return h;
+}
+const fVals={};
+function gv(id){return fVals[id]||""}
+document.addEventListener("input",e=>{if(e.target.id)fVals[e.target.id]=e.target.value});
+document.addEventListener("change",e=>{if(e.target.id)fVals[e.target.id]=e.target.value});
+function sorter(list,key){const st=sortState[curTab];if(!st)return list;
+  return [...list].sort((a,b)=>{let x=a[st.k],y=b[st.k];if(x==null)return 1;if(y==null)return -1;
+    if(typeof x==="number"&&typeof y==="number")return st.d?y-x:x-y;
+    return st.d?String(y).localeCompare(String(x)):String(x).localeCompare(String(y))});}
+function thSort(k,label,num){return '<th class="'+(num?"num":"")+'" onclick="setSort(\''+k+'\')">'+label+' ⇅</th>'}
+function setSort(k){const st=sortState[curTab];sortState[curTab]=st&&st.k===k?{k,d:!st.d}:{k,d:false};renderTab()}
+window.setSort=setSort;
+
+/* ---------- 訂單需求 ---------- */
+let curRows=[];
+function renderOrders(){
+  const q=(gv("foq")||"").toLowerCase(),mo=gv("fom"),po=gv("fop"),oz=gv("foo"),wd=gv("fow");
+  let rows=S.orders.filter(o=>{
+    if(q&&!(o.poNo+" "+o.yarn+" "+o.color+" "+o.remark).toLowerCase().includes(q))return false;
+    if(mo&&(!o._ship||String(o._ship.getMonth()+1)!==mo))return false;
+    if(po&&o.poNo!==po)return false;
+    if(oz&&String(o.weightOz)!==oz)return false;
+    if(wd&&String(o.width)!==wd)return false;
+    return true});
+  rows=sorter(rows);curRows=rows;
+  let h='<div class="panel"><h3>📦 '+t("tabOrders")+' <span class="tag">'+rows.length+' rows / '+fmtN(rows.reduce((s,r)=>s+(+r.qty||0),0))+' yds</span><span class="hgrow" style="flex:1"></span><button class="btn amber" onclick="editRow(\'orders\',null)">＋ 新增</button></h3>'
+   +fbarHTML("fo",{month:1,po:1,oz:1,width:1})
+   +'<div class="tblwrap"><table><thead><tr>'+thSort("orderDate","Order Date")+thSort("poNo","PO")+thSort("weightOz","OZ",1)+thSort("width","Width",1)+thSort("gy","G/Y",1)+thSort("yarn","Yarn")+thSort("color","Color")+thSort("qty","Q'ty",1)+thSort("estiShipDay","Esti Ship")+'<th>NewColor</th><th>Remark</th><th></th></tr></thead><tbody>';
+  rows.forEach(o=>{h+='<tr'+(o._needLD?' style="background:#fff7ed"':'')+'><td>'+esc(o.orderDate||"")+'</td><td><b>'+esc(o.poNo)+'</b></td><td class="num">'+o.weightOz+'</td><td class="num">'+o.width+'</td><td class="num">'+(o.gy||"")+'</td><td>'+esc(o.yarn)+(o._yn.grs?' <span class="pill grs">GRS/RC</span>':'')+'</td><td>'+esc(o.color)+'</td><td class="num">'+fmtN(o.qty)+'</td><td>'+(o.estiShipDay||'<span class="pill ld">Need LD</span>')+'</td>'
+    +'<td><input type="checkbox" '+(o.newColor?"checked":"")+' onchange="toggleNewColor(\''+o.id+'\',this.checked)" title="新顏色 +7 天"></td><td>'+esc(o.remark||"")+'</td>'
+    +'<td><button class="btn line" style="padding:3px 8px" onclick="editRow(\'orders\',\''+o.id+'\')">✏️</button></td></tr>'});
+  h+='</tbody></table></div><div class="hint">☑️ NewColor = 新顏色（交期自動 +7 天）；橘底列 = Need LD approval（無交期）。</div></div>';
+  $("pg-orders").innerHTML=h;
+}
+function toggleNewColor(id,v){const o=S.orders.find(x=>x.id===id);if(o){o.newColor=v;saveLocal();renderTab()}}
+window.toggleNewColor=toggleNewColor;
+
+/* ---------- 依交期 ---------- */
+function renderByShip(){
+  const q=(gv("fsq")||"").toLowerCase();
+  let rows=SHIP.filter(s=>!q||s.ship.toLowerCase().includes(q)||s.maxFab.toLowerCase().includes(q));
+  curRows=rows.map(s=>({ship:s.ship,qty:s.qty,po:[...s.pos].join(", "),fabrics:s.fabs.size,maxFab:s.maxFab,risk:s.risk}));
+  let h='<div class="panel"><h3>🗓️ '+t("tabByShip")+'</h3>'+fbarHTML("fs",{})
+   +'<div class="tblwrap"><table><thead><tr><th>'+t("shipDate")+'</th><th class="num">'+t("totalQty")+'</th><th class="num">'+t("poCount")+'</th><th class="num">'+t("fabricCount")+'</th><th>'+t("maxFabric")+'</th><th>PO</th><th>'+t("risk")+'</th></tr></thead><tbody>';
+  rows.forEach(s=>{h+='<tr><td><b>'+esc(s.ship)+'</b></td><td class="num">'+fmtN(s.qty)+'</td><td class="num">'+s.pos.size+'</td><td class="num">'+s.fabs.size+'</td><td>'+esc(s.maxFab)+'</td><td style="white-space:normal;max-width:260px">'+[...s.pos].join(", ")+'</td><td>'+pill(s.risk)+'</td></tr>'});
+  h+='</tbody></table></div></div>';
+  $("pg-byship").innerHTML=h;
+}
+
+/* ---------- 依布種 ---------- */
+function renderByFabric(){
+  const q=(gv("ffq")||"").toLowerCase(),rk=gv("ffr");
+  let rows=FAB.filter(f=>{if(q&&!(f.fabricKey+" "+f.poArr.join(" ")).toLowerCase().includes(q))return false;if(rk&&f.riskLevel!==rk)return false;return true});
+  curRows=rows.map(f=>({fabric:fabName(f).replace(/<[^>]+>/g,""),demand:f.totalDemandQty,stock:f.matchedGreigeStockQty,balance:f.stockBalance,shortage:f.shortageQty,earliest:f.nearestShip?fmtD(f.nearestShip):"",latest:f.latestShip?fmtD(f.latestShip):"",supplier:f.supplierType,leadtime:f.leadLabel,estArrival:f.estimatedArrivalDate?fmtD(f.estimatedArrivalDate):"",risk:f.riskLevel,action:f.actionNeeded}));
+  let h='<div class="panel"><h3>🧵 '+t("tabByFabric")+' <span class="tag">'+rows.length+'</span></h3>'+fbarHTML("ff",{risk:1})
+   +'<div class="tblwrap"><table><thead><tr><th>Fabric (OZ/Width/Yarn)</th><th class="num">'+t("demand")+'</th><th class="num">'+t("stock")+'</th><th class="num">'+t("balance")+'</th><th class="num">'+t("shortage")+'</th><th class="num">'+t("coverage")+'</th><th>Earliest</th><th>Latest</th><th>'+t("supplier")+'</th><th>'+t("leadtime")+'</th><th>'+t("estArrival")+'</th><th>'+t("risk")+'</th><th>'+t("action")+'</th></tr></thead><tbody>';
+  rows.forEach(f=>{h+='<tr><td><b>'+fabName(f)+'</b><br><span class="hint">PO: '+f.poArr.join(", ")+'</span></td>'
+   +'<td class="num">'+fmtN(f.totalDemandQty)+'</td>'
+   +'<td class="num">'+(f.greigeRows.length?fmtN(f.matchedGreigeStockQty):'<span class="pill na">未匹配</span>')+'</td>'
+   +'<td class="num" style="color:'+(f.stockBalance>=0?"#047857":"#dc2626")+'">'+(f.stockBalance==null?"-":fmtN(f.stockBalance))+'</td>'
+   +'<td class="num">'+(f.shortageQty?'<b style="color:#dc2626">'+fmtN(f.shortageQty)+'</b>':"0")+'</td>'
+   +'<td class="num">'+(f.coverage==null?"-":Math.round(f.coverage*100)+"%")+'</td>'
+   +'<td>'+(f.nearestShip?fmtD(f.nearestShip):"-")+'</td><td>'+(f.latestShip?fmtD(f.latestShip):"-")+'</td>'
+   +'<td>'+(f.supplierType||'<span class="pill na">無資料</span>')+'</td><td>'+esc(f.leadLabel||"-")+'</td>'
+   +'<td>'+(f.estimatedArrivalDate?fmtD(f.estimatedArrivalDate):"-")+(f.newColor?' <span class="pill ld">+7d 新色</span>':'')+'</td>'
+   +'<td>'+pill(f.riskLevel)+'</td><td style="white-space:normal;min-width:180px;font-size:11px">'+esc(f.riskReason)+(f.actionNeeded!=="—"?'<br><b>➡ '+esc(f.actionNeeded)+'</b>':'')+'</td></tr>'});
+  h+='</tbody></table></div></div>';
+  $("pg-byfabric").innerHTML=h;
+}
+
+/* ---------- 胚布庫存 ---------- */
+function renderGreige(){
+  const q=(gv("fgq")||"").toLowerCase();
+  let rows=S.greige.filter(g=>!q||(g.spec+" "+g.yarn+" "+g.remark).toLowerCase().includes(q));
+  rows=sorter(rows);curRows=rows;
+  const tot=rows.reduce((s,g)=>s+(+g.stockQty||0),0);
+  let h='<div class="panel"><h3>🏭 '+t("tabGreige")+' <span class="tag">'+rows.length+' / '+fmtN(tot)+' yds</span><span style="flex:1"></span><button class="btn amber" onclick="editRow(\'greige\',null)">＋ 新增</button></h3>'+fbarHTML("fg",{})
+   +'<div class="tblwrap"><table><thead><tr>'+thSort("sourceSheet","Sheet")+thSort("spec","規格 SPEC")+thSort("finishedWidth","Finished Width")+thSort("yarn","紗種 Yarn")+thSort("weightOz","重量 OZ",1)+thSort("stockQty","Stock",1)+thSort("dillardRecommendationQty","建議數量",1)+'<th>備註 Remark</th><th></th></tr></thead><tbody>';
+  rows.forEach(g=>{h+='<tr><td>'+esc(g.sourceSheet)+'</td><td>'+esc(g.spec)+'</td><td>'+esc(g.finishedWidth||"")+'</td><td>'+esc(g.yarn)+'</td><td class="num">'+g.weightOz+'</td><td class="num"><b>'+fmtN(g.stockQty)+'</b></td><td class="num">'+(g.dillardRecommendationQty?fmtN(g.dillardRecommendationQty):"")+'</td><td style="white-space:normal;max-width:300px;font-size:11px">'+esc(g.remark||"")+'</td><td><button class="btn line" style="padding:3px 8px" onclick="editRow(\'greige\',\''+g.id+'\')">✏️</button></td></tr>'});
+  h+='</tbody></table></div></div>';
+  $("pg-greige").innerHTML=h;
+}
+
+/* ---------- 大江 / 外購交期 ---------- */
+function renderTC(){
+  const q=(gv("ftq")||"").toLowerCase();
+  let rows=S.tachiang.filter(r=>!q||(r.compose+" "+r.weightOz).toLowerCase().includes(q));curRows=rows;
+  let h='<div class="panel"><h3>🚢 Ta Chiang Fabrics Delivery <span class="tag">20260701</span></h3>'+fbarHTML("ft",{})
+   +'<div class="tblwrap"><table><thead><tr><th>Content</th><th class="num">Weight</th><th>Compose</th><th class="num">Width</th><th class="num">MCQ</th><th class="num">Greige Ready</th><th class="num">No Safety Stock</th><th class="num">Transit</th></tr></thead><tbody>';
+  rows.forEach(r=>{h+='<tr><td>100% Spun Polyester</td><td class="num">'+r.weightOz+' oz</td><td>'+esc(r.compose)+'</td><td class="num">'+r.width+'"</td><td class="num">'+fmtN(r.mcq)+'</td><td class="num okc">'+r.greigeReadyDays+' d</td><td class="num" style="color:#b45309">'+r.noSafetyStockDays+' d</td><td class="num">'+r.normalTransitDays+' d</td></tr>'});
+  h+='</tbody></table></div><div class="hint">PS: 1. New color add 7 days.　2. GRS 客製版本交期需依紗廠生產狀況另行回覆。</div></div>';
+  $("pg-tachiang").innerHTML=h;
+}
+function renderOS(){
+  const q=(gv("fuq")||"").toLowerCase();
+  let rows=S.outsource.filter(r=>!q||(r.content+" "+r.compose).toLowerCase().includes(q));curRows=rows;
+  let h='<div class="panel"><h3>🌐 Out Source Fabrics Delivery <span class="tag">20260701</span></h3>'+fbarHTML("fu",{})
+   +'<div class="tblwrap"><table><thead><tr><th>Content</th><th class="num">Weight</th><th>Compose</th><th class="num">MOQ</th><th class="num">MCQ</th><th class="num">Leadtime</th><th class="num">Transit</th></tr></thead><tbody>';
+  rows.forEach(r=>{h+='<tr><td>'+esc(r.content)+'</td><td class="num">'+r.weightOz+' oz</td><td>'+esc(r.compose)+'</td><td class="num">'+fmtN(r.moq)+'</td><td class="num">'+fmtN(r.mcq)+'</td><td class="num">'+(r.leadtimeDays==null?'<span class="pill na">PS 另議</span>':r.leadtimeDays+" d")+'</td><td class="num">'+r.normalTransitDays+' d</td></tr>'});
+  h+='</tbody></table></div><div class="hint">PS: 1. New color add 7 days.　2. GRS 客製版本交期需依紗廠生產狀況另行回覆。</div></div>';
+  $("pg-outsource").innerHTML=h;
+}
+
+/* ---------- 風險分析 ---------- */
+function renderRisk(){
+  const order={crit:0,high:1,med:2,low:3};
+  const rows=[...FAB].sort((a,b)=>order[a.riskLevel]-order[b.riskLevel]||b.shortageQty-a.shortageQty);
+  curRows=rows.map(f=>({fabric:f.fabricKey,risk:f.riskLevel,reason:f.riskReason,shortage:f.shortageQty,required:f.nearestShip?fmtD(f.nearestShip):"",estArrival:f.estimatedArrivalDate?fmtD(f.estimatedArrivalDate):"",action:f.actionNeeded}));
+  let h='<div class="panel"><h3>⚠️ '+t("tabRisk")+'</h3><div class="legend">'
+   +'<span><span class="dot" style="background:#10b981"></span>Low 庫存足夠</span><span><span class="dot" style="background:#f59e0b"></span>Medium 缺料但交期可趕</span><span><span class="dot" style="background:#ef4444"></span>High 缺料且交期趕不上 / 未匹配</span><span><span class="dot" style="background:#1e2640"></span>Critical LD/GRS/無交期資料</span></div>'
+   +'<div class="fbar"><button class="btn line" onclick="exportCurrent(\'risk\')">'+t("exportCur")+'</button></div>'
+   +'<div class="tblwrap"><table><thead><tr><th>'+t("risk")+'</th><th>Fabric</th><th class="num">'+t("demand")+'</th><th class="num">'+t("shortage")+'</th><th>需求交期</th><th>'+t("estArrival")+'</th><th>原因</th><th>'+t("action")+'</th></tr></thead><tbody>';
+  rows.forEach(f=>{h+='<tr><td>'+pill(f.riskLevel)+'</td><td><b>'+fabName(f)+'</b><br><span class="hint">'+f.colorArr.slice(0,4).map(esc).join(" / ")+(f.colorArr.length>4?" …":"")+'</span></td><td class="num">'+fmtN(f.totalDemandQty)+'</td><td class="num">'+(f.shortageQty?'<b style="color:#dc2626">'+fmtN(f.shortageQty)+'</b>':"0")+'</td><td>'+(f.nearestShip?fmtD(f.nearestShip):"-")+'</td><td>'+(f.estimatedArrivalDate?fmtD(f.estimatedArrivalDate):"-")+'</td><td style="white-space:normal;max-width:280px;font-size:11px">'+esc(f.riskReason||"—")+'</td><td style="white-space:normal;max-width:200px;font-size:11px"><b>'+esc(f.actionNeeded)+'</b></td></tr>'});
+  h+='</tbody></table></div></div>';
+  $("pg-risk").innerHTML=h;
+}
+/* ---------- 版本比較 ---------- */
+function snapshot(files){
+  calcAll();const m=metrics();
+  S.versions.push({versionId:uid(),uploadDateTime:nowStr(),sourceFiles:files||"manual",
+    totalOrderQty:m.total,totalGreigeStock:m.greigeTotal,
+    shortageItems:FAB.filter(f=>f.shortageQty>0&&f.greigeRows.length).map(f=>f.fabricKey),
+    delayRiskItems:m.delayItems,
+    dataSnapshot:{orders:JSON.parse(JSON.stringify(S.orders.map(o=>({poNo:o.poNo,weightOz:o.weightOz,width:o.width,yarn:o.yarn,color:o.color,qty:o.qty,estiShipDay:o.estiShipDay})))),
+      greige:JSON.parse(JSON.stringify(S.greige.map(g=>({spec:g.spec,yarn:g.yarn,weightOz:g.weightOz,stockQty:g.stockQty}))))}});
+  if(S.versions.length>20)S.versions.shift();
+  saveLocal();
+}
+function okey(o){return [o.poNo,o.weightOz,o.width,o.yarn,o.color].join("|")}
+function gkey(g){return [g.spec,g.yarn,g.weightOz].join("|")}
+function renderVersion(){
+  let h='<div class="panel"><h3>🔄 '+t("tabVer")+' <span class="tag">'+S.versions.length+' versions</span><span style="flex:1"></span><button class="btn navy" onclick="snapshot(\'manual snapshot\');renderTab()">📸 手動建立快照</button></h3>';
+  if(S.versions.length<1){h+='<div class="hint">尚無版本。每次匯入合併後會自動保留快照。</div></div>';$("pg-version").innerHTML=h;return}
+  const opts=S.versions.map((v,i)=>'<option value="'+i+'">v'+(i+1)+' · '+v.uploadDateTime+' · '+esc(v.sourceFiles)+'</option>').join("");
+  const ia=fVals.verA!=null&&fVals.verA!==""?+fVals.verA:Math.max(0,S.versions.length-2), ib=fVals.verB!=null&&fVals.verB!==""?+fVals.verB:S.versions.length-1;
+  h+='<div class="fbar"><select id="verA" onchange="fVals.verA=this.value;renderTab()">'+opts+'</select> ➡ <select id="verB" onchange="fVals.verB=this.value;renderTab()">'+opts+'</select></div>';
+  const A=S.versions[ia],B=S.versions[ib];
+  setTimeout(()=>{if($("verA"))$("verA").value=ia;if($("verB"))$("verB").value=ib;},0);
+  if(!A||!B){h+='</div>';$("pg-version").innerHTML=h;return}
+  h+='<div class="cards">'
+   +'<div class="card info"><div class="cv">'+fmtN(A.totalOrderQty)+' → '+fmtN(B.totalOrderQty)+'</div><div class="cl">'+t("cTotal")+'</div></div>'
+   +'<div class="card info"><div class="cv">'+fmtN(A.totalGreigeStock)+' → '+fmtN(B.totalGreigeStock)+'</div><div class="cl">'+t("cGreige")+'</div></div>'
+   +'<div class="card '+(B.shortageItems.length>A.shortageItems.length?"bad":"ok")+'"><div class="cv">'+A.shortageItems.length+' → '+B.shortageItems.length+'</div><div class="cl">'+t("cShort")+'</div></div></div>';
+  const oa={},ob={};A.dataSnapshot.orders.forEach(o=>oa[okey(o)]=o);B.dataSnapshot.orders.forEach(o=>ob[okey(o)]=o);
+  const diffs=[];
+  Object.keys(ob).forEach(k=>{const n=ob[k],o=oa[k];
+    if(!o)diffs.push(["add",t("verNew"),k,"",fmtN(n.qty)+" / "+(n.estiShipDay||"-")]);
+    else{
+      if(+n.qty!==+o.qty)diffs.push(["chg",+n.qty>+o.qty?t("verUp"):t("verDown"),k,fmtN(o.qty),fmtN(n.qty)]);
+      if((o.estiShipDay||"")!==(n.estiShipDay||"")){
+        const da=parseMD(o.estiShipDay),db=parseMD(n.estiShipDay);
+        const early=da&&db&&db<da;
+        diffs.push([early?"add":"chg",early?t("verEarly"):t("verLate"),k,o.estiShipDay||"-",n.estiShipDay||"-"]);}
+    }});
+  Object.keys(oa).forEach(k=>{if(!ob[k])diffs.push(["del",t("verDel"),k,fmtN(oa[k].qty),""])});
+  B.shortageItems.filter(k=>!A.shortageItems.includes(k)).forEach(k=>diffs.push(["del",t("verShortNew"),k,"",""]));
+  A.shortageItems.filter(k=>!B.shortageItems.includes(k)).forEach(k=>diffs.push(["add",t("verShortFix"),k,"",""]));
+  const ga={},gb={};A.dataSnapshot.greige.forEach(g=>ga[gkey(g)]=+g.stockQty||0);B.dataSnapshot.greige.forEach(g=>gb[gkey(g)]=+g.stockQty||0);
+  Object.keys(gb).forEach(k=>{const o=ga[k]||0,n=gb[k];if(n!==o)diffs.push([n>o?"add":"del",n>o?t("verGUp"):t("verGDown"),k,fmtN(o),fmtN(n)])});
+  h+='<div class="tblwrap"><table><thead><tr><th>類型</th><th>項目 Key</th><th class="num">舊 v'+(ia+1)+'</th><th class="num">新 v'+(ib+1)+'</th></tr></thead><tbody>';
+  if(!diffs.length)h+='<tr><td colspan="4" style="color:#94a3b8">無變動 No changes</td></tr>';
+  diffs.forEach(d=>{h+='<tr class="diff-'+d[0]+'"><td><b>'+d[1]+'</b></td><td style="white-space:normal">'+esc(d[2])+'</td><td class="num">'+d[3]+'</td><td class="num">'+d[4]+'</td></tr>'});
+  h+='</tbody></table></div><div class="legend"><span><span class="dot" style="background:#d1fae5"></span>改善/新增</span><span><span class="dot" style="background:#fee2e2"></span>惡化/取消</span><span><span class="dot" style="background:#fef3c7"></span>變更</span></div></div>';
+  $("pg-version").innerHTML=h;
+}
+
+/* ---------- 布種對應 Mapping ---------- */
+function renderMapping(){
+  const unmatched=FAB.filter(f=>!f.greigeRows.length);
+  let h='<div class="panel"><h3>🔗 '+t("tabMap")+'</h3>';
+  h+='<div class="hint">'+t("unmatchedHint")+'</div>';
+  if(!unmatched.length)h+='<div class="okc" style="margin:8px 0">✅ 所有布種皆已匹配。</div>';
+  else{
+    h+='<div class="tblwrap"><table><thead><tr><th>Order Fabric</th><th class="num">'+t("demand")+'</th><th>對應胚布 Greige</th><th>對應供應商 Supplier</th><th></th></tr></thead><tbody>';
+    unmatched.forEach((f,i)=>{
+      const gOpts='<option value="">（不對應）</option>'+S.greige.map(g=>'<option value="'+esc(g._key)+'">'+esc(g.weightOz+'oz '+(g.finishedWidth||"?")+' '+g.yarn+' ('+fmtN(g.stockQty)+'y)')+'</option>').join("");
+      const sOpts='<option value="">（自動/無）</option>'+S.tachiang.map((r,j)=>'<option value="tc:'+j+'">大江 '+r.weightOz+'oz '+r.width+'" '+esc(r.compose)+'</option>').join("")+S.outsource.map((r,j)=>'<option value="os:'+j+'">外購 '+r.weightOz+'oz '+esc(r.compose)+'</option>').join("");
+      h+='<tr><td><b>'+fabName(f)+'</b></td><td class="num">'+fmtN(f.totalDemandQty)+'</td><td><select id="mg'+i+'">'+gOpts+'</select></td><td><select id="ms'+i+'">'+sOpts+'</select></td><td><button class="btn amber" data-fk="'+esc(f.fabricKey)+'" data-i="'+i+'" onclick="addAlias(this)">＋ 建立對應</button></td></tr>'});
+    h+='</tbody></table></div>';
+  }
+  h+='<h3 style="margin-top:16px">已建立的別名 Aliases <span class="tag">'+S.aliases.length+'</span></h3><div class="tblwrap"><table><thead><tr><th>Order Pattern (oz|width|yarn)</th><th>Greige Pattern</th><th>Supplier</th><th>Fabric Name</th><th></th></tr></thead><tbody>';
+  S.aliases.forEach(a=>{h+='<tr><td>'+esc(a.orderKey)+'</td><td>'+esc(a.greigeKey||"-")+'</td><td>'+esc(a.supplierKey||"-")+'</td><td>'+esc(a.fabricName||"")+'</td><td><button class="btn red" style="padding:3px 8px" onclick="delAlias(\''+a.id+'\')">🗑️</button></td></tr>'});
+  h+='</tbody></table></div><div class="hint">匹配優先序：別名 Alias → 自動匹配（OZ ±0.05、Width ±0.5"、紗種標準化後 Token 相同；MVS12/300D = MVS12*T300D = 12\'S*T300D）。</div></div>';
+  $("pg-mapping").innerHTML=h;
+}
+function addAlias(btn){
+  const i=btn.dataset.i,orderKey=btn.dataset.fk;
+  const g=$("mg"+i).value,s=$("ms"+i).value;
+  if(!g&&!s){toast("請至少選擇一項對應");return}
+  S.aliases.push({id:uid(),orderKey,greigeKey:g,supplierKey:s,fabricName:orderKey});
+  saveLocal();toast(t("saved"));renderTab();
+}
+function delAlias(id){S.aliases=S.aliases.filter(a=>a.id!==id);saveLocal();renderTab()}
+window.addAlias=addAlias;window.delAlias=delAlias;
+
+/* ---------- 系統設定 ---------- */
+function renderSettings(){
+  const c=S.cfg;
+  $("pg-settings").innerHTML='<div class="panel"><h3>⚙️ '+t("tabSet")+'</h3>'
+   +'<div class="mrow"><div><label>GAS Web App Endpoint</label><input type="text" id="cfgGas" value="'+esc(c.gasEndpoint)+'" placeholder="https://script.google.com/macros/s/…/exec"></div>'
+   +'<div><label>GAS Token（選填）</label><input type="text" id="cfgTok" value="'+esc(c.gasToken)+'"></div></div>'
+   +'<div class="mrow"><div><label>Telegram Bot Token</label><input type="password" id="cfgTg" value="'+esc(c.tgToken)+'" placeholder="123456:ABC…"></div>'
+   +'<div><label>Telegram Chat ID</label><input type="text" id="cfgChat" value="'+esc(c.tgChat)+'" placeholder="5026942575"></div></div>'
+   +'<div class="mrow"><div><label>交期年份 Ship Date Year（PDF 只有月/日）</label><input type="number" id="cfgYear" value="'+(c.year||2026)+'"></div><div></div></div>'
+   +'<div class="mfoot" style="justify-content:flex-start"><button class="btn green" onclick="saveCfg()">💾 儲存設定</button>'
+   +'<button class="btn line" onclick="exportJSON()">🧾 匯出 JSON 備份</button>'
+   +'<button class="btn line" onclick="exportCSVAll()">📑 匯出 CSV（訂單）</button>'
+   +'<button class="btn red" onclick="resetAll()">♻️ 清除資料並還原範例</button></div>'
+   +'<div class="hint">資料自動存於瀏覽器 localStorage；版本快照最多 20 版。Telegram 使用 parse_mode:HTML + escapeHtml；GAS 上傳使用 Content-Type: text/plain;charset=utf-8；日期一律本地時區。</div></div>';
+}
+function saveCfg(){S.cfg.gasEndpoint=$("cfgGas").value.trim();S.cfg.gasToken=$("cfgTok").value.trim();S.cfg.tgToken=$("cfgTg").value.trim();S.cfg.tgChat=$("cfgChat").value.trim();S.cfg.year=+$("cfgYear").value||2026;saveLocal();toast(t("saved"));renderTab()}
+function resetAll(){if(!confirm("確定清除全部資料並還原內建範例？"))return;localStorage.removeItem(LS_KEY);location.reload()}
+window.saveCfg=saveCfg;window.resetAll=resetAll;
+
+/* ---------- 列編輯 ---------- */
+const ORDER_FIELDS=[["orderDate","Order Date (M/D)"],["poNo","PO No."],["weightOz","OZ",1],["width","Width",1],["gy","G/Y",1],["yarn","Yarn"],["color","Color"],["qty","Q'ty",1],["estiShipDay","Esti Ship Day (M/D)"],["remark","Remark"]];
+const GREIGE_FIELDS=[["sourceSheet","Sheet (VRT/YD)"],["spec","規格 SPEC"],["finishedWidth","Finished Width"],["yarn","紗種 Yarn"],["weightOz","重量 OZ",1],["stockQty","Stock",1],["dillardRecommendationQty","建議數量",1],["vrtSafetyStock","Safety Stock",1],["remark","備註"]];
+function editRow(type,id){
+  editCtx={type,id};
+  const fields=type==="orders"?ORDER_FIELDS:GREIGE_FIELDS;
+  const row=id?(type==="orders"?S.orders:S.greige).find(r=>r.id===id)||{}:{};
+  document.getElementById("mEditTitle").textContent=(id?"✏️ 編輯":"＋ 新增")+(type==="orders"?" 訂單":" 胚布");
+  $("mEditBody").innerHTML='<div class="mrow" style="flex-wrap:wrap">'+fields.map(f=>'<div style="min-width:44%"><label>'+f[1]+'</label><input type="'+(f[2]?"number":"text")+'" step="any" id="ef_'+f[0]+'" value="'+esc(row[f[0]]==null?"":row[f[0]])+'"></div>').join("")+'</div>';
+  $("mEditDel").style.display=id?"":"none";
+  $("mEdit").classList.add("on");
+}
+function editSave(){
+  const type=editCtx.type,id=editCtx.id,fields=type==="orders"?ORDER_FIELDS:GREIGE_FIELDS;
+  const arr=type==="orders"?S.orders:S.greige;
+  let row=id?arr.find(r=>r.id===id):null;
+  if(!row){row={id:uid(),sourceFile:"manual",sourceDate:nowStr(),newColor:false};arr.push(row)}
+  fields.forEach(f=>{const v=$("ef_"+f[0]).value;row[f[0]]=f[2]?(v===""?null:+v):v.trim()});
+  saveLocal();closeModal("mEdit");toast(t("saved"));renderTab();
+}
+function editDelete(){
+  const type=editCtx.type,id=editCtx.id;
+  if(type==="orders")S.orders=S.orders.filter(r=>r.id!==id);else S.greige=S.greige.filter(r=>r.id!==id);
+  saveLocal();closeModal("mEdit");renderTab();
+}
+window.editRow=editRow;window.editSave=editSave;window.editDelete=editDelete;
+
+/* ================= 匯入 ================= */
+let excelWB=null;
+function openImport(kind){
+  document.getElementById("mImpTitle").textContent=kind==="pdf"?"📥 Import PDF":kind==="excel"?"📗 Import Excel / CSV":"📋 手動貼上 Paste";
+  $("impRaw").value="";$("impPrevWrap").style.display="none";previewData=null;excelWB=null;
+  $("impFile").value="";$("impFile").accept=kind==="pdf"?".pdf":kind==="excel"?".xlsx,.xls,.csv":".txt,.csv";
+  if(kind==="excel")$("impType").value="greige";
+  if(kind==="pdf")$("impType").value="orders";
+  $("mImport").classList.add("on");
+}
+window.openImport=openImport;
+async function onImpFile(e){
+  const f=e.target.files[0];if(!f)return;
+  try{
+    if(/\.pdf$/i.test(f.name))await loadPDF(f);
+    else if(/\.(xlsx|xls)$/i.test(f.name))await loadExcel(f);
+    else $("impRaw").value=await f.text();
+    const raw=$("impRaw").value;
+    if(/Ta Chiang/i.test(raw))$("impType").value="tachiang";
+    else if(/Out Source/i.test(raw))$("impType").value="outsource";
+    else if(/Esti\s*Ship|Order\s*Date/i.test(raw))$("impType").value="orders";
+    toast("檔案已讀取，請按 🔍 解析");
+  }catch(err){toast("讀取失敗："+err.message)}
+}
+async function loadPDF(file){
+  if(typeof pdfjsLib==="undefined")throw new Error("pdf.js 未載入（離線時請改用貼上）");
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let out=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    const lines={};
+    tc.items.forEach(it=>{const y=Math.round(it.transform[5]/3)*3;(lines[y]=lines[y]||[]).push({x:it.transform[4],s:it.str})});
+    Object.keys(lines).map(Number).sort((a,b)=>b-a).forEach(y=>{
+      const ln=lines[y].sort((a,b)=>a.x-b.x).map(i=>i.s).join(" ").replace(/\s+/g," ").trim();
+      if(ln)out.push(ln);});
+    out.push("--- page "+p+" ---");
+  }
+  $("impRaw").value=out.join("\n");
+}
+async function loadExcel(file){
+  const buf=await file.arrayBuffer();
+  excelWB=XLSX.read(buf,{type:"array",cellDates:false,raw:true});
+  $("impRaw").value="[Excel] "+file.name+"\nSheets: "+excelWB.SheetNames.join(", ")+"\n（Excel 檔直接按 🔍 解析，不需修改此區）";
+}
+function reparseRaw(){
+  const type=$("impType").value,raw=$("impRaw").value;
+  let res={rows:[],errs:[]};
+  if(type==="greige"&&excelWB)res=parseGreigeWB(excelWB);
+  else if(type==="orders")res=parseOrdersText(raw);
+  else if(type==="tachiang")res=parseTCText(raw);
+  else if(type==="outsource")res=parseOSText(raw);
+  else if(type==="greige")res=parseGreigeText(raw);
+  if(!res.rows.length){toast("解析不到資料，請檢查文字或資料類型");$("impErrs").textContent=res.errs.slice(0,10).join(" | ");$("impPrevWrap").style.display="";$("impPrevTbl").innerHTML="";return}
+  previewData={type,rows:res.rows};
+  showPreview(type,res.rows,res.errs);
+}
+window.reparseRaw=reparseRaw;
+function parseOrdersText(raw){
+  const rows=[],errs=[];
+  raw.split(/\n/).forEach(ln=>{
+    ln=ln.trim();
+    if(!ln||/^---/.test(ln)||/Order\s*Date|Esti\s*Ship/i.test(ln))return;
+    let tk=ln.includes("\t")?ln.split("\t").map(s=>s.trim()).filter(Boolean):ln.split(/\s+/);
+    try{
+      let i=0,orderDate="";
+      if(/^\d{1,2}\/\d{1,2}$/.test(tk[0])){orderDate=tk[0];i=1}
+      const poNo=tk[i];if(!/^\d+-\d+$/.test(poNo||""))throw 0;i++;
+      const oz=parseFloat(tk[i++]),width=parseFloat(tk[i++]),gy=parseInt(tk[i++]);
+      if(isNaN(oz)||isNaN(width))throw 0;
+      let rest=tk.slice(i),ship="",remark="",qty=null;
+      if(rest.length&&/^\d{1,2}\/\d{1,2}$/.test(rest[rest.length-1]))ship=rest.pop();
+      for(let j=rest.length-1;j>=0;j--){
+        const m=String(rest[j]).match(/^([\d,]+)(Need.*)?$/i);
+        if(m&&m[1].replace(/,/g,"").length>=3){
+          qty=+m[1].replace(/,/g,"");
+          const tail=rest.slice(j+1).join(" ");
+          remark=((m[2]||"")+" "+tail).trim();
+          rest=rest.slice(0,j);break;
+        }
+      }
+      if(qty==null)throw 0;
+      const yarn=rest[0]||"",color=rest.slice(1).join(" ");
+      rows.push({id:uid(),sourceFile:"import",sourceDate:nowStr(),orderDate,poNo,weightOz:oz,width,gy:isNaN(gy)?null:gy,yarn,color,qty,estiShipDay:ship,remark,newColor:false});
+    }catch(e){if(/\d/.test(ln))errs.push(ln)}
+  });
+  return{rows,errs};
+}
+function parseTCText(raw){
+  const rows=[],errs=[];
+  raw.split(/\n/).forEach(ln=>{
+    ln=ln.trim();if(!ln||/^---/.test(ln)||/Content|Normal|^PS|^Date|^Leadtime|Ta Chiang|Greige\s*$|Ready|Stock/i.test(ln)&&!/oz/i.test(ln))return;
+    const oz=(ln.match(/([\d.]+)\s*oz/i)||[])[1];
+    const days=[...ln.matchAll(/(\d+)\s*days/gi)].map(m=>+m[1]);
+    const mcqm=ln.match(/\b(\d{4,5})\b(?!\s*days)(?![T"])/);
+    const comp=(ln.match(/\/\s*([^\/]+?")\s/)||ln.match(/((?:\d+'?S|T?\d+D)[^ ]*\*[^ ]+")/)||[])[1]||"";
+    const wm=(comp||ln).match(/([\d.]+)\s*"/g);
+    if(oz&&days.length>=3){
+      rows.push({id:uid(),content:"100% Spun Polyester",weightOz:+oz,compose:comp.trim(),width:wm?parseFloat(wm[wm.length-1]):null,mcq:mcqm?+mcqm[1]:null,greigeReadyDays:days[0],noSafetyStockDays:days[1],normalTransitDays:days[2],newColorExtraDays:7,grsRemark:"GRS 另議"});
+    }else if(/oz/i.test(ln))errs.push(ln);
+  });
+  return{rows,errs};
+}
+function parseOSText(raw){
+  const rows=[],errs=[];
+  raw.split(/\n/).forEach(ln=>{
+    ln=ln.trim();if(!ln||/^---/.test(ln)||/^Content|^PS|^Date|Out Source/i.test(ln))return;
+    const oz=(ln.match(/([\d.]+)\s*oz/i)||[])[1];
+    if(!oz)return;
+    const days=[...ln.matchAll(/(\d+)\s*days/gi)].map(m=>+m[1]);
+    const nums=[...ln.matchAll(/\b(\d{4,6})\b(?!\s*days)(?!T)/g)].map(m=>+m[1]).filter(n=>n>=500);
+    const comp=(ln.match(/(\d+T\*[^ ]+|Knit\s*mesh)/i)||[])[1]||"";
+    const content=(ln.split(/[\d.]+\s*oz/i)[0]||"").trim()||"Out Source";
+    const wm=comp.match(/([\d.]+)"/);
+    if(days.length>=1){
+      const lead=/PS/i.test(ln)&&days.length<2?null:days.length>=2?days[0]:days[0];
+      rows.push({id:uid(),content,weightOz:+oz,compose:comp,width:wm?+wm[1]:null,moq:nums[0]||null,mcq:nums[1]||nums[0]||null,leadtimeDays:days.length>=2?days[0]:(/PS/i.test(ln)?null:days[0]),normalTransitDays:days[days.length-1],newColorExtraDays:7,grsRemark:"GRS 另議"});
+    }else errs.push(ln);
+  });
+  return{rows,errs};
+}
+function parseGreigeWB(wb){
+  const rows=[],errs=[];
+  wb.SheetNames.forEach(sn=>{
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});
+    aoa.forEach(r=>{
+      if(!r||!r[0]||typeof r[0]!=="string")return;
+      const spec=String(r[0]).trim();
+      if(!/\d+\*\d+/.test(spec))return;
+      const oz=widthNum(r[3]);
+      const rmk=[r[6],r[7]].filter(x=>typeof x==="string"&&x.trim()).map(x=>x.trim().replace(/\s+/g," ")).join("; ");
+      rows.push({id:uid(),sourceSheet:sn,spec,finishedWidth:r[1]?String(r[1]).trim():"",yarn:r[2]?String(r[2]).trim():"",weightOz:oz,stockQty:typeof r[4]==="number"?r[4]:(+String(r[4]||"").replace(/,/g,"")||0),dillardRecommendationQty:typeof r[5]==="number"?r[5]:0,vrtSafetyStock:typeof r[5]==="number"?r[5]:0,minInventory:typeof r[6]==="number"?r[6]:null,remark:rmk});
+    });
+  });
+  return{rows,errs};
+}
+function parseGreigeText(raw){
+  const rows=[],errs=[];
+  raw.split(/\n/).forEach(ln=>{
+    ln=ln.trim();if(!ln)return;
+    const tk=ln.includes("\t")?ln.split("\t").map(s=>s.trim()):ln.split(/\s{2,}|,/).map(s=>s.trim());
+    if(tk.length>=5&&/\d+\*\d+/.test(tk[0])){
+      rows.push({id:uid(),sourceSheet:"paste",spec:tk[0],finishedWidth:tk[1],yarn:tk[2],weightOz:widthNum(tk[3]),stockQty:+String(tk[4]).replace(/,/g,"")||0,dillardRecommendationQty:+String(tk[5]||"").replace(/,/g,"")||0,remark:tk.slice(6).join(" ")});
+    }else if(/\d/.test(ln))errs.push(ln);
+  });
+  return{rows,errs};
+}
+const PREV_COLS={
+ orders:[["orderDate","OrderDate"],["poNo","PO"],["weightOz","OZ"],["width","Width"],["gy","G/Y"],["yarn","Yarn"],["color","Color"],["qty","Qty"],["estiShipDay","Ship"],["remark","Remark"]],
+ tachiang:[["weightOz","OZ"],["compose","Compose"],["width","Width"],["mcq","MCQ"],["greigeReadyDays","GreigeReady"],["noSafetyStockDays","NoSafety"],["normalTransitDays","Transit"]],
+ outsource:[["content","Content"],["weightOz","OZ"],["compose","Compose"],["width","Width"],["moq","MOQ"],["mcq","MCQ"],["leadtimeDays","Lead"],["normalTransitDays","Transit"]],
+ greige:[["sourceSheet","Sheet"],["spec","SPEC"],["finishedWidth","FinWidth"],["yarn","Yarn"],["weightOz","OZ"],["stockQty","Stock"],["dillardRecommendationQty","建議"],["remark","Remark"]]};
+const NUM_FIELDS=["weightOz","width","gy","qty","mcq","moq","greigeReadyDays","noSafetyStockDays","normalTransitDays","leadtimeDays","stockQty","dillardRecommendationQty"];
+function showPreview(type,rows,errs){
+  const cols=PREV_COLS[type];
+  let h='<table><thead><tr>'+cols.map(c=>'<th>'+c[1]+'</th>').join("")+'</tr></thead><tbody>';
+  rows.forEach((r,i)=>{h+='<tr>'+cols.map(c=>'<td contenteditable data-r="'+i+'" data-f="'+c[0]+'" oninput="prevEdit(this)">'+esc(r[c[0]]==null?"":r[c[0]])+'</td>').join("")+'</tr>'});
+  h+='</tbody></table>';
+  $("impPrevTbl").innerHTML=h;
+  $("impErrs").innerHTML=errs.length?("⚠️ 無法解析 "+errs.length+" 行（Unmapped / Error Review，可修正原始文字後重新解析）：<br>"+errs.slice(0,8).map(esc).join("<br>")):'<span class="okc">✅ 全部解析成功：'+rows.length+' 筆</span>';
+  $("impPrevWrap").style.display="";
+}
+function prevEdit(td){
+  const r=previewData.rows[+td.dataset.r],f=td.dataset.f,v=td.textContent.trim();
+  r[f]=NUM_FIELDS.includes(f)?(v===""?null:+v.replace(/,/g,"")):v;
+}
+window.prevEdit=prevEdit;
+function confirmMerge(){
+  if(!previewData){toast("請先解析");return}
+  snapshot("before import "+previewData.type); /* 先留舊版快照 */
+  const mode=$("mergeMode").value,type=previewData.type,rows=previewData.rows;
+  const target={orders:"orders",tachiang:"tachiang",outsource:"outsource",greige:"greige"}[type];
+  if(mode==="replace")S[target]=rows;else S[target]=S[target].concat(rows);
+  saveLocal();
+  snapshot("import "+type+" ("+rows.length+" rows, "+mode+")");
+  closeModal("mImport");toast("已合併 "+rows.length+" 筆 → "+type);
+  renderTab();
+}
+window.confirmMerge=confirmMerge;
+/* ================= 匯出 ================= */
+function exportExcel(){
+  calcAll();
+  const wb=XLSX.utils.book_new();
+  const oAoa=[["Order Date","PO No.","OZ","Width","G/Y","Yarn","Color","Q'ty","Esti Ship Day","Remark","NewColor"]]
+    .concat(S.orders.map(o=>[o.orderDate,o.poNo,o.weightOz,o.width,o.gy,o.yarn,o.color,o.qty,o.estiShipDay,o.remark,o.newColor?"Y":""]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(oAoa),"OrderDemand");
+  const fAoa=[["Fabric Key","OZ","Width","Yarn","PO List","Demand","Greige Stock","Balance","Shortage","Coverage%","Earliest Ship","Latest Ship","Supplier","Leadtime","Est Ready","Est Arrival","Risk","Reason","Action"]]
+    .concat(FAB.map(f=>[f.fabricKey,f.weightOz,f.width,f.yarn,f.poArr.join(", "),f.totalDemandQty,f.matchedGreigeStockQty,f.stockBalance,f.shortageQty,f.coverage==null?"":Math.round(f.coverage*100),f.nearestShip?fmtD(f.nearestShip):"",f.latestShip?fmtD(f.latestShip):"",f.supplierType||"",f.leadLabel,f.estimatedReadyDate?fmtD(f.estimatedReadyDate):"",f.estimatedArrivalDate?fmtD(f.estimatedArrivalDate):"",f.riskLevel.toUpperCase(),f.riskReason,f.actionNeeded]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(fAoa),"ByFabric");
+  const sAoa=[["Ship Date","Total Qty","PO Count","Fabric Count","Top Fabric","Risk"]]
+    .concat(SHIP.map(s=>[s.ship,s.qty,s.pos.size,s.fabs.size,s.maxFab,s.risk.toUpperCase()]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sAoa),"ByShipDate");
+  const gAoa=[["Sheet","SPEC","Finished Width","Yarn","OZ","Stock","Recommendation","Remark"]]
+    .concat(S.greige.map(g=>[g.sourceSheet,g.spec,g.finishedWidth,g.yarn,g.weightOz,g.stockQty,g.dillardRecommendationQty,g.remark]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(gAoa),"GreigeInventory");
+  const d=new Date();
+  XLSX.writeFile(wb,"VRT_Fabric_Delivery_Summary_"+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+".xlsx");
+}
+window.exportExcel=exportExcel;
+function exportCurrent(){
+  if(!curRows.length){toast("目前無資料可匯出");return}
+  const sample=curRows[0];
+  const keys=Object.keys(sample).filter(k=>!k.startsWith("_")&&typeof sample[k]!=="object"&&typeof sample[k]!=="function");
+  const aoa=[keys].concat(curRows.map(r=>keys.map(k=>r[k])));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),"Filtered");
+  XLSX.writeFile(wb,"VRT_Fabric_Filtered_Export.xlsx");
+}
+window.exportCurrent=exportCurrent;
+function exportCSVAll(){
+  const keys=["orderDate","poNo","weightOz","width","gy","yarn","color","qty","estiShipDay","remark"];
+  const csv=[keys.join(",")].concat(S.orders.map(o=>keys.map(k=>'"'+String(o[k]==null?"":o[k]).replace(/"/g,'""')+'"').join(","))).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="VRT_OrderDemand.csv";a.click();
+}
+window.exportCSVAll=exportCSVAll;
+function exportJSON(){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(S,(k,v)=>k.startsWith("_")?undefined:v,2)],{type:"application/json"}));
+  a.download="VRT_Fabric_Center_Backup.json";a.click();
+}
+window.exportJSON=exportJSON;
+function exportPDF(){
+  calcAll();const m=metrics();
+  let rows=[...FAB].sort((a,b)=>({crit:0,high:1,med:2,low:3})[a.riskLevel]-({crit:0,high:1,med:2,low:3})[b.riskLevel]);
+  let h='<html><head><meta charset="utf-8"><title>VRT Fabric Delivery Summary</title><style>body{font-family:"Microsoft JhengHei",sans-serif;font-size:11px;padding:20px}h1{font-size:16px}h2{font-size:13px;margin:14px 0 6px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:4px 6px;font-size:10px}th{background:#eee}.r{text-align:right}</style></head><body>'
+   +'<h1>VRT Fabric Delivery & Greige Inventory Summary</h1><div>Date: '+fmtD(new Date())+'　產生時間 '+nowStr()+'</div>'
+   +'<h2>Summary</h2><table><tr><th>Total Demand</th><th>July</th><th>August</th><th>September</th><th>Greige Stock</th><th>Shortage Items</th><th>Need LD</th><th>GRS</th></tr>'
+   +'<tr><td class="r">'+fmtN(m.total)+'</td><td class="r">'+fmtN(m.jul)+'</td><td class="r">'+fmtN(m.aug)+'</td><td class="r">'+fmtN(m.sep)+'</td><td class="r">'+fmtN(m.greigeTotal)+'</td><td class="r">'+m.shortItems+'</td><td class="r">'+m.ld+'</td><td class="r">'+m.grsItems+'</td></tr></table>'
+   +'<h2>By Fabric（依風險排序）</h2><table><tr><th>Fabric</th><th>Demand</th><th>Greige</th><th>Shortage</th><th>Required</th><th>Est Arrival</th><th>Risk</th><th>Reason / Action</th></tr>';
+  rows.forEach(f=>{h+='<tr><td>'+f.weightOz+'oz / '+f.width+'" / '+esc(f.yarn)+'</td><td class="r">'+fmtN(f.totalDemandQty)+'</td><td class="r">'+(f.greigeRows.length?fmtN(f.matchedGreigeStockQty):"未匹配")+'</td><td class="r">'+fmtN(f.shortageQty)+'</td><td>'+(f.nearestShip?fmtD(f.nearestShip):"-")+'</td><td>'+(f.estimatedArrivalDate?fmtD(f.estimatedArrivalDate):"-")+'</td><td>'+f.riskLevel.toUpperCase()+'</td><td>'+esc(f.riskReason)+" ➡ "+esc(f.actionNeeded)+'</td></tr>'});
+  h+='</table><script>window.print()<\/script></body></html>';
+  const w=window.open("","_blank");w.document.write(h);w.document.close();
+}
+window.exportPDF=exportPDF;
+
+/* ================= Telegram ================= */
+function tgSummaryText(){
+  calcAll();const m=metrics();
+  const risks=[...FAB].filter(f=>f.riskLevel==="high"||f.riskLevel==="crit").slice(0,6);
+  let txt="<b>VRT Fabric Delivery Summary</b>\n"
+   +"Date: "+fmtD(new Date())+"\n\n"
+   +"Total Demand: "+fmtN(m.total)+" yds\n"
+   +"July Demand: "+fmtN(m.jul)+" yds\n"
+   +"August Demand: "+fmtN(m.aug)+" yds\n"
+   +"September Demand: "+fmtN(m.sep)+" yds\n"
+   +"Greige Stock: "+fmtN(m.greigeTotal)+" yds\n\n"
+   +"High Risk Items: "+m.highItems+"\n"
+   +"Need LD Approval: "+m.ld+"\n"
+   +"GRS Pending: "+m.grsItems+"\n"
+   +"Unmatched Fabric: "+m.unmatched+"\n\n<b>Top Risks:</b>\n";
+  risks.forEach((f,i)=>{
+    txt+=(i+1)+". "+escapeHtml(f.weightOz+"oz / "+f.width+'" / '+f.yarn)
+      +(f.shortageQty?" - Shortage "+fmtN(f.shortageQty)+" yds":"")
+      +(f.nearestShip?" - Required "+(f.nearestShip.getMonth()+1)+"/"+f.nearestShip.getDate():"")
+      +(f.needLD?" - Need LD":"")+(f.grs?" - GRS pending":"")+"\n";});
+  return txt;
+}
+async function sendTG(){
+  if(!S.cfg.tgToken||!S.cfg.tgChat){toast(t("needCfg"));showTab("settings");return}
+  try{
+    const r=await fetch("https://api.telegram.org/bot"+S.cfg.tgToken+"/sendMessage",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({chat_id:S.cfg.tgChat,text:tgSummaryText(),parse_mode:"HTML"})});
+    const j=await r.json();
+    toast(j.ok?t("tgOK"):t("tgFail")+"："+(j.description||""));
+  }catch(e){toast(t("tgFail")+"："+e.message)}
+}
+window.sendTG=sendTG;
+
+/* ================= GAS Cloud Sync ================= */
+async function gasUpload(){
+  if(!S.cfg.gasEndpoint){toast(t("needCfg"));showTab("settings");return}
+  try{
+    calcAll();
+    const payload={action:"saveFabricDeliveryData",token:S.cfg.gasToken,timestamp:nowStr(),
+      data:{orderDemandData:S.orders,greigeInventoryData:S.greige,taChiangLeadtimeData:S.tachiang,outSourceLeadtimeData:S.outsource,aliases:S.aliases,
+        fabricSummaryData:FAB.map(f=>({fabricKey:f.fabricKey,totalDemandQty:f.totalDemandQty,matchedGreigeStockQty:f.matchedGreigeStockQty,shortageQty:f.shortageQty,riskLevel:f.riskLevel,riskReason:f.riskReason})),
+        versionHistory:S.versions.map(v=>({versionId:v.versionId,uploadDateTime:v.uploadDateTime,sourceFiles:v.sourceFiles,totalOrderQty:v.totalOrderQty,totalGreigeStock:v.totalGreigeStock,shortageItems:v.shortageItems.length}))}};
+    const r=await fetch(S.cfg.gasEndpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload,(k,v)=>k.startsWith("_")?undefined:v)});
+    const j=await r.json().catch(()=>({}));
+    toast(j.success!==false?t("gasOK"):t("gasFail"));
+  }catch(e){toast(t("gasFail")+"："+e.message)}
+}
+window.gasUpload=gasUpload;
+async function gasDownload(){
+  if(!S.cfg.gasEndpoint){toast(t("needCfg"));showTab("settings");return}
+  try{
+    const r=await fetch(S.cfg.gasEndpoint+"?action=getFabricDeliveryData&token="+encodeURIComponent(S.cfg.gasToken));
+    const j=await r.json();
+    if(j&&j.data){
+      snapshot("before cloud download");
+      if(j.data.orderDemandData)S.orders=j.data.orderDemandData;
+      if(j.data.greigeInventoryData)S.greige=j.data.greigeInventoryData;
+      if(j.data.taChiangLeadtimeData)S.tachiang=j.data.taChiangLeadtimeData;
+      if(j.data.outSourceLeadtimeData)S.outsource=j.data.outSourceLeadtimeData;
+      if(j.data.aliases)S.aliases=j.data.aliases;
+      saveLocal();snapshot("cloud download");toast(t("gasOK"));renderTab();
+    }else toast(t("gasFail"));
+  }catch(e){toast(t("gasFail")+"："+e.message)}
+}
+window.gasDownload=gasDownload;
+
+/* ================= 儲存 / 載入 ================= */
+function saveLocal(show){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(S,(k,v)=>k.startsWith("_")?undefined:v));if(show)toast(t("saved"))}
+  catch(e){if(show)toast("儲存失敗："+e.message)}
+}
+window.saveLocal=saveLocal;
+function loadSeed(){
+  S.orders=SEED_ORDERS.map(a=>({id:uid(),sourceFile:"115-7-6VRT訂單進度DAVID.pdf",sourceDate:"2026-07-06",orderDate:a[0],poNo:a[1],weightOz:a[2],width:a[3],gy:a[4],yarn:a[5],color:a[6],qty:a[7],estiShipDay:a[8],remark:a[9],newColor:false}));
+  S.tachiang=SEED_TC.map(a=>({id:uid(),content:"100% Spun Polyester",weightOz:a[0],compose:a[1],width:a[2],mcq:a[3],greigeReadyDays:a[4],noSafetyStockDays:a[5],normalTransitDays:a[6],newColorExtraDays:7,grsRemark:"GRS 客製交期另議"}));
+  S.outsource=SEED_OS.map(a=>({id:uid(),content:a[0],weightOz:a[1],compose:a[2],width:a[3],moq:a[4],mcq:a[5],leadtimeDays:a[6],normalTransitDays:a[7],newColorExtraDays:7,grsRemark:"GRS 客製交期另議"}));
+  S.greige=SEED_GREIGE.map(a=>({id:uid(),sourceSheet:a[0],spec:a[1],finishedWidth:a[2],yarn:a[3],weightOz:a[4],stockQty:a[5],dillardRecommendationQty:a[6],vrtSafetyStock:a[6],minInventory:null,remark:a[7]}));
+  S.aliases=JSON.parse(JSON.stringify(SEED_ALIASES));
+}
+function cycleLang(){
+  S.cfg.lang=({zh:"en",en:"km",km:"zh"})[S.cfg.lang]||"zh";
+  $("langBtn").textContent=({zh:"中",en:"EN",km:"ខ្មែរ"})[S.cfg.lang];
+  document.querySelectorAll("#tabbar button").forEach(b=>{const k=b.getAttribute("data-i18n");if(k)b.textContent=t(k)});
+  document.querySelectorAll(".hstat-l[data-i18n]").forEach(el=>el.textContent=t(el.getAttribute("data-i18n")));
+  saveLocal();renderTab();
+}
+window.cycleLang=cycleLang;
+/* ================= init ================= */
+(function init(){
+  try{
+    const saved=localStorage.getItem(LS_KEY);
+    if(saved){const p=JSON.parse(saved);S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};}
+  }catch(e){}
+  if(!S.orders.length){loadSeed();snapshot("內建範例資料 seed 20260706");}
+  document.addEventListener("DOMContentLoaded",()=>{
+    $("impFile").addEventListener("change",onImpFile);
+    $("langBtn").textContent=({zh:"中",en:"EN",km:"ខ្មែរ"})[S.cfg.lang]||"中";
+    document.querySelectorAll("#tabbar button").forEach(b=>{const k=b.getAttribute("data-i18n");if(k)b.textContent=t(k)});
+    document.querySelectorAll(".hstat-l[data-i18n]").forEach(el=>el.textContent=t(el.getAttribute("data-i18n")));
+    renderTab();
+  });
+  if(document.readyState!=="loading"){
+    $("impFile").addEventListener("change",onImpFile);
+    renderTab();
+  }
+})();
+</script>
+
+<script>
+/* ===== 雲端同步（tool=fabric，與 Portal 同協定） ===== */
+(function(){
+  const css=document.createElement('style');
+  css.textContent='#vcFab{position:fixed;right:18px;bottom:18px;width:52px;height:52px;border-radius:50%;background:#0f172a;border:1px solid #334155;color:#93c5fd;font-size:22px;cursor:pointer;z-index:9998;box-shadow:0 4px 14px rgba(0,0,0,.35)}#vcPanel{position:fixed;right:18px;bottom:80px;width:320px;max-width:92vw;background:#0b1220;border:1px solid #24344d;border-radius:14px;padding:14px;z-index:9999;color:#e2e8f0;font-size:13px;display:none;box-shadow:0 10px 30px rgba(0,0,0,.5)}#vcPanel h4{margin:0 0 8px;font-size:14px;color:#93c5fd}#vcPanel .vrow{display:flex;gap:8px;margin:8px 0}#vcPanel button{flex:1;padding:9px;border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit}#vcPushBtn2{background:#3a2c07;border:1px solid #b45309;color:#fcd34d}#vcPullBtn2{background:#0c1a2c;border:1px solid #1d4ed8;color:#93c5fd}#vcUrl{flex:1;padding:8px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:12px}#vcSave{flex:none;padding:8px 12px;background:#1e293b;border:1px solid #475569;color:#cbd5e1;border-radius:8px}#vcLogBox{max-height:110px;overflow:auto;background:#060b14;border-radius:8px;padding:8px;margin-top:8px;font-family:monospace;font-size:11.5px;line-height:1.6}';
+  document.head.appendChild(css);
+  const fab=document.createElement('button');fab.id='vcFab';fab.textContent='☁';document.body.appendChild(fab);
+  const panel=document.createElement('div');panel.id='vcPanel';
+  panel.innerHTML='<h4>☁ 雲端同步 — 布料進倉</h4><div class="vrow"><button id="vcPushBtn2">☁ 推送</button><button id="vcPullBtn2">⬇ 拉取</button></div><div style="color:#64748b;font-size:11px;margin-top:4px">GAS URL</div><div class="vrow"><input id="vcUrl" placeholder="https://script.google.com/.../exec"><button id="vcSave">存</button></div><div id="vcLogBox"></div>';
+  document.body.appendChild(panel);
+  const URL_KEY='vrt_portal_gas_url';
+  const getUrl=()=>((localStorage.getItem(URL_KEY)||'').trim());
+  function vcLog(m,k){const b=document.getElementById('vcLogBox');
+    const c=k==='err'?'#f87171':(k==='ok'?'#4ade80':'#93c5fd');
+    b.innerHTML+='<div style="color:'+c+'">['+new Date().toTimeString().slice(0,8)+'] '+m+'</div>';b.scrollTop=b.scrollHeight;}
+  fab.onclick=()=>{const p=document.getElementById('vcPanel');
+    const show=p.style.display!=='block';p.style.display=show?'block':'none';
+    if(show)document.getElementById('vcUrl').value=getUrl();};
+  document.getElementById('vcSave').onclick=()=>{
+    try{localStorage.setItem(URL_KEY,document.getElementById('vcUrl').value.trim());}catch(e){}
+    vcLog('✓ GAS URL 已儲存','ok');};
+  function fabRaw(){try{return localStorage.getItem(LS_KEY)||JSON.stringify(S,(k,v)=>k.startsWith('_')?undefined:v);}catch(e){return JSON.stringify(S,(k,v)=>k.startsWith('_')?undefined:v);}}
+  function fabCount(raw){try{const o=JSON.parse(raw);let n=0;Object.keys(o||{}).forEach(k=>{if(Array.isArray(o[k]))n+=o[k].length;});return n||1;}catch(e){return 1;}}
+  document.getElementById('vcPushBtn2').onclick=async function(){
+    const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}
+    try{
+      const raw=fabRaw();
+      const payload={tool:'fabric',recordCount:fabCount(raw),fabState:raw};
+      vcLog('推送中...','i');
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
+      const d=await r.json();if(!d.ok)throw new Error(d.error||'GAS error');
+      vcLog('✓ 推送完成','ok');
+    }catch(e){vcLog('✗ 推送失敗：'+(e.message||e),'err');}
+  };
+  document.getElementById('vcPullBtn2').onclick=async function(){
+    const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}
+    if(!confirm('拉取會覆蓋本機布料進倉資料，確定嗎？'))return;
+    try{
+      vcLog('拉取中...','i');
+      const r=await fetch(url+'?action=pull&tool=fabric',{redirect:'follow'});
+      const j=await r.json();if(!j.ok)throw new Error(j.error||'GAS error');
+      let p=j.data&&j.data.data?j.data.data:null;
+      if(!p||!p.fabState){vcLog('雲端尚無資料','err');return;}
+      JSON.parse(p.fabState);   // 先驗格式
+      localStorage.setItem(LS_KEY,p.fabState);
+      vcLog('✓ 拉取完成，即將重新載入...','ok');
+      setTimeout(()=>location.reload(),800);
+    }catch(e){vcLog('✗ 拉取失敗：'+(e.message||e),'err');}
+  };
+})();
+</script>
+</body>
+</html>

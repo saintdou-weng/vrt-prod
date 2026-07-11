@@ -46,6 +46,27 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 .mc-bom  .mcard-stripe{background:linear-gradient(90deg,#f97316,transparent)}
 .mc-fg   .mcard-stripe{background:linear-gradient(90deg,#14b8a6,transparent)}
 .mc-sp   .mcard-stripe{background:linear-gradient(90deg,#84cc16,transparent)}
+/* ── 生產流程鏈 ── */
+.flow-wrap{max-width:1100px;margin:14px auto 0;padding:0 18px}
+.flow-title{font-size:12px;letter-spacing:2px;color:#64748b;margin-bottom:8px;font-weight:700}
+.flow{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+.fnode{flex:1;min-width:96px;background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:10px 8px;text-align:center;cursor:pointer;position:relative;transition:.15s}
+.fnode:hover{border-color:#334155;transform:translateY(-2px)}
+.fnode .fi{font-size:19px}
+.fnode .fn{font-size:12px;font-weight:700;color:#cbd5e1;margin-top:3px}
+.fnode .fc{font-size:15px;font-weight:800;margin-top:2px}
+.fnode .ft{font-size:10px;color:#64748b;margin-top:1px}
+.fnode::after{content:'▸';position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:#334155;font-size:13px;z-index:1}
+.fnode:last-child::after{display:none}
+.f-ok .fc{color:#4ade80}.f-warn .fc{color:#fbbf24}.f-bad .fc{color:#f87171}.f-none .fc{color:#475569}
+.f-ok{border-color:rgba(74,222,128,.25)}.f-warn{border-color:rgba(251,191,36,.3)}.f-bad{border-color:rgba(248,113,113,.3)}
+/* ── 分組標題 ── */
+.gtitle{max-width:1100px;margin:20px auto 8px;padding:0 4px;font-size:13px;font-weight:800;letter-spacing:1.5px;color:#7dd3fc;display:flex;align-items:center;gap:8px}
+.gtitle::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#1e3a5f,transparent)}
+.mc-cs   .mcard-stripe{background:linear-gradient(90deg,#38bdf8,transparent)}
+.mc-pp   .mcard-stripe{background:linear-gradient(90deg,#a3e635,transparent)}
+.mc-fab  .mcard-stripe{background:linear-gradient(90deg,#c084fc,transparent)}
+.mc-ms   .mcard-stripe{background:linear-gradient(90deg,#fb923c,transparent)}
 
 .mc-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .mc-icon{font-size:24px;width:40px;text-align:center}
@@ -103,86 +124,43 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   <span class="gas-lbl" id="gasLbl">未設定</span>
 </div>
 
+
+<!-- ═══ 生產流程鏈:PO → 排產 → 布料 → 裁剪 → 車縫 → 成品 → 出貨 ═══ -->
+<div class="flow-wrap">
+  <div class="flow-title">📈 生產流程總覽 &nbsp;·&nbsp; 綠=24h內同步 黃=3天內 紅=過期/未同步 · 點擊節點跳至模組</div>
+  <div class="flow" id="flowStrip">
+    <div class="fnode f-none" id="fn-po"       onclick="flowGo('card-custstats')"><div class="fi">📋</div><div class="fn">訂單 PO</div><div class="fc">--</div><div class="ft">--</div></div>
+    <div class="fnode f-none" id="fn-plan"     onclick="flowGo('card-prodplan')"><div class="fi">📅</div><div class="fn">排產</div><div class="fc">--</div><div class="ft">--</div></div>
+    <div class="fnode f-none" id="fn-fabric"   onclick="flowGo('card-fabric')"><div class="fi">🧶</div><div class="fn">布料</div><div class="fc">--</div><div class="ft">--</div></div>
+    <div class="fnode f-none" id="fn-cutting"  onclick="flowGo('card-cutting')"><div class="fi">✂️</div><div class="fn">裁剪</div><div class="fc">--</div><div class="ft">--</div></div>
+    <div class="fnode f-none" id="fn-sewing"   onclick="flowGo('card-sewing')"><div class="fi">🧵</div><div class="fn">車縫</div><div class="fc">--</div><div class="ft">--</div></div>
+    <div class="fnode f-none" id="fn-fg"       onclick="flowGo('card-fg')"><div class="fi">📦</div><div class="fn">成品 FG</div><div class="fc">--</div><div class="ft">--</div></div>
+    <div class="fnode f-none" id="fn-ship"     onclick="flowGo('card-shipping')"><div class="fi">🚢</div><div class="fn">出貨</div><div class="fc">--</div><div class="ft">--</div></div>
+  </div>
+</div>
+
 <div class="main">
 
+  <div class="gtitle">📋 訂單與客戶 ORDERS</div>
   <div class="grid">
-
-    <!-- 生產總覽 -->
-    <div class="mcard mc-prod">
+    <div class="mcard mc-cs" id="card-custstats">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
         <div class="mc-icon">📊</div>
         <div class="mc-info">
-          <div class="mc-title">生產總覽</div>
-          <div class="mc-sub">production_v4.html · 讀取車縫＋裁剪</div>
+          <div class="mc-title">客戶統計中心</div>
+          <div class="mc-sub">vrt_customer_statistics_control_center_v1.html · 15 分頁全流程分析</div>
         </div>
-        <span class="mc-badge badge-auto">自動讀取</span>
+        <span class="mc-badge badge-none" id="bd-custstats">--</span>
       </div>
-      <div class="mc-sync" style="color:#3b82f6">先拉取車縫＋裁剪，再開啟即可</div>
+      <div class="mc-sync" id="st-custstats">雲端：未查詢</div>
       <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='production_v4.html'" style="flex:1">📊 開啟總覽</button>
+        <button class="btn-open" onclick="location.href='vrt_customer_statistics_control_center_v1.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-custstats" onclick="push('custstats')">☁ 推送</button>
+        <button class="btn-pull" id="pl-custstats" onclick="pull('custstats')">⬇ 拉取</button>
       </div>
     </div>
-
-    <!-- 車縫 -->
-    <div class="mcard mc-sew">
-      <div class="mcard-stripe"></div>
-      <div class="mc-head">
-        <div class="mc-icon">🧵</div>
-        <div class="mc-info">
-          <div class="mc-title">車縫生產</div>
-          <div class="mc-sub">sewing_v5.html · localStorage: sewing_prod_v1</div>
-        </div>
-        <span class="mc-badge badge-none" id="bd-sewing">--</span>
-      </div>
-      <div class="mc-sync" id="st-sewing">雲端：未查詢</div>
-      <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='sewing_v5.html'">📂 開啟</button>
-        <button class="btn-push" id="pp-sewing" onclick="push('sewing')">☁ 推送</button>
-        <button class="btn-pull" id="pl-sewing" onclick="pull('sewing')">⬇ 拉取</button>
-      </div>
-    </div>
-
-    <!-- 裁剪 -->
-    <div class="mcard mc-cut">
-      <div class="mcard-stripe"></div>
-      <div class="mc-head">
-        <div class="mc-icon">✂️</div>
-        <div class="mc-info">
-          <div class="mc-title">裁剪生產</div>
-          <div class="mc-sub">cutting_v3.html · IndexedDB: CuttingProd</div>
-        </div>
-        <span class="mc-badge badge-none" id="bd-cutting">--</span>
-      </div>
-      <div class="mc-sync" id="st-cutting">雲端：未查詢</div>
-      <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='cutting_v3.html'">📂 開啟</button>
-        <button class="btn-push" id="pp-cutting" onclick="push('cutting')">☁ 推送</button>
-        <button class="btn-pull" id="pl-cutting" onclick="pull('cutting')">⬇ 拉取</button>
-      </div>
-    </div>
-
-    <!-- 裁剪計劃 -->
-    <div class="mcard mc-cutplan">
-      <div class="mcard-stripe"></div>
-      <div class="mc-head">
-        <div class="mc-icon">📅</div>
-        <div class="mc-info">
-          <div class="mc-title">裁剪計劃</div>
-          <div class="mc-sub">cutting_plan_v2.html · localStorage: cutting_plan_v1</div>
-        </div>
-        <span class="mc-badge badge-none" id="bd-cuttingplan">--</span>
-      </div>
-      <div class="mc-sync" id="st-cuttingplan">雲端：未查詢</div>
-      <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='cutting_plan_v2.html'">📂 開啟</button>
-        <button class="btn-push" id="pp-cuttingplan" onclick="push('cuttingplan')">☁ 推送</button>
-        <button class="btn-pull" id="pl-cuttingplan" onclick="pull('cuttingplan')">⬇ 拉取</button>
-      </div>
-    </div>
-
-    <!-- 訂單 -->
-    <div class="mcard mc-ord">
+    <div class="mcard mc-ord" id="card-orders">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
         <div class="mc-icon">📦</div>
@@ -199,9 +177,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-pull" id="pl-orders" onclick="pull('orders')">⬇ 拉取</button>
       </div>
     </div>
-
-    <!-- PO 交期中心 -->
-    <div class="mcard mc-pod">
+    <div class="mcard mc-pod" id="card-podelivery">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
         <div class="mc-icon">🚚</div>
@@ -218,46 +194,66 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-pull" id="pl-podelivery" onclick="pull('podelivery')">⬇ 拉取</button>
       </div>
     </div>
+  </div>
 
-    <!-- 出貨 -->
-    <div class="mcard mc-ship">
+  <div class="gtitle">📅 計劃排產 PLANNING</div>
+  <div class="grid">
+    <div class="mcard mc-pp" id="card-prodplan">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
-        <div class="mc-icon">🚢</div>
+        <div class="mc-icon">🗓️</div>
         <div class="mc-info">
-          <div class="mc-title">出貨追蹤</div>
-          <div class="mc-sub">shipping_v2.html · 解析後同步</div>
+          <div class="mc-title">排產產能</div>
+          <div class="mc-sub">production_plan_capacity_v1.html · IndexedDB: ProdPlanCapacity</div>
         </div>
-        <span class="mc-badge badge-none" id="bd-shipping">--</span>
+        <span class="mc-badge badge-none" id="bd-prodplan">--</span>
       </div>
-      <div class="mc-sync" id="st-shipping">雲端：未查詢</div>
+      <div class="mc-sync" id="st-prodplan">雲端：未查詢</div>
       <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='shipping_v2.html'">📂 開啟 &amp; 同步</button>
-        <button class="btn-pull" id="pl-shipping" onclick="pull('shipping')" style="flex:none;padding:9px 14px">⬇ 拉取</button>
+        <button class="btn-open" onclick="location.href='production_plan_capacity_v1.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-prodplan" onclick="push('prodplan')">☁ 推送</button>
+        <button class="btn-pull" id="pl-prodplan" onclick="pull('prodplan')">⬇ 拉取</button>
       </div>
     </div>
-
-    <!-- SMV -->
-    <div class="mcard mc-smv">
+    <div class="mcard mc-cutplan" id="card-cuttingplan">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
-        <div class="mc-icon">⏱️</div>
+        <div class="mc-icon">📅</div>
         <div class="mc-info">
-          <div class="mc-title">SMV 管理</div>
-          <div class="mc-sub">smv_manager_v5_final.html</div>
+          <div class="mc-title">裁剪計劃</div>
+          <div class="mc-sub">cutting_plan_v2.html · localStorage: cutting_plan_v1</div>
         </div>
-        <span class="mc-badge badge-none" id="bd-smv">--</span>
+        <span class="mc-badge badge-none" id="bd-cuttingplan">--</span>
       </div>
-      <div class="mc-sync" id="st-smv">雲端：未查詢</div>
+      <div class="mc-sync" id="st-cuttingplan">雲端：未查詢</div>
       <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='smv_manager_v5_final.html'">📂 開啟</button>
-        <button class="btn-push" id="pp-smv" onclick="push('smv')">☁ 推送</button>
-        <button class="btn-pull" id="pl-smv" onclick="pull('smv')">⬇ 拉取</button>
+        <button class="btn-open" onclick="location.href='cutting_plan_v2.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-cuttingplan" onclick="push('cuttingplan')">☁ 推送</button>
+        <button class="btn-pull" id="pl-cuttingplan" onclick="pull('cuttingplan')">⬇ 拉取</button>
       </div>
     </div>
+  </div>
 
-    <!-- BOM 管理 -->
-    <div class="mcard mc-bom">
+  <div class="gtitle">🧶 物料 MATERIALS</div>
+  <div class="grid">
+    <div class="mcard mc-fab" id="card-fabric">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🧶</div>
+        <div class="mc-info">
+          <div class="mc-title">布料進倉 / 胚布</div>
+          <div class="mc-sub">vrt_fabric_delivery_greige_center_v1.html · localStorage</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-fabric">--</span>
+      </div>
+      <div class="mc-sync" id="st-fabric">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='vrt_fabric_delivery_greige_center_v1.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-fabric" onclick="push('fabric')">☁ 推送</button>
+        <button class="btn-pull" id="pl-fabric" onclick="pull('fabric')">⬇ 拉取</button>
+      </div>
+    </div>
+    <div class="mcard mc-bom" id="card-bom">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
         <div class="mc-icon">🧵</div>
@@ -274,9 +270,81 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-pull" id="pl-bom" onclick="pull('bom')">⬇ 拉取</button>
       </div>
     </div>
+  </div>
 
-    <!-- FG 成品倉 -->
-    <div class="mcard mc-fg">
+  <div class="gtitle">🏭 生產 PRODUCTION</div>
+  <div class="grid">
+    <div class="mcard mc-prod" id="card-production">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📊</div>
+        <div class="mc-info">
+          <div class="mc-title">生產總覽</div>
+          <div class="mc-sub">production_v4.html · 讀取車縫＋裁剪</div>
+        </div>
+        <span class="mc-badge badge-auto">自動讀取</span>
+      </div>
+      <div class="mc-sync" style="color:#3b82f6">先拉取車縫＋裁剪，再開啟即可</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='production_v4.html'" style="flex:1">📂 開啟</button>
+      </div>
+    </div>
+    <div class="mcard mc-cut" id="card-cutting">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">✂️</div>
+        <div class="mc-info">
+          <div class="mc-title">裁剪生產</div>
+          <div class="mc-sub">cutting_v3.html · IndexedDB: CuttingProd</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-cutting">--</span>
+      </div>
+      <div class="mc-sync" id="st-cutting">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='cutting_v3.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-cutting" onclick="push('cutting')">☁ 推送</button>
+        <button class="btn-pull" id="pl-cutting" onclick="pull('cutting')">⬇ 拉取</button>
+      </div>
+    </div>
+    <div class="mcard mc-sew" id="card-sewing">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🧵</div>
+        <div class="mc-info">
+          <div class="mc-title">車縫生產</div>
+          <div class="mc-sub">sewing_v5.html · localStorage: sewing_prod_v1</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-sewing">--</span>
+      </div>
+      <div class="mc-sync" id="st-sewing">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='sewing_v5.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-sewing" onclick="push('sewing')">☁ 推送</button>
+        <button class="btn-pull" id="pl-sewing" onclick="pull('sewing')">⬇ 拉取</button>
+      </div>
+    </div>
+    <div class="mcard mc-smv" id="card-smv">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">⏱️</div>
+        <div class="mc-info">
+          <div class="mc-title">SMV 管理</div>
+          <div class="mc-sub">smv_manager_v5_final.html</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-smv">--</span>
+      </div>
+      <div class="mc-sync" id="st-smv">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='smv_manager_v5_final.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-smv" onclick="push('smv')">☁ 推送</button>
+        <button class="btn-pull" id="pl-smv" onclick="pull('smv')">⬇ 拉取</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gtitle">📦 倉儲出貨 WAREHOUSE · SHIPPING</div>
+  <div class="grid">
+    <div class="mcard mc-fg" id="card-fg">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
         <div class="mc-icon">📦</div>
@@ -293,9 +361,44 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-pull" id="pl-fg" onclick="pull('fg')">⬇ 拉取</button>
       </div>
     </div>
+    <div class="mcard mc-ship" id="card-shipping">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🚢</div>
+        <div class="mc-info">
+          <div class="mc-title">出貨追蹤</div>
+          <div class="mc-sub">shipping_v2.html · 解析後同步</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-shipping">--</span>
+      </div>
+      <div class="mc-sync" id="st-shipping">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='shipping_v2.html'">📂 開啟 &amp; 同步</button>
+        <button class="btn-pull" id="pl-shipping" onclick="pull('shipping')" style="flex:none;padding:9px 14px">⬇ 拉取</button>
+      </div>
+    </div>
+    <div class="mcard mc-ms" id="card-monthship">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">🗓️</div>
+        <div class="mc-info">
+          <div class="mc-title">月出貨管制</div>
+          <div class="mc-sub">vrt_monthly_shipping_control_center_v1.html · IndexedDB</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-monthship">--</span>
+      </div>
+      <div class="mc-sync" id="st-monthship">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='vrt_monthly_shipping_control_center_v1.html'">📂 開啟</button>
+        <button class="btn-push" id="pp-monthship" onclick="push('monthship')">☁ 推送</button>
+        <button class="btn-pull" id="pl-monthship" onclick="pull('monthship')">⬇ 拉取</button>
+      </div>
+    </div>
+  </div>
 
-    <!-- 零件倉 -->
-    <div class="mcard mc-sp">
+  <div class="gtitle">🔧 工程維修 MAINTENANCE</div>
+  <div class="grid">
+    <div class="mcard mc-sp" id="card-spareparts">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
         <div class="mc-icon">🔧</div>
@@ -312,7 +415,6 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-pull" id="pl-spareparts" onclick="pull('spareparts')">⬇ 拉取</button>
       </div>
     </div>
-
   </div>
 
   <!-- Log -->
@@ -490,7 +592,99 @@ const TOOLS = {
       return (d.parts || []).length;
     }
   },
+  prodplan: {
+    read: async () => {
+      const recs = await idbGetAll('ProdPlanCapacity', 1, 'records');
+      if (!recs.length) return null;
+      return { tool:'prodplan', recordCount: recs.length, records: recs };
+    },
+    write: async (data) => {
+      const recs = Array.isArray(data.records) ? data.records : [];
+      if (!recs.length) return 0;
+      await idbPutAll('ProdPlanCapacity', 1, 'records', recs);
+      return recs.length;
+    }
+  },
+  custstats: {
+    read: async () => {
+      const recs = await idbGetAll('VRTCustomerStatistics', 1, 'records');
+      if (!recs.length) return null;
+      const evts = await idbGetAll('VRTCustomerStatistics', 1, 'events');
+      return { tool:'custstats', recordCount: recs.length, records: recs, events: evts };
+    },
+    write: async (data) => {
+      const recs = Array.isArray(data.records) ? data.records : [];
+      if (!recs.length) return 0;
+      await idbPutAll('VRTCustomerStatistics', 1, 'records', recs);
+      if (Array.isArray(data.events) && data.events.length)
+        await idbPutAll('VRTCustomerStatistics', 1, 'events', data.events);
+      return recs.length;
+    }
+  },
+  fabric: {
+    read: async () => {
+      const raw = localStorage.getItem('vrt_fabric_center_v1');
+      if (!raw) return null;
+      let cnt = 1;
+      try { const o = JSON.parse(raw); cnt = Object.keys(o).reduce((s,k)=>s+(Array.isArray(o[k])?o[k].length:0),0) || 1; } catch(e) {}
+      return { tool:'fabric', recordCount: cnt, fabState: raw };
+    },
+    write: async (data) => {
+      if (!data.fabState) return 0;
+      try { JSON.parse(data.fabState); } catch(e) { return 0; }
+      try { localStorage.setItem('vrt_fabric_center_v1', data.fabState); } catch(e) { return 0; }
+      return data.recordCount || 1;
+    }
+  },
+  monthship: {
+    read: async () => {
+      const st = await idbKvGet('VRTMonthlyShippingControlCenter', 1, 'state', 'main');
+      if (!st) return null;
+      let cnt = 1;
+      try { cnt = ((st.monthly||[]).length + (st.weekly||[]).length) || 1; } catch(e) {}
+      return { tool:'monthship', recordCount: cnt, msState: JSON.stringify(st) };
+    },
+    write: async (data) => {
+      if (!data.msState) return 0;
+      let st = null;
+      try { st = JSON.parse(data.msState); } catch(e) { return 0; }
+      if (!st || !st.monthly) return 0;
+      await idbKvPut('VRTMonthlyShippingControlCenter', 1, 'state', 'main', st);
+      return data.recordCount || 1;
+    }
+  },
 };
+
+// ═══ 生產流程鏈渲染 ═══
+function flowGo(id){ const el=document.getElementById(id); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 0 0 2px #38bdf8'; setTimeout(()=>el.style.boxShadow='',1600); } }
+window.flowGo = flowGo;
+
+function renderFlow(data){
+  // 每個流程節點取一個主 tool;沒有就找備援 tool
+  const map = [
+    { id:'fn-po',      tools:['custstats','orders'] },
+    { id:'fn-plan',    tools:['prodplan','cuttingplan'] },
+    { id:'fn-fabric',  tools:['fabric'] },
+    { id:'fn-cutting', tools:['cutting','cuttingplan'] },
+    { id:'fn-sewing',  tools:['sewing'] },
+    { id:'fn-fg',      tools:['fg'] },
+    { id:'fn-ship',    tools:['monthship','shipping'] },
+  ];
+  map.forEach(n => {
+    const el = document.getElementById(n.id);
+    if (!el) return;
+    let s = null;
+    for (const t of n.tools){ if (data[t] && data[t].timestamp){ s = data[t]; break; } }
+    const fc = el.querySelector('.fc'), ft = el.querySelector('.ft');
+    el.classList.remove('f-ok','f-warn','f-bad','f-none');
+    if (!s){ fc.textContent='--'; ft.textContent='未同步'; el.classList.add('f-bad'); return; }
+    const hrs = (Date.now() - new Date(s.timestamp).getTime()) / 3600000;
+    fc.textContent = (s.recordCount||0).toLocaleString('en-US');
+    ft.textContent = hrs < 1 ? '剛剛同步' : (hrs < 48 ? Math.round(hrs)+'h 前' : Math.round(hrs/24)+'天前');
+    el.classList.add(hrs < 24 ? 'f-ok' : (hrs < 72 ? 'f-warn' : 'f-bad'));
+  });
+}
+
 
 // ─── INIT ───────────────────────────────────────────────
 function init() {
@@ -535,7 +729,8 @@ async function fetchStatus() {
     const d = await r.json();
     if (!d.ok) return;
     const data = d.data || {};
-    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts'].forEach(t => {
+    renderFlow(data);
+    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts','prodplan','custstats','fabric','monthship'].forEach(t => {
       const info = data[t];
       const stEl = document.getElementById('st-' + t);
       const bdEl = document.getElementById('bd-' + t);
@@ -638,6 +833,9 @@ const IDB_SCHEMAS = {
   'VRT_FGInventory':  { ver: 1, stores: { fg_records:{keyPath:'id'}, system_meta:{keyPath:'key'} } },
   'vrt_bom2_v1':      { ver: 1, stores: { kv:null } },
   'vrt_spareparts':   { ver: 2, stores: { parts:{keyPath:'id'}, txns:{keyPath:'id'}, versions:{keyPath:'id'}, meta:{keyPath:'k'}, suppliers:{keyPath:'id'}, invoices:{keyPath:'id'}, ocrhist:{keyPath:'id'}, images:{keyPath:'id'} } },
+  'ProdPlanCapacity': { ver: 1, stores: { records:{keyPath:'id'}, meta:{keyPath:'k'} } },
+  'VRTCustomerStatistics': { ver: 1, stores: { records:{keyPath:'id'}, events:{keyPath:'id'}, summaries:{keyPath:'k'}, settings:{keyPath:'k'}, importHistory:{keyPath:'id'} } },
+  'VRTMonthlyShippingControlCenter': { ver: 1, stores: { state:null } },
 };
 
 function _buildStores(db, schema) {

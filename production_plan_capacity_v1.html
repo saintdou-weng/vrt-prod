@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<!-- VRT Production Plan & Capacity Control Center v1 -->
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT Production Plan & Capacity Control Center</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",sans-serif;background:#eef1f7;color:#1e2640;font-size:13px;-webkit-text-size-adjust:100%}
+.header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:11px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:40}
+.logo{width:36px;height:36px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:0 2px 8px rgba(245,158,11,.35)}
+.h-title{color:#fff;font-size:15px;font-weight:700;letter-spacing:.01em}
+.h-sub{font-size:10.5px;color:#8b95b8;margin-top:1px}
+.hgrow{flex:1}
+.hstat{text-align:right;padding:0 4px}
+.hstat-v{font-size:16px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace;line-height:1}
+.hstat-l{font-size:9.5px;color:#8b95b8;margin-top:2px}
+.hbtn{background:rgba(255,255,255,.08);color:#dfe4f0;border:1px solid rgba(255,255,255,.14);padding:6px 11px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+.hbtn:hover{background:rgba(255,255,255,.16)}
+.hicons{display:flex;gap:5px;flex-wrap:wrap}
+.hicon{width:31px;height:31px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);border-radius:7px;cursor:pointer;font-size:14px;transition:.15s}
+.hicon:hover{background:rgba(245,158,11,.25);border-color:#f59e0b}
+.tabs{background:#fff;border-bottom:2px solid #e2e6f0;display:flex;padding:0 12px;overflow-x:auto;gap:0;position:sticky;top:58px;z-index:30}
+.tab{padding:12px 14px;font-size:12.5px;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:.15s;user-select:none}
+.tab:hover{color:#1e2640;background:#f7f8fc}
+.tab.on{color:#d97706;border-bottom-color:#f59e0b;background:#fffbf0;font-weight:700}
+.wrap{max-width:1400px;margin:0 auto;padding:16px 14px 60px}
+.pane{display:none}
+.pane.on{display:block}
+.card{background:#fff;border:1px solid #e2e6f0;border-radius:11px;padding:15px;margin-bottom:13px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.ct::before{content:'';width:3px;height:12px;background:#f59e0b;border-radius:2px;flex-shrink:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:13px}
+.kpi{background:#fff;border:1px solid #e2e6f0;border-radius:9px;padding:12px;box-shadow:0 1px 3px rgba(30,38,64,.04);border-left:3px solid #cbd2e6}
+.kpi.g{border-left-color:#10b981}.kpi.a{border-left-color:#f59e0b}.kpi.r{border-left-color:#ef4444}.kpi.b{border-left-color:#3b82f6}.kpi.p{border-left-color:#8b5cf6}
+.kpi-n{font-size:22px;font-weight:700;font-family:ui-monospace,monospace;line-height:1.05;color:#1e2640;word-break:break-all}
+.kpi-u{font-size:11px;color:#6b7a9e;margin-left:2px;font-weight:400}
+.kpi-l{font-size:10.5px;color:#6b7a9e;margin-top:5px;line-height:1.3}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+@media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+.drop{border:2px dashed #c5c9d8;border-radius:11px;padding:32px 20px;text-align:center;cursor:pointer;transition:.2s;background:#fafbfc}
+.drop:hover,.drop.drag{border-color:#f59e0b;background:#fffbf0}
+.drop.done{border-color:#10b981;border-style:solid;background:#f0fdf8}
+.drop-i{font-size:34px;margin-bottom:8px}
+.btn{padding:8px 14px;border-radius:7px;font-size:12.5px;cursor:pointer;font-family:inherit;border:none;transition:.15s;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-y{background:#f59e0b;color:#1c1200}.btn-y:hover:not(:disabled){background:#d97706}
+.btn-b{background:#3b82f6;color:#fff}.btn-b:hover:not(:disabled){background:#2563eb}
+.btn-g{background:#fff;color:#4a5578;border:1px solid #d0d5e8}.btn-g:hover:not(:disabled){background:#f7f8fc}
+.btn-r{background:#fff5f5;color:#dc2626;border:1px solid #fecaca}.btn-r:hover:not(:disabled){background:#fee2e2}
+.btn-sm{padding:5px 9px;font-size:11.5px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filt{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+select,input[type=text],input[type=date],input[type=number],input[type=month]{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:7px 10px;border-radius:7px;font-size:12.5px;font-family:inherit}
+select:focus,input:focus{outline:2px solid #f59e0b33;border-color:#f59e0b}
+label.fl{font-size:11px;color:#6b7a9e;font-weight:600;display:flex;flex-direction:column;gap:3px}
+.tblwrap{overflow-x:auto;border:1px solid #e2e6f0;border-radius:9px;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:12px;min-width:640px}
+th{text-align:left;padding:8px 10px;color:#6b7a9e;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid #e2e6f0;background:#f7f8fc;white-space:nowrap;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid #eef0f6;color:#2d3a5e;white-space:nowrap}
+tr:hover td{background:#fafbfc}
+.num{font-family:ui-monospace,monospace;text-align:right}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.b-ok{background:#d1fae5;color:#065f46}
+.b-short{background:#fee2e2;color:#991b1b}
+.b-nodata{background:#e5e7eb;color:#4b5563}
+.b-over{background:#fef3c7;color:#92400e}
+.b-info{background:#e0f2fe;color:#0369a1}
+.al{padding:11px 14px;border-radius:9px;font-size:12.5px;margin-bottom:9px;line-height:1.5}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#eff6ff;border:1px solid #93c5fd;color:#1e40af}
+.empty{text-align:center;padding:54px 20px;color:#8b95b8}
+.empty-i{font-size:44px;margin-bottom:12px;opacity:.5}
+.chartbox{position:relative;height:230px}
+.chartbox.tall{height:290px}
+.lc{background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:12px;border-top:3px solid #cbd2e6}
+.lc.hi{border-top-color:#059669}.lc.md{border-top-color:#d97706}.lc.lo{border-top-color:#dc2626}.lc.over{border-top-color:#dc2626}
+.lc-name{font-size:14px;font-weight:700;color:#1e2640;display:flex;justify-content:space-between;align-items:center}
+.load-bar{height:7px;background:#eef0f6;border-radius:4px;overflow:hidden;margin:8px 0}
+.load-fill{height:100%;border-radius:4px;transition:width .4s}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.mini-c{background:#f7f8fc;border-radius:6px;padding:6px;text-align:center}
+.mini-n{font-size:15px;font-weight:700;font-family:ui-monospace,monospace;color:#1e2640}
+.mini-l{font-size:9px;color:#6b7a9e;margin-top:1px}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px}
+.bar-lb{width:120px;flex-shrink:0;color:#2d3a5e;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-tk{flex:1;height:18px;background:#eef0f6;border-radius:4px;overflow:hidden;position:relative}
+.bar-in{height:100%;background:linear-gradient(90deg,#f59e0b,#d97706);border-radius:4px}
+.bar-vl{width:90px;text-align:right;flex-shrink:0;font-family:ui-monospace,monospace;font-weight:600;color:#1e2640;font-size:11.5px}
+.modal{position:fixed;inset:0;background:rgba(20,26,45,.55);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:20px;overflow-y:auto}
+.modal.on{display:flex}
+.modal-c{background:#fff;border-radius:13px;padding:20px;max-width:720px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto}
+.modal-t{font-size:16px;font-weight:700;margin-bottom:14px;color:#1e2640;display:flex;justify-content:space-between;align-items:center}
+.mclose{cursor:pointer;color:#9ca3af;font-size:22px;line-height:1}
+.fgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
+@media(max-width:640px){.fgrid{grid-template-columns:1fr 1fr}.kpi-n{font-size:19px}}
+.fgrid label{font-size:11px;color:#6b7a9e;font-weight:600;display:flex;flex-direction:column;gap:3px}
+.fgrid input,.fgrid select{width:100%}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1e2640;color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.3);display:none;max-width:90vw}
+.ver{position:fixed;right:11px;bottom:9px;font-size:10px;color:#9aa3bd;background:rgba(255,255,255,.75);padding:3px 9px;border-radius:20px;z-index:20;pointer-events:none}
+.pill{display:inline-flex;gap:5px;align-items:center;background:#f7f8fc;border:1px solid #e2e6f0;border-radius:20px;padding:4px 11px;font-size:11.5px;color:#4a5578;font-weight:600}
+.split{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eef0f6;font-size:12px}
+.split:last-child{border-bottom:none}
+.split b{font-family:ui-monospace,monospace;color:#1e2640}
+.nav-arrows{display:inline-flex;gap:4px}
+.exp-head{cursor:pointer;user-select:none}
+.exp-head:hover{background:#fffbf0}
+.sub-row td{background:#fafbfe;font-size:11.5px}
+.tag{font-size:10px;padding:1px 6px;border-radius:4px;background:#eef2ff;color:#4338ca;font-weight:600}
+@media print{.header,.tabs,.hicons,.btnrow,.filt,.no-print{display:none!important}.wrap{padding:0}.card{break-inside:avoid;box-shadow:none}}
+.imp-hist{font-size:11.5px;color:#4a5578;padding:6px 0;border-bottom:1px solid #eef0f6;display:flex;justify-content:space-between;gap:10px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">🏭</div>
+  <div>
+    <div class="h-title" id="hTitle">VRT Production Plan & Capacity</div>
+    <div class="h-sub" id="hSub">生產排產與產能控制中心</div>
+  </div>
+  <div class="hgrow"></div>
+  <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-i18n="hRecords">記錄</div></div>
+  <div class="hstat"><div class="hstat-v" id="hSew">0</div><div class="hstat-l" data-i18n="hSewing">車縫 pcs</div></div>
+  <div class="hstat"><div class="hstat-v" id="hLines">0</div><div class="hstat-l" data-i18n="hLines">線別</div></div>
+  <div class="hicons">
+    <div class="hicon" title="Language" onclick="toggleLang()" id="langBtn">🌐</div>
+    <div class="hicon" title="Cloud Upload" onclick="cloudUpload()">☁️</div>
+    <div class="hicon" title="Cloud Download" onclick="cloudDownload()">⬇️</div>
+    <div class="hicon" title="Cloud Sync" onclick="cloudSync()">🔄</div>
+    <div class="hicon" title="Print" onclick="window.print()">🖨️</div>
+  </div>
+</div>
+
+<div class="tabs" id="tabs">
+  <div class="tab on" data-tab="dashboard" data-i18n="tabDash">📊 儀錶板</div>
+  <div class="tab" data-tab="upload" data-i18n="tabUpload">📥 匯入</div>
+  <div class="tab" data-tab="daily" data-i18n="tabDaily">📅 日報</div>
+  <div class="tab" data-tab="weekly" data-i18n="tabWeekly">🗓️ 週報</div>
+  <div class="tab" data-tab="monthly" data-i18n="tabMonthly">📆 月報</div>
+  <div class="tab" data-tab="yearly" data-i18n="tabYearly">📈 年報</div>
+  <div class="tab" data-tab="custprod" data-i18n="tabCust">🏷️ 客戶/產品</div>
+  <div class="tab" data-tab="line" data-i18n="tabLine">🧵 線別產能</div>
+  <div class="tab" data-tab="cutsew" data-i18n="tabCut">✂️ 裁縫比對</div>
+  <div class="tab" data-tab="records" data-i18n="tabRecords">📋 全部資料</div>
+  <div class="tab" data-tab="settings" data-i18n="tabSettings">⚙️ 設定</div>
+</div>
+
+<div class="wrap">
+  <div id="dashboard" class="pane on"></div>
+  <div id="upload" class="pane"></div>
+  <div id="daily" class="pane"></div>
+  <div id="weekly" class="pane"></div>
+  <div id="monthly" class="pane"></div>
+  <div id="yearly" class="pane"></div>
+  <div id="custprod" class="pane"></div>
+  <div id="line" class="pane"></div>
+  <div id="cutsew" class="pane"></div>
+  <div id="records" class="pane"></div>
+  <div id="settings" class="pane"></div>
+</div>
+
+<div class="modal" id="editModal"><div class="modal-c">
+  <div class="modal-t"><span id="editTitle">➕ 新增排產</span><span class="mclose" onclick="closeEdit()">×</span></div>
+  <div class="fgrid" id="editForm"></div>
+  <div class="btnrow" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn btn-g" onclick="closeEdit()" data-i18n="btnCancel">取消</button>
+    <button class="btn btn-y" onclick="saveEdit()" data-i18n="btnSave">儲存</button>
+  </div>
+</div></div>
+
+<div class="modal" id="dupModal"><div class="modal-c" style="max-width:520px">
+  <div class="modal-t"><span data-i18n="dupTitle">⚠️ 發現重複資料</span></div>
+  <div id="dupBody" style="font-size:13px;line-height:1.6;color:#4a5578"></div>
+  <div class="btnrow" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn btn-g" onclick="resolveDup('skip')" data-i18n="dupSkip">跳過</button>
+    <button class="btn btn-b" onclick="resolveDup('revision')" data-i18n="dupRev">新增為修正版</button>
+    <button class="btn btn-y" onclick="resolveDup('replace')" data-i18n="dupReplace">覆蓋</button>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<div class="ver">VRT Production Plan &amp; Capacity Control Center · v1.0</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   VRT Production Plan & Capacity Control Center v1.0
+   單頁生產排產與產能分析系統 — 依 Production Plan Excel 分析日/週/月/年產能
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 全域狀態 ──────────────────────────────────────────────────────────── */
+const VER = 'production_plan_capacity_v1';
+let DB = [];                 // 主資料
+let SMV_MAP = {};            // normalizeStyle(style) -> smv
+let IMPORT_HISTORY = [];     // 匯入紀錄
+let SETTINGS = {
+  lang: 'zh',
+  dayMode: 'working',        // working | calendar
+  excludeSunday: true,
+  defaultEff: 0.30,
+  defaultHours: 8,
+  gasUrl: '',
+  tgChatId: '',
+  cloudOn: false
+};
+let CHARTS = {};             // Chart.js 實例
+let EDIT_ID = null;          // 目前編輯的 record id
+let PENDING_DUP = null;      // 待處理的重複匯入
+
+const LS_SET = 'ppc_settings';
+const LS_HIST = 'ppc_import_history';
+
+/* ── IndexedDB 主儲存 ─────────────────────────────────────────────────── */
+const IDB_NAME = 'ProdPlanCapacity', IDB_STORE = 'records', IDB_META = 'meta';
+function openIDB(){
+  return new Promise((res,rej)=>{
+    const build = db => {
+      if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE,{keyPath:'id'});
+      if(!db.objectStoreNames.contains(IDB_META)) db.createObjectStore(IDB_META,{keyPath:'k'});
+    };
+    const tryOpen = ver => new Promise((r2,j2)=>{
+      const rq = ver ? indexedDB.open(IDB_NAME, ver) : indexedDB.open(IDB_NAME);
+      rq.onupgradeneeded = e=>build(e.target.result);
+      rq.onsuccess = e=>r2(e.target.result);
+      rq.onerror = ()=>j2(rq.error);
+    });
+    // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+    tryOpen(1)
+      .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+      .then(db=>{
+        if(db.objectStoreNames.contains(IDB_STORE)&&db.objectStoreNames.contains(IDB_META)) return res(db);
+        const nv=db.version+1; db.close();
+        return tryOpen(nv).then(res);
+      })
+      .catch(rej);
+  });
+}
+async function idbSaveAll(){
+  try{
+    const db = await openIDB();
+    const tx = db.transaction([IDB_STORE,IDB_META],'readwrite');
+    const st = tx.objectStore(IDB_STORE);
+    st.clear();
+    DB.forEach(r=>st.put(r));
+    tx.objectStore(IDB_META).put({k:'smvMap', v:SMV_MAP});
+    return new Promise((res)=>{ tx.oncomplete=()=>res(); tx.onerror=()=>res(); });
+  }catch(e){ console.warn('idbSaveAll',e); }
+}
+async function idbLoadAll(){
+  try{
+    const db = await openIDB();
+    const tx = db.transaction([IDB_STORE,IDB_META],'readonly');
+    const recs = await new Promise(r=>{ const rq=tx.objectStore(IDB_STORE).getAll(); rq.onsuccess=()=>r(rq.result||[]); rq.onerror=()=>r([]); });
+    const meta = await new Promise(r=>{ const rq=tx.objectStore(IDB_META).get('smvMap'); rq.onsuccess=()=>r(rq.result?rq.result.v:{}); rq.onerror=()=>r({}); });
+    DB = recs || [];
+    SMV_MAP = meta || {};
+  }catch(e){ console.warn('idbLoadAll',e); DB=[]; }
+}
+async function persist(){ await idbSaveAll(); saveSettings(); saveHistory(); refreshHeader(); }
+
+function saveSettings(){ try{ localStorage.setItem(LS_SET, JSON.stringify(SETTINGS)); }catch(e){} }
+function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(LS_SET)||'null'); if(s) SETTINGS={...SETTINGS,...s}; }catch(e){}
+  if(!SETTINGS.gasUrl){ const pu=(localStorage.getItem('vrt_portal_gas_url')||'').trim(); if(pu) SETTINGS.gasUrl=pu; } }
+function saveHistory(){ try{ localStorage.setItem(LS_HIST, JSON.stringify(IMPORT_HISTORY)); }catch(e){} }
+function loadHistory(){ try{ IMPORT_HISTORY=JSON.parse(localStorage.getItem(LS_HIST)||'[]'); }catch(e){ IMPORT_HISTORY=[]; } }
+
+/* ── 多語系 ───────────────────────────────────────────────────────────── */
+const I18N = {
+  zh:{
+    sysTitle:'VRT Production Plan & Capacity', sysSub:'生產排產與產能控制中心',
+    hRecords:'記錄', hSewing:'車縫 pcs', hLines:'線別',
+    tabDash:'📊 儀錶板', tabUpload:'📥 匯入', tabDaily:'📅 日報', tabWeekly:'🗓️ 週報',
+    tabMonthly:'📆 月報', tabYearly:'📈 年報', tabCust:'🏷️ 客戶/產品', tabLine:'🧵 線別產能',
+    tabCut:'✂️ 裁縫比對', tabRecords:'📋 全部資料', tabSettings:'⚙️ 設定',
+    btnCancel:'取消', btnSave:'儲存', btnAdd:'➕ 新增排產',
+    dupTitle:'⚠️ 發現重複資料', dupSkip:'跳過', dupRev:'新增為修正版', dupReplace:'覆蓋',
+    kTotalOrders:'總訂單量', kTotalSew:'總車縫量', kTotalCut:'總裁剪量', kCutSew:'裁剪對車縫比',
+    kLines:'使用線別', kCust:'客戶數', kStyles:'款式數', kRange:'排產日期範圍',
+    kAvgDay:'平均日產能', kPeakDay:'最高日產能',
+    empty:'尚無資料', emptyHint:'請至「匯入」頁上傳 Production Plan Excel 開始分析',
+    goImport:'📥 前往匯入', mgmtSummary:'管理摘要', dailyTrend:'每日產能趨勢',
+    custShare:'客戶占比', prodShare:'產品類別占比', lineLoad:'線別負荷排名',
+    gapTop:'裁縫缺口 Top 10', startEnd:'上線 / 下線分布',
+    cust:'客戶', po:'PO', style:'款式', color:'顏色', size:'尺寸', prodType:'產品類別',
+    line:'線別', sewQty:'車縫量', cutQty:'裁剪量', gap:'缺口', ratio:'裁/縫%',
+    start:'上線日', end:'下線日', status:'狀態', remark:'備註', dailyOut:'日批量',
+    plannedToday:'今日排產', manpower:'人數', hours:'工時', smv:'SMV', planDays:'天數',
+    load:'負荷%', orderQty:'訂單量', actions:'操作',
+    stOK:'足夠', stShort:'裁剪不足', stNoData:'無裁剪資料', stOver:'超裁', stInfo:'資訊',
+    date:'日期', week:'週', month:'月份', year:'年度', prev:'◀ 上一', next:'下一 ▶',
+    filterCust:'全部客戶', filterProd:'全部產品', filterLine:'全部線別', filterAll:'全部',
+    search:'搜尋 PO / 款式 / 客戶...', edit:'編輯', del:'刪除', confirmDel:'確定刪除此筆資料？',
+    wPlanned:'本週計劃車縫', wCut:'本週裁片需求', wCustCnt:'涉及客戶', wStyleCnt:'涉及款式',
+    wLineCnt:'涉及線別', wPeakLine:'最高負荷線別', wRisk:'高風險訂單',
+    mTotalSew:'月總車縫量', mTotalOrder:'月總訂單量', mTotalCut:'月總裁剪量',
+    weekBreak:'每週產能拆分', starting:'即將上線', finishing:'即將下線',
+    dayModeW:'工作日(排除週日)', dayModeC:'日曆日(含全部)',
+    setLang:'語言', setDayMode:'工作日模式', setExSun:'排除週日', setEff:'預設效率目標',
+    setHours:'預設工作時數', setGas:'GAS Web App URL', setTgChat:'Telegram Chat ID',
+    setCloud:'雲端同步', setBackup:'本機備份 / 還原',
+    impExcel:'📥 匯入 Excel', expExcel:'📤 匯出 Excel', expCsv:'⬇ 匯出 CSV',
+    bkJson:'💾 備份 JSON', rsJson:'📂 還原 JSON', clUp:'☁️ 雲端上傳', clDown:'☁️ 雲端下載',
+    clSync:'🔄 雲端同步', tgPush:'📨 推送 Telegram', printR:'🖨 列印報告',
+    dropHint:'拖拉 Excel 到此，或點擊選擇檔案', dropSub:'支援 .xlsx / .xls / .csv，可一次匯入多月份',
+    preview:'解析預覽', confirmImport:'✅ 確認匯入', reparse:'重新選擇',
+    impHistory:'匯入紀錄', noHist:'尚無匯入紀錄',
+    totalSew:'總車縫量', totalCut:'總裁剪量', totalGap:'總缺口',
+    shortOrders:'裁剪不足訂單', noDataOrders:'無裁剪資料訂單', overOrders:'超裁訂單',
+    activeStyles:'活躍款式', activePOs:'活躍PO', dateRange:'日期範圍', share:'占比',
+    theoCap:'理論產能', loadPct:'負荷', expand:'展開/收合',
+    yTrend:'每月產能趨勢', highCust:'年度最大客戶', highProd:'年度最大產品類別', highLine:'年度最高負荷線別',
+    saved:'已儲存', imported:'已匯入', deleted:'已刪除', noGas:'尚未設定 GAS URL',
+    cloudDev:'雲端功能已保留介面，實際上傳需先設定並部署 GAS。',
+    calc:'計算中...', on:'開', off:'關', mode:'模式'
+  },
+  en:{
+    sysTitle:'VRT Production Plan & Capacity', sysSub:'Production Plan & Capacity Control Center',
+    hRecords:'Records', hSewing:'Sewing pcs', hLines:'Lines',
+    tabDash:'📊 Dashboard', tabUpload:'📥 Import', tabDaily:'📅 Daily', tabWeekly:'🗓️ Weekly',
+    tabMonthly:'📆 Monthly', tabYearly:'📈 Yearly', tabCust:'🏷️ Customer/Product', tabLine:'🧵 Line Capacity',
+    tabCut:'✂️ Cut vs Sewing', tabRecords:'📋 Records', tabSettings:'⚙️ Settings',
+    btnCancel:'Cancel', btnSave:'Save', btnAdd:'➕ Add Plan',
+    dupTitle:'⚠️ Duplicate Found', dupSkip:'Skip', dupRev:'Add as Revision', dupReplace:'Replace',
+    kTotalOrders:'Total Orders', kTotalSew:'Total Sewing Qty', kTotalCut:'Total Cut Qty', kCutSew:'Cut vs Sewing %',
+    kLines:'Active Lines', kCust:'Customers', kStyles:'Styles', kRange:'Date Range',
+    kAvgDay:'Avg Daily Cap.', kPeakDay:'Peak Daily Cap.',
+    empty:'No data yet', emptyHint:'Go to "Import" and upload the Production Plan Excel to start.',
+    goImport:'📥 Go to Import', mgmtSummary:'Management Summary', dailyTrend:'Daily Capacity Trend',
+    custShare:'Customer Share', prodShare:'Product Type Share', lineLoad:'Line Load Ranking',
+    gapTop:'Cut Gap Top 10', startEnd:'Start / End Distribution',
+    cust:'Customer', po:'PO', style:'Style', color:'Color', size:'Size', prodType:'Product Type',
+    line:'Line', sewQty:'Sewing Qty', cutQty:'Cut Qty', gap:'Gap', ratio:'Cut/Sew%',
+    start:'Start', end:'End', status:'Status', remark:'Remark', dailyOut:'Daily Out',
+    plannedToday:'Planned Today', manpower:'Manpower', hours:'Hours', smv:'SMV', planDays:'Days',
+    load:'Load%', orderQty:'Order Qty', actions:'Actions',
+    stOK:'OK', stShort:'Short Cut', stNoData:'No Cut Data', stOver:'Over Cut', stInfo:'Info',
+    date:'Date', week:'Week', month:'Month', year:'Year', prev:'◀ Prev', next:'Next ▶',
+    filterCust:'All Customers', filterProd:'All Products', filterLine:'All Lines', filterAll:'All',
+    search:'Search PO / Style / Customer...', edit:'Edit', del:'Delete', confirmDel:'Delete this record?',
+    wPlanned:'Weekly Planned Sew', wCut:'Weekly Cut Need', wCustCnt:'Customers', wStyleCnt:'Styles',
+    wLineCnt:'Lines', wPeakLine:'Peak Load Line', wRisk:'High-risk Orders',
+    mTotalSew:'Monthly Sewing', mTotalOrder:'Monthly Orders', mTotalCut:'Monthly Cut',
+    weekBreak:'Weekly Breakdown', starting:'Starting Soon', finishing:'Finishing Soon',
+    dayModeW:'Working Days (excl. Sun)', dayModeC:'Calendar Days (all)',
+    setLang:'Language', setDayMode:'Day Mode', setExSun:'Exclude Sunday', setEff:'Default Efficiency Target',
+    setHours:'Default Working Hours', setGas:'GAS Web App URL', setTgChat:'Telegram Chat ID',
+    setCloud:'Cloud Sync', setBackup:'Local Backup / Restore',
+    impExcel:'📥 Import Excel', expExcel:'📤 Export Excel', expCsv:'⬇ Export CSV',
+    bkJson:'💾 Backup JSON', rsJson:'📂 Restore JSON', clUp:'☁️ Cloud Upload', clDown:'☁️ Cloud Download',
+    clSync:'🔄 Cloud Sync', tgPush:'📨 Send Telegram', printR:'🖨 Print Report',
+    dropHint:'Drag Excel here, or click to choose file', dropSub:'.xlsx / .xls / .csv — multi-month import supported',
+    preview:'Parse Preview', confirmImport:'✅ Confirm Import', reparse:'Choose Again',
+    impHistory:'Import History', noHist:'No import history yet',
+    totalSew:'Total Sewing', totalCut:'Total Cut', totalGap:'Total Gap',
+    shortOrders:'Short Cut Orders', noDataOrders:'No Cut Data Orders', overOrders:'Over Cut Orders',
+    activeStyles:'Active Styles', activePOs:'Active POs', dateRange:'Date Range', share:'Share',
+    theoCap:'Theo. Cap.', loadPct:'Load', expand:'Toggle',
+    yTrend:'Monthly Capacity Trend', highCust:'Top Customer', highProd:'Top Product Type', highLine:'Peak Load Line',
+    saved:'Saved', imported:'Imported', deleted:'Deleted', noGas:'GAS URL not set',
+    cloudDev:'Cloud UI is preserved; real upload requires GAS setup & deployment first.',
+    calc:'Calculating...', on:'ON', off:'OFF', mode:'Mode'
+  },
+  km:{
+    sysTitle:'VRT Production Plan & Capacity', sysSub:'មជ្ឈមណ្ឌលគ្រប់គ្រងផែនការ និងសមត្ថភាពផលិត',
+    hRecords:'កំណត់ត្រា', hSewing:'ដេរ pcs', hLines:'ខ្សែ',
+    tabDash:'📊 ផ្ទាំង', tabUpload:'📥 នាំចូល', tabDaily:'📅 ថ្ងៃ', tabWeekly:'🗓️ សប្តាហ៍',
+    tabMonthly:'📆 ខែ', tabYearly:'📈 ឆ្នាំ', tabCust:'🏷️ អតិថិជន/ផលិតផល', tabLine:'🧵 សមត្ថភាពខ្សែ',
+    tabCut:'✂️ កាត់ ធៀប ដេរ', tabRecords:'📋 ទិន្នន័យ', tabSettings:'⚙️ កំណត់',
+    btnCancel:'បោះបង់', btnSave:'រក្សាទុក', btnAdd:'➕ បន្ថែម',
+    dupTitle:'⚠️ ស្ទួន', dupSkip:'រំលង', dupRev:'បន្ថែមកំណែ', dupReplace:'ជំនួស',
+    kTotalOrders:'ការបញ្ជាទិញសរុប', kTotalSew:'ដេរសរុប', kTotalCut:'កាត់សរុប', kCutSew:'កាត់/ដេរ %',
+    kLines:'ខ្សែសកម្ម', kCust:'អតិថិជន', kStyles:'ម៉ូដែល', kRange:'ចន្លោះកាលបរិច្ឆេទ',
+    kAvgDay:'មធ្យមភាគ/ថ្ងៃ', kPeakDay:'កំពូល/ថ្ងៃ',
+    empty:'មិនទាន់មានទិន្នន័យ', emptyHint:'សូមទៅ "នាំចូល" ដើម្បីផ្ទុក Excel Production Plan។',
+    goImport:'📥 ទៅនាំចូល', mgmtSummary:'សេចក្តីសង្ខេប', dailyTrend:'និន្នាការសមត្ថភាពប្រចាំថ្ងៃ',
+    custShare:'ចំណែកអតិថិជន', prodShare:'ចំណែកប្រភេទផលិតផល', lineLoad:'ចំណាត់ថ្នាក់ខ្សែ',
+    gapTop:'គម្លាតកាត់ Top 10', startEnd:'ចែកចាយ ចាប់ផ្តើម/បញ្ចប់',
+    cust:'អតិថិជន', po:'PO', style:'ម៉ូដែល', color:'ពណ៌', size:'ទំហំ', prodType:'ប្រភេទ',
+    line:'ខ្សែ', sewQty:'ដេរ', cutQty:'កាត់', gap:'គម្លាត', ratio:'កាត់/ដេរ%',
+    start:'ចាប់ផ្តើម', end:'បញ្ចប់', status:'ស្ថានភាព', remark:'កំណត់', dailyOut:'ថ្ងៃ',
+    plannedToday:'ផែនការថ្ងៃនេះ', manpower:'កម្លាំង', hours:'ម៉ោង', smv:'SMV', planDays:'ថ្ងៃ',
+    load:'បន្ទុក%', orderQty:'បញ្ជាទិញ', actions:'សកម្មភាព',
+    stOK:'គ្រប់គ្រាន់', stShort:'កាត់មិនគ្រប់', stNoData:'គ្មានទិន្នន័យកាត់', stOver:'កាត់លើស', stInfo:'ព័ត៌មាន',
+    date:'កាលបរិច្ឆេទ', week:'សប្តាហ៍', month:'ខែ', year:'ឆ្នាំ', prev:'◀ មុន', next:'បន្ទាប់ ▶',
+    filterCust:'អតិថិជនទាំងអស់', filterProd:'ផលិតផលទាំងអស់', filterLine:'ខ្សែទាំងអស់', filterAll:'ទាំងអស់',
+    search:'ស្វែងរក PO / ម៉ូដែល / អតិថិជន...', edit:'កែ', del:'លុប', confirmDel:'លុបកំណត់ត្រានេះ?',
+    wPlanned:'ដេរផែនការសប្តាហ៍', wCut:'តម្រូវការកាត់សប្តាហ៍', wCustCnt:'អតិថិជន', wStyleCnt:'ម៉ូដែល',
+    wLineCnt:'ខ្សែ', wPeakLine:'ខ្សែបន្ទុកខ្ពស់', wRisk:'ការបញ្ជាទិញហានិភ័យ',
+    mTotalSew:'ដេរប្រចាំខែ', mTotalOrder:'បញ្ជាទិញប្រចាំខែ', mTotalCut:'កាត់ប្រចាំខែ',
+    weekBreak:'បំបែកតាមសប្តាហ៍', starting:'ជិតចាប់ផ្តើម', finishing:'ជិតបញ្ចប់',
+    dayModeW:'ថ្ងៃធ្វើការ (លើកលែងអាទិត្យ)', dayModeC:'ថ្ងៃប្រតិទិន (ទាំងអស់)',
+    setLang:'ភាសា', setDayMode:'របៀបថ្ងៃ', setExSun:'លើកលែងថ្ងៃអាទិត្យ', setEff:'គោលដៅប្រសិទ្ធភាព',
+    setHours:'ម៉ោងធ្វើការ', setGas:'GAS Web App URL', setTgChat:'Telegram Chat ID',
+    setCloud:'ធ្វើសមកាលកម្ម', setBackup:'បម្រុងទុក / ស្តារ',
+    impExcel:'📥 នាំចូល Excel', expExcel:'📤 នាំចេញ Excel', expCsv:'⬇ នាំចេញ CSV',
+    bkJson:'💾 បម្រុង JSON', rsJson:'📂 ស្តារ JSON', clUp:'☁️ ផ្ទុកឡើង', clDown:'☁️ ទាញយក',
+    clSync:'🔄 សមកាលកម្ម', tgPush:'📨 ផ្ញើ Telegram', printR:'🖨 បោះពុម្ព',
+    dropHint:'អូស Excel មកទីនេះ ឬចុចជ្រើស', dropSub:'.xlsx / .xls / .csv — អាចនាំចូលច្រើនខែ',
+    preview:'មើលជាមុន', confirmImport:'✅ បញ្ជាក់នាំចូល', reparse:'ជ្រើសម្តងទៀត',
+    impHistory:'ប្រវត្តិនាំចូល', noHist:'គ្មានប្រវត្តិ',
+    totalSew:'ដេរសរុប', totalCut:'កាត់សរុប', totalGap:'គម្លាតសរុប',
+    shortOrders:'កាត់មិនគ្រប់', noDataOrders:'គ្មានទិន្នន័យកាត់', overOrders:'កាត់លើស',
+    activeStyles:'ម៉ូដែលសកម្ម', activePOs:'PO សកម្ម', dateRange:'ចន្លោះកាលបរិច្ឆេទ', share:'ចំណែក',
+    theoCap:'សមត្ថភាព', loadPct:'បន្ទុក', expand:'បិទ/បើក',
+    yTrend:'និន្នាការប្រចាំខែ', highCust:'អតិថិជនកំពូល', highProd:'ផលិតផលកំពូល', highLine:'ខ្សែបន្ទុកខ្ពស់',
+    saved:'បានរក្សាទុក', imported:'បាននាំចូល', deleted:'បានលុប', noGas:'មិនទាន់កំណត់ GAS URL',
+    cloudDev:'ផ្ទៃពពកត្រូវបានរក្សាទុក; ការផ្ទុកឡើងពិតត្រូវការ GAS។',
+    calc:'កំពុងគណនា...', on:'បើក', off:'បិទ', mode:'របៀប'
+  }
+};
+function t(k){ return (I18N[SETTINGS.lang]||I18N.zh)[k] || I18N.zh[k] || k; }
+function toggleLang(){
+  SETTINGS.lang = SETTINGS.lang==='zh'?'en':SETTINGS.lang==='en'?'km':'zh';
+  saveSettings(); applyLang(); renderAll();
+}
+function applyLang(){
+  document.documentElement.lang = SETTINGS.lang==='zh'?'zh-TW':SETTINGS.lang==='km'?'km':'en';
+  document.getElementById('langBtn').textContent = SETTINGS.lang==='zh'?'🌐 EN':SETTINGS.lang==='en'?'🌐 ខ្មែរ':'🌐 中文';
+  document.getElementById('hTitle').textContent = t('sysTitle');
+  document.getElementById('hSub').textContent = t('sysSub');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.dataset.i18n); });
+}
+
+/* ── 工具函式 ─────────────────────────────────────────────────────────── */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeHtml(s){ return esc(s); }
+function fmt(n){ const x=Number(n)||0; return x.toLocaleString('en-US',{maximumFractionDigits:0}); }
+function fmt1(n){ const x=Number(n)||0; return x.toLocaleString('en-US',{maximumFractionDigits:1}); }
+function toNum(v){ if(v==null||v==='')return null; const n=Number(String(v).replace(/,/g,'').trim()); return isNaN(n)?null:n; }
+function uid(){ return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none',2200); }
+
+// 本地時區日期字串 (絕不用 toISOString)
+function ymd(d){ if(!(d instanceof Date)||isNaN(d))return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function todayStr(){ return ymd(new Date()); }
+function nowStamp(){ const d=new Date(); return `${ymd(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
+function parseYMD(s){ if(!s)return null; const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(!m)return null; return new Date(+m[1],+m[2]-1,+m[3]); }
+
+// Excel 序號 / 日期字串 → YYYY-MM-DD
+function anyToYMD(v){
+  if(v==null||v==='')return '';
+  if(v instanceof Date && !isNaN(v)) return ymd(v);
+  // 純數字 → Excel serial
+  const n = typeof v==='number' ? v : (/^\d+(\.\d+)?$/.test(String(v).trim()) ? Number(v) : null);
+  if(n!=null && n>1 && n<80000){
+    const ms=(n-25569)*86400*1000;         // Excel serial → unix ms (UTC)
+    const d=new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+  }
+  // 日期字串
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if(m) return `${m[3]}-${String(+m[1]).padStart(2,'0')}-${String(+m[2]).padStart(2,'0')}`;
+  const d=new Date(s); return isNaN(d)?'':ymd(d);
+}
+
+// 款式標準化 (供 SMV 模糊匹配)：去空白去符號大寫
+function normStyle(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function smvLookup(style){
+  const k=normStyle(style);
+  if(k && SMV_MAP[k]!=null) return SMV_MAP[k];
+  return null;
+}
+
+// 工作天數 (依 dayMode)
+function countWorkingDays(startYMD,endYMD){
+  const s=parseYMD(startYMD), e=parseYMD(endYMD);
+  if(!s||!e||e<s) return 0;
+  let cnt=0; const d=new Date(s);
+  while(d<=e){
+    if(SETTINGS.dayMode==='calendar' || !SETTINGS.excludeSunday || d.getDay()!==0) cnt++;
+    d.setDate(d.getDate()+1);
+  }
+  return cnt || 1;
+}
+function isActiveOnDate(rec,dateYMD){
+  if(!rec.startDate||!rec.endDate) return false;
+  return dateYMD>=rec.startDate && dateYMD<=rec.endDate;
+}
+// 每筆訂單的每日計劃車縫量
+function dailyPlannedQty(rec){
+  const active = countWorkingDays(rec.startDate,rec.endDate) || 1;
+  const sew = rec.sewingQty || 0;
+  if(rec.dailyOutput) return Math.min(rec.dailyOutput, sew>0?sew:rec.dailyOutput);
+  return active>0 ? sew/active : sew;
+}
+// 某日某筆訂單的排產量 (需該日是工作日)
+function plannedQtyOnDate(rec,dateYMD){
+  if(!isActiveOnDate(rec,dateYMD)) return 0;
+  const d=parseYMD(dateYMD);
+  if(SETTINGS.dayMode==='working' && SETTINGS.excludeSunday && d.getDay()===0) return 0;
+  return dailyPlannedQty(rec);
+}
+
+/* ── 裁縫狀態判斷 ─────────────────────────────────────────────────────── */
+function cutStatus(rec){
+  const sew=rec.sewingQty||0, cut=rec.cutQty;
+  if(cut==null || cut===0) return 'nodata';
+  if(cut > sew*1.1) return 'over';
+  if(cut >= sew) return 'ok';
+  return 'short';
+}
+const STATUS_BADGE = {
+  ok:['b-ok','stOK'], short:['b-short','stShort'], nodata:['b-nodata','stNoData'], over:['b-over','stOver'], info:['b-info','stInfo']
+};
+function statusBadge(st){ const [c,k]=STATUS_BADGE[st]||STATUS_BADGE.info; return `<span class="badge ${c}">${t(k)}</span>`; }
+
+/* ── 資料清洗 normalizeData ───────────────────────────────────────────── */
+function upperType(v){
+  const s=String(v||'').trim().toUpperCase();
+  if(!s) return '';
+  if(s.startsWith('GARM')) return 'GARMENT';
+  if(s.startsWith('APRON')) return 'APRON';
+  if(s==='TOP'||s.startsWith('TOP')) return 'TOP';
+  return s;
+}
+function normLine(v){
+  if(v==null||v==='') return '';
+  const s=String(v).trim();
+  if(/^\d+$/.test(s)) return 'Line '+s;
+  if(/^line/i.test(s)) return 'Line '+s.replace(/^line\s*/i,'');
+  return s;
+}
+function normPO(v){ if(v==null)return ''; return String(v).trim(); }
+
+function normalizeRecord(raw){
+  const r = {...raw};
+  r.productType = upperType(r.productType);
+  r.line = normLine(r.line);
+  r.customer = String(r.customer||'').trim().toUpperCase();
+  r.po = normPO(r.po);
+  r.styleRaw = String(r.style||'').trim();
+  r.style = r.styleRaw.toUpperCase();
+  r.color = String(r.color||'').trim();
+  r.size = String(r.size||'').trim();
+  ['orderQty','sewingQty','cutQty','dailyOutput','manpower','workingHours','planDays','weeklyOutput','monthlyOutput','plannedHoursOrDays'].forEach(f=>{ r[f]=toNum(r[f]); });
+  r.efficiencyTarget = toNum(r.efficiencyTarget);
+  if(r.efficiencyTarget!=null && r.efficiencyTarget>1) r.efficiencyTarget=r.efficiencyTarget/100; // 30 → 0.30
+  r.shipmentDate = anyToYMD(r.shipmentDate);
+  r.startDate = anyToYMD(r.startDate);
+  r.endDate = anyToYMD(r.endDate);
+  r.finishDate = anyToYMD(r.finishDate);
+  r.remark = String(r.remark||'').trim();
+  // SMV：空白時用 style 對照
+  if(r.smv==null || r.smv===''){ const s=smvLookup(r.style); if(s!=null) r.smv=s; }
+  else r.smv=toNum(r.smv);
+  // dailyOutput 反推
+  if((r.dailyOutput==null||r.dailyOutput===0) && r.sewingQty && r.planDays) r.dailyOutput=Math.round(r.sewingQty/r.planDays);
+  // planDays 反推
+  if((r.planDays==null||r.planDays===0) && r.sewingQty && r.dailyOutput) r.planDays=Math.ceil(r.sewingQty/r.dailyOutput);
+  if(!r.id) r.id=uid();
+  if(!r._srcMonth) r._srcMonth = (r.startDate||r.shipmentDate||todayStr()).slice(0,7);
+  r._key = uniqueKey(r);
+  return r;
+}
+function uniqueKey(r){
+  return [r.productType,r.line,r.customer,r.po,r.style,r.color,r.size,r.startDate,r.endDate].join('|');
+}
+// 判斷一列是否為空
+function isEmptyRow(r){
+  return !r.customer && !r.po && !r.style && (r.orderQty==null) && (r.sewingQty==null) && !r.startDate;
+}
+
+/* ── Excel 解析 ───────────────────────────────────────────────────────── */
+const COL_ORDER = ['productType','line','customer','shipmentDate','po','style','color','size',
+  'orderQty','sewingQty','cutQty','dailyOutput','smv','manpower','workingHours','plannedHoursOrDays',
+  'efficiencyTarget','startDate','endDate','finishDate','planDays','weeklyOutput','monthlyOutput','remark'];
+
+function buildSmvMapFromSheet(wb){
+  // 找 STYLE/SMV 對照表 (通常是 Sheet1)
+  let sheetName = wb.SheetNames.find(n=>/^sheet1$/i.test(n)) || wb.SheetNames.find(n=>{
+    const ws=wb.Sheets[n]; const a1=ws['A1']; return a1 && /style/i.test(String(a1.v));
+  });
+  if(!sheetName) return;
+  const ws=wb.Sheets[sheetName];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  if(!rows.length) return;
+  // 找 header 列
+  let hi=0;
+  for(let i=0;i<Math.min(3,rows.length);i++){ if(rows[i].some(c=>/style/i.test(String(c)))){ hi=i; break; } }
+  const hdr=rows[hi].map(c=>String(c).toUpperCase().trim());
+  const si=hdr.findIndex(c=>c==='STYLE'), vi=hdr.findIndex(c=>c==='SMV');
+  const styleCol = si>=0?si:0, smvCol = vi>=0?vi:1;
+  for(let i=hi+1;i<rows.length;i++){
+    const st=rows[i][styleCol], sv=toNum(rows[i][smvCol]);
+    if(st!=null && st!=='' && sv!=null){ SMV_MAP[normStyle(st)]=sv; }
+  }
+}
+
+function parseMainSheet(wb){
+  // 找主表：名稱含 PRODUCTION PLAN，否則取第一張非 Sheet1
+  let name = wb.SheetNames.find(n=>/production plan/i.test(n))
+          || wb.SheetNames.find(n=>!/^sheet1$/i.test(n))
+          || wb.SheetNames[0];
+  const ws=wb.Sheets[name];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+  // 找中文 header 列 (含 产品描述) 或英文 header (含 Products)
+  let hi=-1, engRow=-1;
+  for(let i=0;i<Math.min(8,rows.length);i++){
+    const line=rows[i].map(c=>String(c==null?'':c));
+    if(line.some(c=>c.includes('产品描述'))) { hi=i; }
+    if(line.some(c=>/products/i.test(c) && /tyle|type/i.test(line.join(' ')))) engRow=i;
+  }
+  // 資料起始列：中文header後隔英文header → +2；只有英文 → +1
+  let dataStart;
+  if(hi>=0){ dataStart = (engRow===hi+1)?hi+2:hi+1; }
+  else if(engRow>=0){ dataStart = engRow+1; }
+  else { dataStart = 4; } // 後備：預設第5列(index4)
+  const out=[];
+  for(let i=dataStart;i<rows.length;i++){
+    const row=rows[i]; if(!row || row.every(c=>c==null||c==='')) continue;
+    const rec={};
+    COL_ORDER.forEach((f,idx)=>{ rec[f]=row[idx]!==undefined?row[idx]:null; });
+    const nr=normalizeRecord(rec);
+    if(isEmptyRow(nr)) continue;
+    out.push(nr);
+  }
+  return {sheetName:name, records:out};
+}
+
+let PARSED_PREVIEW = null;
+function handleFiles(files){
+  const arr=[...files]; if(!arr.length) return;
+  let allRecs=[], fileNames=[];
+  let done=0;
+  arr.forEach(file=>{
+    const rd=new FileReader();
+    rd.onload=e=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false,raw:true});
+        buildSmvMapFromSheet(wb);
+        const {records}=parseMainSheet(wb);
+        // 二次補 SMV (剛建好對照表)
+        records.forEach(r=>{ if(r.smv==null){ const s=smvLookup(r.style); if(s!=null) r.smv=s; } r._srcFile=file.name; });
+        allRecs=allRecs.concat(records);
+        fileNames.push(file.name+' ('+records.length+')');
+      }catch(err){ console.error(err); toast('解析失敗: '+file.name); }
+      if(++done===arr.length){
+        PARSED_PREVIEW={records:allRecs, files:fileNames};
+        renderUpload();
+      }
+    };
+    rd.readAsArrayBuffer(file);
+  });
+}
+
+function confirmImport(){
+  if(!PARSED_PREVIEW||!PARSED_PREVIEW.records.length) return;
+  const incoming = PARSED_PREVIEW.records;
+  const existKeys = new Set(DB.map(r=>r._key));
+  let added=0, dups=[];
+  incoming.forEach(r=>{
+    if(existKeys.has(r._key)){ dups.push(r); }
+    else { DB.push(r); existKeys.add(r._key); added++; }
+  });
+  const doFinish=()=>{
+    IMPORT_HISTORY.unshift({ time:nowStamp(), files:PARSED_PREVIEW.files.join(', '),
+      count:incoming.length, added, dups:dups.length });
+    PARSED_PREVIEW=null;
+    persist(); renderAll();
+    toast(`${t('imported')}: +${added}${dups.length?(' / dup '+dups.length):''}`);
+  };
+  if(dups.length){
+    PENDING_DUP={dups, cb:doFinish};
+    document.getElementById('dupBody').innerHTML =
+      `${SETTINGS.lang==='zh'?'偵測到':'Detected'} <b>${dups.length}</b> ${SETTINGS.lang==='zh'?'筆重複資料 (相同 產品/線別/客戶/PO/款式/顏色/尺寸/上下線日)。請選擇處理方式：':'duplicate rows (same key). Choose how to handle:'}`;
+    document.getElementById('dupModal').classList.add('on');
+  } else { doFinish(); }
+}
+function resolveDup(mode){
+  const {dups,cb}=PENDING_DUP||{};
+  document.getElementById('dupModal').classList.remove('on');
+  if(!PENDING_DUP) return;
+  if(mode==='replace'){
+    dups.forEach(r=>{ const i=DB.findIndex(x=>x._key===r._key); if(i>=0){ r.id=DB[i].id; DB[i]=r; } });
+  } else if(mode==='revision'){
+    dups.forEach(r=>{ r.id=uid(); r._key=r._key+'|rev'+Date.now().toString(36).slice(-3); r.remark=(r.remark?r.remark+' ':'')+'[REV]'; DB.push(r); });
+  } // skip: 不動作
+  PENDING_DUP=null;
+  cb && cb();
+}
+
+/* ── 聚合分析引擎 ─────────────────────────────────────────────────────── */
+function activeRecords(){ return DB.filter(r=>r.startDate&&r.endDate); }
+
+function dateRangeOfDB(list){
+  const ds=list.map(r=>r.startDate).filter(Boolean).sort();
+  const de=list.map(r=>r.endDate).filter(Boolean).sort();
+  return { min: ds[0]||'', max: de[de.length-1]||'' };
+}
+function eachDate(startYMD,endYMD,cb){
+  const s=parseYMD(startYMD), e=parseYMD(endYMD); if(!s||!e)return;
+  const d=new Date(s);
+  while(d<=e){ cb(ymd(d), d); d.setDate(d.getDate()+1); }
+}
+// 一段期間內每筆訂單分攤加總
+function periodStats(list,startYMD,endYMD){
+  let sew=0, byLine={}, byCust={}, byProd={}, styles=new Set(), lines=new Set(), custs=new Set();
+  const daily={};
+  eachDate(startYMD,endYMD,(dstr,dobj)=>{
+    if(SETTINGS.dayMode==='working'&&SETTINGS.excludeSunday&&dobj.getDay()===0){ daily[dstr]=daily[dstr]||0; return; }
+    daily[dstr]=daily[dstr]||0;
+    list.forEach(r=>{
+      const q=plannedQtyOnDate(r,dstr);
+      if(q>0){ sew+=q; daily[dstr]+=q; byLine[r.line]=(byLine[r.line]||0)+q; byCust[r.customer]=(byCust[r.customer]||0)+q; byProd[r.productType]=(byProd[r.productType]||0)+q; styles.add(r.style); lines.add(r.line); custs.add(r.customer); }
+    });
+  });
+  // 該期間內的裁剪需求：上線日落在期間的訂單其裁片
+  let cutNeed=0, activeOrders=[];
+  list.forEach(r=>{
+    if(r.startDate<=endYMD && r.endDate>=startYMD){ activeOrders.push(r); if(r.cutQty) cutNeed+=r.cutQty; }
+  });
+  return {sew:Math.round(sew), cutNeed, byLine, byCust, byProd,
+    styles:styles.size, lines:lines.size, custs:custs.size, daily, activeOrders};
+}
+
+function weekBounds(anyYMD){
+  const d=parseYMD(anyYMD)||new Date();
+  const dow=d.getDay(); // 0=Sun
+  const monOff = dow===0?-6:1-dow;
+  const mon=new Date(d); mon.setDate(d.getDate()+monOff);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  return {start:ymd(mon), end:ymd(sun)};
+}
+function monthBounds(ym){ // ym = 'YYYY-MM'
+  const [y,m]=ym.split('-').map(Number);
+  const s=new Date(y,m-1,1), e=new Date(y,m,0);
+  return {start:ymd(s), end:ymd(e)};
+}
+function yearBounds(y){ return {start:y+'-01-01', end:y+'-12-31'}; }
+
+function fyGroup(list){ // 產品/客戶/線別彙總 (整體，用原始 qty)
+  const g={};
+  list.forEach(r=>{ g[r.customer]=g[r.customer]||{}; });
+  return g;
+}
+// 客戶彙總
+function summarizeBy(list,keyFn){
+  const map={};
+  list.forEach(r=>{
+    const k=keyFn(r)||'(空)';
+    const o=map[k]||(map[k]={key:k, orderQty:0, sewQty:0, cutQty:0, cutHas:false, styles:new Set(), pos:new Set(), lines:new Set(), starts:[], ends:[], recs:[]});
+    o.orderQty+=r.orderQty||0; o.sewQty+=r.sewingQty||0;
+    if(r.cutQty!=null){ o.cutQty+=r.cutQty; o.cutHas=true; }
+    o.styles.add(r.style); o.pos.add(r.po); o.lines.add(r.line);
+    if(r.startDate) o.starts.push(r.startDate); if(r.endDate) o.ends.push(r.endDate);
+    o.recs.push(r);
+  });
+  return Object.values(map).map(o=>({
+    key:o.key, orderQty:o.orderQty, sewQty:o.sewQty, cutQty:o.cutQty, cutHas:o.cutHas,
+    gap:o.cutQty-o.sewQty, styles:o.styles.size, pos:o.pos.size, lines:o.lines.size,
+    minStart:o.starts.sort()[0]||'', maxEnd:o.ends.sort().slice(-1)[0]||'', recs:o.recs
+  })).sort((a,b)=>b.sewQty-a.sewQty);
+}
+
+// 線別理論產能 & 負荷
+function theoreticalCapacity(rec, days){
+  const mp=rec.manpower||0, wh=rec.workingHours||SETTINGS.defaultHours, smv=rec.smv;
+  const eff=(rec.efficiencyTarget!=null?rec.efficiencyTarget:SETTINGS.defaultEff);
+  if(!mp||!smv||smv<=0) return null;
+  return mp*wh*60/smv*eff*(days||1);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   渲染層
+   ══════════════════════════════════════════════════════════════════════════ */
+let CUR_TAB='dashboard';
+let FILTERS={ daily:{date:'',cust:'',prod:'',line:''}, weekly:{ref:'',cust:'',prod:'',line:''},
+  monthly:{ym:'',cust:'',prod:'',line:''}, yearly:{y:'',cust:'',prod:'',line:''},
+  records:{q:'',cust:'',po:'',style:'',line:'',date:''}, cutsew:{sort:'gap'} };
+
+function goTab(tab){
+  CUR_TAB=tab;
+  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('on',el.dataset.tab===tab));
+  document.querySelectorAll('.pane').forEach(el=>el.classList.toggle('on',el.id===tab));
+  renderTab(tab);
+}
+function renderAll(){ applyLang(); refreshHeader(); renderTab(CUR_TAB); }
+function renderTab(tab){
+  const r={dashboard:renderDashboard,upload:renderUpload,daily:renderDaily,weekly:renderWeekly,
+    monthly:renderMonthly,yearly:renderYearly,custprod:renderCustProd,line:renderLineCap,
+    cutsew:renderCutSew,records:renderRecords,settings:renderSettings}[tab];
+  if(r) r();
+}
+function refreshHeader(){
+  document.getElementById('hRecs').textContent=fmt(DB.length);
+  document.getElementById('hSew').textContent=fmt(DB.reduce((s,r)=>s+(r.sewingQty||0),0));
+  document.getElementById('hLines').textContent=new Set(DB.filter(r=>r.line).map(r=>r.line)).size;
+}
+
+// 共用篩選下拉
+function optList(vals,cur,allLabel){
+  const arr=[...new Set(vals.filter(Boolean))].sort();
+  return `<option value="">${esc(allLabel)}</option>`+arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)}</option>`).join('');
+}
+function applyFilters(list,f){
+  return list.filter(r=>{
+    if(f.cust && r.customer!==f.cust) return false;
+    if(f.prod && r.productType!==f.prod) return false;
+    if(f.line && r.line!==f.line) return false;
+    return true;
+  });
+}
+function emptyState(){
+  return `<div class="card"><div class="empty"><div class="empty-i">📭</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px">${t('empty')}</div>
+    <div style="margin-bottom:16px">${t('emptyHint')}</div>
+    <button class="btn btn-y" onclick="goTab('upload')">${t('goImport')}</button></div></div>`;
+}
+function destroyChart(id){ if(CHARTS[id]){ CHARTS[id].destroy(); delete CHARTS[id]; } }
+const CHART_COLORS=['#f59e0b','#3b82f6','#10b981','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#eab308'];
+
+/* ── 儀錶板 ───────────────────────────────────────────────────────────── */
+function renderDashboard(){
+  const el=document.getElementById('dashboard');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const totOrder=DB.reduce((s,r)=>s+(r.orderQty||0),0);
+  const totSew=DB.reduce((s,r)=>s+(r.sewingQty||0),0);
+  const cutRecs=DB.filter(r=>r.cutQty!=null);
+  const totCut=cutRecs.reduce((s,r)=>s+(r.cutQty||0),0);
+  const cutSewPct= totSew? (totCut/totSew*100):0;
+  const lines=new Set(DB.filter(r=>r.line).map(r=>r.line));
+  const custs=new Set(DB.filter(r=>r.customer).map(r=>r.customer));
+  const styles=new Set(DB.filter(r=>r.style).map(r=>r.style));
+  const rng=dateRangeOfDB(activeRecords());
+  // 每日產能
+  const stats = rng.min? periodStats(activeRecords(),rng.min,rng.max):{daily:{},byCust:{},byProd:{},byLine:{}};
+  const dailyVals=Object.values(stats.daily);
+  const avgDay = dailyVals.filter(v=>v>0).length? dailyVals.reduce((a,b)=>a+b,0)/dailyVals.filter(v=>v>0).length:0;
+  const peakDay = Math.max(0,...dailyVals);
+
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+  let html=`<div class="kpis">
+    ${kpi('b',fmt(totOrder),'pcs',t('kTotalOrders'))}
+    ${kpi('a',fmt(totSew),'pcs',t('kTotalSew'))}
+    ${kpi('g',fmt(totCut),'pcs',t('kTotalCut'))}
+    ${kpi(cutSewPct>=90?'g':cutSewPct>=50?'a':'r',fmt1(cutSewPct),'%',t('kCutSew'))}
+    ${kpi('p',lines.size,'',t('kLines'))}
+    ${kpi('b',custs.size,'',t('kCust'))}
+    ${kpi('b',styles.size,'',t('kStyles'))}
+    ${kpi('a',fmt(Math.round(avgDay)),'pcs',t('kAvgDay'))}
+    ${kpi('r',fmt(Math.round(peakDay)),'pcs',t('kPeakDay'))}
+    ${kpi('',esc(rng.min||'-')+' ~ '+esc(rng.max||'-'),'',t('kRange'))}
+  </div>`;
+
+  // 管理摘要
+  html+=`<div class="card"><div class="ct">🧠 ${t('mgmtSummary')}</div><div id="mgmtBox"></div></div>`;
+
+  // 圖表區
+  html+=`<div class="grid2">
+    <div class="card"><div class="ct">📈 ${t('dailyTrend')}</div><div class="chartbox"><canvas id="cDaily"></canvas></div></div>
+    <div class="card"><div class="ct">🥧 ${t('custShare')}</div><div class="chartbox"><canvas id="cCust"></canvas></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="ct">🧵 ${t('lineLoad')}</div><div id="lineLoadBars"></div></div>
+    <div class="card"><div class="ct">🏷️ ${t('prodShare')}</div><div class="chartbox"><canvas id="cProd"></canvas></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="ct">✂️ ${t('gapTop')}</div><div id="gapTopBox"></div></div>
+    <div class="card"><div class="ct">📅 ${t('startEnd')}</div><div class="chartbox"><canvas id="cStartEnd"></canvas></div></div>
+  </div>`;
+  el.innerHTML=html;
+
+  // 管理摘要文字
+  document.getElementById('mgmtBox').innerHTML=buildMgmtSummary();
+
+  // 每日趨勢
+  const days=Object.keys(stats.daily).sort();
+  destroyChart('cDaily');
+  CHARTS.cDaily=new Chart(document.getElementById('cDaily'),{type:'line',
+    data:{labels:days.map(d=>d.slice(5)),datasets:[{label:t('sewQty'),data:days.map(d=>Math.round(stats.daily[d])),
+      borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.15)',fill:true,tension:.3,pointRadius:2}]},
+    options:chartOpt()});
+  // 客戶占比
+  pieChart('cCust',stats.byCust);
+  // 產品占比
+  pieChart('cProd',stats.byProd);
+  // 線別負荷 bars
+  document.getElementById('lineLoadBars').innerHTML=barRows(stats.byLine);
+  // gap top10
+  document.getElementById('gapTopBox').innerHTML=gapTopHtml();
+  // 上下線分布
+  startEndChart('cStartEnd');
+}
+function chartOpt(extra){
+  return Object.assign({responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:10},maxRotation:60}},y:{ticks:{font:{size:10}},beginAtZero:true}}},extra||{});
+}
+function pieChart(id,obj){
+  const entries=Object.entries(obj).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  destroyChart(id);
+  if(!entries.length){ document.getElementById(id).parentElement.innerHTML='<div class="empty" style="padding:30px">-</div>'; return; }
+  CHARTS[id]=new Chart(document.getElementById(id),{type:'doughnut',
+    data:{labels:entries.map(e=>e[0]),datasets:[{data:entries.map(e=>Math.round(e[1])),backgroundColor:CHART_COLORS,borderWidth:1,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12}}}}});
+}
+function barRows(obj){
+  const entries=Object.entries(obj).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return `<div class="empty" style="padding:20px">-</div>`;
+  const max=entries[0][1];
+  return entries.map(([k,v])=>`<div class="bar-row">
+    <div class="bar-lb">${esc(k)}</div>
+    <div class="bar-tk"><div class="bar-in" style="width:${(v/max*100).toFixed(1)}%"></div></div>
+    <div class="bar-vl">${fmt(Math.round(v))}</div></div>`).join('');
+}
+function startEndChart(id){
+  const starts={}, ends={};
+  activeRecords().forEach(r=>{ if(r.startDate){starts[r.startDate]=(starts[r.startDate]||0)+1;} if(r.endDate){ends[r.endDate]=(ends[r.endDate]||0)+1;} });
+  const days=[...new Set([...Object.keys(starts),...Object.keys(ends)])].sort();
+  destroyChart(id);
+  CHARTS[id]=new Chart(document.getElementById(id),{type:'bar',
+    data:{labels:days.map(d=>d.slice(5)),datasets:[
+      {label:t('start'),data:days.map(d=>starts[d]||0),backgroundColor:'#3b82f6'},
+      {label:t('end'),data:days.map(d=>ends[d]||0),backgroundColor:'#f59e0b'}]},
+    options:chartOpt({plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12}}}})});
+}
+function gapTopHtml(){
+  const gaps=DB.filter(r=>r.cutQty!=null && (r.sewingQty||0)>0)
+    .map(r=>({r,gap:(r.sewingQty||0)-(r.cutQty||0)})).filter(x=>x.gap>0)
+    .sort((a,b)=>b.gap-a.gap).slice(0,10);
+  if(!gaps.length) return `<div class="al al-ok">✅ ${SETTINGS.lang==='zh'?'目前無裁剪短缺訂單':'No short-cut orders'}</div>`;
+  const max=gaps[0].gap;
+  return gaps.map(({r,gap})=>`<div class="bar-row">
+    <div class="bar-lb" title="${esc(r.po)} ${esc(r.style)}">${esc(r.customer)} · ${esc(r.style)}</div>
+    <div class="bar-tk"><div class="bar-in" style="width:${(gap/max*100).toFixed(1)}%;background:linear-gradient(90deg,#ef4444,#dc2626)"></div></div>
+    <div class="bar-vl">-${fmt(gap)}</div></div>`).join('');
+}
+
+function buildMgmtSummary(){
+  const totSew=DB.reduce((s,r)=>s+(r.sewingQty||0),0);
+  const totCut=DB.filter(r=>r.cutQty!=null).reduce((s,r)=>s+(r.cutQty||0),0);
+  const pct= totSew?(totCut/totSew*100):0;
+  const lines=new Set(DB.filter(r=>r.line).map(r=>r.line)).size;
+  const custS=summarizeBy(DB,r=>r.customer);
+  const prodS=summarizeBy(DB,r=>r.productType);
+  const topCust=custS[0], topProd=prodS[0];
+  // 線別負荷
+  const rng=dateRangeOfDB(activeRecords());
+  const stats=rng.min?periodStats(activeRecords(),rng.min,rng.max):{byLine:{}};
+  const lineArr=Object.entries(stats.byLine).sort((a,b)=>b[1]-a[1]);
+  const peakLine=lineArr[0];
+  const shortCnt=DB.filter(r=>cutStatus(r)==='short').length;
+  const noCutCnt=DB.filter(r=>cutStatus(r)==='nodata').length;
+  // 即將上/下線 (今天起 7 天)
+  const today=todayStr();
+  const in7=(()=>{const d=parseYMD(today)||new Date();d.setDate(d.getDate()+7);return ymd(d);})();
+  const starting=DB.filter(r=>r.startDate>=today&&r.startDate<=in7).length;
+  const finishing=DB.filter(r=>r.endDate>=today&&r.endDate<=in7).length;
+
+  const L=SETTINGS.lang;
+  let txt;
+  if(L==='en'){
+    txt=`This Production Plan covers <b>${lines}</b> lines with a total planned sewing output of <b>${fmt(totSew)} pcs</b> and total cut of <b>${fmt(totCut)} pcs</b> (cut vs sewing ≈ <b>${fmt1(pct)}%</b>). `
+      + (topProd?`Capacity is concentrated in <b>${esc(topProd.key)}</b> products; `:'')
+      + (topCust?`the largest customer is <b>${esc(topCust.key)}</b> (${fmt(topCust.sewQty)} pcs). `:'')
+      + (peakLine?`The highest-load line is <b>${esc(peakLine[0])}</b>. `:'');
+  } else if(L==='km'){
+    txt=`ផែនការនេះគ្របដណ្តប់ <b>${lines}</b> ខ្សែ ដេរសរុប <b>${fmt(totSew)} pcs</b> កាត់សរុប <b>${fmt(totCut)} pcs</b> (កាត់/ដេរ ≈ <b>${fmt1(pct)}%</b>). `
+      + (topProd?`ផលិតផលសំខាន់៖ <b>${esc(topProd.key)}</b>. `:'')
+      + (topCust?`អតិថិជនធំបំផុត៖ <b>${esc(topCust.key)}</b>. `:'')
+      + (peakLine?`ខ្សែបន្ទុកខ្ពស់៖ <b>${esc(peakLine[0])}</b>. `:'');
+  } else {
+    txt=`本期 Production Plan 涵蓋 <b>${lines}</b> 條線，總車縫排產量 <b>${fmt(totSew)} pcs</b>，總裁剪量 <b>${fmt(totCut)} pcs</b>，裁剪對車縫比例約 <b>${fmt1(pct)}%</b>。`
+      + (topProd?`目前主要產能集中在 <b>${esc(topProd.key)}</b> 類產品；`:'')
+      + (topCust?`最大客戶為 <b>${esc(topCust.key)}</b>（${fmt(topCust.sewQty)} pcs）；`:'')
+      + (peakLine?`最高負荷線別為 <b>${esc(peakLine[0])}</b>。`:'');
+  }
+  let alerts='';
+  if(shortCnt) alerts+=`<div class="al al-e">🔴 ${L==='en'?`${shortCnt} orders are short of cut pieces — confirm cutting supply before line start.`:L==='km'?`${shortCnt} ការបញ្ជាទិញកាត់មិនគ្រប់។`:`有 ${shortCnt} 張訂單裁片短缺，需優先確認裁剪供應是否跟上上線日。`}</div>`;
+  if(noCutCnt) alerts+=`<div class="al al-w">⚪ ${L==='en'?`${noCutCnt} orders have no cut data yet — please update cutting records.`:L==='km'?`${noCutCnt} ការបញ្ជាទិញគ្មានទិន្នន័យកាត់។`:`有 ${noCutCnt} 張訂單尚未填裁剪資料，需補齊裁片數據。`}</div>`;
+  if(starting) alerts+=`<div class="al al-i">▶️ ${L==='en'?`${starting} orders start within 7 days.`:L==='km'?`${starting} ការបញ្ជាទិញនឹងចាប់ផ្តើមក្នុង 7 ថ្ងៃ។`:`未來 7 天內有 ${starting} 張訂單即將上線。`}</div>`;
+  if(finishing) alerts+=`<div class="al al-ok">🏁 ${L==='en'?`${finishing} orders finish within 7 days.`:L==='km'?`${finishing} ការបញ្ជាទិញនឹងបញ្ចប់ក្នុង 7 ថ្ងៃ។`:`未來 7 天內有 ${finishing} 張訂單即將下線。`}</div>`;
+  return `<div style="font-size:13.5px;line-height:1.7;color:#2d3a5e;margin-bottom:10px">${txt}</div>${alerts}`;
+}
+
+/* ── 匯入頁 ───────────────────────────────────────────────────────────── */
+function renderUpload(){
+  const el=document.getElementById('upload');
+  let preview='';
+  if(PARSED_PREVIEW){
+    const recs=PARSED_PREVIEW.records;
+    preview=`<div class="card"><div class="ct">🔍 ${t('preview')} · ${recs.length} rows</div>
+      <div style="font-size:12px;color:#6b7a9e;margin-bottom:8px">${esc(PARSED_PREVIEW.files.join(', '))}</div>
+      <div class="tblwrap" style="max-height:340px;overflow-y:auto"><table><thead><tr>
+        <th>${t('prodType')}</th><th>${t('line')}</th><th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th>
+        <th>${t('color')}</th><th>${t('sewQty')}</th><th>${t('cutQty')}</th><th>SMV</th><th>${t('start')}</th><th>${t('end')}</th></tr></thead><tbody>`
+      + recs.slice(0,200).map(r=>`<tr><td>${esc(r.productType)}</td><td>${esc(r.line)}</td><td>${esc(r.customer)}</td>
+        <td>${esc(r.po)}</td><td>${esc(r.styleRaw||r.style)}</td><td>${esc(r.color)}</td>
+        <td class="num">${fmt(r.sewingQty)}</td><td class="num">${r.cutQty==null?'<span class="badge b-nodata">'+t('stNoData')+'</span>':fmt(r.cutQty)}</td>
+        <td class="num">${r.smv!=null?r.smv:'-'}</td><td>${esc(r.startDate)}</td><td>${esc(r.endDate)}</td></tr>`).join('')
+      + `</tbody></table></div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn btn-y" onclick="confirmImport()">${t('confirmImport')}</button>
+        <button class="btn btn-g" onclick="PARSED_PREVIEW=null;renderUpload()">${t('reparse')}</button>
+      </div></div>`;
+  }
+  let hist = IMPORT_HISTORY.length
+    ? IMPORT_HISTORY.map(h=>`<div class="imp-hist"><span>🕐 ${esc(h.time)}</span><span>${esc(h.files)}</span><span class="pill">+${h.added} / dup ${h.dups}</span></div>`).join('')
+    : `<div class="empty" style="padding:20px">${t('noHist')}</div>`;
+
+  el.innerHTML=`
+    <div class="card">
+      <div class="ct">📥 ${t('impExcel')}</div>
+      <div class="drop" id="drop" onclick="document.getElementById('fileInput').click()">
+        <div class="drop-i">📄</div>
+        <div style="font-size:15px;font-weight:600;color:#4a5578">${t('dropHint')}</div>
+        <div style="font-size:12px;color:#8b95b8;margin-top:5px">${t('dropSub')}</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none">
+    </div>
+    ${preview}
+    <div class="card"><div class="ct">🕐 ${t('impHistory')}</div>${hist}</div>`;
+
+  const inp=document.getElementById('fileInput');
+  inp.onchange=e=>handleFiles(e.target.files);
+  const drop=document.getElementById('drop');
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',e=>handleFiles(e.dataTransfer.files));
+}
+
+/* ── 表格列渲染 (通用訂單表) ─────────────────────────────────────────── */
+function orderTable(list,dateForToday){
+  if(!list.length) return `<div class="empty" style="padding:26px">-</div>`;
+  const rows=list.map(r=>{
+    const st=cutStatus(r); const pq=dateForToday?Math.round(plannedQtyOnDate(r,dateForToday)):null;
+    return `<tr>
+      <td>${esc(r.line)}</td><td>${esc(r.customer)}</td><td>${esc(r.po)}</td>
+      <td>${esc(r.styleRaw||r.style)}</td><td>${esc(r.productType)}</td><td>${esc(r.color)}</td><td>${esc(r.size)}</td>
+      <td class="num">${fmt(r.sewingQty)}</td>
+      <td class="num">${r.cutQty==null?'<span class="badge b-nodata">'+t('stNoData')+'</span>':fmt(r.cutQty)}</td>
+      <td class="num">${r.dailyOutput!=null?fmt(r.dailyOutput):'-'}</td>
+      ${dateForToday!==undefined?`<td class="num" style="font-weight:700;color:#d97706">${pq?fmt(pq):'-'}</td>`:''}
+      <td>${esc(r.startDate)}</td><td>${esc(r.endDate)}</td>
+      <td>${statusBadge(st)}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(r.remark)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="tblwrap"><table><thead><tr>
+    <th>${t('line')}</th><th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('prodType')}</th>
+    <th>${t('color')}</th><th>${t('size')}</th><th>${t('sewQty')}</th><th>${t('cutQty')}</th><th>${t('dailyOut')}</th>
+    ${dateForToday!==undefined?`<th>${t('plannedToday')}</th>`:''}
+    <th>${t('start')}</th><th>${t('end')}</th><th>${t('status')}</th><th>${t('remark')}</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+function periodKpiRow(stats,extra){
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+  return `<div class="kpis">
+    ${kpi('a',fmt(stats.sew),'pcs',t('wPlanned'))}
+    ${kpi('g',fmt(stats.cutNeed),'pcs',t('wCut'))}
+    ${kpi('b',stats.custs,'',t('wCustCnt'))}
+    ${kpi('p',stats.styles,'',t('wStyleCnt'))}
+    ${kpi('b',stats.lines,'',t('wLineCnt'))}
+    ${extra||''}
+  </div>`;
+}
+function filterBar(scope,f){
+  return `<div class="filt">
+    <select onchange="FILTERS.${scope}.cust=this.value;renderTab('${scope==='daily'?'daily':scope}')">${optList(DB.map(r=>r.customer),f.cust,t('filterCust'))}</select>
+    <select onchange="FILTERS.${scope}.prod=this.value;renderTab('${scope}')">${optList(DB.map(r=>r.productType),f.prod,t('filterProd'))}</select>
+    <select onchange="FILTERS.${scope}.line=this.value;renderTab('${scope}')">${optList(DB.map(r=>r.line),f.line,t('filterLine'))}</select>
+  </div>`;
+}
+
+/* ── 日報 ─────────────────────────────────────────────────────────────── */
+function renderDaily(){
+  const el=document.getElementById('daily');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const f=FILTERS.daily;
+  const rng=dateRangeOfDB(activeRecords());
+  if(!f.date) f.date = rng.min || todayStr();
+  const list=applyFilters(activeRecords(),f);
+  const active=list.filter(r=>isActiveOnDate(r,f.date));
+  const starting=list.filter(r=>r.startDate===f.date);
+  const finishing=list.filter(r=>r.endDate===f.date);
+  let plannedSew=0, cutNeed=0, byLine={};
+  active.forEach(r=>{ const q=plannedQtyOnDate(r,f.date); plannedSew+=q; if(r.cutQty)cutNeed+=r.cutQty; byLine[r.line]=(byLine[r.line]||0)+q; });
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+
+  el.innerHTML=`
+    <div class="card"><div class="filt">
+      <div class="nav-arrows"><button class="btn btn-g btn-sm" onclick="shiftDate('daily',-1)">${t('prev')}</button></div>
+      <input type="date" value="${f.date}" onchange="FILTERS.daily.date=this.value;renderDaily()">
+      <div class="nav-arrows"><button class="btn btn-g btn-sm" onclick="shiftDate('daily',1)">${t('next')}</button></div>
+      <span class="pill">${dow(f.date)}</span>
+    </div>${filterBar('daily',f)}
+    <div class="kpis">
+      ${kpi('a',fmt(Math.round(plannedSew)),'pcs',t('wPlanned'))}
+      ${kpi('g',fmt(cutNeed),'pcs',t('wCut'))}
+      ${kpi('b',active.length,'',t('orderQty'))}
+      ${kpi('b',new Set(active.map(r=>r.line)).size,'',t('wLineCnt'))}
+      ${kpi('p',starting.length,'',t('starting'))}
+      ${kpi('r',finishing.length,'',t('finishing'))}
+    </div></div>
+    <div class="grid2">
+      <div class="card"><div class="ct">🧵 ${t('lineLoad')}</div>${barRows(byLine)}</div>
+      <div class="card"><div class="ct">📅 ${t('starting')} / ${t('finishing')}</div>
+        <div class="slist-hd" style="font-size:11px;font-weight:700;color:#3b82f6;margin-bottom:4px">▶️ ${t('starting')}</div>
+        ${miniList(starting)}
+        <div class="slist-hd" style="font-size:11px;font-weight:700;color:#d97706;margin:10px 0 4px">🏁 ${t('finishing')}</div>
+        ${miniList(finishing)}
+      </div>
+    </div>
+    <div class="card"><div class="ct">📋 ${t('date')}: ${f.date} · ${active.length} orders</div>${orderTable(active,f.date)}</div>`;
+}
+function dow(ymdStr){ const d=parseYMD(ymdStr); if(!d)return''; return ['週日','週一','週二','週三','週四','週五','週六'][d.getDay()]; }
+function shiftDate(scope,delta){ const d=parseYMD(FILTERS[scope].date)||new Date(); d.setDate(d.getDate()+delta); FILTERS[scope].date=ymd(d); renderTab(scope); }
+function miniList(list){
+  if(!list.length) return `<div style="font-size:11.5px;color:#9aa3bd;padding:4px 0">-</div>`;
+  return list.map(r=>`<div class="split"><span>${esc(r.line)} · ${esc(r.customer)} · ${esc(r.styleRaw||r.style)}</span><b>${fmt(r.sewingQty)}</b></div>`).join('');
+}
+
+/* ── 週報 ─────────────────────────────────────────────────────────────── */
+function renderWeekly(){
+  const el=document.getElementById('weekly');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const f=FILTERS.weekly;
+  const rng=dateRangeOfDB(activeRecords());
+  if(!f.ref) f.ref = rng.min || todayStr();
+  const wb=weekBounds(f.ref);
+  const list=applyFilters(activeRecords(),f);
+  const stats=periodStats(list,wb.start,wb.end);
+  const peakLine=Object.entries(stats.byLine).sort((a,b)=>b[1]-a[1])[0];
+  // 高風險：期間在線 & 裁剪不足或無資料
+  const risk=stats.activeOrders.filter(r=>['short','nodata'].includes(cutStatus(r)));
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+
+  el.innerHTML=`
+    <div class="card"><div class="filt">
+      <button class="btn btn-g btn-sm" onclick="shiftWeek(-1)">${t('prev')}${t('week')}</button>
+      <input type="date" value="${f.ref}" onchange="FILTERS.weekly.ref=this.value;renderWeekly()">
+      <button class="btn btn-g btn-sm" onclick="shiftWeek(1)">${t('next')}${t('week')}</button>
+      <span class="pill">📆 ${wb.start} ~ ${wb.end}</span>
+    </div>${filterBar('weekly',f)}
+    ${periodKpiRow(stats, kpi('r',peakLine?esc(peakLine[0]):'-','',t('wPeakLine'))+kpi(risk.length?'r':'g',risk.length,'',t('wRisk')))}
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="ct">📈 ${t('weekBreak')}</div><div class="chartbox"><canvas id="cWeekDaily"></canvas></div></div>
+      <div class="card"><div class="ct">🧵 ${t('lineLoad')}</div>${barRows(stats.byLine)}</div>
+    </div>
+    <div class="card"><div class="ct">⚠️ ${t('wRisk')} · ${risk.length}</div>${orderTable(risk)}</div>
+    <div class="card"><div class="ct">📋 ${t('week')} orders · ${stats.activeOrders.length}</div>${orderTable(stats.activeOrders)}</div>`;
+
+  const days=Object.keys(stats.daily).sort();
+  destroyChart('cWeekDaily');
+  CHARTS.cWeekDaily=new Chart(document.getElementById('cWeekDaily'),{type:'bar',
+    data:{labels:days.map(d=>d.slice(5)+' '+dow(d)),datasets:[{label:t('sewQty'),data:days.map(d=>Math.round(stats.daily[d])),backgroundColor:'#f59e0b'}]},
+    options:chartOpt()});
+}
+function shiftWeek(delta){ const d=parseYMD(FILTERS.weekly.ref)||new Date(); d.setDate(d.getDate()+delta*7); FILTERS.weekly.ref=ymd(d); renderWeekly(); }
+
+/* ── 月報 ─────────────────────────────────────────────────────────────── */
+function renderMonthly(){
+  const el=document.getElementById('monthly');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const f=FILTERS.monthly;
+  const rng=dateRangeOfDB(activeRecords());
+  if(!f.ym) f.ym = (rng.min||todayStr()).slice(0,7);
+  const mb=monthBounds(f.ym);
+  const list=applyFilters(activeRecords(),f);
+  const stats=periodStats(list,mb.start,mb.end);
+  const totOrder=stats.activeOrders.reduce((s,r)=>s+(r.orderQty||0),0);
+  const dailyVals=Object.values(stats.daily).filter(v=>v>0);
+  const avgDay=dailyVals.length?dailyVals.reduce((a,b)=>a+b,0)/dailyVals.length:0;
+  const peakDay=Math.max(0,...Object.values(stats.daily));
+  const peakLine=Object.entries(stats.byLine).sort((a,b)=>b[1]-a[1])[0];
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+  // 週別拆分
+  const weeks=weeklySplit(stats.daily);
+
+  el.innerHTML=`
+    <div class="card"><div class="filt">
+      <input type="month" value="${f.ym}" onchange="FILTERS.monthly.ym=this.value;renderMonthly()">
+      <span class="pill">📆 ${mb.start} ~ ${mb.end}</span>
+    </div>${filterBar('monthly',f)}
+    <div class="kpis">
+      ${kpi('b',fmt(totOrder),'pcs',t('mTotalOrder'))}
+      ${kpi('a',fmt(stats.sew),'pcs',t('mTotalSew'))}
+      ${kpi('g',fmt(stats.cutNeed),'pcs',t('mTotalCut'))}
+      ${kpi('a',fmt(Math.round(avgDay)),'pcs',t('kAvgDay'))}
+      ${kpi('r',fmt(Math.round(peakDay)),'pcs',t('kPeakDay'))}
+      ${kpi('p',peakLine?esc(peakLine[0]):'-','',t('wPeakLine'))}
+    </div></div>
+    <div class="grid2">
+      <div class="card"><div class="ct">🥧 ${t('custShare')}</div><div class="chartbox"><canvas id="cMonCust"></canvas></div></div>
+      <div class="card"><div class="ct">🏷️ ${t('prodShare')}</div><div class="chartbox"><canvas id="cMonProd"></canvas></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="ct">🧵 ${t('lineLoad')}</div>${barRows(stats.byLine)}</div>
+      <div class="card"><div class="ct">📊 ${t('weekBreak')}</div>${barRows(weeks)}</div>
+    </div>
+    <div class="card"><div class="ct">📈 ${t('dailyTrend')}</div><div class="chartbox"><canvas id="cMonDaily"></canvas></div></div>`;
+
+  pieChart('cMonCust',stats.byCust);
+  pieChart('cMonProd',stats.byProd);
+  const days=Object.keys(stats.daily).sort();
+  destroyChart('cMonDaily');
+  CHARTS.cMonDaily=new Chart(document.getElementById('cMonDaily'),{type:'line',
+    data:{labels:days.map(d=>d.slice(5)),datasets:[{label:t('sewQty'),data:days.map(d=>Math.round(stats.daily[d])),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.15)',fill:true,tension:.3,pointRadius:1}]},
+    options:chartOpt()});
+}
+function weeklySplit(daily){
+  const w={};
+  Object.entries(daily).forEach(([d,v])=>{ const wb=weekBounds(d); const k='W '+wb.start.slice(5); w[k]=(w[k]||0)+v; });
+  return w;
+}
+
+/* ── 年報 ─────────────────────────────────────────────────────────────── */
+function renderYearly(){
+  const el=document.getElementById('yearly');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const f=FILTERS.yearly;
+  const years=[...new Set(activeRecords().map(r=>r.startDate.slice(0,4)).filter(Boolean))].sort();
+  if(!f.y) f.y=years[years.length-1]||String(new Date().getFullYear());
+  const list=applyFilters(activeRecords(),f).filter(r=>r.startDate.slice(0,4)===f.y || r.endDate.slice(0,4)===f.y);
+  const totOrder=list.reduce((s,r)=>s+(r.orderQty||0),0);
+  const totSew=list.reduce((s,r)=>s+(r.sewingQty||0),0);
+  const totCut=list.filter(r=>r.cutQty!=null).reduce((s,r)=>s+(r.cutQty||0),0);
+  // 每月排產
+  const monSew={}, monCut={};
+  for(let m=1;m<=12;m++){ const ym=`${f.y}-${String(m).padStart(2,'0')}`; const mb=monthBounds(ym);
+    const st=periodStats(list,mb.start,mb.end); monSew[ym.slice(5)]=st.sew; monCut[ym.slice(5)]=st.cutNeed; }
+  const custS=summarizeBy(list,r=>r.customer);
+  const prodS=summarizeBy(list,r=>r.productType);
+  const lineArr=Object.entries(list.reduce((a,r)=>{a[r.line]=(a[r.line]||0)+(r.sewingQty||0);return a;},{})).sort((a,b)=>b[1]-a[1]);
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+
+  el.innerHTML=`
+    <div class="card"><div class="filt">
+      <select onchange="FILTERS.yearly.y=this.value;renderYearly()">${years.map(y=>`<option ${y===f.y?'selected':''}>${y}</option>`).join('')}</select>
+      ${filterBar('yearly',f).replace('<div class="filt">','').replace('</div>','')}
+    </div>
+    <div class="kpis">
+      ${kpi('b',fmt(totOrder),'pcs',t('kTotalOrders'))}
+      ${kpi('a',fmt(totSew),'pcs',t('kTotalSew'))}
+      ${kpi('g',fmt(totCut),'pcs',t('kTotalCut'))}
+      ${kpi('p',custS[0]?esc(custS[0].key):'-','',t('highCust'))}
+      ${kpi('b',prodS[0]?esc(prodS[0].key):'-','',t('highProd'))}
+      ${kpi('r',lineArr[0]?esc(lineArr[0][0]):'-','',t('highLine'))}
+    </div></div>
+    <div class="card"><div class="ct">📈 ${t('yTrend')}</div><div class="chartbox tall"><canvas id="cYearTrend"></canvas></div></div>
+    <div class="grid2">
+      <div class="card"><div class="ct">🥧 ${t('custShare')}</div><div class="chartbox"><canvas id="cYearCust"></canvas></div></div>
+      <div class="card"><div class="ct">🧵 ${t('highLine')}</div>${barRows(Object.fromEntries(lineArr))}</div>
+    </div>`;
+
+  destroyChart('cYearTrend');
+  const months=Object.keys(monSew);
+  CHARTS.cYearTrend=new Chart(document.getElementById('cYearTrend'),{type:'bar',
+    data:{labels:months,datasets:[
+      {label:t('sewQty'),data:months.map(m=>Math.round(monSew[m])),backgroundColor:'#f59e0b'},
+      {label:t('cutQty'),data:months.map(m=>Math.round(monCut[m])),backgroundColor:'#3b82f6'}]},
+    options:chartOpt({plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:12}}}})});
+  pieChart('cYearCust',Object.fromEntries(custS.map(c=>[c.key,c.sewQty])));
+}
+
+/* ── 客戶 / 產品分析 ─────────────────────────────────────────────────── */
+function renderCustProd(){
+  const el=document.getElementById('custprod');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const custS=summarizeBy(DB,r=>r.customer);
+  const prodS=summarizeBy(DB,r=>r.productType);
+  const totSew=DB.reduce((s,r)=>s+(r.sewingQty||0),0)||1;
+
+  const custRows=custS.map(c=>`<tr>
+    <td><b>${esc(c.key)}</b></td><td class="num">${fmt(c.orderQty)}</td><td class="num">${fmt(c.sewQty)}</td>
+    <td class="num">${c.cutHas?fmt(c.cutQty):'<span class="badge b-nodata">'+t('stNoData')+'</span>'}</td>
+    <td class="num">${c.styles}</td><td class="num">${c.pos}</td>
+    <td>${esc(c.minStart)}~${esc(c.maxEnd)}</td>
+    <td class="num" style="color:${c.gap<0?'#dc2626':'#059669'}">${c.cutHas?fmt(c.gap):'-'}</td>
+    <td class="num">${fmt1(c.sewQty/totSew*100)}%</td></tr>`).join('');
+
+  const prodBlocks=prodS.map((p,i)=>{
+    const inner=summarizeBy(p.recs,r=>r.customer).map(c=>`<tr class="sub-row">
+      <td style="padding-left:26px">↳ ${esc(c.key)}</td><td class="num">${fmt(c.sewQty)}</td>
+      <td class="num">${c.cutHas?fmt(c.cutQty):'-'}</td><td class="num">${c.styles}</td><td class="num">${c.pos}</td></tr>`).join('');
+    return `<tr class="exp-head" onclick="toggleExp('pexp${i}')">
+        <td><b>🏷️ ${esc(p.key)}</b> <span class="tag">${p.recs.length}</span></td>
+        <td class="num"><b>${fmt(p.sewQty)}</b></td><td class="num">${p.cutHas?fmt(p.cutQty):'-'}</td>
+        <td class="num">${p.styles}</td><td class="num">${p.pos}</td></tr>`
+      + `<tbody id="pexp${i}" style="display:none">${inner}</tbody>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div class="card"><div class="ct">👥 ${t('cust')} Analysis</div>
+      <div class="tblwrap"><table><thead><tr>
+        <th>${t('cust')}</th><th>${t('orderQty')}</th><th>${t('sewQty')}</th><th>${t('cutQty')}</th>
+        <th>${t('activeStyles')}</th><th>${t('activePOs')}</th><th>${t('dateRange')}</th><th>${t('gap')}</th><th>${t('share')}</th>
+      </tr></thead><tbody>${custRows}</tbody></table></div>
+    </div>
+    <div class="card"><div class="ct">🏷️ ${t('prodType')} Analysis <span style="font-weight:400;color:#9aa3bd;text-transform:none">(${t('expand')})</span></div>
+      <div class="tblwrap"><table><thead><tr>
+        <th>${t('prodType')}</th><th>${t('sewQty')}</th><th>${t('cutQty')}</th><th>${t('activeStyles')}</th><th>${t('activePOs')}</th>
+      </tr></thead>${prodBlocks}</table></div>
+    </div>`;
+}
+function toggleExp(id){ const e=document.getElementById(id); if(e) e.style.display=e.style.display==='none'?'':'none'; }
+
+/* ── 線別產能 ─────────────────────────────────────────────────────────── */
+function renderLineCap(){
+  const el=document.getElementById('line');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  // 期間：全體排產範圍
+  const rng=dateRangeOfDB(activeRecords());
+  // 每條線的訂單
+  const byLine={};
+  activeRecords().forEach(r=>{ (byLine[r.line]=byLine[r.line]||[]).push(r); });
+  const lineNames=Object.keys(byLine).sort((a,b)=>{
+    const na=parseInt(a.replace(/\D/g,''))||0, nb=parseInt(b.replace(/\D/g,''))||0; return na-nb; });
+
+  const cards=lineNames.map(ln=>{
+    const recs=byLine[ln];
+    // 該線期間排產量 (依日分攤)
+    let planned=0; const stats=periodStats(recs,rng.min,rng.max); planned=stats.sew;
+    // 理論產能：取該線平均 manpower/wh/smv * 工作天
+    const days=countWorkingDays(rng.min,rng.max);
+    // 用代表值 (第一筆有 smv 者)
+    const rep=recs.find(r=>r.smv&&r.manpower)||recs[0];
+    const theo=rep?theoreticalCapacity(rep,days):null;
+    const load = theo? planned/theo*100 : null;
+    const cls = load==null?'md':load>=100?'over':load>=70?'hi':load>=40?'md':'lo';
+    const totSew=recs.reduce((s,r)=>s+(r.sewingQty||0),0);
+    const totCut=recs.filter(r=>r.cutQty!=null).reduce((s,r)=>s+(r.cutQty||0),0);
+    const custs=[...new Set(recs.map(r=>r.customer))];
+    const styles=[...new Set(recs.map(r=>r.style))];
+    const barColor = load==null?'#9ca3af':load>=100?'#dc2626':load>=70?'#059669':load>=40?'#d97706':'#dc2626';
+    return `<div class="lc ${cls}">
+      <div class="lc-name">${esc(ln)} <span class="pill">${recs.length} orders</span></div>
+      <div style="font-size:11px;color:#6b7a9e;margin-top:3px">${esc(custs.slice(0,3).join(', '))}${custs.length>3?'…':''}</div>
+      <div class="load-bar"><div class="load-fill" style="width:${load==null?0:Math.min(100,load).toFixed(0)}%;background:${barColor}"></div></div>
+      <div style="font-size:11px;color:#4a5578;text-align:right">${t('load')}: <b>${load==null?'N/A':fmt1(load)+'%'}</b></div>
+      <div class="mini">
+        <div class="mini-c"><div class="mini-n">${fmt(totSew)}</div><div class="mini-l">${t('sewQty')}</div></div>
+        <div class="mini-c"><div class="mini-n">${totCut?fmt(totCut):'-'}</div><div class="mini-l">${t('cutQty')}</div></div>
+        <div class="mini-c"><div class="mini-n">${rep&&rep.manpower?rep.manpower:'-'}</div><div class="mini-l">${t('manpower')}</div></div>
+        <div class="mini-c"><div class="mini-n">${rep&&rep.smv?rep.smv:'-'}</div><div class="mini-l">${t('smv')}</div></div>
+      </div>
+      <div style="font-size:10.5px;color:#8b95b8;margin-top:6px">${styles.length} ${t('style')} · ${theo?t('theoCap')+' '+fmt(Math.round(theo)):''}</div>
+    </div>`;
+  }).join('');
+
+  // 詳細表
+  const rows=activeRecords().sort((a,b)=>{
+    const na=parseInt(a.line.replace(/\D/g,''))||0, nb=parseInt(b.line.replace(/\D/g,''))||0;
+    return na-nb || (a.startDate>b.startDate?1:-1);
+  }).map(r=>{
+    const days=r.planDays||countWorkingDays(r.startDate,r.endDate);
+    const theo=theoreticalCapacity(r,days);
+    const load=theo?(r.sewingQty||0)/theo*100:null;
+    const st=cutStatus(r);
+    return `<tr>
+      <td>${esc(r.line)}</td><td>${esc(r.productType)}</td><td>${esc(r.customer)}</td><td>${esc(r.styleRaw||r.style)}</td>
+      <td class="num">${fmt(r.sewingQty)}</td><td class="num">${r.cutQty==null?'-':fmt(r.cutQty)}</td>
+      <td class="num">${r.dailyOutput!=null?fmt(r.dailyOutput):'-'}</td><td class="num">${r.manpower||'-'}</td>
+      <td class="num">${r.workingHours||'-'}</td><td class="num">${r.smv!=null?r.smv:'-'}</td>
+      <td>${esc(r.startDate)}</td><td>${esc(r.endDate)}</td><td class="num">${days||'-'}</td>
+      <td class="num" style="font-weight:700;color:${load==null?'#6b7a9e':load>=100?'#dc2626':load>=70?'#059669':'#d97706'}">${load==null?'N/A':fmt1(load)+'%'}</td>
+      <td>${statusBadge(st)}</td></tr>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div class="card"><div class="ct">🧵 ${t('tabLine')} · ${rng.min}~${rng.max}</div>
+      <div class="kpis" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">${cards}</div></div>
+    <div class="card"><div class="ct">📋 ${t('line')} Detail</div>
+      <div class="tblwrap"><table><thead><tr>
+        <th>${t('line')}</th><th>${t('prodType')}</th><th>${t('cust')}</th><th>${t('style')}</th>
+        <th>${t('sewQty')}</th><th>${t('cutQty')}</th><th>${t('dailyOut')}</th><th>${t('manpower')}</th>
+        <th>${t('hours')}</th><th>${t('smv')}</th><th>${t('start')}</th><th>${t('end')}</th><th>${t('planDays')}</th>
+        <th>${t('load')}</th><th>${t('status')}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ── 裁縫比對 ─────────────────────────────────────────────────────────── */
+function renderCutSew(){
+  const el=document.getElementById('cutsew');
+  if(!DB.length){ el.innerHTML=emptyState(); return; }
+  const totSew=DB.reduce((s,r)=>s+(r.sewingQty||0),0);
+  const totCut=DB.filter(r=>r.cutQty!=null).reduce((s,r)=>s+(r.cutQty||0),0);
+  const shortN=DB.filter(r=>cutStatus(r)==='short').length;
+  const noN=DB.filter(r=>cutStatus(r)==='nodata').length;
+  const overN=DB.filter(r=>cutStatus(r)==='over').length;
+  const kpi=(cls,n,u,l)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
+  const sort=FILTERS.cutsew.sort;
+  let list=[...DB];
+  const gapOf=r=>(r.sewingQty||0)-(r.cutQty||0);
+  if(sort==='gap') list.sort((a,b)=>gapOf(b)-gapOf(a));
+  else if(sort==='ratio') list.sort((a,b)=>((a.cutQty||0)/(a.sewingQty||1))-((b.cutQty||0)/(b.sewingQty||1)));
+  else if(sort==='cust') list.sort((a,b)=>a.customer.localeCompare(b.customer));
+
+  const rows=list.map(r=>{
+    const st=cutStatus(r); const gap=gapOf(r);
+    const ratio=r.sewingQty?(r.cutQty||0)/r.sewingQty*100:0;
+    return `<tr>
+      <td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.styleRaw||r.style)}</td>
+      <td>${esc(r.color)}</td><td>${esc(r.size)}</td><td>${esc(r.productType)}</td><td>${esc(r.line)}</td>
+      <td class="num">${fmt(r.sewingQty)}</td><td class="num">${r.cutQty==null?'<span class="badge b-nodata">'+t('stNoData')+'</span>':fmt(r.cutQty)}</td>
+      <td class="num" style="color:${gap>0?'#dc2626':gap<0?'#059669':'#6b7a9e'};font-weight:700">${r.cutQty==null?'-':(gap>0?'-':'+')+fmt(Math.abs(gap))}</td>
+      <td class="num">${r.cutQty==null?'-':fmt1(ratio)+'%'}</td>
+      <td>${esc(r.startDate)}</td><td>${esc(r.endDate)}</td><td>${statusBadge(st)}</td></tr>`;
+  }).join('');
+
+  el.innerHTML=`
+    <div class="card"><div class="ct">✂️ Cut vs Sewing</div>
+    <div class="kpis">
+      ${kpi('a',fmt(totSew),'pcs',t('totalSew'))}
+      ${kpi('g',fmt(totCut),'pcs',t('totalCut'))}
+      ${kpi('r',fmt(totSew-totCut),'pcs',t('totalGap'))}
+      ${kpi('r',shortN,'',t('shortOrders'))}
+      ${kpi('',noN,'',t('noDataOrders'))}
+      ${kpi('a',overN,'',t('overOrders'))}
+    </div>
+    <div class="filt"><label class="fl">${t('mode')}
+      <select onchange="FILTERS.cutsew.sort=this.value;renderCutSew()">
+        <option value="gap" ${sort==='gap'?'selected':''}>${t('gap')} ↓</option>
+        <option value="ratio" ${sort==='ratio'?'selected':''}>${t('ratio')} ↑</option>
+        <option value="cust" ${sort==='cust'?'selected':''}>${t('cust')}</option>
+      </select></label></div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('color')}</th><th>${t('size')}</th>
+      <th>${t('prodType')}</th><th>${t('line')}</th><th>${t('sewQty')}</th><th>${t('cutQty')}</th>
+      <th>${t('gap')}</th><th>${t('ratio')}</th><th>${t('start')}</th><th>${t('end')}</th><th>${t('status')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ── 全部資料 ─────────────────────────────────────────────────────────── */
+function renderRecords(){
+  const el=document.getElementById('records');
+  const f=FILTERS.records;
+  let list=DB.filter(r=>{
+    if(f.cust && r.customer!==f.cust) return false;
+    if(f.line && r.line!==f.line) return false;
+    if(f.date && !(r.startDate<=f.date && r.endDate>=f.date)) return false;
+    if(f.q){ const q=f.q.toLowerCase(); if(!(String(r.po).toLowerCase().includes(q)||r.style.toLowerCase().includes(q)||r.customer.toLowerCase().includes(q)||(r.styleRaw||'').toLowerCase().includes(q))) return false; }
+    return true;
+  });
+  const rows=list.map(r=>{
+    const st=cutStatus(r);
+    return `<tr>
+      <td>${esc(r.line)}</td><td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.styleRaw||r.style)}</td>
+      <td>${esc(r.productType)}</td><td>${esc(r.color)}</td><td>${esc(r.size)}</td>
+      <td class="num">${fmt(r.orderQty)}</td><td class="num">${fmt(r.sewingQty)}</td>
+      <td class="num">${r.cutQty==null?'-':fmt(r.cutQty)}</td><td>${esc(r.startDate)}</td><td>${esc(r.endDate)}</td>
+      <td>${statusBadge(st)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-g btn-sm" onclick="openEdit('${r.id}')">✏️</button>
+        <button class="btn btn-r btn-sm" onclick="delRecord('${r.id}')">🗑</button></td></tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="card">
+      <div class="btnrow" style="margin-bottom:12px">
+        <button class="btn btn-y" onclick="openEdit(null)">${t('btnAdd')}</button>
+        <button class="btn btn-g" onclick="exportExcel()">${t('expExcel')}</button>
+        <button class="btn btn-g" onclick="exportCSV()">${t('expCsv')}</button>
+        <div style="flex:1"></div>
+        <span class="pill">${list.length} / ${DB.length}</span>
+      </div>
+      <div class="filt">
+        <input type="text" placeholder="${t('search')}" value="${esc(f.q)}" style="min-width:220px" oninput="FILTERS.records.q=this.value;renderRecords()">
+        <select onchange="FILTERS.records.cust=this.value;renderRecords()">${optList(DB.map(r=>r.customer),f.cust,t('filterCust'))}</select>
+        <select onchange="FILTERS.records.line=this.value;renderRecords()">${optList(DB.map(r=>r.line),f.line,t('filterLine'))}</select>
+        <input type="date" value="${f.date}" onchange="FILTERS.records.date=this.value;renderRecords()">
+        ${f.date||f.q||f.cust||f.line?`<button class="btn btn-g btn-sm" onclick="FILTERS.records={q:'',cust:'',po:'',style:'',line:'',date:''};renderRecords()">✕ ${t('filterAll')}</button>`:''}
+      </div>
+      ${DB.length?`<div class="tblwrap"><table><thead><tr>
+        <th>${t('line')}</th><th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('prodType')}</th>
+        <th>${t('color')}</th><th>${t('size')}</th><th>${t('orderQty')}</th><th>${t('sewQty')}</th><th>${t('cutQty')}</th>
+        <th>${t('start')}</th><th>${t('end')}</th><th>${t('status')}</th><th>${t('actions')}</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`:`<div class="empty"><div class="empty-i">📭</div>${t('emptyHint')}</div>`}
+    </div>`;
+}
+
+/* ── CRUD ────────────────────────────────────────────────────────────── */
+const EDIT_FIELDS=[
+  ['productType','prodType','select',['GARMENT','APRON','TOP']],['line','line','text'],['customer','cust','text'],
+  ['shipmentDate','date','date'],['po','po','text'],['style','style','text'],['color','color','text'],['size','size','text'],
+  ['orderQty','orderQty','number'],['sewingQty','sewQty','number'],['cutQty','cutQty','number'],['dailyOutput','dailyOut','number'],
+  ['smv','smv','number'],['manpower','manpower','number'],['workingHours','hours','number'],['efficiencyTarget','setEff','number'],
+  ['startDate','start','date'],['endDate','end','date'],['finishDate','finishing','date'],['remark','remark','text']
+];
+function openEdit(id){
+  EDIT_ID=id;
+  const r = id? DB.find(x=>x.id===id)||{} : {};
+  document.getElementById('editTitle').textContent = id? (SETTINGS.lang==='zh'?'✏️ 編輯排產':'✏️ Edit Plan') : t('btnAdd');
+  document.getElementById('editForm').innerHTML = EDIT_FIELDS.map(([f,lbl,type,opts])=>{
+    let val = r[f]!=null?r[f]:'';
+    if(f==='efficiencyTarget' && val!=='' && val<=1) val=Math.round(val*100);
+    if(f==='style') val=r.styleRaw||val;
+    let input;
+    if(type==='select'){ input=`<select id="ef_${f}"><option value=""></option>${opts.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}</select>`; }
+    else input=`<input id="ef_${f}" type="${type}" value="${esc(val)}">`;
+    return `<label>${t(lbl)}${f==='efficiencyTarget'?' %':''}${input}</label>`;
+  }).join('');
+  document.getElementById('editModal').classList.add('on');
+}
+function closeEdit(){ document.getElementById('editModal').classList.remove('on'); EDIT_ID=null; }
+function saveEdit(){
+  const raw={};
+  EDIT_FIELDS.forEach(([f])=>{ const el=document.getElementById('ef_'+f); raw[f]=el?el.value:''; });
+  if(EDIT_ID) raw.id=EDIT_ID;
+  const nr=normalizeRecord(raw);
+  if(EDIT_ID){ const i=DB.findIndex(x=>x.id===EDIT_ID); if(i>=0) DB[i]=nr; }
+  else DB.push(nr);
+  closeEdit(); persist(); renderAll(); toast(t('saved'));
+}
+function delRecord(id){
+  if(!confirm(t('confirmDel'))) return;
+  DB=DB.filter(r=>r.id!==id); persist(); renderAll(); toast(t('deleted'));
+}
+
+/* ── 匯出 / 備份 ─────────────────────────────────────────────────────── */
+function exportExcel(){
+  if(!DB.length){ toast('No data'); return; }
+  const wb=XLSX.utils.book_new();
+  const raw=DB.map(r=>({
+    ProductType:r.productType,Line:r.line,Customer:r.customer,ShipmentDate:r.shipmentDate,PO:r.po,Style:r.styleRaw||r.style,
+    Color:r.color,Size:r.size,OrderQty:r.orderQty,SewingQty:r.sewingQty,CutQty:r.cutQty,DailyOutput:r.dailyOutput,
+    SMV:r.smv,Manpower:r.manpower,WorkingHours:r.workingHours,EfficiencyTarget:r.efficiencyTarget,
+    StartDate:r.startDate,EndDate:r.endDate,FinishDate:r.finishDate,PlanDays:r.planDays,Remark:r.remark,
+    CutStatus:t(STATUS_BADGE[cutStatus(r)][1])
+  }));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(raw),'Raw Data');
+  // Daily
+  const rng=dateRangeOfDB(activeRecords());
+  const dailyRows=[];
+  if(rng.min){ const st=periodStats(activeRecords(),rng.min,rng.max);
+    Object.keys(st.daily).sort().forEach(d=>dailyRows.push({Date:d,PlannedSewing:Math.round(st.daily[d])})); }
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(dailyRows),'Daily Summary');
+  // Weekly
+  const weekRows=[];
+  if(rng.min){ const st=periodStats(activeRecords(),rng.min,rng.max); const w=weeklySplit(st.daily);
+    Object.entries(w).forEach(([k,v])=>weekRows.push({Week:k,PlannedSewing:Math.round(v)})); }
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(weekRows),'Weekly Summary');
+  // Monthly
+  const monRows=[]; const months=[...new Set(activeRecords().map(r=>r.startDate.slice(0,7)))].sort();
+  months.forEach(ym=>{ const mb=monthBounds(ym); const st=periodStats(activeRecords(),mb.start,mb.end);
+    monRows.push({Month:ym,PlannedSewing:st.sew,CutNeed:st.cutNeed}); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(monRows),'Monthly Summary');
+  // Yearly
+  const yrRows=[]; const years=[...new Set(activeRecords().map(r=>r.startDate.slice(0,4)))].sort();
+  years.forEach(y=>{ const yb=yearBounds(y); const st=periodStats(activeRecords(),yb.start,yb.end);
+    yrRows.push({Year:y,PlannedSewing:st.sew,CutNeed:st.cutNeed}); });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(yrRows),'Yearly Summary');
+  // Customer
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summarizeBy(DB,r=>r.customer).map(c=>({
+    Customer:c.key,OrderQty:c.orderQty,SewingQty:c.sewQty,CutQty:c.cutHas?c.cutQty:'',Gap:c.cutHas?c.gap:'',
+    Styles:c.styles,POs:c.pos,DateRange:c.minStart+'~'+c.maxEnd}))),'Customer Summary');
+  // Product
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summarizeBy(DB,r=>r.productType).map(p=>({
+    ProductType:p.key,SewingQty:p.sewQty,CutQty:p.cutHas?p.cutQty:'',Styles:p.styles,POs:p.pos}))),'Product Summary');
+  // Line Capacity
+  const lineRows=activeRecords().map(r=>{ const days=r.planDays||countWorkingDays(r.startDate,r.endDate); const theo=theoreticalCapacity(r,days);
+    return {Line:r.line,ProductType:r.productType,Customer:r.customer,Style:r.styleRaw||r.style,SewingQty:r.sewingQty,
+      CutQty:r.cutQty,DailyOutput:r.dailyOutput,Manpower:r.manpower,WorkingHours:r.workingHours,SMV:r.smv,
+      StartDate:r.startDate,EndDate:r.endDate,PlanDays:days,TheoCap:theo?Math.round(theo):'',
+      Load:theo?fmt1((r.sewingQty||0)/theo*100)+'%':''}; });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lineRows),'Line Capacity');
+  // Cut vs Sewing Gap
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(DB.map(r=>({
+    Customer:r.customer,PO:r.po,Style:r.styleRaw||r.style,Color:r.color,Size:r.size,ProductType:r.productType,Line:r.line,
+    SewingQty:r.sewingQty,CutQty:r.cutQty,Gap:r.cutQty==null?'':(r.sewingQty||0)-(r.cutQty||0),
+    Status:t(STATUS_BADGE[cutStatus(r)][1])}))),'Cut vs Sewing Gap');
+  XLSX.writeFile(wb,`VRT_Production_Capacity_${todayStr()}.xlsx`);
+  toast('📤 Excel');
+}
+function exportCSV(){
+  if(!DB.length){ toast('No data'); return; }
+  const cols=['line','customer','po','style','productType','color','size','orderQty','sewingQty','cutQty','dailyOutput','smv','manpower','workingHours','startDate','endDate','finishDate','remark'];
+  const head=cols.join(',');
+  const body=DB.map(r=>cols.map(c=>{ let v=(c==='style'?(r.styleRaw||r.style):r[c]); v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+head+'\n'+body],{type:'text/csv;charset=utf-8'});
+  dl(blob,`VRT_Production_${todayStr()}.csv`); toast('⬇ CSV');
+}
+function backupJSON(){
+  const payload={version:VER,lastUpdated:nowStamp(),records:DB,settings:SETTINGS,importHistory:IMPORT_HISTORY,smvMap:SMV_MAP};
+  dl(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),`VRT_ProdCapacity_backup_${todayStr()}.json`);
+  toast('💾 JSON');
+}
+function restoreJSON(){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
+  inp.onchange=e=>{ const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+    rd.onload=ev=>{ try{ const o=JSON.parse(ev.target.result);
+      if(Array.isArray(o.records)) DB=o.records.map(normalizeRecord);
+      if(o.settings) SETTINGS={...SETTINGS,...o.settings};
+      if(Array.isArray(o.importHistory)) IMPORT_HISTORY=o.importHistory;
+      if(o.smvMap) SMV_MAP={...SMV_MAP,...o.smvMap};
+      persist(); renderAll(); toast('📂 '+t('imported'));
+    }catch(err){ toast('Restore failed'); } };
+    rd.readAsText(f); };
+  inp.click();
+}
+function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+
+/* ── 雲端 (介面保留，不寫死 token) ───────────────────────────────────── */
+async function cloudUpload(){
+  if(!SETTINGS.gasUrl){ toast(t('noGas')); goTab('settings'); return; }
+  try{
+    toast(t('calc'));
+    const payload={action:'push',tool:'prodplan',version:VER,lastUpdated:nowStamp(),records:DB,importHistory:IMPORT_HISTORY};
+    const r=await fetch(SETTINGS.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
+    await r.text(); toast('☁️ Upload OK');
+  }catch(e){ toast('Upload failed'); console.warn(e); }
+}
+async function cloudDownload(){
+  if(!SETTINGS.gasUrl){ toast(t('noGas')); goTab('settings'); return; }
+  try{
+    toast(t('calc'));
+    const r=await fetch(`${SETTINGS.gasUrl}?action=pull&tool=prodplan`,{redirect:'follow'});
+    const j=await r.json();
+    // GAS 回應為包裝格式 {ok,data:{tool,chunked,data:PAYLOAD}}；也相容未包裝舊格式
+    let o=(j&&j.ok&&j.data)?j.data:j;
+    if(o&&o.data&&!Array.isArray(o.records)) o=o.data;
+    if(o&&Array.isArray(o.records)){ DB=o.records.map(normalizeRecord);
+      if(o.settings) SETTINGS={...SETTINGS,...o.settings};
+      persist(); renderAll(); toast('☁️ Download OK ('+DB.length+')'); }
+    else toast('No cloud data');
+  }catch(e){ toast('Download failed'); console.warn(e); }
+}
+async function cloudSync(){
+  if(!SETTINGS.gasUrl){ toast(t('cloudDev')); goTab('settings'); return; }
+  await cloudDownload(); await cloudUpload();
+}
+async function sendTelegramSummary(){
+  if(!SETTINGS.gasUrl){ toast(t('noGas')); goTab('settings'); return; }
+  try{
+    const totSew=DB.reduce((s,r)=>s+(r.sewingQty||0),0);
+    const totCut=DB.filter(r=>r.cutQty!=null).reduce((s,r)=>s+(r.cutQty||0),0);
+    const text=`<b>VRT Production Plan</b>\n${nowStamp()}\nRecords: ${DB.length}\nSewing: ${fmt(totSew)} pcs\nCut: ${fmt(totCut)} pcs`;
+    const payload={action:'telegram',chatId:SETTINGS.tgChatId,text,parse_mode:'HTML'};
+    await fetch(SETTINGS.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
+    toast('📨 Telegram sent');
+  }catch(e){ toast('Send failed'); }
+}
+
+/* ── 設定 ─────────────────────────────────────────────────────────────── */
+function renderSettings(){
+  const el=document.getElementById('settings');
+  const s=SETTINGS;
+  el.innerHTML=`
+    <div class="card"><div class="ct">⚙️ ${t('tabSettings')}</div>
+      <div class="fgrid">
+        <label>${t('setLang')}<select onchange="SETTINGS.lang=this.value;saveSettings();applyLang();renderAll()">
+          <option value="zh" ${s.lang==='zh'?'selected':''}>繁體中文</option>
+          <option value="en" ${s.lang==='en'?'selected':''}>English</option>
+          <option value="km" ${s.lang==='km'?'selected':''}>ខ្មែរ</option></select></label>
+        <label>${t('setDayMode')}<select onchange="SETTINGS.dayMode=this.value;saveSettings();renderAll()">
+          <option value="working" ${s.dayMode==='working'?'selected':''}>${t('dayModeW')}</option>
+          <option value="calendar" ${s.dayMode==='calendar'?'selected':''}>${t('dayModeC')}</option></select></label>
+        <label>${t('setExSun')}<select onchange="SETTINGS.excludeSunday=this.value==='1';saveSettings();renderAll()">
+          <option value="1" ${s.excludeSunday?'selected':''}>${t('on')}</option>
+          <option value="0" ${!s.excludeSunday?'selected':''}>${t('off')}</option></select></label>
+        <label>${t('setEff')} (%)<input type="number" value="${Math.round(s.defaultEff*100)}" onchange="SETTINGS.defaultEff=Math.max(0,(+this.value||30)/100);saveSettings();renderAll()"></label>
+        <label>${t('setHours')}<input type="number" value="${s.defaultHours}" onchange="SETTINGS.defaultHours=+this.value||8;saveSettings();renderAll()"></label>
+      </div>
+    </div>
+    <div class="card"><div class="ct">☁️ ${t('setCloud')}</div>
+      <div class="al al-i">${t('cloudDev')}</div>
+      <div class="fgrid" style="grid-template-columns:1fr 1fr">
+        <label>${t('setGas')}<input type="text" value="${esc(s.gasUrl)}" placeholder="https://script.google.com/.../exec" onchange="SETTINGS.gasUrl=this.value.trim();saveSettings()"></label>
+        <label>${t('setTgChat')}<input type="text" value="${esc(s.tgChatId)}" placeholder="-100xxxxxxxxxx" onchange="SETTINGS.tgChatId=this.value.trim();saveSettings()"></label>
+      </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn btn-b" onclick="cloudUpload()">${t('clUp')}</button>
+        <button class="btn btn-g" onclick="cloudDownload()">${t('clDown')}</button>
+        <button class="btn btn-g" onclick="cloudSync()">${t('clSync')}</button>
+        <button class="btn btn-g" onclick="sendTelegramSummary()">${t('tgPush')}</button>
+      </div>
+    </div>
+    <div class="card"><div class="ct">💾 ${t('setBackup')}</div>
+      <div class="btnrow">
+        <button class="btn btn-y" onclick="exportExcel()">${t('expExcel')}</button>
+        <button class="btn btn-g" onclick="exportCSV()">${t('expCsv')}</button>
+        <button class="btn btn-g" onclick="backupJSON()">${t('bkJson')}</button>
+        <button class="btn btn-g" onclick="restoreJSON()">${t('rsJson')}</button>
+        <button class="btn btn-g" onclick="window.print()">${t('printR')}</button>
+        <button class="btn btn-r" onclick="if(confirm('清空所有資料？Clear all data?')){DB=[];IMPORT_HISTORY=[];persist();renderAll();toast('Cleared');}">🗑 Clear All</button>
+      </div>
+    </div>`;
+}
+
+/* ── 初始化 ───────────────────────────────────────────────────────────── */
+document.querySelectorAll('.tab').forEach(el=>el.addEventListener('click',()=>goTab(el.dataset.tab)));
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('on'); }));
+
+async function init(){
+  loadSettings(); loadHistory();
+  await idbLoadAll();
+  applyLang(); refreshHeader();
+  renderTab('dashboard');
+}
+init();
+
+
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<!-- VRT Customer Order / Fabric / Cutting / Sewing / Shipping Statistics Control Center v1
+     風格沿用 production_plan_capacity_v1（家族一致）：底 #eef1f7 / header #1e2640→#2d3658 / amber #f59e0b -->
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT Customer Statistics Control Center</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",sans-serif;background:#eef1f7;color:#1e2640;font-size:13px;-webkit-text-size-adjust:100%}
+.header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:11px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:40}
+.logo{width:36px;height:36px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:0 2px 8px rgba(245,158,11,.35)}
+.h-title{color:#fff;font-size:15px;font-weight:700}.h-title b{color:#fbbf24}
+.h-sub{font-size:10.5px;color:#8b95b8;margin-top:1px}
+.hgrow{flex:1}
+.hstat{text-align:right;padding:0 4px}
+.hstat-v{font-size:15px;font-weight:700;color:#fbbf24;font-family:ui-monospace,monospace;line-height:1}
+.hstat-l{font-size:9px;color:#8b95b8;margin-top:2px}
+.hicons{display:flex;gap:5px;flex-wrap:wrap}
+.hicon{min-width:31px;height:31px;padding:0 6px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);border-radius:7px;cursor:pointer;font-size:14px;transition:.15s;color:#dfe4f0}
+.hicon:hover{background:rgba(245,158,11,.25);border-color:#f59e0b}
+.hicon.on{background:#f59e0b;color:#1c1200;border-color:#f59e0b;font-weight:700}
+/* mode switch */
+.modebar{background:#263049;padding:7px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:58px;z-index:39;border-bottom:1px solid #0d1424}
+.mode-sw{display:inline-flex;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:3px}
+.mode-sw button{background:transparent;border:0;color:#c4cbe0;padding:5px 13px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.mode-sw button.on{background:#f59e0b;color:#1c1200}
+.modebar .dp{display:flex;align-items:center;gap:6px;color:#c4cbe0;font-size:11.5px}
+.modebar input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit}
+.modebar input::-webkit-calendar-picker-indicator{filter:invert(1)}
+.modebar .nav-b{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#dfe4f0;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:12px}
+.modebar .cur{color:#fbbf24;font-weight:700;font-family:ui-monospace,monospace;min-width:120px;text-align:center}
+/* tabs */
+.tabs{background:#fff;border-bottom:2px solid #e2e6f0;display:flex;padding:0 12px;overflow-x:auto;gap:0;position:sticky;top:104px;z-index:30}
+.tab{padding:11px 13px;font-size:12px;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-weight:500;transition:.15s;user-select:none}
+.tab:hover{color:#1e2640;background:#f7f8fc}
+.tab.on{color:#d97706;border-bottom-color:#f59e0b;background:#fffbf0;font-weight:700}
+.wrap{max-width:1440px;margin:0 auto;padding:16px 14px 70px}
+.pane{display:none}.pane.on{display:block}
+.card{background:#fff;border:1px solid #e2e6f0;border-radius:11px;padding:15px;margin-bottom:13px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.ct::before{content:'';width:3px;height:12px;background:#f59e0b;border-radius:2px;flex-shrink:0}
+.ct .sp{flex:1}
+/* kpi */
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:13px}
+.kpi{background:#fff;border:1px solid #e2e6f0;border-radius:9px;padding:11px 12px;box-shadow:0 1px 3px rgba(30,38,64,.04);border-left:3px solid #cbd2e6}
+.kpi.g{border-left-color:#10b981}.kpi.a{border-left-color:#f59e0b}.kpi.r{border-left-color:#ef4444}
+.kpi.b{border-left-color:#3b82f6}.kpi.p{border-left-color:#8b5cf6}.kpi.o{border-left-color:#e67e22}.kpi.c{border-left-color:#9b59b6}
+.kpi-n{font-size:20px;font-weight:700;font-family:ui-monospace,monospace;line-height:1.05;color:#1e2640;word-break:break-all}
+.kpi-u{font-size:10.5px;color:#6b7a9e;margin-left:2px;font-weight:400}
+.kpi-l{font-size:10px;color:#6b7a9e;margin-top:5px;line-height:1.3}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+/* drop */
+.drop{border:2px dashed #c5c9d8;border-radius:11px;padding:30px 20px;text-align:center;cursor:pointer;transition:.2s;background:#fafbfc}
+.drop:hover,.drop.drag{border-color:#f59e0b;background:#fffbf0}
+.drop.done{border-color:#10b981;border-style:solid;background:#f0fdf8}
+.drop-i{font-size:34px;margin-bottom:8px}
+.drop-t{font-size:14px;font-weight:700;color:#1e2640}
+.drop-s{font-size:11.5px;color:#6b7a9e;margin-top:4px}
+/* btn */
+.btn{padding:8px 14px;border-radius:7px;font-size:12.5px;cursor:pointer;font-family:inherit;border:none;transition:.15s;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-y{background:#f59e0b;color:#1c1200}.btn-y:hover:not(:disabled){background:#d97706}
+.btn-b{background:#3b82f6;color:#fff}.btn-b:hover:not(:disabled){background:#2563eb}
+.btn-g{background:#fff;color:#4a5578;border:1px solid #d0d5e8}.btn-g:hover:not(:disabled){background:#f7f8fc}
+.btn-r{background:#fff5f5;color:#dc2626;border:1px solid #fecaca}.btn-r:hover:not(:disabled){background:#fee2e2}
+.btn-sm{padding:5px 9px;font-size:11.5px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filt{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+select,input[type=text],input[type=date],input[type=number],input[type=month]{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:7px 10px;border-radius:7px;font-size:12.5px;font-family:inherit}
+select:focus,input:focus{outline:2px solid #f59e0b33;border-color:#f59e0b}
+label.fl{font-size:11px;color:#6b7a9e;font-weight:600;display:flex;flex-direction:column;gap:3px}
+/* table */
+.tblwrap{overflow-x:auto;border:1px solid #e2e6f0;border-radius:9px;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:12px;min-width:640px}
+th{text-align:left;padding:8px 10px;color:#6b7a9e;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;border-bottom:2px solid #e2e6f0;background:#f7f8fc;white-space:nowrap;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid #eef0f6;color:#2d3a5e;white-space:nowrap}
+tr:hover>td{background:#fafbfc}
+.num{font-family:ui-monospace,monospace;text-align:right}
+th.num{text-align:right}
+.drow{cursor:pointer;user-select:none}
+.drow .cr{display:inline-block;width:13px;color:#8b95b8;transition:.15s}
+.drow.open .cr{transform:rotate(90deg)}
+.lv1 td:first-child{padding-left:10px}.lv2 td:first-child{padding-left:26px}
+.lv3 td:first-child{padding-left:42px}.lv4 td:first-child{padding-left:58px}
+.lv5 td:first-child{padding-left:74px}.lv6 td:first-child{padding-left:90px}
+.crow>td{background:#fbfcff}
+/* badge */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.b-ok{background:#d1fae5;color:#065f46}
+.b-watch{background:#fef3c7;color:#92400e}
+.b-risk{background:#fee2e2;color:#991b1b}
+.b-nodata{background:#e5e7eb;color:#4b5563}
+.b-shipped{background:#dbeafe;color:#1e40af}
+.b-fabric{background:#fde8d0;color:#9a4a0d}
+.b-cutting{background:#ede0fb;color:#6b21a8}
+.b-over{background:#fef3c7;color:#92400e}
+.b-info{background:#e0f2fe;color:#0369a1}
+/* alerts */
+.al{padding:10px 13px;border-radius:9px;font-size:12.5px;margin-bottom:9px;line-height:1.5}
+.al-ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46}
+.al-w{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.al-e{background:#fff1f2;border:1px solid #fca5a5;color:#991b1b}
+.al-i{background:#eff6ff;border:1px solid #93c5fd;color:#1e40af}
+.empty{text-align:center;padding:50px 20px;color:#8b95b8}
+.empty-i{font-size:44px;margin-bottom:12px;opacity:.5}
+/* charts */
+.chartbox{position:relative;height:250px}.chartbox.tall{height:300px}
+/* rank bars */
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px}
+.bar-lb{width:150px;flex-shrink:0;color:#2d3a5e;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-tk{flex:1;height:18px;background:#eef0f6;border-radius:4px;overflow:hidden;position:relative}
+.bar-in{height:100%;background:linear-gradient(90deg,#f59e0b,#d97706);border-radius:4px}
+.bar-in.r{background:linear-gradient(90deg,#ef4444,#b91c1c)}
+.bar-in.b{background:linear-gradient(90deg,#3b82f6,#1d4ed8)}
+.bar-in.p{background:linear-gradient(90deg,#8b5cf6,#6d28d9)}
+.bar-vl{width:96px;text-align:right;flex-shrink:0;font-family:ui-monospace,monospace;font-weight:600;color:#1e2640;font-size:11.5px}
+/* line cards */
+.lc{background:#fff;border:1px solid #e2e6f0;border-radius:10px;padding:12px;border-top:3px solid #cbd2e6}
+.lc.hi{border-top-color:#059669}.lc.md{border-top-color:#d97706}.lc.lo{border-top-color:#dc2626}
+.lc-name{font-size:14px;font-weight:700;color:#1e2640;display:flex;justify-content:space-between;align-items:center}
+.load-bar{height:7px;background:#eef0f6;border-radius:4px;overflow:hidden;margin:8px 0}
+.load-fill{height:100%;border-radius:4px;transition:width .4s}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.mini-c{background:#f7f8fc;border-radius:6px;padding:6px;text-align:center}
+.mini-n{font-size:14px;font-weight:700;font-family:ui-monospace,monospace;color:#1e2640}
+.mini-l{font-size:9px;color:#6b7a9e;margin-top:1px}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(20,26,45,.55);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:20px;overflow-y:auto}
+.modal.on{display:flex}
+.modal-c{background:#fff;border-radius:13px;padding:20px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto}
+.modal-t{font-size:16px;font-weight:700;margin-bottom:14px;color:#1e2640;display:flex;justify-content:space-between;align-items:center}
+.mclose{cursor:pointer;color:#9ca3af;font-size:22px;line-height:1;background:none;border:0}
+.fgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
+@media(max-width:640px){.fgrid{grid-template-columns:1fr 1fr}.kpi-n{font-size:18px}}
+.fgrid label{font-size:11px;color:#6b7a9e;font-weight:600;display:flex;flex-direction:column;gap:3px}
+.fgrid input,.fgrid select{width:100%}
+/* toast */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1e2640;color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.3);display:none;max-width:90vw;text-align:center}
+.toast.ok{background:#065f46}.toast.err{background:#991b1b}.toast.warn{background:#92400e}
+.ver{position:fixed;right:11px;bottom:9px;font-size:10px;color:#9aa3bd;background:rgba(255,255,255,.75);padding:3px 9px;border-radius:20px;z-index:20;pointer-events:none}
+.pill{display:inline-flex;gap:5px;align-items:center;background:#f7f8fc;border:1px solid #e2e6f0;border-radius:20px;padding:4px 11px;font-size:11.5px;color:#4a5578;font-weight:600}
+.split{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eef0f6;font-size:12px;gap:10px}
+.split:last-child{border-bottom:none}
+.split b{font-family:ui-monospace,monospace;color:#1e2640}
+.tag{font-size:10px;padding:1px 6px;border-radius:4px;background:#eef2ff;color:#4338ca;font-weight:600}
+.tip{border-bottom:1px dotted #94a3b8;cursor:help;position:relative}
+.tip:hover::after{content:attr(data-tip);position:absolute;left:0;bottom:135%;background:#1e2640;color:#fff;padding:7px 10px;border-radius:7px;font-size:11px;font-weight:400;white-space:normal;width:230px;z-index:60;box-shadow:0 6px 18px rgba(0,0,0,.3);line-height:1.4}
+.imp-stat{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px;margin-top:12px}
+.imp-stat .s{background:#f7f8fc;border-radius:9px;padding:9px;text-align:center}
+.imp-stat .s b{display:block;font-size:19px;color:#1e2640;font-family:ui-monospace,monospace}
+.imp-stat .s span{font-size:10.5px;color:#6b7a9e}
+.imp-hist{font-size:11.5px;color:#4a5578;padding:6px 0;border-bottom:1px solid #eef0f6;display:flex;justify-content:space-between;gap:10px}
+.note{background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:9px 12px;font-size:11.5px;color:#92400e;margin-bottom:11px;line-height:1.5}
+textarea{width:100%;min-height:120px;border:1px solid #d0d5e8;border-radius:7px;padding:9px;font-family:ui-monospace,monospace;font-size:11.5px;resize:vertical}
+@media print{.header,.modebar,.tabs,.hicons,.btnrow,.filt,.no-print{display:none!important}.wrap{padding:0}.card{break-inside:avoid;box-shadow:none;border-color:#ccc}}
+@media(max-width:640px){.tabs{top:104px}.bar-lb{width:110px}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">📊</div>
+  <div>
+    <div class="h-title">VRT Customer <b>Statistics</b> Control Center</div>
+    <div class="h-sub" id="hSub">客戶訂單・布料・裁剪・車縫・出貨統計控制中心</div>
+  </div>
+  <div class="hgrow"></div>
+  <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-i18n="hRecords">明細</div></div>
+  <div class="hstat"><div class="hstat-v" id="hOpen">0</div><div class="hstat-l" data-i18n="hOpen">未出 pcs</div></div>
+  <div class="hstat"><div class="hstat-v" id="hCust">0</div><div class="hstat-l" data-i18n="hCust">客戶</div></div>
+  <div class="hicons">
+    <div class="hicon" title="Language / 語言" onclick="toggleLang()" id="langBtn">🌐 <span id="langTag" style="font-size:10px">中</span></div>
+    <div class="hicon" title="Cloud Upload" onclick="cloudUpload()">☁️</div>
+    <div class="hicon" title="Cloud Download" onclick="cloudDownload()">⬇️</div>
+    <div class="hicon" title="Cloud Sync" onclick="cloudSync()">🔄</div>
+    <div class="hicon" title="Telegram Push" onclick="sendTelegramSummary()">📨</div>
+    <div class="hicon" title="Print" onclick="window.print()">🖨️</div>
+  </div>
+</div>
+
+<div class="modebar">
+  <span style="color:#8b95b8;font-size:11px;font-weight:600" data-i18n="periodMode">統計週期</span>
+  <div class="mode-sw" id="modeSw">
+    <button data-m="day" onclick="setMode('day')" data-i18n="mDay">日 Day</button>
+    <button data-m="week" onclick="setMode('week')" data-i18n="mWeek">週 Week</button>
+    <button data-m="month" class="on" onclick="setMode('month')" data-i18n="mMonth">月 Month</button>
+    <button data-m="year" onclick="setMode('year')" data-i18n="mYear">年 Year</button>
+  </div>
+  <div class="dp">
+    <button class="nav-b" onclick="periodNav(-1)">◀</button>
+    <span class="cur" id="periodCur">—</span>
+    <button class="nav-b" onclick="periodNav(1)">▶</button>
+    <button class="nav-b" onclick="periodToday()" data-i18n="today">今天</button>
+  </div>
+</div>
+
+<div class="tabs" id="tabs"></div>
+<div class="wrap">
+  <div class="pane on" id="dashboard"></div>
+  <div class="pane" id="import"></div>
+  <div class="pane" id="daily"></div>
+  <div class="pane" id="weekly"></div>
+  <div class="pane" id="monthly"></div>
+  <div class="pane" id="yearly"></div>
+  <div class="pane" id="custprod"></div>
+  <div class="pane" id="postyle"></div>
+  <div class="pane" id="fabric"></div>
+  <div class="pane" id="cutting"></div>
+  <div class="pane" id="line"></div>
+  <div class="pane" id="shipping"></div>
+  <div class="pane" id="compare"></div>
+  <div class="pane" id="records"></div>
+  <div class="pane" id="settings"></div>
+</div>
+
+<div class="modal" id="modal"><div class="modal-c" id="modalC"></div></div>
+<div class="toast" id="toast"></div>
+<div class="ver">VRT Customer Statistics v1 · SAINTDOU / AC</div>
+<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none">
+<input type="file" id="jsonInput" accept=".json" style="display:none">
+<input type="file" id="planInput" accept=".json,.xlsx,.xls" style="display:none">
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   VRT Customer Statistics Control Center — Engine
+   儲存：IndexedDB "VRTCustomerStatistics" (records/events/summaries/settings/importHistory)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const VER='v1';
+const DB_NAME='VRTCustomerStatistics';
+const ST_REC='records', ST_EVT='events', ST_SUM='summaries', ST_SET='settings', ST_HIS='importHistory';
+const LS_SET='vcs_settings', LS_HIST='vcs_import_history', LS_FILTER='vcs_last_filter', LS_CMP='vcs_compare_payload';
+const TODAY=(()=>{const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());})();
+
+/* ── ALL CUSTOMER 欄位對應（欄位固定索引，A=0）─────────────────────────── */
+const COLMAP=[
+  ['customer',0,'txt'],['poDate',1,'date'],['etd',2,'date'],['indcEta',3,'date'],
+  ['garmentType',4,'txt'],['po',5,'txt'],['style',6,'txt'],['color',8,'txt'],['size',9,'txt'],
+  ['openQty',10,'num'],['unit',11,'txt'],
+  ['fabricItem',12,'txt'],['fabricType',13,'txt'],['yrdPerPcs',14,'num'],['totalYdsRequired',15,'num'],
+  ['fabricReqPerOpen',16,'num'],['fabricReqPerNotCut',17,'num'],['fabricStockYds',18,'num'],
+  ['firstFabricCatchUp',19,'txt'],['fabricStatus',20,'txt'],['fabricOrderDate',21,'date'],
+  ['davidFabricDate',22,'date'],['fabricLeadTimeDays',23,'num'],['estimatedFabricEta',24,'date'],
+  ['actualFabricArrived',25,'date'],
+  ['estimatedCuttingPlanDate',26,'date'],['estimatedSewingPlanDate',27,'date'],['planToMarkerRoom',28,'num'],
+  ['markerPlanDate',29,'raw'],['cutStock',30,'num'],['cutAdjust',31,'num'],['actualCutPcs',32,'num'],
+  ['recutOver',33,'num'],['actualCuttingDateRaw',34,'raw'],['actualCutStock',35,'num'],['cutFlag',36,'num'],
+  ['uncutQty',37,'num'],
+  ['qtyTransferCutWip',39,'num'],['qtyInput',40,'num'],['sewingPlanDate',41,'date'],['loadingDateRaw',42,'raw'],
+  ['lineNo',43,'txt'],['cuttingPcsBalance',44,'num'],['receivingDateRaw',45,'raw'],
+  ['qtyReceivedFromSewing',46,'num'],['sewingAdjust',47,'num'],['totalPacked',48,'num'],['cuttingWip',49,'num'],
+  ['shippedDateRaw',50,'raw'],['shippedQty',51,'num'],['shippedAdjust',52,'num'],['totalShipped',53,'num'],
+  ['stockFgPcs',54,'num'],['stockFgCtn',55,'num'],['actualNotSewing',56,'num'],['openOrderPcs',57,'num'],
+  ['openOrderCtns',58,'num'],['pcsPerBox',59,'num'],['comment',60,'txt'],
+  ['poToFabricOrderDays',61,'num'],['fabricOrderToEtaDays',62,'num'],['etaToCutDays',63,'num'],
+  ['cutToSewDays',64,'num'],['sewToShipDays',65,'num']
+];
+/* raw 事件欄位 → process 類型 */
+const RAW_EVENT_COLS=[
+  ['markerPlanDate','marker'],['actualCuttingDateRaw','cutting'],['loadingDateRaw','loading'],
+  ['receivingDateRaw','receiving'],['shippedDateRaw','shipping']
+];
+const PROC_FALLBACK={cutting:'actualCutPcs',marker:'planToMarkerRoom',sewing:'qtyInput',
+  loading:'qtyInput',receiving:'qtyReceivedFromSewing',shipping:'shippedQty'};
+const GARMENT_KEYS=['GARMENT','APRON','TOP','NAPKIN','OTHER'];
+
+/* ── 狀態 ──────────────────────────────────────────────────────────────── */
+let RECORDS=[], EVENTS=[], PLAN_RECORDS=[], IMPORT_HISTORY=[];
+let SETTINGS={lang:'zh',gasUrl:'',tgChatId:'',moduleKey:'custstats',cloudOn:false,autoBackup:false,
+  dailyOutput:6000,monthlyOutput:156000};
+let MODE='month';        // day|week|month|year
+let CUR_PERIOD='';       // 目前週期參考值
+let CUR_TAB='dashboard';
+let CHARTS={};
+let EDIT_ID=null, PENDING=null;
+let GF={cust:'',garment:'',po:'',style:'',size:'',fabric:'',line:''}; // 全域篩選
+let expanded={};         // drill-down 展開狀態
+
+/* ── 小工具 ─────────────────────────────────────────────────────────────── */
+function p2(n){return String(n).padStart(2,'0');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function fmt(n){n=Math.round(+n||0);return n.toLocaleString('en-US');}
+function fmt1(n){return (Math.round((+n||0)*10)/10).toLocaleString('en-US');}
+function pct(a,b){return b>0?Math.round(a/b*1000)/10:0;}
+function uid(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function toast(msg,cls){const el=document.getElementById('toast');el.className='toast'+(cls?' '+cls:'');el.textContent=msg;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(()=>el.style.display='none',2600);}
+function nowStamp(){const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes());}
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1200);}
+function num(v){if(v==null||v==='')return 0;if(typeof v==='number')return isFinite(v)?v:0;let s=String(v).replace(/[, ]/g,'').replace(/^-$/,'0');let f=parseFloat(s);return isFinite(f)?f:0;}
+function sum(list,f){return list.reduce((s,r)=>s+(+f(r)||0),0);}
+function uniq(list,f){return [...new Set(list.map(f).filter(x=>x!=null&&x!==''))];}
+
+/* ── 日期解析 ───────────────────────────────────────────────────────────── */
+function fmtDate(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+function validYMD(y,m,d){y=+y;m=+m;d=+d;return y>=2000&&y<=2100&&m>=1&&m<=12&&d>=1&&d<=31;}
+function parseDateToken(tok){
+  tok=String(tok).trim();
+  if(/^\d{8}$/.test(tok)){const y=tok.slice(0,4),m=tok.slice(4,6),d=tok.slice(6,8);return validYMD(y,m,d)?`${y}-${m}-${d}`:null;}
+  if(/^\d{6}$/.test(tok)){const y='20'+tok.slice(0,2),m=tok.slice(2,4),d=tok.slice(4,6);return validYMD(y,m,d)?`${y}-${m}-${d}`:null;}
+  return null;
+}
+function parseAnyDate(v){
+  if(v==null||v==='')return '';
+  if(v instanceof Date&&!isNaN(v))return fmtDate(v);
+  if(typeof v==='number'){
+    if(v>=20000&&v<=60000){const d=new Date(Math.round((v-25569)*86400000));return isNaN(d)?'':fmtDate(d);}
+    v=String(v);
+  }
+  let s=String(v).trim();
+  let mIso=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(mIso)return validYMD(mIso[1],mIso[2],mIso[3])?`${mIso[1]}-${p2(mIso[2])}-${p2(mIso[3])}`:'';
+  let mSl=s.match(/^(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{2,4})$/);
+  if(mSl){let mo=mSl[1],da=mSl[2],yr=mSl[3];yr=yr.length===2?('20'+yr):yr;return validYMD(yr,mo,da)?`${yr}-${p2(mo)}-${p2(da)}`:'';}
+  if(/^\d{8}$/.test(s))return parseDateToken(s)||'';
+  if(/^\d{6}$/.test(s))return parseDateToken(s)||'';
+  let d=new Date(s);if(!isNaN(d)&&d.getFullYear()>1990&&d.getFullYear()<2100)return fmtDate(d);
+  return '';
+}
+/* ISO 週：回傳 YYYY-Www */
+function isoWeek(ymd){
+  if(!ymd)return '';
+  let d=new Date(ymd+'T00:00:00');if(isNaN(d))return '';
+  let t=new Date(d.getTime());t.setDate(t.getDate()+3-((t.getDay()+6)%7));
+  let wk1=new Date(t.getFullYear(),0,4);
+  let wn=1+Math.round(((t-wk1)/86400000-3+((wk1.getDay()+6)%7))/7);
+  return t.getFullYear()+'-W'+p2(wn);
+}
+function weekOf(dateObj){return isoWeek(fmtDate(dateObj));}
+function monthKey(ymd){return ymd?ymd.slice(0,7):'';}
+function yearKey(ymd){return ymd?ymd.slice(0,4):'';}
+function periodKeyOf(ymd,mode){if(!ymd)return '';return mode==='day'?ymd:mode==='week'?isoWeek(ymd):mode==='month'?monthKey(ymd):yearKey(ymd);}
+/* 週起訖（週一~週日）*/
+function weekBounds(wkKey){
+  let m=wkKey.match(/^(\d{4})-W(\d{2})$/);if(!m)return null;
+  let y=+m[1],w=+m[2];
+  let simple=new Date(y,0,1+(w-1)*7);
+  let dow=simple.getDay();
+  let mon=new Date(simple);mon.setDate(simple.getDate()-((dow+6)%7));
+  let sun=new Date(mon);sun.setDate(mon.getDate()+6);
+  return {start:fmtDate(mon),end:fmtDate(sun)};
+}
+
+/* ── 日期文字 timeline parser（核心）───────────────────────────────────── */
+function parseSegment(seg,process,ctx){
+  const raw=String(seg).trim();if(!raw)return null;
+  /* 純 5 位 Excel serial */
+  if(/^\d{5}$/.test(raw)){let n=+raw;if(n>=20000&&n<=60000){let date=parseAnyDate(n);return mkEvent(date,process,'Unknown Line',fbQty(0,process,ctx),raw,date?'ok':'unparsed',ctx);}}
+  let m8=raw.match(/(?<![\d])(\d{8})(?![\d])/);
+  let m6=raw.match(/(?<![\d])(\d{6})(?![\d])/);
+  let tok=m8?m8[1]:(m6?m6[1]:null);
+  let date=tok?parseDateToken(tok):null;
+  let rest=tok?raw.replace(tok,' '):raw;
+  let line=null;
+  let lm=rest.match(/L\s*(\d+)/i);if(lm)line='Line '+(+lm[1]);
+  let qty=0;
+  if(rest.includes('=')){
+    let be=rest.match(/(\d+)\s*=/);if(be&&!lm)line='Line '+(+be[1]);
+    let after=rest.slice(rest.indexOf('=')+1);let ns=after.match(/\d+/g);
+    if(ns)qty=ns.reduce((a,b)=>a+ +b,0);
+  }else{
+    let tmp=rest;if(lm)tmp=tmp.replace(/L\s*\d+/i,' ');
+    let ns=tmp.match(/\d+/g);if(ns)qty=ns.reduce((a,b)=>a+ +b,0);
+  }
+  qty=fbQty(qty,process,ctx);
+  return mkEvent(date,process,line||'Unknown Line',qty,raw,date?'ok':'unparsed',ctx);
+}
+function fbQty(qty,process,ctx){if(qty&&qty>0)return qty;let f=PROC_FALLBACK[process];return f&&ctx&&ctx[f]?ctx[f]:(qty||0);}
+function mkEvent(date,process,line,qty,rawText,status,ctx){
+  return {id:uid(),date:date||null,process,line:line||'Unknown Line',qty:+qty||0,rawText,parseStatus:status,
+    customer:ctx.customer,po:ctx.po,style:ctx.style,color:ctx.color,size:ctx.size,garmentType:ctx.garmentType,recId:ctx.id};
+}
+function parseTimeline(raw,process,ctx){
+  const out=[];
+  if(raw==null||raw==='')return out;
+  let s=String(raw).trim();if(!s)return out;
+  let segs=s.split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+  segs.forEach(seg=>{let e=parseSegment(seg,process,ctx);if(e)out.push(e);});
+  if(!out.length)out.push(mkEvent(null,process,'Unknown Line',fbQty(0,process,ctx),s,'unparsed',ctx));
+  return out;
+}
+
+/* ── i18n ───────────────────────────────────────────────────────────────── */
+const I18N={
+ zh:{
+  sysSub:'客戶訂單・布料・裁剪・車縫・出貨統計控制中心',hRecords:'明細',hOpen:'未出 pcs',hCust:'客戶',
+  periodMode:'統計週期',mDay:'日 Day',mWeek:'週 Week',mMonth:'月 Month',mYear:'年 Year',today:'今天',
+  tabDashboard:'📊 儀錶板',tabImport:'📥 匯入',tabDaily:'📅 日報',tabWeekly:'🗓️ 週報',tabMonthly:'📆 月報',
+  tabYearly:'📈 年報',tabCust:'🏷️ 客戶產品',tabPo:'📦 訂單款式尺寸',tabFabric:'🧵 布料庫存',tabCut:'📐 裁剪Marker',
+  tabLine:'🪡 車縫線別產能',tabShip:'🚚 出貨未出',tabCompare:'🔁 排產產能比對',tabRecords:'📋 全部資料',tabSettings:'⚙️ 設定',
+  empty:'尚無資料',emptyHint:'請至「匯入」頁上傳 VRT ALL CUSTOMER Excel 開始分析',goImport:'📥 前往匯入',
+  filterAll:'全部',allCust:'全部客戶',allGarment:'全部類別',allPo:'全部PO',allStyle:'全部款式',allSize:'全部尺寸',
+  allFabric:'全部布種',allLine:'全部線別',search:'搜尋 PO/款式/客戶/布/線...',apply:'套用',reset:'清除',
+  /* KPI */
+  kTotalOrder:'總訂單量',kOpenOrder:'總未出訂單',kActualCut:'總實裁',kUncut:'總未裁',kQtyInput:'總車縫Input',
+  kPacked:'總包裝',kShipped:'總出貨',kUnshipped:'未出貨量',kFgStock:'FG成品庫存',kCutWip:'裁剪WIP',
+  kNotSewing:'未車縫',kFabReq:'布料需求Yds',kFabStock:'布料庫存Yds',kFabShort:'布料缺口Yds',
+  kCust:'客戶數',kPo:'PO數',kStyle:'款式數',kSize:'尺寸數',kLine:'使用線別',kOverdue:'逾期未出訂單',
+  /* labels */
+  cust:'客戶',garment:'類別',po:'PO',style:'款式',color:'顏色',size:'尺寸',fabric:'布種',line:'線別',
+  openQty:'訂單量',fabReq:'布需求',fabStock:'布庫存',marker:'Marker',cut:'實裁',uncut:'未裁',input:'車縫Input',
+  packed:'包裝',shipped:'出貨',fgStock:'FG庫存',unshipped:'未出',notSew:'未車',cutWip:'裁WIP',
+  etd:'ETD',eta:'ETA',status:'狀態',qty:'數量',date:'日期',process:'流程',rawText:'原始文字',actions:'操作',
+  /* badge */
+  bOK:'OK',bWatch:'留意',bRisk:'風險',bNoData:'無資料',bShipped:'已出',bFabShort:'缺布',bCutShort:'缺裁',
+  /* import */
+  dropTitle:'拖拉 Excel 到此，或點擊選擇檔案',dropSub:'支援 .xlsx / .xls / .csv，可一次匯入多份；主表為 ALL CUSTOMER，第5列起為明細',
+  impResult:'匯入結果',impTotal:'總筆數',impNew:'新增',impDup:'重複',impAbn:'異常',impNoDate:'無法解析日期',
+  impConfirm:'✅ 確認匯入',impReparse:'重新選擇',impPreview:'解析預覽（前20筆）',impHistory:'匯入紀錄',noHist:'尚無匯入紀錄',
+  dupTitle:'⚠️ 發現重複資料',dupBody:'偵測到相同主鍵（客戶+PO+款式+顏色+尺寸+類別+訂單量）',dupSkip:'跳過',dupReplace:'覆蓋',dupRev:'新增為修正版',
+  /* dashboard */
+  mgmt:'管理摘要',custShare:'客戶訂單占比',prodShare:'產品類別占比',monTrend:'月度 訂單/裁/車/出貨 趨勢',
+  fabTop:'布料缺口 Top10',cutTop:'裁剪缺口 Top10',unshipTop:'未出客戶 Top10',lineTrend:'線別每日產出趨勢',
+  lineRank:'線別月產出排名',ltDist:'Lead Time 分布',fgVsUn:'FG庫存 vs 未出貨',riskList:'風險訂單清單',
+  /* fabric */
+  fabAnalysis:'布料分析維度',fabDim:'分析維度',totYds:'需求Yds',reqOpen:'依Open需求',reqNotCut:'依未裁需求',
+  stockYds:'庫存Yds',shortYds:'缺口Yds',coverage:'覆蓋%',fabLT:'交期天',fabEta:'預計到布',fabArr:'實際到布',
+  affectFlow:'影響裁/車/出貨',
+  /* cutting */
+  cutComp:'裁剪完成%',uncutPct:'未裁%',cutShort:'裁剪缺口',overCut:'超裁',cutRisk:'裁剪風險',
+  markerRoom:'進Marker',markerDate:'Marker日',cutDate:'實裁日',cutBal:'裁片餘',
+  /* line */
+  lineLoad:'線別負荷',dailyOut:'日產出',weekOut:'週產出',monOut:'月產出',styleByLine:'款式×線',
+  custByLine:'客戶×線',poByLine:'PO×線',lineRiskList:'線別風險',
+  /* shipping */
+  shipDaily:'日出貨',shipWeek:'週出貨',shipMon:'月出貨',shipYear:'年出貨',overdueList:'逾期未出訂單',
+  custUnship:'客戶未出排名',poUnship:'PO未出排名',fgWait:'FG待出',etdRisk:'ETD到期風險',dueSoon:'即將到期',
+  /* compare */
+  cmpTitle:'排產產能比對',cmpReadPlan:'讀取 Plan Capacity',cmpImportJson:'匯入 Plan JSON',cmpImportXlsx:'匯入 Plan Excel',
+  cmpPaste:'貼上 Plan JSON',cmpParse:'解析',cmpNoPlan:'尚未載入 Plan Capacity 資料',cmpExport:'匯出 Compare JSON',
+  cmpPlanQty:'排產量',cmpDemand:'訂單需求',cmpCutAvail:'可車裁片',cmpSewInput:'車縫Input',cmpPacked:'已包裝',
+  cmpShipped:'已出貨',cmpUnship:'未出貨',cmpGapPlan:'需求vs排產',cmpGapCut:'裁片缺口',cmpGapShip:'出貨缺口',cmpRisk:'風險',
+  /* records */
+  addRec:'➕ 新增',edit:'編輯',del:'刪除',batchDel:'批次刪除',confirmDel:'確定刪除？',selected:'已選',
+  expExcel:'📤 匯出Excel',expCsv:'⬇ 匯出CSV',expJson:'📦 匯出JSON',expCmp:'🔁 匯出Compare',expFiltered:'匯出當前篩選',
+  expDaily:'匯出日報',expWeekly:'匯出週報',expMonthly:'匯出月報',expYearly:'匯出年報',
+  /* settings */
+  setLang:'語言',setGas:'GAS Web App URL',setTg:'Telegram Chat ID',setKey:'Module Key',
+  setCloud:'雲端同步',setBackup:'自動備份',setDaily:'預設日產能',setMonthly:'預設月產能',
+  bkJson:'💾 備份JSON',rsJson:'📂 還原JSON',clUp:'☁️ 上傳',clDown:'⬇️ 下載',clSync:'🔄 同步',
+  clDev:'雲端介面已保留，實際上傳需先設定並部署 GAS。',noGas:'尚未設定 GAS URL',on:'開',off:'關',
+  save:'儲存',cancel:'取消',saved:'已儲存',deleted:'已刪除',imported:'已匯入',calc:'處理中...',
+  demandBy:'需求依 ETD 歸期；出貨依 Shipped Date；裁/車依事件 timeline',noEtd:'（無ETD歸期）',
+  reqToday:'應出貨',actShip:'實出貨',pending:'待出',
+  tip_marker:'Marker 排料圖/嘜架：決定布怎麼排、怎麼裁。',tip_wip:'WIP 在製品：還沒完成的半成品。',
+  tip_fg:'FG 成品：已完成但可能還沒出貨的成品。',tip_lt:'Lead Time：兩個流程之間花了幾天。',
+  tip_cap:'Capacity 產能：某天/週/月可生產或實際生產的數量。',tip_uncut:'Uncut 未裁：訂單還沒裁剪的數量。',
+  tip_unship:'Unshipped 未出：已下單但還沒出貨的數量。'
+ },
+ en:{
+  sysSub:'Customer Order · Fabric · Cutting · Sewing · Shipping Statistics Control Center',hRecords:'Records',hOpen:'Unship pcs',hCust:'Customers',
+  periodMode:'Period',mDay:'Day',mWeek:'Week',mMonth:'Month',mYear:'Year',today:'Today',
+  tabDashboard:'📊 Dashboard',tabImport:'📥 Import',tabDaily:'📅 Daily',tabWeekly:'🗓️ Weekly',tabMonthly:'📆 Monthly',
+  tabYearly:'📈 Yearly',tabCust:'🏷️ Customer/Product',tabPo:'📦 PO/Style/Size',tabFabric:'🧵 Fabric/Inventory',tabCut:'📐 Marker/Cutting',
+  tabLine:'🪡 Line Capacity',tabShip:'🚚 Shipping/Unship',tabCompare:'🔁 Plan Compare',tabRecords:'📋 Records',tabSettings:'⚙️ Settings',
+  empty:'No data yet',emptyHint:'Go to "Import" and upload VRT ALL CUSTOMER Excel to start.',goImport:'📥 Go to Import',
+  filterAll:'All',allCust:'All Customers',allGarment:'All Types',allPo:'All PO',allStyle:'All Styles',allSize:'All Sizes',
+  allFabric:'All Fabric',allLine:'All Lines',search:'Search PO/Style/Customer/Fabric/Line...',apply:'Apply',reset:'Reset',
+  kTotalOrder:'Total Order',kOpenOrder:'Total Open',kActualCut:'Actual Cut',kUncut:'Total Uncut',kQtyInput:'Sew Input',
+  kPacked:'Total Packed',kShipped:'Total Shipped',kUnshipped:'Unshipped',kFgStock:'FG Stock',kCutWip:'Cutting WIP',
+  kNotSewing:'Not Sewing',kFabReq:'Fabric Req Yds',kFabStock:'Fabric Stock',kFabShort:'Fabric Short',
+  kCust:'Customers',kPo:'POs',kStyle:'Styles',kSize:'Sizes',kLine:'Lines',kOverdue:'Overdue Unship',
+  cust:'Customer',garment:'Type',po:'PO',style:'Style',color:'Color',size:'Size',fabric:'Fabric',line:'Line',
+  openQty:'Open',fabReq:'Fab Req',fabStock:'Fab Stock',marker:'Marker',cut:'Cut',uncut:'Uncut',input:'Input',
+  packed:'Packed',shipped:'Shipped',fgStock:'FG',unshipped:'Unship',notSew:'NotSew',cutWip:'CutWIP',
+  etd:'ETD',eta:'ETA',status:'Status',qty:'Qty',date:'Date',process:'Process',rawText:'Raw',actions:'Actions',
+  bOK:'OK',bWatch:'Watch',bRisk:'Risk',bNoData:'No Data',bShipped:'Shipped',bFabShort:'Fab Short',bCutShort:'Cut Short',
+  dropTitle:'Drag Excel here or click to choose',dropSub:'.xlsx / .xls / .csv, multiple files ok; main sheet ALL CUSTOMER, data from row 5',
+  impResult:'Import Result',impTotal:'Total',impNew:'New',impDup:'Duplicate',impAbn:'Abnormal',impNoDate:'Unparsed Date',
+  impConfirm:'✅ Confirm Import',impReparse:'Reselect',impPreview:'Preview (first 20)',impHistory:'Import History',noHist:'No history yet',
+  dupTitle:'⚠️ Duplicate Found',dupBody:'Same key (customer+PO+style+color+size+type+openQty)',dupSkip:'Skip',dupReplace:'Replace',dupRev:'Add Revision',
+  mgmt:'Management Summary',custShare:'Customer Order Share',prodShare:'Product Type Share',monTrend:'Monthly Order/Cut/Sew/Ship Trend',
+  fabTop:'Fabric Shortage Top10',cutTop:'Cutting Shortage Top10',unshipTop:'Unshipped Customer Top10',lineTrend:'Line Daily Output',
+  lineRank:'Line Monthly Output',ltDist:'Lead Time Distribution',fgVsUn:'FG Stock vs Unshipped',riskList:'Risk Orders',
+  fabAnalysis:'Fabric Analysis',fabDim:'Dimension',totYds:'Req Yds',reqOpen:'Req/Open',reqNotCut:'Req/NotCut',
+  stockYds:'Stock Yds',shortYds:'Short Yds',coverage:'Cover%',fabLT:'LT(d)',fabEta:'Est ETA',fabArr:'Arrived',
+  affectFlow:'Affects Flow',
+  cutComp:'Cut Done%',uncutPct:'Uncut%',cutShort:'Cut Short',overCut:'Over Cut',cutRisk:'Cut Risk',
+  markerRoom:'To Marker',markerDate:'Marker',cutDate:'Cut Date',cutBal:'Balance',
+  lineLoad:'Line Load',dailyOut:'Daily',weekOut:'Weekly',monOut:'Monthly',styleByLine:'Style×Line',
+  custByLine:'Customer×Line',poByLine:'PO×Line',lineRiskList:'Line Risk',
+  shipDaily:'Daily Ship',shipWeek:'Weekly Ship',shipMon:'Monthly Ship',shipYear:'Yearly Ship',overdueList:'Overdue Orders',
+  custUnship:'Customer Unship Rank',poUnship:'PO Unship Rank',fgWait:'FG Waiting',etdRisk:'ETD Due Risk',dueSoon:'Due Soon',
+  cmpTitle:'Plan Capacity Compare',cmpReadPlan:'Read Plan Capacity',cmpImportJson:'Import Plan JSON',cmpImportXlsx:'Import Plan Excel',
+  cmpPaste:'Paste Plan JSON',cmpParse:'Parse',cmpNoPlan:'No Plan Capacity data loaded',cmpExport:'Export Compare JSON',
+  cmpPlanQty:'Plan Qty',cmpDemand:'Demand',cmpCutAvail:'Cut Avail',cmpSewInput:'Sew Input',cmpPacked:'Packed',
+  cmpShipped:'Shipped',cmpUnship:'Unship',cmpGapPlan:'Gap vs Plan',cmpGapCut:'Gap vs Cut',cmpGapShip:'Gap vs Ship',cmpRisk:'Risk',
+  addRec:'➕ Add',edit:'Edit',del:'Delete',batchDel:'Batch Delete',confirmDel:'Delete?',selected:'selected',
+  expExcel:'📤 Excel',expCsv:'⬇ CSV',expJson:'📦 JSON',expCmp:'🔁 Compare',expFiltered:'Export Filtered',
+  expDaily:'Daily Report',expWeekly:'Weekly Report',expMonthly:'Monthly Report',expYearly:'Yearly Report',
+  setLang:'Language',setGas:'GAS Web App URL',setTg:'Telegram Chat ID',setKey:'Module Key',
+  setCloud:'Cloud Sync',setBackup:'Auto Backup',setDaily:'Default Daily Cap',setMonthly:'Default Monthly Cap',
+  bkJson:'💾 Backup',rsJson:'📂 Restore',clUp:'☁️ Upload',clDown:'⬇️ Download',clSync:'🔄 Sync',
+  clDev:'Cloud UI preserved; real upload needs GAS setup & deployment.',noGas:'GAS URL not set',on:'On',off:'Off',
+  save:'Save',cancel:'Cancel',saved:'Saved',deleted:'Deleted',imported:'Imported',calc:'Processing...',
+  demandBy:'Demand by ETD; shipment by Shipped Date; cut/sew by event timeline',noEtd:'(no ETD)',
+  reqToday:'Req Ship',actShip:'Actual Ship',pending:'Pending',
+  tip_marker:'Marker: layout that decides how fabric is laid & cut.',tip_wip:'WIP: work-in-process, unfinished goods.',
+  tip_fg:'FG: finished goods, done but maybe not shipped.',tip_lt:'Lead Time: days between two processes.',
+  tip_cap:'Capacity: qty producible/produced per day/week/month.',tip_uncut:'Uncut: order qty not yet cut.',
+  tip_unship:'Unshipped: ordered but not shipped yet.'
+ },
+ km:{
+  sysSub:'មជ្ឈមណ្ឌលគ្រប់គ្រងស្ថិតិ បញ្ជាទិញ·ក្រណាត់·កាត់·ដេរ·ដឹកជញ្ជូន',hRecords:'កំណត់ត្រា',hOpen:'មិនទាន់ដឹក',hCust:'អតិថិជន',
+  periodMode:'រយៈពេល',mDay:'ថ្ងៃ',mWeek:'សប្តាហ៍',mMonth:'ខែ',mYear:'ឆ្នាំ',today:'ថ្ងៃនេះ',
+  tabDashboard:'📊 ផ្ទាំង',tabImport:'📥 នាំចូល',tabDaily:'📅 ថ្ងៃ',tabWeekly:'🗓️ សប្តាហ៍',tabMonthly:'📆 ខែ',
+  tabYearly:'📈 ឆ្នាំ',tabCust:'🏷️ អតិថិជន',tabPo:'📦 PO/ម៉ូដែល',tabFabric:'🧵 ក្រណាត់',tabCut:'📐 កាត់',
+  tabLine:'🪡 ខ្សែដេរ',tabShip:'🚚 ដឹកជញ្ជូន',tabCompare:'🔁 ប្រៀបធៀប',tabRecords:'📋 ទិន្នន័យ',tabSettings:'⚙️ ការកំណត់',
+  empty:'មិនទាន់មានទិន្នន័យ',emptyHint:'សូមទៅ "នាំចូល" ដើម្បីផ្ទុក Excel',goImport:'📥 នាំចូល',
+  filterAll:'ទាំងអស់',allCust:'អតិថិជនទាំងអស់',allGarment:'ប្រភេទទាំងអស់',allPo:'PO ទាំងអស់',allStyle:'ម៉ូដែលទាំងអស់',allSize:'ទំហំទាំងអស់',
+  allFabric:'ក្រណាត់ទាំងអស់',allLine:'ខ្សែទាំងអស់',search:'ស្វែងរក...',apply:'អនុវត្ត',reset:'សម្អាត',
+  kTotalOrder:'បញ្ជាទិញសរុប',kOpenOrder:'នៅសល់',kActualCut:'កាត់ពិត',kUncut:'មិនកាត់',kQtyInput:'ដេរ Input',
+  kPacked:'ខ្ចប់',kShipped:'ដឹករួច',kUnshipped:'មិនទាន់ដឹក',kFgStock:'ស្តុក FG',kCutWip:'WIP កាត់',
+  kNotSewing:'មិនដេរ',kFabReq:'ត្រូវការ Yds',kFabStock:'ស្តុក Yds',kFabShort:'ខ្វះ Yds',
+  kCust:'អតិថិជន',kPo:'PO',kStyle:'ម៉ូដែល',kSize:'ទំហំ',kLine:'ខ្សែ',kOverdue:'ហួសកំណត់',
+  cust:'អតិថិជន',garment:'ប្រភេទ',po:'PO',style:'ម៉ូដែល',color:'ពណ៌',size:'ទំហំ',fabric:'ក្រណាត់',line:'ខ្សែ',
+  openQty:'នៅសល់',fabReq:'ត្រូវការ',fabStock:'ស្តុក',marker:'Marker',cut:'កាត់',uncut:'មិនកាត់',input:'Input',
+  packed:'ខ្ចប់',shipped:'ដឹក',fgStock:'FG',unshipped:'មិនដឹក',notSew:'មិនដេរ',cutWip:'WIP',
+  etd:'ETD',eta:'ETA',status:'ស្ថានភាព',qty:'ចំនួន',date:'កាលបរិច្ឆេទ',process:'ដំណើរការ',rawText:'អត្ថបទ',actions:'សកម្មភាព',
+  bOK:'ល្អ',bWatch:'ប្រយ័ត្ន',bRisk:'ហានិភ័យ',bNoData:'គ្មាន',bShipped:'ដឹករួច',bFabShort:'ខ្វះក្រណាត់',bCutShort:'ខ្វះកាត់',
+  dropTitle:'ទាញ Excel មកទីនេះ ឬចុចជ្រើស',dropSub:'.xlsx / .xls / .csv',
+  impResult:'លទ្ធផល',impTotal:'សរុប',impNew:'ថ្មី',impDup:'ស្ទួន',impAbn:'មិនធម្មតា',impNoDate:'កាលបរិច្ឆេទមិនច្បាស់',
+  impConfirm:'✅ បញ្ជាក់',impReparse:'ជ្រើសម្តងទៀត',impPreview:'មើលមុន (20)',impHistory:'ប្រវត្តិ',noHist:'គ្មានប្រវត្តិ',
+  dupTitle:'⚠️ ស្ទួន',dupBody:'កូនសោដូចគ្នា',dupSkip:'រំលង',dupReplace:'ជំនួស',dupRev:'កំណែថ្មី',
+  mgmt:'សេចក្តីសង្ខេប',custShare:'ចំណែកអតិថិជន',prodShare:'ចំណែកប្រភេទ',monTrend:'និន្នាការខែ',
+  fabTop:'ខ្វះក្រណាត់ Top10',cutTop:'ខ្វះកាត់ Top10',unshipTop:'មិនដឹក Top10',lineTrend:'ខ្សែផលិតថ្ងៃ',
+  lineRank:'ខ្សែផលិតខែ',ltDist:'Lead Time',fgVsUn:'FG vs មិនដឹក',riskList:'បញ្ជីហានិភ័យ',
+  fabAnalysis:'វិភាគក្រណាត់',fabDim:'វិមាត្រ',totYds:'ត្រូវការ Yds',reqOpen:'តាម Open',reqNotCut:'តាមមិនកាត់',
+  stockYds:'ស្តុក Yds',shortYds:'ខ្វះ Yds',coverage:'គ្រប%',fabLT:'LT',fabEta:'ETA',fabArr:'មកដល់',
+  affectFlow:'ប៉ះពាល់',
+  cutComp:'កាត់រួច%',uncutPct:'មិនកាត់%',cutShort:'ខ្វះកាត់',overCut:'កាត់លើស',cutRisk:'ហានិភ័យកាត់',
+  markerRoom:'ចូល Marker',markerDate:'Marker',cutDate:'ថ្ងៃកាត់',cutBal:'នៅសល់',
+  lineLoad:'បន្ទុកខ្សែ',dailyOut:'ថ្ងៃ',weekOut:'សប្តាហ៍',monOut:'ខែ',styleByLine:'ម៉ូដែល×ខ្សែ',
+  custByLine:'អតិថិជន×ខ្សែ',poByLine:'PO×ខ្សែ',lineRiskList:'ហានិភ័យខ្សែ',
+  shipDaily:'ដឹកថ្ងៃ',shipWeek:'ដឹកសប្តាហ៍',shipMon:'ដឹកខែ',shipYear:'ដឹកឆ្នាំ',overdueList:'ហួសកំណត់',
+  custUnship:'អតិថិជនមិនដឹក',poUnship:'PO មិនដឹក',fgWait:'FG រង់ចាំ',etdRisk:'ETD ហានិភ័យ',dueSoon:'ជិតដល់',
+  cmpTitle:'ប្រៀបធៀបផលិតកម្ម',cmpReadPlan:'អាន Plan Capacity',cmpImportJson:'នាំចូល JSON',cmpImportXlsx:'នាំចូល Excel',
+  cmpPaste:'បិទភ្ជាប់ JSON',cmpParse:'ញែក',cmpNoPlan:'មិនទាន់មាន Plan',cmpExport:'នាំចេញ Compare',
+  cmpPlanQty:'Plan Qty',cmpDemand:'តម្រូវការ',cmpCutAvail:'កាត់មាន',cmpSewInput:'ដេរ Input',cmpPacked:'ខ្ចប់',
+  cmpShipped:'ដឹករួច',cmpUnship:'មិនដឹក',cmpGapPlan:'Gap Plan',cmpGapCut:'Gap Cut',cmpGapShip:'Gap Ship',cmpRisk:'ហានិភ័យ',
+  addRec:'➕ បន្ថែម',edit:'កែ',del:'លុប',batchDel:'លុបច្រើន',confirmDel:'លុប?',selected:'បានជ្រើស',
+  expExcel:'📤 Excel',expCsv:'⬇ CSV',expJson:'📦 JSON',expCmp:'🔁 Compare',expFiltered:'នាំចេញតម្រង',
+  expDaily:'របាយការណ៍ថ្ងៃ',expWeekly:'របាយការណ៍សប្តាហ៍',expMonthly:'របាយការណ៍ខែ',expYearly:'របាយការណ៍ឆ្នាំ',
+  setLang:'ភាសា',setGas:'GAS URL',setTg:'Telegram Chat ID',setKey:'Module Key',
+  setCloud:'ធ្វើសមកាលកម្ម',setBackup:'បម្រុងទុក',setDaily:'ផលិតថ្ងៃ',setMonthly:'ផលិតខែ',
+  bkJson:'💾 បម្រុង',rsJson:'📂 ស្តារ',clUp:'☁️ ផ្ទុកឡើង',clDown:'⬇️ ទាញ',clSync:'🔄 សមកាល',
+  clDev:'ផ្ទៃពពករក្សាទុក; ត្រូវការ GAS។',noGas:'មិនទាន់កំណត់ GAS',on:'បើក',off:'បិទ',
+  save:'រក្សាទុក',cancel:'បោះបង់',saved:'បានរក្សាទុក',deleted:'បានលុប',imported:'បាននាំចូល',calc:'កំពុងដំណើរការ...',
+  demandBy:'តម្រូវការតាម ETD; ដឹកតាម Shipped Date',noEtd:'(គ្មាន ETD)',
+  reqToday:'គួរដឹក',actShip:'ដឹកពិត',pending:'រង់ចាំ',
+  tip_marker:'Marker: គំនូសកាត់ក្រណាត់។',tip_wip:'WIP: ទំនិញកំពុងផលិត។',
+  tip_fg:'FG: ទំនិញរួច។',tip_lt:'Lead Time: ចំនួនថ្ងៃ។',
+  tip_cap:'Capacity: ចំនួនផលិត។',tip_uncut:'Uncut: មិនទាន់កាត់។',tip_unship:'Unshipped: មិនទាន់ដឹក។'
+ }
+};
+function t(k){return (I18N[SETTINGS.lang]&&I18N[SETTINGS.lang][k])||(I18N.zh[k])||k;}
+function toggleLang(){SETTINGS.lang=SETTINGS.lang==='zh'?'en':SETTINGS.lang==='en'?'km':'zh';saveSettings();applyLang();renderAll();}
+function applyLang(){
+  document.getElementById('langTag').textContent=SETTINGS.lang==='zh'?'中':SETTINGS.lang==='en'?'EN':'ខ្មែរ';
+  document.getElementById('hSub').textContent=t('sysSub');
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+  buildTabs();
+}
+/* ── 正規化 ─────────────────────────────────────────────────────────────── */
+function normCustomer(v){return String(v==null?'':v).trim().replace(/\s+/g,' ').toUpperCase();}
+function normText(v){return String(v==null?'':v).trim();}
+function normGarment(v){
+  let s=String(v==null?'':v).trim().toUpperCase();
+  if(!s)return 'OTHER';
+  if(/APRON/.test(s))return 'APRON';
+  if(/NAPKIN|SERVIETTE/.test(s))return 'NAPKIN';
+  if(/\bTOP\b|SHIRT|JACKET|POLO|BLOUSE/.test(s))return 'TOP';
+  if(/GARMENT|PANT|TROUSER|COAT|UNIFORM|GOWN|SCRUB|COVERALL/.test(s))return 'GARMENT';
+  return GARMENT_KEYS.includes(s)?s:'OTHER';
+}
+function styleKey(v){return String(v==null?'':v).trim().toUpperCase().replace(/[\s\-_.]/g,'');}
+function hasLetter(s){return /[A-Za-z\u4e00-\u9fff\u1780-\u17ff]/.test(String(s==null?'':s));}
+function isSummaryRow(r){
+  const c=String(r.customer||'').trim();
+  const cu=c.toUpperCase();
+  // 明確關鍵字總計列
+  if(/^(GRAND\s*TOTAL|TOTAL|SUB.?TOTAL|SUMMARY|TTL)\b/.test(cu))return true;
+  if(/^(合計|總計|小計|总计|合计|總數|总数|總合|合計數)/.test(c))return true;
+  // 客戶欄不含任何字母（英/中/高棉）→ 佔位/總計/雜訊列（例如整表總計列 customer/po/style/size 全填 "1"）
+  if(c!=='' && !hasLetter(c))return true;
+  // 客戶欄空白但 style/po 也不含字母，且有大量數量（無主體的總計列）
+  if(c==='' && !hasLetter(r.po) && !hasLetter(r.style) && num(r.openQty)>0)return true;
+  return false;
+}
+function isEmptyRow(r){return !((r.customer||'').trim()||(r.po||'').trim()||(r.style||'').trim())|| (num(r.openQty)===0 && !(r.customer||'').trim());}
+
+/* 由陣列列建立 record（依 COLMAP 固定索引）*/
+function rowToRecord(arr){
+  const rec={id:uid(),_raw:{}};
+  COLMAP.forEach(([field,idx,type])=>{
+    let v=arr[idx];
+    if(type==='num')rec[field]=num(v);
+    else if(type==='date')rec[field]=parseAnyDate(v);
+    else if(type==='raw')rec[field]=(v==null?'':String(v).trim());
+    else rec[field]=normText(v);
+  });
+  rec.customer=normCustomer(rec.customer);
+  rec.garmentType=normGarment(rec.garmentType);
+  rec.style=normText(rec.style);
+  rec.styleKey=styleKey(rec.style);
+  rec.color=normText(rec.color);
+  rec.size=normText(rec.size);
+  rec.po=normText(rec.po);
+  rec.lineNo=normText(rec.lineNo);
+  return rec;
+}
+function dupKey(r){return [r.customer,r.po,r.styleKey,r.color,r.size,r.garmentType,num(r.openQty)].join('|');}
+
+/* ── 記錄衍生計算 ───────────────────────────────────────────────────────── */
+function derive(r){
+  const openQty=num(r.openQty);
+  const acs=num(r.actualCutStock)|| (num(r.actualCutPcs)+num(r.cutStock));
+  const uncut=r.uncutQty!=null&&r.uncutQty!==''?num(r.uncutQty):Math.max(openQty-acs,0);
+  const totalShipped=num(r.totalShipped)||num(r.shippedQty);
+  const openOrderPcs=r.openOrderPcs!=null&&num(r.openOrderPcs)>0?num(r.openOrderPcs):Math.max(openQty-totalShipped,0);
+  const reqNotCut=num(r.fabricReqPerNotCut);
+  const fabStock=num(r.fabricStockYds);
+  const fabShort=Math.max(reqNotCut-fabStock,0);
+  const fabCover=reqNotCut>0?fabStock/reqNotCut:1;
+  const cutComp=openQty>0?acs/openQty:0;
+  const cutShort=Math.max(openQty-acs,0);
+  const overCut=Math.max(acs-openQty*1.0,0);
+  const d={openQty,acs,uncut,totalShipped,openOrderPcs,reqNotCut,fabStock,fabShort,fabCover,
+    cutComp,cutShort,overCut,
+    packed:num(r.totalPacked),input:num(r.qtyInput),fg:num(r.stockFgPcs),cutWip:num(r.cuttingWip),
+    notSew:num(r.actualNotSewing),totYds:num(r.totalYdsRequired),marker:num(r.planToMarkerRoom),
+    recut:num(r.recutOver)};
+  // 狀態 badge
+  let st='nodata';
+  if(openQty<=0)st='nodata';
+  else if(totalShipped>=openQty)st='shipped';
+  else if(fabShort>0)st='fabric';
+  else if(uncut>0||acs<openQty)st='cutting';
+  else if(r.etd&&r.etd<TODAY&&openOrderPcs>0)st='risk';
+  else if(r.etd&&daysBetween(TODAY,r.etd)>=0&&daysBetween(TODAY,r.etd)<=7&&openOrderPcs>0)st='watch';
+  else st='ok';
+  d.status=st;
+  d.overdue=(r.etd&&r.etd<TODAY&&openOrderPcs>0);
+  d.dueSoon=(r.etd&&daysBetween(TODAY,r.etd)>=0&&daysBetween(TODAY,r.etd)<=7&&openOrderPcs>0);
+  return d;
+}
+function daysBetween(a,b){let da=new Date(a+'T00:00:00'),db=new Date(b+'T00:00:00');if(isNaN(da)||isNaN(db))return NaN;return Math.round((db-da)/86400000);}
+const BADGE={ok:['b-ok','🟢',()=>t('bOK')],watch:['b-watch','🟡',()=>t('bWatch')],risk:['b-risk','🔴',()=>t('bRisk')],
+  nodata:['b-nodata','⚫',()=>t('bNoData')],shipped:['b-shipped','🔵',()=>t('bShipped')],
+  fabric:['b-fabric','🟠',()=>t('bFabShort')],cutting:['b-cutting','🟣',()=>t('bCutShort')]};
+function badge(st){const b=BADGE[st]||BADGE.nodata;return `<span class="badge ${b[0]}">${b[1]} ${esc(b[2]())}</span>`;}
+
+/* ── 事件建立 ───────────────────────────────────────────────────────────── */
+function buildEventsFor(rec){
+  const evs=[];
+  const ctx={id:rec.id,customer:rec.customer,po:rec.po,style:rec.style,color:rec.color,size:rec.size,
+    garmentType:rec.garmentType,actualCutPcs:num(rec.actualCutPcs),planToMarkerRoom:num(rec.planToMarkerRoom),
+    qtyInput:num(rec.qtyInput),qtyReceivedFromSewing:num(rec.qtyReceivedFromSewing),shippedQty:num(rec.shippedQty)||num(rec.totalShipped)};
+  RAW_EVENT_COLS.forEach(([col,proc])=>{
+    let raw=rec[col];
+    if(raw==null||raw==='')return;
+    parseTimeline(raw,proc,ctx).forEach(e=>evs.push(e));
+  });
+  // 若有 sewingPlanDate + qtyInput 但無 loading 事件 → 補一筆 sewing 估算
+  const hasSew=evs.some(e=>e.process==='loading'||e.process==='sewing');
+  if(!hasSew && rec.sewingPlanDate && num(rec.qtyInput)>0){
+    evs.push(mkEvent(rec.sewingPlanDate,'sewing',rec.lineNo?('Line '+rec.lineNo.replace(/\D/g,'')):'Unknown Line',num(rec.qtyInput),'[plan]'+rec.sewingPlanDate,'estimated',ctx));
+  }
+  return evs;
+}
+function rebuildEvents(){EVENTS=[];RECORDS.forEach(r=>{buildEventsFor(r).forEach(e=>EVENTS.push(e));});}
+
+/* ── IndexedDB ──────────────────────────────────────────────────────────── */
+function openIDB(){
+  const build=db=>{
+    [ST_REC,ST_EVT].forEach(s=>{if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'id'});});
+    [ST_SUM,ST_SET].forEach(s=>{if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'k'});});
+    if(!db.objectStoreNames.contains(ST_HIS))db.createObjectStore(ST_HIS,{keyPath:'id'});
+  };
+  const NEED=[ST_REC,ST_EVT,ST_SUM,ST_SET,ST_HIS];
+  const tryOpen=ver=>new Promise((r2,j2)=>{
+    const rq=ver?indexedDB.open(DB_NAME,ver):indexedDB.open(DB_NAME);
+    rq.onupgradeneeded=e=>build(e.target.result);
+    rq.onsuccess=e=>r2(e.target.result);rq.onerror=()=>j2(rq.error);
+  });
+  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
+  return tryOpen(1)
+    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
+    .then(db=>{ if(NEED.every(s=>db.objectStoreNames.contains(s))) return db;
+      const nv=db.version+1; db.close(); return tryOpen(nv); });
+}
+async function idbSaveAll(){
+  try{const db=await openIDB();
+    const tx=db.transaction([ST_REC,ST_EVT,ST_SET],'readwrite');
+    const sr=tx.objectStore(ST_REC);sr.clear();RECORDS.forEach(r=>sr.put(r));
+    const se=tx.objectStore(ST_EVT);se.clear();EVENTS.forEach(e=>se.put(e));
+    tx.objectStore(ST_SET).put({k:'main',v:SETTINGS});
+    return new Promise(r=>{tx.oncomplete=()=>r();tx.onerror=()=>r();});
+  }catch(e){console.warn('idbSaveAll',e);}
+}
+async function idbLoadAll(){
+  try{const db=await openIDB();
+    const tx=db.transaction([ST_REC,ST_EVT,ST_SET],'readonly');
+    RECORDS=await new Promise(r=>{const q=tx.objectStore(ST_REC).getAll();q.onsuccess=()=>r(q.result||[]);q.onerror=()=>r([]);});
+    EVENTS=await new Promise(r=>{const q=tx.objectStore(ST_EVT).getAll();q.onsuccess=()=>r(q.result||[]);q.onerror=()=>r([]);});
+    const s=await new Promise(r=>{const q=tx.objectStore(ST_SET).get('main');q.onsuccess=()=>r(q.result?q.result.v:null);q.onerror=()=>r(null);});
+    if(s)SETTINGS={...SETTINGS,...s};
+    if(RECORDS.length&&!EVENTS.length)rebuildEvents();
+  }catch(e){console.warn('idbLoadAll',e);RECORDS=[];EVENTS=[];}
+}
+async function persist(){await idbSaveAll();saveSettings();saveHistory();refreshHeader();}
+function saveSettings(){try{localStorage.setItem(LS_SET,JSON.stringify(SETTINGS));}catch(e){}}
+function loadSettings(){try{const s=JSON.parse(localStorage.getItem(LS_SET)||'null');if(s)SETTINGS={...SETTINGS,...s};}catch(e){}
+  SETTINGS.moduleKey='custstats';  // 與 Portal/GAS 統一頻道名
+  if(!SETTINGS.gasUrl){const pu=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(pu)SETTINGS.gasUrl=pu;}}
+function saveHistory(){try{localStorage.setItem(LS_HIST,JSON.stringify(IMPORT_HISTORY));}catch(e){}}
+function loadHistory(){try{IMPORT_HISTORY=JSON.parse(localStorage.getItem(LS_HIST)||'[]');}catch(e){IMPORT_HISTORY=[];}}
+function saveFilter(){try{localStorage.setItem(LS_FILTER,JSON.stringify({GF,MODE,CUR_PERIOD}));}catch(e){}}
+
+/* ── 匯入 ───────────────────────────────────────────────────────────────── */
+let PENDING_ROWS=null;
+function pickSheet(wb){
+  // 找 ALL CUSTOMER；找不到就取第一個資料量最大的分頁
+  let names=wb.SheetNames;
+  let hit=names.find(n=>/ALL\s*CUSTOMER/i.test(n));
+  if(hit)return hit;
+  hit=names.find(n=>/CUSTOMER/i.test(n)&&!/SUMMARY|MASTER|FABRIC|LIST/i.test(n));
+  return hit||names[0];
+}
+function parseWorkbook(wb){
+  const sn=pickSheet(wb);
+  const ws=wb.Sheets[sn];
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,cellDates:false,defval:''});
+  // 表頭在第3/4列合併，資料從第5列（index 4）
+  const rows=aoa.slice(4);
+  const recs=[];let noDate=0,abn=0;
+  rows.forEach(arr=>{
+    if(!arr||!arr.length)return;
+    const rec=rowToRecord(arr);
+    if(isEmptyRow(rec))return;
+    if(isSummaryRow(rec))return;
+    // 異常偵測
+    if(num(rec.qtyInput)>num(rec.actualCutStock)+1 && num(rec.actualCutStock)>0)rec._abn=true,abn++;
+    // 無法解析日期
+    RAW_EVENT_COLS.forEach(([col])=>{let v=rec[col];if(v){let ev=parseTimeline(v,'x',{});if(ev.every(e=>e.parseStatus==='unparsed'))noDate++;}});
+    recs.push(rec);
+  });
+  return {sheetName:sn,records:recs,noDate,abn};
+}
+function handleFiles(files){
+  const arr=[...files];if(!arr.length)return;
+  let all=[],meta=[];
+  let done=0;
+  arr.forEach(f=>{
+    const rd=new FileReader();
+    rd.onload=e=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false});
+        const res=parseWorkbook(wb);
+        all=all.concat(res.records);meta.push({file:f.name,sheet:res.sheetName,count:res.records.length,noDate:res.noDate,abn:res.abn});
+      }catch(err){toast('解析失敗: '+f.name,'err');console.warn(err);}
+      if(++done===arr.length){PENDING_ROWS={records:all,meta};previewImport();}
+    };
+    rd.readAsArrayBuffer(f);
+  });
+}
+function previewImport(){
+  const {records,meta}=PENDING_ROWS;
+  const existing=new Set(RECORDS.map(dupKey));
+  let newN=0,dupN=0,abnN=0,noDateN=0;
+  records.forEach(r=>{if(existing.has(dupKey(r)))dupN++;else newN++;if(r._abn)abnN++;});
+  meta.forEach(m=>noDateN+=m.noDate);
+  PENDING_ROWS.stat={total:records.length,newN,dupN,abnN,noDateN};
+  const el=document.getElementById('import');
+  const prev=records.slice(0,20);
+  el.querySelector('#impPreviewBox').innerHTML=`
+    <div class="imp-stat">
+      <div class="s"><b>${fmt(records.length)}</b><span>${t('impTotal')}</span></div>
+      <div class="s"><b style="color:#059669">${fmt(newN)}</b><span>${t('impNew')}</span></div>
+      <div class="s"><b style="color:#d97706">${fmt(dupN)}</b><span>${t('impDup')}</span></div>
+      <div class="s"><b style="color:#dc2626">${fmt(abnN)}</b><span>${t('impAbn')}</span></div>
+      <div class="s"><b style="color:#7c3aed">${fmt(noDateN)}</b><span>${t('impNoDate')}</span></div>
+    </div>
+    <div class="btnrow" style="margin:12px 0">
+      <button class="btn btn-y" onclick="confirmImport()">${t('impConfirm')}</button>
+      <button class="btn btn-g" onclick="cancelImport()">${t('impReparse')}</button>
+    </div>
+    <div class="ct">${t('impPreview')}</div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('color')}</th><th>${t('size')}</th>
+      <th class="num">${t('openQty')}</th><th>${t('fabric')}</th><th class="num">${t('cut')}</th><th class="num">${t('shipped')}</th><th>ETD</th>
+    </tr></thead><tbody>${prev.map(r=>`<tr>
+      <td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td><td>${esc(r.color)}</td><td>${esc(r.size)}</td>
+      <td class="num">${fmt(r.openQty)}</td><td>${esc(r.fabricItem||r.fabricType)}</td><td class="num">${fmt(r.actualCutStock)}</td>
+      <td class="num">${fmt(r.totalShipped)}</td><td>${esc(r.etd)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function cancelImport(){PENDING_ROWS=null;renderImport();}
+function confirmImport(){
+  if(!PENDING_ROWS)return;
+  const {records}=PENDING_ROWS;
+  const existing=new Map(RECORDS.map(r=>[dupKey(r),r]));
+  const dups=records.filter(r=>existing.has(dupKey(r)));
+  if(dups.length){PENDING={records,existing,mode:null};askDup(dups.length);return;}
+  applyImport(records,existing,'add');
+}
+function askDup(n){
+  showModal(`<div class="modal-t">${t('dupTitle')}<button class="mclose" onclick="closeModal()">×</button></div>
+    <div class="al al-w">${t('dupBody')}<br><b>${n}</b> ${t('impDup')}</div>
+    <div class="btnrow" style="justify-content:flex-end">
+      <button class="btn btn-g" onclick="resolveDup('skip')">${t('dupSkip')}</button>
+      <button class="btn btn-b" onclick="resolveDup('rev')">${t('dupRev')}</button>
+      <button class="btn btn-r" onclick="resolveDup('replace')">${t('dupReplace')}</button>
+    </div>`);
+}
+function resolveDup(mode){closeModal();applyImport(PENDING.records,PENDING.existing,mode);}
+function applyImport(records,existing,mode){
+  let added=0,replaced=0,skipped=0;
+  records.forEach(r=>{
+    const k=dupKey(r);
+    if(existing.has(k)){
+      if(mode==='skip'){skipped++;return;}
+      if(mode==='replace'){const old=existing.get(k);r.id=old.id;const i=RECORDS.findIndex(x=>x.id===old.id);if(i>=0)RECORDS[i]=r;replaced++;return;}
+      if(mode==='rev'){r.style=r.style+' (REV)';r.styleKey=styleKey(r.style);RECORDS.push(r);existing.set(dupKey(r),r);added++;return;}
+    }
+    RECORDS.push(r);existing.set(k,r);added++;
+  });
+  rebuildEvents();
+  IMPORT_HISTORY.unshift({id:uid(),ts:nowStamp(),files:(PENDING_ROWS?PENDING_ROWS.meta.map(m=>m.file).join(', '):''),added,replaced,skipped,total:records.length});
+  IMPORT_HISTORY=IMPORT_HISTORY.slice(0,40);
+  PENDING_ROWS=null;PENDING=null;
+  persist();toast(`${t('imported')}: +${added} ⟳${replaced} ⊘${skipped}`,'ok');
+  goTab('dashboard');renderAll();
+}
+
+/* ── 篩選 + 聚合 ────────────────────────────────────────────────────────── */
+function filteredRecords(){
+  return RECORDS.filter(r=>{
+    if(GF.cust&&r.customer!==GF.cust)return false;
+    if(GF.garment&&r.garmentType!==GF.garment)return false;
+    if(GF.po&&r.po!==GF.po)return false;
+    if(GF.style&&r.style!==GF.style)return false;
+    if(GF.size&&r.size!==GF.size)return false;
+    if(GF.fabric&&(r.fabricItem!==GF.fabric&&r.fabricType!==GF.fabric))return false;
+    if(GF.line&&normText(r.lineNo)!==GF.line)return false;
+    return true;
+  });
+}
+function filteredEvents(){
+  const recIds=new Set(filteredRecords().map(r=>r.id));
+  return EVENTS.filter(e=>recIds.has(e.recId)).filter(e=>{
+    if(GF.line&&e.line!==GF.line)return false;
+    return true;
+  });
+}
+/* KPI 計算 */
+function computeKPI(list){
+  const D=list.map(derive);
+  const S=(f)=>D.reduce((s,d)=>s+(+d[f]||0),0);
+  return {
+    totalOrder:S('openQty'),
+    openOrder:S('openOrderPcs'),
+    actualCut:S('acs'),
+    uncut:S('uncut'),
+    input:S('input'),
+    packed:S('packed'),
+    shipped:S('totalShipped'),
+    unshipped:S('openOrderPcs'),
+    fg:S('fg'),
+    cutWip:S('cutWip'),
+    notSew:S('notSew'),
+    fabReq:S('reqNotCut'),
+    fabStock:S('fabStock'),
+    fabShort:S('fabShort'),
+    custN:uniq(list,r=>r.customer).length,
+    poN:uniq(list,r=>r.po).length,
+    styleN:uniq(list,r=>r.styleKey).length,
+    sizeN:uniq(list,r=>r.size).length,
+    lineN:uniq(list,r=>normText(r.lineNo)).filter(Boolean).length,
+    overdueN:D.filter(d=>d.overdue).length
+  };
+}
+/* 依維度加總 */
+function groupSum(list,keyFn){
+  const m={};
+  list.forEach(r=>{const k=keyFn(r);if(k==null||k==='')return;const d=derive(r);
+    if(!m[k])m[k]={key:k,openQty:0,acs:0,uncut:0,input:0,packed:0,shipped:0,unship:0,fg:0,cutWip:0,notSew:0,
+      fabReq:0,fabStock:0,fabShort:0,marker:0,recs:[]};
+    const o=m[k];
+    o.openQty+=d.openQty;o.acs+=d.acs;o.uncut+=d.uncut;o.input+=d.input;o.packed+=d.packed;
+    o.shipped+=d.totalShipped;o.unship+=d.openOrderPcs;o.fg+=d.fg;o.cutWip+=d.cutWip;o.notSew+=d.notSew;
+    o.fabReq+=d.reqNotCut;o.fabStock+=d.fabStock;o.fabShort+=d.fabShort;o.marker+=d.marker;o.recs.push(r);
+  });
+  return Object.values(m);
+}
+/* 事件依日期聚合（process 分列）*/
+function eventPeriodSum(evList,mode){
+  const m={};
+  evList.forEach(e=>{
+    const key=e.date?periodKeyOf(e.date,mode):'(no-date)';
+    if(!m[key])m[key]={key,marker:0,cutting:0,sewing:0,loading:0,receiving:0,shipping:0,total:0};
+    m[key][e.process]=(m[key][e.process]||0)+e.qty;m[key].total+=e.qty;
+  });
+  return Object.values(m).sort((a,b)=>a.key<b.key?-1:1);
+}
+/* ── Tabs / 導覽 ────────────────────────────────────────────────────────── */
+const TABS=[['dashboard','tabDashboard'],['import','tabImport'],['daily','tabDaily'],['weekly','tabWeekly'],
+  ['monthly','tabMonthly'],['yearly','tabYearly'],['custprod','tabCust'],['postyle','tabPo'],['fabric','tabFabric'],
+  ['cutting','tabCut'],['line','tabLine'],['shipping','tabShip'],['compare','tabCompare'],['records','tabRecords'],['settings','tabSettings']];
+function buildTabs(){
+  document.getElementById('tabs').innerHTML=TABS.map(([id,k])=>
+    `<div class="tab ${id===CUR_TAB?'on':''}" data-tab="${id}" onclick="goTab('${id}')">${esc(t(k))}</div>`).join('');
+}
+function goTab(tab){CUR_TAB=tab;
+  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('on',el.dataset.tab===tab));
+  document.querySelectorAll('.pane').forEach(el=>el.classList.toggle('on',el.id===tab));
+  renderTab(tab);window.scrollTo(0,0);
+}
+function renderTab(tab){const r={dashboard:renderDashboard,import:renderImport,daily:renderDaily,weekly:renderWeekly,
+  monthly:renderMonthly,yearly:renderYearly,custprod:renderCustProd,postyle:renderPoStyle,fabric:renderFabric,
+  cutting:renderCutting,line:renderLine,shipping:renderShipping,compare:renderCompare,records:renderRecords,settings:renderSettings}[tab];
+  if(r)r();}
+function renderAll(){applyLang();refreshHeader();renderModebar();renderTab(CUR_TAB);}
+function refreshHeader(){
+  document.getElementById('hRecs').textContent=fmt(RECORDS.length);
+  document.getElementById('hOpen').textContent=fmt(sum(RECORDS.map(derive),d=>d.openOrderPcs));
+  document.getElementById('hCust').textContent=uniq(RECORDS,r=>r.customer).length;
+}
+
+/* ── 模式 / 週期 ────────────────────────────────────────────────────────── */
+function setMode(m){MODE=m;document.querySelectorAll('#modeSw button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  ensurePeriod();renderModebar();saveFilter();
+  if(['daily','weekly','monthly','yearly','dashboard','line','shipping'].includes(CUR_TAB))renderTab(CUR_TAB);}
+function ensurePeriod(){
+  const dates=RECORDS.map(r=>r.etd||r.shippedDateRaw&&parseAnyDate(r.shippedDateRaw)||r.poDate).filter(Boolean).sort();
+  const ref=CUR_PERIOD&&isValidRef(CUR_PERIOD,MODE)?refToDate(CUR_PERIOD):(dates.length?dates[dates.length-1]:TODAY);
+  CUR_PERIOD=periodKeyOf(ref||TODAY,MODE);
+}
+function isValidRef(p,mode){if(mode==='day')return /^\d{4}-\d{2}-\d{2}$/.test(p);if(mode==='week')return /^\d{4}-W\d{2}$/.test(p);if(mode==='month')return /^\d{4}-\d{2}$/.test(p);return /^\d{4}$/.test(p);}
+function refToDate(p){if(/^\d{4}-W\d{2}$/.test(p)){let b=weekBounds(p);return b?b.start:TODAY;}if(/^\d{4}-\d{2}$/.test(p))return p+'-01';if(/^\d{4}$/.test(p))return p+'-01-01';return p;}
+function periodNav(dir){
+  let d=new Date(refToDate(CUR_PERIOD)+'T00:00:00');
+  if(MODE==='day')d.setDate(d.getDate()+dir);
+  else if(MODE==='week')d.setDate(d.getDate()+7*dir);
+  else if(MODE==='month')d.setMonth(d.getMonth()+dir);
+  else d.setFullYear(d.getFullYear()+dir);
+  CUR_PERIOD=periodKeyOf(fmtDate(d),MODE);renderModebar();saveFilter();renderTab(CUR_TAB);
+}
+function periodToday(){CUR_PERIOD=periodKeyOf(TODAY,MODE);renderModebar();saveFilter();renderTab(CUR_TAB);}
+function renderModebar(){ensurePeriod();
+  let label=CUR_PERIOD;
+  if(MODE==='week'){let b=weekBounds(CUR_PERIOD);if(b)label=CUR_PERIOD+' ('+b.start.slice(5)+'~'+b.end.slice(5)+')';}
+  document.getElementById('periodCur').textContent=label;
+}
+function inPeriod(ymd){if(!ymd)return false;return periodKeyOf(ymd,MODE)===CUR_PERIOD;}
+
+/* ── 共用篩選列 ─────────────────────────────────────────────────────────── */
+function optList(vals,cur,allLabel){const arr=[...new Set(vals.filter(v=>v!=null&&v!==''))].sort();
+  return `<option value="">${esc(allLabel)}</option>`+arr.map(v=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)}</option>`).join('');}
+function filterBar(){
+  return `<div class="filt">
+    <label class="fl">${t('cust')}<select onchange="GF.cust=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>r.customer),GF.cust,t('allCust'))}</select></label>
+    <label class="fl">${t('garment')}<select onchange="GF.garment=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>r.garmentType),GF.garment,t('allGarment'))}</select></label>
+    <label class="fl">${t('po')}<select onchange="GF.po=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>r.po),GF.po,t('allPo'))}</select></label>
+    <label class="fl">${t('style')}<select onchange="GF.style=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>r.style),GF.style,t('allStyle'))}</select></label>
+    <label class="fl">${t('size')}<select onchange="GF.size=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>r.size),GF.size,t('allSize'))}</select></label>
+    <label class="fl">${t('fabric')}<select onchange="GF.fabric=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>r.fabricItem||r.fabricType),GF.fabric,t('allFabric'))}</select></label>
+    <label class="fl">${t('line')}<select onchange="GF.line=this.value;saveFilter();renderTab(CUR_TAB)">${optList(RECORDS.map(r=>normText(r.lineNo)),GF.line,t('allLine'))}</select></label>
+    <button class="btn btn-g btn-sm" onclick="resetFilter()">${t('reset')}</button>
+  </div>`;
+}
+function resetFilter(){GF={cust:'',garment:'',po:'',style:'',size:'',fabric:'',line:''};saveFilter();renderTab(CUR_TAB);}
+function emptyState(pane){document.getElementById(pane).innerHTML=`<div class="card"><div class="empty">
+  <div class="empty-i">📊</div><div style="font-size:15px;font-weight:600">${t('empty')}</div>
+  <div style="margin:8px 0 16px">${t('emptyHint')}</div>
+  <button class="btn btn-y" onclick="goTab('import')">${t('goImport')}</button></div></div>`;}
+
+/* ── 圖表 helper ────────────────────────────────────────────────────────── */
+const PALETTE=['#f59e0b','#3b82f6','#10b981','#8b5cf6','#ef4444','#e67e22','#06b6d4','#ec4899','#84cc16','#6366f1'];
+function mkChart(id,cfg){if(CHARTS[id]){CHARTS[id].destroy();}const c=document.getElementById(id);if(!c)return;CHARTS[id]=new Chart(c,cfg);}
+function barRow(name,val,max,cls){const w=max>0?Math.max(val/max*100,1):0;
+  return `<div class="bar-row"><div class="bar-lb">${esc(name)}</div><div class="bar-tk"><div class="bar-in ${cls||''}" style="width:${w}%"></div></div><div class="bar-vl">${fmt(val)}</div></div>`;}
+
+/* ── Dashboard ──────────────────────────────────────────────────────────── */
+function kpiCard(cls,val,unit,label){return `<div class="kpi ${cls}"><div class="kpi-n">${val}<span class="kpi-u">${unit||''}</span></div><div class="kpi-l">${label}</div></div>`;}
+function renderDashboard(){
+  if(!RECORDS.length)return emptyState('dashboard');
+  const list=filteredRecords();const K=computeKPI(list);
+  const el=document.getElementById('dashboard');
+  el.innerHTML=`${filterBar()}
+  <div class="kpis">
+    ${kpiCard('','<span>'+fmt(K.totalOrder)+'</span>','pcs',t('kTotalOrder'))}
+    ${kpiCard('a',fmt(K.openOrder),'pcs',t('kOpenOrder'))}
+    ${kpiCard('c',fmt(K.actualCut),'pcs',t('kActualCut'))}
+    ${kpiCard('p',fmt(K.uncut),'pcs',t('kUncut'))}
+    ${kpiCard('b',fmt(K.input),'pcs',t('kQtyInput'))}
+    ${kpiCard('',fmt(K.packed),'pcs',t('kPacked'))}
+    ${kpiCard('g',fmt(K.shipped),'pcs',t('kShipped'))}
+    ${kpiCard('r',fmt(K.unshipped),'pcs',t('kUnshipped'))}
+    ${kpiCard('b',fmt(K.fg),'pcs','<span class="tip" data-tip="'+esc(t('tip_fg'))+'">'+t('kFgStock')+'</span>')}
+    ${kpiCard('p',fmt(K.cutWip),'pcs','<span class="tip" data-tip="'+esc(t('tip_wip'))+'">'+t('kCutWip')+'</span>')}
+    ${kpiCard('',fmt(K.notSew),'pcs',t('kNotSewing'))}
+    ${kpiCard('o',fmt(K.fabReq),'yds',t('kFabReq'))}
+    ${kpiCard('o',fmt(K.fabStock),'yds',t('kFabStock'))}
+    ${kpiCard('r',fmt(K.fabShort),'yds',t('kFabShort'))}
+    ${kpiCard('',fmt(K.custN),'',t('kCust'))}
+    ${kpiCard('',fmt(K.poN),'',t('kPo'))}
+    ${kpiCard('',fmt(K.styleN),'',t('kStyle'))}
+    ${kpiCard('',fmt(K.sizeN),'',t('kSize'))}
+    ${kpiCard('',fmt(K.lineN),'',t('kLine'))}
+    ${kpiCard('r',fmt(K.overdueN),'',t('kOverdue'))}
+  </div>
+  ${dashMgmt(K,list)}
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('custShare')}</div><div class="chartbox"><canvas id="chCust"></canvas></div></div>
+    <div class="card"><div class="ct">${t('prodShare')}</div><div class="chartbox"><canvas id="chProd"></canvas></div></div>
+  </div>
+  <div class="card"><div class="ct">${t('monTrend')}</div><div class="chartbox tall"><canvas id="chTrend"></canvas></div></div>
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('fabTop')}</div><div class="chartbox"><canvas id="chFab"></canvas></div></div>
+    <div class="card"><div class="ct">${t('cutTop')}</div><div class="chartbox"><canvas id="chCut"></canvas></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('unshipTop')}</div><div class="chartbox"><canvas id="chUnship"></canvas></div></div>
+    <div class="card"><div class="ct">${t('fgVsUn')}</div><div class="chartbox"><canvas id="chFgUn"></canvas></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('lineTrend')}</div><div class="chartbox"><canvas id="chLine"></canvas></div></div>
+    <div class="card"><div class="ct">${t('ltDist')}</div><div class="chartbox"><canvas id="chLT"></canvas></div></div>
+  </div>
+  <div class="card"><div class="ct">🔴 ${t('riskList')}</div>${riskTable(list)}</div>`;
+  drawDashCharts(list);
+}
+function dashMgmt(K,list){
+  const cutPct=pct(K.actualCut,K.totalOrder),inPct=pct(K.input,K.totalOrder),shipPct=pct(K.shipped,K.totalOrder);
+  const topCust=groupSum(list,r=>r.customer).sort((a,b)=>b.openQty-a.openQty)[0];
+  return `<div class="card"><div class="ct">📝 ${t('mgmt')}</div>
+    <div class="al al-i">${t('demandBy')}</div>
+    <div class="grid3">
+      <div class="split"><span>${t('kActualCut')} %</span><b>${cutPct}%</b></div>
+      <div class="split"><span>${t('kQtyInput')} %</span><b>${inPct}%</b></div>
+      <div class="split"><span>${t('kShipped')} %</span><b>${shipPct}%</b></div>
+    </div>
+    <div class="al ${K.fabShort>0?'al-w':'al-ok'}" style="margin-top:10px">
+      ${t('kFabShort')}: <b>${fmt(K.fabShort)}</b> yds ｜ ${t('kOverdue')}: <b>${K.overdueN}</b> ｜ ${topCust?('Top: '+esc(topCust.key)+' '+fmt(topCust.openQty)+' pcs'):''}
+    </div></div>`;
+}
+function riskTable(list){
+  const rows=list.map(r=>({r,d:derive(r)})).filter(x=>['risk','fabric','cutting'].includes(x.d.status))
+    .sort((a,b)=>b.d.openOrderPcs-a.d.openOrderPcs).slice(0,30);
+  if(!rows.length)return `<div class="empty" style="padding:24px"><div class="empty-i">✅</div>${t('bOK')}</div>`;
+  return `<div class="tblwrap"><table><thead><tr>
+    <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('size')}</th>
+    <th class="num">${t('openQty')}</th><th class="num">${t('uncut')}</th><th class="num">${t('shortYds')}</th>
+    <th class="num">${t('unshipped')}</th><th>ETD</th><th>${t('status')}</th></tr></thead><tbody>
+    ${rows.map(({r,d})=>`<tr><td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td><td>${esc(r.size)}</td>
+    <td class="num">${fmt(d.openQty)}</td><td class="num">${fmt(d.uncut)}</td><td class="num">${fmt(d.fabShort)}</td>
+    <td class="num">${fmt(d.openOrderPcs)}</td><td>${esc(r.etd)||'<span style="color:#b91c1c">'+t('noEtd')+'</span>'}</td><td>${badge(d.status)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function drawDashCharts(list){
+  // 客戶占比
+  const cs=groupSum(list,r=>r.customer).sort((a,b)=>b.openQty-a.openQty).slice(0,10);
+  mkChart('chCust',{type:'doughnut',data:{labels:cs.map(x=>x.key),datasets:[{data:cs.map(x=>x.openQty),backgroundColor:PALETTE}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:10}}}},maintainAspectRatio:false}});
+  // 產品類別
+  const ps=groupSum(list,r=>r.garmentType).sort((a,b)=>b.openQty-a.openQty);
+  mkChart('chProd',{type:'doughnut',data:{labels:ps.map(x=>x.key),datasets:[{data:ps.map(x=>x.openQty),backgroundColor:PALETTE}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:10}}}},maintainAspectRatio:false}});
+  // 月度趨勢：訂單(依ETD) / 裁 / 車 / 出貨(事件)
+  const evs=filteredEvents();
+  const months=[...new Set([...list.map(r=>monthKey(r.etd)).filter(Boolean),...evs.map(e=>monthKey(e.date)).filter(Boolean)])].sort();
+  const orderByM={},cutByM={},sewByM={},shipByM={};
+  list.forEach(r=>{if(r.etd){orderByM[monthKey(r.etd)]=(orderByM[monthKey(r.etd)]||0)+derive(r).openQty;}});
+  evs.forEach(e=>{if(!e.date)return;const m=monthKey(e.date);if(e.process==='cutting')cutByM[m]=(cutByM[m]||0)+e.qty;if(e.process==='sewing'||e.process==='loading')sewByM[m]=(sewByM[m]||0)+e.qty;if(e.process==='shipping')shipByM[m]=(shipByM[m]||0)+e.qty;});
+  mkChart('chTrend',{type:'line',data:{labels:months,datasets:[
+    {label:t('kTotalOrder'),data:months.map(m=>orderByM[m]||0),borderColor:'#3b82f6',tension:.3},
+    {label:t('cut'),data:months.map(m=>cutByM[m]||0),borderColor:'#8b5cf6',tension:.3},
+    {label:t('input'),data:months.map(m=>sewByM[m]||0),borderColor:'#f59e0b',tension:.3},
+    {label:t('shipped'),data:months.map(m=>shipByM[m]||0),borderColor:'#10b981',tension:.3}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}}}});
+  // 布料缺口 Top10（去重布號）
+  const fab=fabricShortageRank(list).slice(0,10);
+  mkChart('chFab',{type:'bar',data:{labels:fab.map(x=>x.key),datasets:[{label:'yds',data:fab.map(x=>x.fabShort),backgroundColor:'#e67e22'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+  // 裁剪缺口 Top10
+  const cut=groupSum(list,r=>r.customer+' / '+r.po).map(o=>({key:o.key,short:Math.max(o.openQty-o.acs,0)})).filter(x=>x.short>0).sort((a,b)=>b.short-a.short).slice(0,10);
+  mkChart('chCut',{type:'bar',data:{labels:cut.map(x=>x.key),datasets:[{label:'pcs',data:cut.map(x=>x.short),backgroundColor:'#8b5cf6'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+  // 未出客戶 Top10
+  const un=groupSum(list,r=>r.customer).map(o=>({key:o.key,un:o.unship})).sort((a,b)=>b.un-a.un).slice(0,10);
+  mkChart('chUnship',{type:'bar',data:{labels:un.map(x=>x.key),datasets:[{label:'pcs',data:un.map(x=>x.un),backgroundColor:'#ef4444'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+  // FG vs 未出
+  const cg=groupSum(list,r=>r.customer).sort((a,b)=>b.unship-a.unship).slice(0,8);
+  mkChart('chFgUn',{type:'bar',data:{labels:cg.map(x=>x.key),datasets:[
+    {label:t('kFgStock'),data:cg.map(x=>x.fg),backgroundColor:'#3b82f6'},
+    {label:t('kUnshipped'),data:cg.map(x=>x.unship),backgroundColor:'#ef4444'}]},options:{maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}}}});
+  // 線別每日產出趨勢（近期）
+  const byLineDate={};evs.filter(e=>e.date&&(e.process==='sewing'||e.process==='loading')).forEach(e=>{byLineDate[e.date]=(byLineDate[e.date]||0)+e.qty;});
+  const ds=Object.keys(byLineDate).sort().slice(-30);
+  mkChart('chLine',{type:'bar',data:{labels:ds,datasets:[{label:t('input'),data:ds.map(d=>byLineDate[d]),backgroundColor:'#f59e0b'}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+  // Lead time 分布（Sew→Ship days）
+  const lt={};list.forEach(r=>{let v=num(r.sewToShipDays);if(v>0){let b=v<=3?'0-3':v<=7?'4-7':v<=14?'8-14':v<=30?'15-30':'30+';lt[b]=(lt[b]||0)+1;}});
+  const ltl=['0-3','4-7','8-14','15-30','30+'];
+  mkChart('chLT',{type:'bar',data:{labels:ltl,datasets:[{label:'orders',data:ltl.map(k=>lt[k]||0),backgroundColor:'#06b6d4'}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+}
+
+/* ── Import 頁 ──────────────────────────────────────────────────────────── */
+function renderImport(){
+  const el=document.getElementById('import');
+  el.innerHTML=`
+  <div class="card"><div class="ct">📥 ${t('tabImport')}</div>
+    <div class="drop" id="drop" onclick="document.getElementById('fileInput').click()">
+      <div class="drop-i">📄</div><div class="drop-t">${t('dropTitle')}</div><div class="drop-s">${t('dropSub')}</div>
+    </div>
+    <div id="impPreviewBox"></div>
+  </div>
+  <div class="card"><div class="ct">🕑 ${t('impHistory')}</div>
+    ${IMPORT_HISTORY.length?IMPORT_HISTORY.map(h=>`<div class="imp-hist"><span>${esc(h.ts)} · ${esc(h.files||'')}</span><span>+${fmt(h.added)} ⟳${fmt(h.replaced||0)} ⊘${fmt(h.skipped||0)}</span></div>`).join(''):`<div class="empty" style="padding:20px">${t('noHist')}</div>`}
+  </div>`;
+  const drop=document.getElementById('drop');
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag');};
+  drop.ondragleave=()=>drop.classList.remove('drag');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');handleFiles(e.dataTransfer.files);};
+  if(PENDING_ROWS)previewImport();
+}
+
+/* ── 日/週/月/年 報 ─────────────────────────────────────────────────────── */
+function periodEventsAndRecords(){
+  // 該週期內：需求(依ETD歸期)、出貨(shippedDate)、事件(cut/sew...)
+  const list=filteredRecords();
+  const evs=filteredEvents().filter(e=>e.date&&inPeriod(e.date));
+  const demand=list.filter(r=>r.etd&&inPeriod(r.etd));
+  return {list,evs,demand};
+}
+function periodProcessSum(evs){
+  const o={marker:0,cutting:0,sewing:0,loading:0,receiving:0,shipping:0};
+  evs.forEach(e=>{o[e.process]=(o[e.process]||0)+e.qty;});
+  o.sew=o.sewing+o.loading;return o;
+}
+function renderPeriodReport(pane,titleKey){
+  if(!RECORDS.length)return emptyState(pane);
+  const {list,evs,demand}=periodEventsAndRecords();
+  const P=periodProcessSum(evs);
+  const reqShip=sum(demand.map(derive),d=>d.openQty);
+  const actShip=P.shipping;
+  const pending=Math.max(reqShip-actShip,0);
+  const el=document.getElementById(pane);
+  // detail rows in period
+  const detail=[...demand,...list.filter(r=>evs.some(e=>e.recId===r.id))];
+  const detailU=[...new Map(detail.map(r=>[r.id,r])).values()];
+  el.innerHTML=`${filterBar()}
+  <div class="al al-i">${t('demandBy')} ｜ <b>${esc(CUR_PERIOD)}</b></div>
+  <div class="kpis">
+    ${kpiCard('b',fmt(reqShip),'pcs',t('reqToday'))}
+    ${kpiCard('g',fmt(actShip),'pcs',t('actShip'))}
+    ${kpiCard('r',fmt(pending),'pcs',t('pending'))}
+    ${kpiCard('a',fmt(P.marker),'pcs',t('marker'))}
+    ${kpiCard('c',fmt(P.cutting),'pcs',t('cut'))}
+    ${kpiCard('p',fmt(demandUncut(demand)),'pcs',t('uncut'))}
+    ${kpiCard('',fmt(P.sew),'pcs',t('input'))}
+    ${kpiCard('',fmt(periodPacked(evs,demand)),'pcs',t('packed'))}
+    ${kpiCard('b',fmt(P.receiving),'pcs',t('line')+' out')}
+  </div>
+  <div class="card"><div class="ct">${esc(t(titleKey))} · ${esc(CUR_PERIOD)}</div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('color')}</th><th>${t('size')}</th>
+      <th class="num">${t('openQty')}</th><th class="num">${t('cut')}</th><th class="num">${t('uncut')}</th>
+      <th class="num">${t('input')}</th><th class="num">${t('packed')}</th><th class="num">${t('shipped')}</th>
+      <th>${t('line')}</th><th>ETD</th><th>${t('status')}</th></tr></thead><tbody>
+      ${detailU.slice(0,300).map(r=>{const d=derive(r);return `<tr><td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td>
+      <td>${esc(r.color)}</td><td>${esc(r.size)}</td><td class="num">${fmt(d.openQty)}</td><td class="num">${fmt(d.acs)}</td>
+      <td class="num">${fmt(d.uncut)}</td><td class="num">${fmt(d.input)}</td><td class="num">${fmt(d.packed)}</td>
+      <td class="num">${fmt(d.totalShipped)}</td><td>${esc(r.lineNo)}</td><td>${esc(r.etd)}</td><td>${badge(d.status)}</td></tr>`;}).join('')||`<tr><td colspan="14"><div class="empty" style="padding:20px">${t('empty')}</div></td></tr>`}
+    </tbody></table></div>
+  </div>
+  <div class="card"><div class="ct">📈 ${esc(t(titleKey))} — ${t('process')}</div><div class="chartbox"><canvas id="chPeriod"></canvas></div></div>`;
+  const labels=[t('marker'),t('cut'),t('input'),'Receiving',t('shipped')];
+  mkChart('chPeriod',{type:'bar',data:{labels,datasets:[{data:[P.marker,P.cutting,P.sew,P.receiving,P.shipping],backgroundColor:PALETTE}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+}
+function demandUncut(demand){return sum(demand.map(derive),d=>d.uncut);}
+function periodPacked(evs,demand){return sum(demand.map(derive),d=>d.packed);}
+function renderDaily(){setMode('day');renderPeriodReport('daily','tabDaily');}
+function renderWeekly(){setModeSilently('week');renderPeriodReport('weekly','tabWeekly');}
+function renderMonthly(){setModeSilently('month');renderPeriodReport('monthly','tabMonthly');}
+function renderYearly(){setModeSilently('year');renderYearReport();}
+function setModeSilently(m){if(MODE!==m){MODE=m;document.querySelectorAll('#modeSw button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));ensurePeriod();renderModebar();}}
+/* Daily 特別確保切到 day 模式（避免遞迴）*/
+(function(){const _rd=renderDaily;window.renderDaily=function(){setModeSilently('day');renderPeriodReport('daily','tabDaily');};})();
+
+function renderYearReport(){
+  if(!RECORDS.length)return emptyState('yearly');
+  const list=filteredRecords();const evs=filteredEvents();
+  const year=CUR_PERIOD.slice(0,4);
+  const months=Array.from({length:12},(_,i)=>year+'-'+p2(i+1));
+  const orderM={},cutM={},sewM={},shipM={},unshipM={};
+  list.forEach(r=>{if(r.etd&&r.etd.startsWith(year)){orderM[monthKey(r.etd)]=(orderM[monthKey(r.etd)]||0)+derive(r).openQty;unshipM[monthKey(r.etd)]=(unshipM[monthKey(r.etd)]||0)+derive(r).openOrderPcs;}});
+  evs.forEach(e=>{if(!e.date||!e.date.startsWith(year))return;const m=monthKey(e.date);if(e.process==='cutting')cutM[m]=(cutM[m]||0)+e.qty;if(e.process==='sewing'||e.process==='loading')sewM[m]=(sewM[m]||0)+e.qty;if(e.process==='shipping')shipM[m]=(shipM[m]||0)+e.qty;});
+  const el=document.getElementById('yearly');
+  const shipTotal=sum(list.filter(r=>r.etd&&r.etd.startsWith(year)).map(derive),d=>d.totalShipped);
+  const orderTotal=months.reduce((s,m)=>s+(orderM[m]||0),0);
+  el.innerHTML=`${filterBar()}
+  <div class="al al-i">${t('demandBy')} ｜ <b>${year}</b></div>
+  <div class="kpis">
+    ${kpiCard('b',fmt(orderTotal),'pcs',t('kTotalOrder'))}
+    ${kpiCard('c',fmt(months.reduce((s,m)=>s+(cutM[m]||0),0)),'pcs',t('cut'))}
+    ${kpiCard('a',fmt(months.reduce((s,m)=>s+(sewM[m]||0),0)),'pcs',t('input'))}
+    ${kpiCard('g',fmt(months.reduce((s,m)=>s+(shipM[m]||0),0)),'pcs',t('shipped'))}
+    ${kpiCard('r',fmt(months.reduce((s,m)=>s+(unshipM[m]||0),0)),'pcs',t('unshipped'))}
+    ${kpiCard('',pct(shipTotal,orderTotal)+'%','',t('shipped')+' %')}
+  </div>
+  <div class="card"><div class="ct">📈 ${year} ${t('monTrend')}</div><div class="chartbox tall"><canvas id="chYear"></canvas></div></div>
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('custShare')} ${year}</div><div class="chartbox"><canvas id="chYCust"></canvas></div></div>
+    <div class="card"><div class="ct">${t('prodShare')} ${year}</div><div class="chartbox"><canvas id="chYProd"></canvas></div></div>
+  </div>`;
+  mkChart('chYear',{type:'line',data:{labels:months.map(m=>m.slice(5)),datasets:[
+    {label:t('kTotalOrder'),data:months.map(m=>orderM[m]||0),borderColor:'#3b82f6',tension:.3},
+    {label:t('cut'),data:months.map(m=>cutM[m]||0),borderColor:'#8b5cf6',tension:.3},
+    {label:t('input'),data:months.map(m=>sewM[m]||0),borderColor:'#f59e0b',tension:.3},
+    {label:t('shipped'),data:months.map(m=>shipM[m]||0),borderColor:'#10b981',tension:.3},
+    {label:t('unshipped'),data:months.map(m=>unshipM[m]||0),borderColor:'#ef4444',tension:.3,borderDash:[5,4]}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}}}});
+  const yl=list.filter(r=>r.etd&&r.etd.startsWith(year));
+  const cs=groupSum(yl.length?yl:list,r=>r.customer).sort((a,b)=>b.openQty-a.openQty).slice(0,10);
+  mkChart('chYCust',{type:'doughnut',data:{labels:cs.map(x=>x.key),datasets:[{data:cs.map(x=>x.openQty),backgroundColor:PALETTE}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:10}}}}}});
+  const ps=groupSum(yl.length?yl:list,r=>r.garmentType).sort((a,b)=>b.openQty-a.openQty);
+  mkChart('chYProd',{type:'doughnut',data:{labels:ps.map(x=>x.key),datasets:[{data:ps.map(x=>x.openQty),backgroundColor:PALETTE}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:10}}}}}});
+}
+/* ── 布料缺口去重排名（dashboard/fabric 共用）───────────────────────────── */
+function fabricShortageRank(list){
+  const m={};
+  list.forEach(r=>{const code=r.fabricItem||r.fabricType;if(!code)return;const d=derive(r);
+    if(!m[code])m[code]={key:code,reqNotCut:0,fabStock:0,fabShort:0,recs:0,type:r.fabricType};
+    m[code].reqNotCut+=d.reqNotCut;m[code].fabStock=Math.max(m[code].fabStock,d.fabStock);m[code].recs++;});
+  // 去重布號後：缺口 = 需求 - 庫存（庫存取該布號最大值代表倉庫實際庫存）
+  Object.values(m).forEach(o=>{o.fabShort=Math.max(o.reqNotCut-o.fabStock,0);o.coverage=o.reqNotCut>0?o.fabStock/o.reqNotCut:1;});
+  return Object.values(m).sort((a,b)=>b.fabShort-a.fabShort);
+}
+
+/* ── 客戶→類別→PO→款式→顏色→尺寸 下鑽 ────────────────────────────────── */
+const DRILL_LEVELS=[r=>r.customer,r=>r.garmentType,r=>r.po,r=>r.style,r=>r.color,r=>r.size];
+const DRILL_LABELS=['cust','garment','po','style','color','size'];
+function drillMetrics(recs){
+  const D=recs.map(derive);const S=f=>D.reduce((s,d)=>s+(+d[f]||0),0);
+  return {openQty:S('openQty'),reqNotCut:S('reqNotCut'),fabStock:S('fabStock'),marker:S('marker'),acs:S('acs'),
+    uncut:S('uncut'),input:S('input'),packed:S('packed'),totalShipped:S('totalShipped'),fg:S('fg'),
+    openOrderPcs:S('openOrderPcs'),notSew:S('notSew'),cutWip:S('cutWip'),fabShort:S('fabShort')};
+}
+function drillStatus(recs){
+  const c={};recs.map(derive).forEach(d=>{c[d.status]=(c[d.status]||0)+1;});
+  const order=['risk','fabric','cutting','watch','shipped','ok','nodata'];
+  for(const s of order)if(c[s])return s;return 'nodata';
+}
+function renderCustProd(){
+  if(!RECORDS.length)return emptyState('custprod');
+  const list=filteredRecords();
+  const el=document.getElementById('custprod');
+  el.innerHTML=`${filterBar()}
+  <div class="card"><div class="ct">🏷️ ${t('tabCust')} <span class="sp"></span><span class="pill">${fmt(list.length)} rows</span></div>
+    <div class="al al-i" style="font-size:11px">${t('cust')}→${t('garment')}→${t('po')}→${t('style')}→${t('color')}→${t('size')}</div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('cust')}/${t('style')}</th><th class="num">${t('openQty')}</th><th class="num">${t('fabReq')}</th>
+      <th class="num">${t('marker')}</th><th class="num">${t('cut')}</th><th class="num">${t('uncut')}</th>
+      <th class="num">${t('input')}</th><th class="num">${t('packed')}</th><th class="num">${t('shipped')}</th>
+      <th class="num">${t('fgStock')}</th><th class="num">${t('unshipped')}</th><th class="num">${t('notSew')}</th>
+      <th>${t('status')}</th></tr></thead><tbody id="drillBody"></tbody></table></div></div>`;
+  renderDrill(list);
+}
+function renderDrill(list){
+  const body=document.getElementById('drillBody');
+  const rows=[];
+  function walk(recs,lvl,prefix){
+    const groups={};
+    recs.forEach(r=>{const k=DRILL_LEVELS[lvl](r)||'—';(groups[k]=groups[k]||[]).push(r);});
+    Object.keys(groups).sort().forEach(k=>{
+      const g=groups[k];const m=drillMetrics(g);const id=prefix+'||'+k;const isOpen=expanded[id];
+      const hasChild=lvl<DRILL_LEVELS.length-1;
+      rows.push(`<tr class="drow lv${lvl+1} ${isOpen?'open':''}" onclick="toggleDrill('${esc(id).replace(/'/g,'')}')">
+        <td>${hasChild?'<span class="cr">▶</span>':'<span style="display:inline-block;width:13px"></span>'} ${esc(k)}<span class="tag" style="margin-left:6px">${g.length}</span></td>
+        <td class="num">${fmt(m.openQty)}</td><td class="num">${fmt(m.reqNotCut)}</td><td class="num">${fmt(m.marker)}</td>
+        <td class="num">${fmt(m.acs)}</td><td class="num">${fmt(m.uncut)}</td><td class="num">${fmt(m.input)}</td>
+        <td class="num">${fmt(m.packed)}</td><td class="num">${fmt(m.totalShipped)}</td><td class="num">${fmt(m.fg)}</td>
+        <td class="num">${fmt(m.openOrderPcs)}</td><td class="num">${fmt(m.notSew)}</td><td>${badge(drillStatus(g))}</td></tr>`);
+      if(isOpen&&hasChild)walk(g,lvl+1,id);
+    });
+  }
+  walk(list,0,'root');
+  body.innerHTML=rows.join('')||`<tr><td colspan="13"><div class="empty" style="padding:20px">${t('empty')}</div></td></tr>`;
+}
+function toggleDrill(id){expanded[id]=!expanded[id];renderDrill(filteredRecords());}
+
+/* ── PO / 款式 / 尺寸 ───────────────────────────────────────────────────── */
+function renderPoStyle(){
+  if(!RECORDS.length)return emptyState('postyle');
+  const list=filteredRecords();
+  const byPo=groupSum(list,r=>r.po).sort((a,b)=>b.openQty-a.openQty);
+  const el=document.getElementById('postyle');
+  el.innerHTML=`${filterBar()}
+  <div class="card"><div class="ct">📦 ${t('po')} / ${t('style')} / ${t('size')}</div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('po')}</th><th class="num">${t('openQty')}</th><th class="num">${t('cut')}</th><th class="num">${t('uncut')}</th>
+      <th class="num">${t('input')}</th><th class="num">${t('packed')}</th><th class="num">${t('shipped')}</th>
+      <th class="num">${t('unshipped')}</th><th class="num">${t('fabShort')}</th></tr></thead><tbody>
+      ${byPo.map(o=>`<tr><td><b>${esc(o.key)}</b> <span class="tag">${o.recs.length}</span></td><td class="num">${fmt(o.openQty)}</td>
+        <td class="num">${fmt(o.acs)}</td><td class="num">${fmt(o.uncut)}</td><td class="num">${fmt(o.input)}</td>
+        <td class="num">${fmt(o.packed)}</td><td class="num">${fmt(o.shipped)}</td><td class="num">${fmt(o.unship)}</td>
+        <td class="num">${fmt(o.fabShort)}</td></tr>`).join('')}
+    </tbody></table></div></div>
+  <div class="card"><div class="ct">${t('style')} × ${t('size')}</div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('style')}</th><th>${t('size')}</th><th class="num">${t('openQty')}</th><th class="num">${t('cut')}</th>
+      <th class="num">${t('input')}</th><th class="num">${t('shipped')}</th><th class="num">${t('unshipped')}</th><th>${t('status')}</th></tr></thead><tbody>
+      ${groupSum(list,r=>r.style+' ▸ '+r.size).sort((a,b)=>b.openQty-a.openQty).slice(0,400).map(o=>{
+        const parts=o.key.split(' ▸ ');const st=drillStatus(o.recs);
+        return `<tr><td>${esc(parts[0])}</td><td>${esc(parts[1]||'')}</td><td class="num">${fmt(o.openQty)}</td>
+        <td class="num">${fmt(o.acs)}</td><td class="num">${fmt(o.input)}</td><td class="num">${fmt(o.shipped)}</td>
+        <td class="num">${fmt(o.unship)}</td><td>${badge(st)}</td></tr>`;}).join('')}
+    </tbody></table></div></div>`;
+}
+
+/* ── 布料 ───────────────────────────────────────────────────────────────── */
+let FAB_DIM='fabric';
+function renderFabric(){
+  if(!RECORDS.length)return emptyState('fabric');
+  const list=filteredRecords();
+  const dimFn={fabric:r=>r.fabricItem||r.fabricType,type:r=>r.fabricType,customer:r=>r.customer,
+    garment:r=>r.garmentType,po:r=>r.po,style:r=>r.style,color:r=>r.color,size:r=>r.size}[FAB_DIM];
+  const rank=fabricShortageRank(list);
+  const grp=groupSum(list,dimFn).map(o=>({...o,coverage:o.fabReq>0?o.fabStock/o.fabReq:1})).sort((a,b)=>b.fabShort-a.fabShort);
+  const totReq=sum(list.map(derive),d=>d.reqNotCut),totStock=sum(list.map(derive),d=>d.fabStock),totShort=sum(list.map(derive),d=>d.fabShort);
+  const el=document.getElementById('fabric');
+  el.innerHTML=`${filterBar()}
+  <div class="kpis">
+    ${kpiCard('o',fmt(totReq),'yds',t('reqNotCut'))}
+    ${kpiCard('o',fmt(totStock),'yds',t('stockYds'))}
+    ${kpiCard('r',fmt(totShort),'yds',t('shortYds'))}
+    ${kpiCard('',pct(totStock,totReq)+'%','',t('coverage'))}
+    ${kpiCard('',uniq(list,r=>r.fabricItem||r.fabricType).length,'',t('fabric'))}
+  </div>
+  <div class="card"><div class="ct">🧵 ${t('fabAnalysis')}
+    <span class="sp"></span>
+    <label class="fl" style="flex-direction:row;align-items:center;gap:6px">${t('fabDim')}
+    <select onchange="FAB_DIM=this.value;renderFabric()">
+      ${['fabric','type','customer','garment','po','style','color','size'].map(d=>`<option value="${d}" ${d===FAB_DIM?'selected':''}>${esc(t(d==='fabric'?'fabric':d==='type'?'fabric':d))||d}</option>`).join('')}
+    </select></label></div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('fabDim')}</th><th class="num">${t('reqNotCut')}</th><th class="num">${t('stockYds')}</th>
+      <th class="num">${t('shortYds')}</th><th class="num">${t('coverage')}</th><th class="num">${t('openQty')}</th>
+      <th class="num">${t('uncut')}</th><th>${t('affectFlow')}</th></tr></thead><tbody>
+      ${grp.slice(0,300).map(o=>{const cov=Math.round(o.coverage*100);const affect=o.fabShort>0?(o.uncut>0?'裁+車+出':'裁剪前'):'—';
+        return `<tr><td>${esc(o.key)}</td><td class="num">${fmt(o.fabReq)}</td><td class="num">${fmt(o.fabStock)}</td>
+        <td class="num" style="color:${o.fabShort>0?'#dc2626':'#059669'}">${fmt(o.fabShort)}</td>
+        <td class="num">${cov}%</td><td class="num">${fmt(o.openQty)}</td><td class="num">${fmt(o.uncut)}</td>
+        <td>${o.fabShort>0?'<span class="badge b-fabric">🟠 '+esc(affect)+'</span>':'<span class="badge b-ok">🟢 OK</span>'}</td></tr>`;}).join('')}
+    </tbody></table></div></div>
+  <div class="card"><div class="ct">📉 ${t('fabTop')}</div>
+    ${rank.slice(0,15).map(o=>barRow(o.key+' ('+Math.round(o.coverage*100)+'%)',o.fabShort,rank[0]?rank[0].fabShort:1,'r')).join('')||`<div class="empty" style="padding:20px">${t('bOK')}</div>`}
+  </div>`;
+}
+
+/* ── 裁剪 / Marker ──────────────────────────────────────────────────────── */
+function cutRisk(d,r){
+  if(d.fabShort>0)return 'fabric';
+  if(!r.actualCuttingDateRaw && d.openQty>0)return 'nocutdate';
+  if(d.acs>d.openQty*1.1)return 'over';
+  if(d.uncut>0||d.acs<d.openQty)return 'short';
+  return 'ok';
+}
+const CUTRISK_LABEL={fabric:['b-fabric','🟠 裁前缺布'],nocutdate:['b-nodata','⚫ 無裁剪日'],over:['b-over','🟡 超裁'],short:['b-cutting','🟣 裁剪不足'],ok:['b-ok','🟢 足夠']};
+function renderCutting(){
+  if(!RECORDS.length)return emptyState('cutting');
+  const list=filteredRecords();
+  const D=list.map(derive);
+  const totOpen=sum(D,d=>d.openQty),totCut=sum(D,d=>d.acs),totUncut=sum(D,d=>d.uncut),totOver=sum(D,d=>d.overCut);
+  const el=document.getElementById('cutting');
+  const shortRank=groupSum(list,r=>r.customer+' / '+r.po+' / '+r.style).map(o=>({key:o.key,short:Math.max(o.openQty-o.acs,0),uncut:o.uncut})).filter(x=>x.short>0).sort((a,b)=>b.short-a.short);
+  el.innerHTML=`${filterBar()}
+  <div class="kpis">
+    ${kpiCard('',fmt(totOpen),'pcs',t('openQty'))}
+    ${kpiCard('c',fmt(totCut),'pcs',t('cut'))}
+    ${kpiCard('',pct(totCut,totOpen)+'%','',t('cutComp'))}
+    ${kpiCard('p',fmt(totUncut),'pcs',t('uncut'))}
+    ${kpiCard('',pct(totUncut,totOpen)+'%','',t('uncutPct'))}
+    ${kpiCard('a',fmt(totOver),'pcs',t('overCut'))}
+  </div>
+  <div class="card"><div class="ct">📐 ${t('tabCut')} · <span class="tip" data-tip="${esc(t('tip_marker'))}">Marker</span></div>
+    <div class="tblwrap"><table><thead><tr>
+      <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('size')}</th>
+      <th class="num">${t('openQty')}</th><th class="num">${t('markerRoom')}</th><th class="num">${t('cut')}</th>
+      <th class="num">${t('uncut')}</th><th class="num">${t('overCut')}</th><th>${t('cutDate')}</th><th>${t('cutRisk')}</th></tr></thead><tbody>
+      ${list.map(r=>({r,d:derive(r)})).sort((a,b)=>b.d.uncut-a.d.uncut).slice(0,300).map(({r,d})=>{
+        const risk=cutRisk(d,r);const rl=CUTRISK_LABEL[risk];
+        return `<tr><td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td><td>${esc(r.size)}</td>
+        <td class="num">${fmt(d.openQty)}</td><td class="num">${fmt(d.marker)}</td><td class="num">${fmt(d.acs)}</td>
+        <td class="num" style="color:${d.uncut>0?'#7c3aed':'#059669'}">${fmt(d.uncut)}</td><td class="num">${fmt(d.overCut)}</td>
+        <td>${esc((r.actualCuttingDateRaw||'').slice(0,20))}</td><td><span class="badge ${rl[0]}">${rl[1]}</span></td></tr>`;}).join('')}
+    </tbody></table></div></div>
+  <div class="card"><div class="ct">🟣 ${t('cutTop')}</div>
+    ${shortRank.slice(0,15).map(x=>barRow(x.key,x.short,shortRank[0]?shortRank[0].short:1,'p')).join('')||`<div class="empty" style="padding:20px">${t('bOK')}</div>`}
+  </div>`;
+}
+
+/* ── 車縫線別產能 ───────────────────────────────────────────────────────── */
+function renderLine(){
+  if(!RECORDS.length)return emptyState('line');
+  const evs=filteredEvents().filter(e=>e.process==='sewing'||e.process==='loading');
+  const byLine={};
+  evs.forEach(e=>{const l=e.line||'Unknown Line';if(!byLine[l])byLine[l]={line:l,qty:0,days:new Set(),custs:new Set(),styles:new Set(),pos:new Set()};
+    byLine[l].qty+=e.qty;if(e.date)byLine[l].days.add(e.date);byLine[l].custs.add(e.customer);byLine[l].styles.add(e.style);byLine[l].pos.add(e.po);});
+  const lines=Object.values(byLine).sort((a,b)=>b.qty-a.qty);
+  const maxQty=lines[0]?lines[0].qty:1;
+  const cap=SETTINGS.monthlyOutput||156000;
+  const el=document.getElementById('line');
+  // daily trend
+  const byDate={};evs.forEach(e=>{if(e.date)byDate[e.date]=(byDate[e.date]||0)+e.qty;});
+  const ds=Object.keys(byDate).sort().slice(-40);
+  el.innerHTML=`${filterBar()}
+  <div class="card"><div class="ct">🪡 ${t('lineLoad')} · <span class="tip" data-tip="${esc(t('tip_cap'))}">${t('tabLine')}</span></div>
+    <div class="grid3">${lines.slice(0,12).map(l=>{const load=pct(l.qty,cap);const cls=load>=80?'hi':load>=40?'md':'lo';
+      return `<div class="lc ${cls}"><div class="lc-name">${esc(l.line)}<span class="tag">${l.days.size}d</span></div>
+      <div class="load-bar"><div class="load-fill" style="width:${Math.min(load,100)}%;background:${load>=80?'#059669':load>=40?'#d97706':'#dc2626'}"></div></div>
+      <div style="font-size:11px;color:#6b7a9e">${t('monOut')}: <b style="font-family:ui-monospace">${fmt(l.qty)}</b> pcs · ${load}%</div>
+      <div class="mini"><div class="mini-c"><div class="mini-n">${l.custs.size}</div><div class="mini-l">${t('cust')}</div></div>
+      <div class="mini-c"><div class="mini-n">${l.styles.size}</div><div class="mini-l">${t('style')}</div></div></div></div>`;}).join('')||`<div class="empty" style="padding:20px">${t('empty')}</div>`}</div>
+  </div>
+  <div class="card"><div class="ct">📊 ${t('lineTrend')}</div><div class="chartbox"><canvas id="chLineDay"></canvas></div></div>
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('lineRank')}</div>${lines.slice(0,15).map(l=>barRow(l.line,l.qty,maxQty,'')).join('')||`<div class="empty" style="padding:20px">${t('empty')}</div>`}</div>
+    <div class="card"><div class="ct">${t('custByLine')}</div>
+      <div class="tblwrap"><table><thead><tr><th>${t('line')}</th><th>${t('cust')}</th><th class="num">${t('input')}</th></tr></thead><tbody>
+      ${lineCross(evs,e=>e.line,e=>e.customer).slice(0,60).map(x=>`<tr><td>${esc(x.a)}</td><td>${esc(x.b)}</td><td class="num">${fmt(x.qty)}</td></tr>`).join('')}
+      </tbody></table></div></div>
+  </div>
+  <div class="card"><div class="ct">🔴 ${t('lineRiskList')}</div>
+    <div class="al al-i" style="font-size:11px">未歸線/未歸日之車縫量會顯示為 Unknown Line，代表資料需補線別或日期。</div>
+    ${byLine['Unknown Line']?`<div class="al al-w">Unknown Line: <b>${fmt(byLine['Unknown Line'].qty)}</b> pcs — 需補線別/日期</div>`:`<div class="al al-ok">${t('bOK')}</div>`}
+  </div>`;
+  mkChart('chLineDay',{type:'bar',data:{labels:ds,datasets:[{label:t('input'),data:ds.map(d=>byDate[d]),backgroundColor:'#f59e0b'}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+}
+function lineCross(evs,aFn,bFn){
+  const m={};evs.forEach(e=>{const a=aFn(e)||'—',b=bFn(e)||'—';const k=a+'||'+b;if(!m[k])m[k]={a,b,qty:0};m[k].qty+=e.qty;});
+  return Object.values(m).sort((x,y)=>y.qty-x.qty);
+}
+
+/* ── 出貨 / 未出 ────────────────────────────────────────────────────────── */
+function renderShipping(){
+  if(!RECORDS.length)return emptyState('shipping');
+  const list=filteredRecords();const D=list.map(derive);
+  const shipEvs=filteredEvents().filter(e=>e.process==='shipping'&&e.date);
+  const totShip=sum(D,d=>d.totalShipped),totUn=sum(D,d=>d.openOrderPcs),totFg=sum(D,d=>d.fg);
+  const overdue=list.map(r=>({r,d:derive(r)})).filter(x=>x.d.overdue).sort((a,b)=>b.d.openOrderPcs-a.d.openOrderPcs);
+  const overdueQty=sum(overdue.map(x=>x.d),d=>d.openOrderPcs);
+  const dueSoon=list.map(r=>({r,d:derive(r)})).filter(x=>x.d.dueSoon).sort((a,b)=>a.r.etd<b.r.etd?-1:1);
+  const el=document.getElementById('shipping');
+  const shipByP=eventPeriodSum(shipEvs,MODE);
+  el.innerHTML=`${filterBar()}
+  <div class="kpis">
+    ${kpiCard('g',fmt(totShip),'pcs',t('kShipped'))}
+    ${kpiCard('r',fmt(totUn),'pcs',t('kUnshipped'))}
+    ${kpiCard('b',fmt(totFg),'pcs',t('kFgStock'))}
+    ${kpiCard('r',fmt(overdueQty),'pcs',t('overdueList'))}
+    ${kpiCard('a',overdue.length,'',t('kOverdue'))}
+  </div>
+  <div class="card"><div class="ct">🚚 ${t('ship'+(MODE==='day'?'Daily':MODE==='week'?'Week':MODE==='year'?'Year':'Mon'))}</div>
+    <div class="chartbox"><canvas id="chShip"></canvas></div></div>
+  <div class="card"><div class="ct">🔴 ${t('overdueList')} <span class="sp"></span><span class="pill">${overdue.length}</span></div>
+    ${overdue.length?`<div class="tblwrap"><table><thead><tr>
+      <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('size')}</th>
+      <th class="num">${t('openQty')}</th><th class="num">${t('shipped')}</th><th class="num">${t('unshipped')}</th>
+      <th class="num">${t('fabShort')}</th><th class="num">${t('uncut')}</th><th>ETD</th><th>${t('status')}</th></tr></thead><tbody>
+      ${overdue.slice(0,200).map(({r,d})=>`<tr><td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td><td>${esc(r.size)}</td>
+      <td class="num">${fmt(d.openQty)}</td><td class="num">${fmt(d.totalShipped)}</td><td class="num" style="color:#dc2626">${fmt(d.openOrderPcs)}</td>
+      <td class="num">${fmt(d.fabShort)}</td><td class="num">${fmt(d.uncut)}</td><td style="color:#b91c1c">${esc(r.etd)}</td>
+      <td>${badge(d.fabShort>0?'fabric':d.uncut>0?'cutting':'risk')}</td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty" style="padding:20px"><div class="empty-i">✅</div>${t('bOK')}</div>`}
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="ct">${t('custUnship')}</div>
+      ${(()=>{const g=groupSum(list,r=>r.customer).sort((a,b)=>b.unship-a.unship);const mx=g[0]?g[0].unship:1;return g.slice(0,12).map(o=>barRow(o.key,o.unship,mx,'r')).join('');})()}</div>
+    <div class="card"><div class="ct">${t('poUnship')}</div>
+      ${(()=>{const g=groupSum(list,r=>r.po).sort((a,b)=>b.unship-a.unship);const mx=g[0]?g[0].unship:1;return g.slice(0,12).map(o=>barRow(o.key,o.unship,mx,'r')).join('');})()}</div>
+  </div>
+  <div class="card"><div class="ct">🟡 ${t('etdRisk')} · ${t('dueSoon')} (7d)</div>
+    ${dueSoon.length?`<div class="tblwrap"><table><thead><tr><th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th>
+      <th class="num">${t('unshipped')}</th><th>ETD</th></tr></thead><tbody>
+      ${dueSoon.slice(0,100).map(({r,d})=>`<tr><td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td>
+      <td class="num">${fmt(d.openOrderPcs)}</td><td>${esc(r.etd)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty" style="padding:20px">${t('bOK')}</div>`}
+  </div>`;
+  mkChart('chShip',{type:'bar',data:{labels:shipByP.map(x=>x.key),datasets:[{label:t('shipped'),data:shipByP.map(x=>x.shipping),backgroundColor:'#10b981'}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+}
+
+/* ── 排產產能比對（讀 ProdPlanCapacity）─────────────────────────────────── */
+function loadPlanFromIDB(){
+  return new Promise(res=>{
+    try{const rq=indexedDB.open('ProdPlanCapacity');   // 不帶版本：讀既有版本
+      // 資料庫不存在時取消建立，避免留下空庫影響排產系統
+      rq.onupgradeneeded=e=>{try{e.target.transaction.abort();}catch(_){}};
+      rq.onsuccess=e=>{const db=e.target.result;
+        if(!db.objectStoreNames.contains('records')){res([]);return;}
+        const tx=db.transaction(['records'],'readonly');const q=tx.objectStore('records').getAll();
+        q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);};
+      rq.onerror=()=>res([]);
+    }catch(e){res([]);}
+  });
+}
+async function cmpReadPlan(){PLAN_RECORDS=await loadPlanFromIDB();if(!PLAN_RECORDS.length)toast(t('cmpNoPlan'),'warn');else toast(fmt(PLAN_RECORDS.length)+' plan records','ok');renderCompare();}
+function cmpPasteParse(){
+  const v=document.getElementById('cmpPasteBox').value.trim();if(!v)return;
+  try{let o=JSON.parse(v);let recs=Array.isArray(o)?o:(o.records||[]);PLAN_RECORDS=recs;toast(fmt(recs.length)+' plan records','ok');renderCompare();}
+  catch(e){toast('JSON error','err');}
+}
+function planKey(p,relax){
+  const c=normCustomer(p.customer),po=normText(p.po),st=styleKey(p.style),co=normText(p.color),sz=normText(p.size),ln=normText(p.line);
+  if(relax===0)return [c,po,st,co,sz,ln].join('|');
+  if(relax===1)return [c,po,st,co,sz].join('|');
+  if(relax===2)return [c,po,st,sz].join('|');
+  if(relax===3)return [c,st,sz].join('|');
+  return [st,sz].join('|');
+}
+function recKey(r,relax){
+  const c=r.customer,po=r.po,st=r.styleKey,co=r.color,sz=r.size,ln=normText(r.lineNo);
+  if(relax===0)return [c,po,st,co,sz,ln].join('|');
+  if(relax===1)return [c,po,st,co,sz].join('|');
+  if(relax===2)return [c,po,st,sz].join('|');
+  if(relax===3)return [c,st,sz].join('|');
+  return [st,sz].join('|');
+}
+function buildComparePayload(){
+  const list=filteredRecords();
+  const evs=filteredEvents();
+  return {module:SETTINGS.moduleKey,version:VER,generatedAt:nowStamp(),
+    records:list.map(r=>{const d=derive(r);return {customer:r.customer,po:r.po,style:r.style,color:r.color,size:r.size,
+      line:r.lineNo,etd:r.etd,openQty:d.openQty,actualCutStock:d.acs,qtyInput:d.input,packed:d.packed,
+      shipped:d.totalShipped,unshipped:d.openOrderPcs,uncut:d.uncut,fabShort:d.fabShort};}),
+    summaryBy:{Customer:groupSum(list,r=>r.customer).map(o=>({key:o.key,openQty:o.openQty,shipped:o.shipped,unship:o.unship})),
+      Line:lineCross(evs.filter(e=>e.process==='sewing'||e.process==='loading'),e=>e.line,e=>e.customer),
+      Month:eventPeriodSum(evs,'month')}};
+}
+function renderCompare(){
+  const list=filteredRecords();
+  const el=document.getElementById('compare');
+  let cmpRows='';
+  if(PLAN_RECORDS.length&&list.length){
+    // 建 plan 索引（漸進放寬）
+    const planIdx=[{},{},{},{},{}];
+    PLAN_RECORDS.forEach(p=>{for(let rx=0;rx<5;rx++){const k=planKey(p,rx);(planIdx[rx][k]=planIdx[rx][k]||[]).push(p);}});
+    const rows=list.map(r=>{
+      const d=derive(r);let plan=null,used=-1;
+      for(let rx=0;rx<5;rx++){const k=recKey(r,rx);if(planIdx[rx][k]){plan=planIdx[rx][k];used=rx;break;}}
+      const planQty=plan?plan.reduce((s,p)=>s+(num(p.sewingQty)||num(p.sewQty)||0),0):0;
+      const demand=d.openQty;const cutAvail=d.acs;
+      const gapPlan=demand-planQty,gapCut=planQty-cutAvail,gapShip=demand-d.totalShipped;
+      let risk='ok';
+      if(planQty>cutAvail&&planQty>0)risk='cutshort';
+      else if(d.packed>d.totalShipped&&r.etd&&r.etd<TODAY)risk='shipdelay';
+      else if(demand>planQty&&planQty>0)risk='underplan';
+      else if(planQty>demand*1.15&&demand>0)risk='overplan';
+      else if(d.input>d.acs+1&&d.acs>0)risk='dataabn';
+      return {r,d,planQty,demand,cutAvail,gapPlan,gapCut,gapShip,risk,used};
+    }).filter(x=>x.planQty>0||x.demand>0).sort((a,b)=>Math.abs(b.gapPlan)-Math.abs(a.gapPlan));
+    const RISK={ok:['b-ok','🟢 OK'],cutshort:['b-cutting','🟣 裁片不足'],shipdelay:['b-risk','🔴 出貨延遲'],underplan:['b-watch','🟡 排產不足'],overplan:['b-over','🟡 過量/未對齊'],dataabn:['b-nodata','⚫ 資料異常']};
+    cmpRows=`<div class="card"><div class="ct">🔁 ${t('cmpTitle')} <span class="sp"></span>
+      <button class="btn btn-g btn-sm" onclick="exportCompareJson()">${t('cmpExport')}</button></div>
+      <div class="tblwrap"><table><thead><tr>
+        <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('size')}</th><th>${t('line')}</th>
+        <th class="num">${t('cmpPlanQty')}</th><th class="num">${t('cmpDemand')}</th><th class="num">${t('cmpCutAvail')}</th>
+        <th class="num">${t('cmpSewInput')}</th><th class="num">${t('cmpShipped')}</th><th class="num">${t('cmpUnship')}</th>
+        <th class="num">${t('cmpGapPlan')}</th><th class="num">${t('cmpGapCut')}</th><th>${t('cmpRisk')}</th></tr></thead><tbody>
+        ${rows.slice(0,300).map(x=>{const rl=RISK[x.risk];return `<tr><td>${esc(x.r.customer)}</td><td>${esc(x.r.po)}</td><td>${esc(x.r.style)}</td>
+        <td>${esc(x.r.size)}</td><td>${esc(x.r.lineNo)}</td><td class="num">${fmt(x.planQty)}</td><td class="num">${fmt(x.demand)}</td>
+        <td class="num">${fmt(x.cutAvail)}</td><td class="num">${fmt(x.d.input)}</td><td class="num">${fmt(x.d.totalShipped)}</td>
+        <td class="num">${fmt(x.d.openOrderPcs)}</td><td class="num" style="color:${x.gapPlan>0?'#dc2626':'#059669'}">${fmt(x.gapPlan)}</td>
+        <td class="num" style="color:${x.gapCut>0?'#dc2626':'#059669'}">${fmt(x.gapCut)}</td>
+        <td><span class="badge ${rl[0]}">${rl[1]}</span></td></tr>`;}).join('')}
+      </tbody></table></div>
+      <div class="al al-i" style="margin-top:10px">比對主鍵漸進放寬：Customer+PO+Style+Color+Size+Line → … → Style+Size。Plan 排產量取自 Plan Capacity 的 sewingQty。</div>
+    </div>`;
+  }else{
+    cmpRows=`<div class="card"><div class="empty"><div class="empty-i">🔁</div>${t('cmpNoPlan')}</div></div>`;
+  }
+  el.innerHTML=`${filterBar()}
+  <div class="card"><div class="ct">🔁 ${t('cmpTitle')}</div>
+    <div class="btnrow" style="margin-bottom:10px">
+      <button class="btn btn-y" onclick="cmpReadPlan()">${t('cmpReadPlan')}</button>
+      <button class="btn btn-b" onclick="document.getElementById('planInput').click()">${t('cmpImportJson')} / Excel</button>
+      <span class="pill">Plan: ${fmt(PLAN_RECORDS.length)}</span>
+    </div>
+    <label class="fl">${t('cmpPaste')}<textarea id="cmpPasteBox" placeholder='[{"customer":"...","po":"...","style":"...","size":"...","line":"...","sewingQty":1000}]'></textarea></label>
+    <div class="btnrow" style="margin-top:8px"><button class="btn btn-g btn-sm" onclick="cmpPasteParse()">${t('cmpParse')}</button></div>
+  </div>
+  ${cmpRows}`;
+}
+
+/* ── 全部資料 + CRUD ────────────────────────────────────────────────────── */
+let REC_Q='',REC_SEL=new Set();
+function renderRecords(){
+  if(!RECORDS.length)return emptyState('records');
+  let list=filteredRecords();
+  if(REC_Q){const q=REC_Q.toLowerCase();list=list.filter(r=>[r.customer,r.po,r.style,r.color,r.size,r.fabricItem,r.fabricType,r.lineNo].some(v=>String(v||'').toLowerCase().includes(q)));}
+  const el=document.getElementById('records');
+  el.innerHTML=`${filterBar()}
+  <div class="card"><div class="ct">📋 ${t('tabRecords')} <span class="sp"></span><span class="pill">${fmt(list.length)}</span></div>
+    <div class="btnrow" style="margin-bottom:10px">
+      <input type="text" placeholder="${t('search')}" value="${esc(REC_Q)}" oninput="REC_Q=this.value;clearTimeout(window._rq);window._rq=setTimeout(renderRecords,250)" style="min-width:220px">
+      <button class="btn btn-y btn-sm" onclick="openEdit(null)">${t('addRec')}</button>
+      <button class="btn btn-r btn-sm" onclick="batchDel()">${t('batchDel')} <span id="selN">(${REC_SEL.size})</span></button>
+      <button class="btn btn-g btn-sm" onclick="exportExcel(filteredRecords2())">${t('expExcel')}</button>
+      <button class="btn btn-g btn-sm" onclick="exportCsv(filteredRecords2())">${t('expCsv')}</button>
+      <button class="btn btn-g btn-sm" onclick="exportJson()">${t('expJson')}</button>
+    </div>
+    <div class="tblwrap"><table><thead><tr>
+      <th><input type="checkbox" onclick="toggleAllSel(this.checked)"></th>
+      <th>${t('cust')}</th><th>${t('po')}</th><th>${t('style')}</th><th>${t('color')}</th><th>${t('size')}</th>
+      <th class="num">${t('openQty')}</th><th class="num">${t('cut')}</th><th class="num">${t('input')}</th>
+      <th class="num">${t('shipped')}</th><th class="num">${t('unshipped')}</th><th>${t('line')}</th><th>ETD</th>
+      <th>${t('status')}</th><th>${t('actions')}</th></tr></thead><tbody>
+      ${list.slice(0,500).map(r=>{const d=derive(r);return `<tr>
+        <td><input type="checkbox" ${REC_SEL.has(r.id)?'checked':''} onclick="toggleSel('${r.id}',this.checked)"></td>
+        <td>${esc(r.customer)}</td><td>${esc(r.po)}</td><td>${esc(r.style)}</td><td>${esc(r.color)}</td><td>${esc(r.size)}</td>
+        <td class="num">${fmt(d.openQty)}</td><td class="num">${fmt(d.acs)}</td><td class="num">${fmt(d.input)}</td>
+        <td class="num">${fmt(d.totalShipped)}</td><td class="num">${fmt(d.openOrderPcs)}</td><td>${esc(r.lineNo)}</td><td>${esc(r.etd)}</td>
+        <td>${badge(d.status)}</td>
+        <td><button class="btn btn-g btn-sm" onclick="openEdit('${r.id}')">✏️</button> <button class="btn btn-r btn-sm" onclick="delRec('${r.id}')">🗑️</button></td></tr>`;}).join('')}
+    </tbody></table></div>
+    ${list.length>500?`<div class="al al-i" style="margin-top:8px">顯示前 500 筆（共 ${fmt(list.length)}）。可用篩選或搜尋縮小範圍。</div>`:''}
+  </div>`;
+}
+function filteredRecords2(){let list=filteredRecords();if(REC_Q){const q=REC_Q.toLowerCase();list=list.filter(r=>[r.customer,r.po,r.style,r.color,r.size,r.fabricItem,r.lineNo].some(v=>String(v||'').toLowerCase().includes(q)));}return list;}
+function toggleSel(id,on){if(on)REC_SEL.add(id);else REC_SEL.delete(id);const e=document.getElementById('selN');if(e)e.textContent='('+REC_SEL.size+')';}
+function toggleAllSel(on){const list=filteredRecords2().slice(0,500);if(on)list.forEach(r=>REC_SEL.add(r.id));else REC_SEL.clear();renderRecords();}
+function batchDel(){if(!REC_SEL.size)return;if(!confirm(t('confirmDel')+' ('+REC_SEL.size+')'))return;RECORDS=RECORDS.filter(r=>!REC_SEL.has(r.id));REC_SEL.clear();rebuildEvents();persist();toast(t('deleted'),'ok');renderRecords();}
+function delRec(id){if(!confirm(t('confirmDel')))return;RECORDS=RECORDS.filter(r=>r.id!==id);rebuildEvents();persist();toast(t('deleted'),'ok');renderTab(CUR_TAB);}
+const EDIT_FIELDS=['customer','garmentType','po','style','color','size','openQty','etd','indcEta','fabricItem','fabricType',
+  'fabricReqPerNotCut','fabricStockYds','actualCutStock','uncutQty','qtyInput','totalPacked','totalShipped','stockFgPcs',
+  'actualNotSewing','openOrderPcs','lineNo','sewingPlanDate','actualCuttingDateRaw','shippedDateRaw'];
+function openEdit(id){
+  EDIT_ID=id;const r=id?RECORDS.find(x=>x.id===id):{};
+  showModal(`<div class="modal-t">${id?t('edit'):t('addRec')}<button class="mclose" onclick="closeModal()">×</button></div>
+    <div class="fgrid">${EDIT_FIELDS.map(f=>`<label>${esc(f)}<input id="ef_${f}" value="${esc(r&&r[f]!=null?r[f]:'')}"></label>`).join('')}</div>
+    <div class="btnrow" style="justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-g" onclick="closeModal()">${t('cancel')}</button>
+      <button class="btn btn-y" onclick="saveEdit()">${t('save')}</button></div>`);
+}
+function saveEdit(){
+  const numF=['openQty','fabricReqPerNotCut','fabricStockYds','actualCutStock','uncutQty','qtyInput','totalPacked','totalShipped','stockFgPcs','actualNotSewing','openOrderPcs'];
+  let r=EDIT_ID?RECORDS.find(x=>x.id===EDIT_ID):{id:uid()};
+  EDIT_FIELDS.forEach(f=>{let v=document.getElementById('ef_'+f).value;r[f]=numF.includes(f)?num(v):v;});
+  r.customer=normCustomer(r.customer);r.garmentType=normGarment(r.garmentType);r.styleKey=styleKey(r.style);
+  if(!EDIT_ID)RECORDS.push(r);
+  rebuildEvents();persist();closeModal();toast(t('saved'),'ok');renderTab(CUR_TAB);
+}
+function showModal(html){document.getElementById('modalC').innerHTML=html;document.getElementById('modal').classList.add('on');}
+function closeModal(){document.getElementById('modal').classList.remove('on');}
+
+/* ── 設定 ───────────────────────────────────────────────────────────────── */
+function renderSettings(){
+  const s=SETTINGS;const el=document.getElementById('settings');
+  el.innerHTML=`<div class="card"><div class="ct">⚙️ ${t('tabSettings')}</div>
+    <div class="fgrid">
+      <label>${t('setGas')}<input type="text" value="${esc(s.gasUrl)}" placeholder="https://script.google.com/.../exec" onchange="SETTINGS.gasUrl=this.value.trim();saveSettings()"></label>
+      <label>${t('setTg')}<input type="text" value="${esc(s.tgChatId)}" placeholder="5026942575" onchange="SETTINGS.tgChatId=this.value.trim();saveSettings()"></label>
+      <label>${t('setKey')}<input type="text" value="${esc(s.moduleKey)}" onchange="SETTINGS.moduleKey=this.value.trim();saveSettings()"></label>
+      <label>${t('setDaily')}<input type="number" value="${s.dailyOutput}" onchange="SETTINGS.dailyOutput=+this.value||0;saveSettings()"></label>
+      <label>${t('setMonthly')}<input type="number" value="${s.monthlyOutput}" onchange="SETTINGS.monthlyOutput=+this.value||0;saveSettings()"></label>
+      <label>${t('setCloud')}<select onchange="SETTINGS.cloudOn=this.value==='1';saveSettings()"><option value="0" ${!s.cloudOn?'selected':''}>${t('off')}</option><option value="1" ${s.cloudOn?'selected':''}>${t('on')}</option></select></label>
+      <label>${t('setBackup')}<select onchange="SETTINGS.autoBackup=this.value==='1';saveSettings()"><option value="0" ${!s.autoBackup?'selected':''}>${t('off')}</option><option value="1" ${s.autoBackup?'selected':''}>${t('on')}</option></select></label>
+    </div>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn btn-g" onclick="bkJson()">${t('bkJson')}</button>
+      <button class="btn btn-g" onclick="document.getElementById('jsonInput').click()">${t('rsJson')}</button>
+      <button class="btn btn-b" onclick="cloudUpload()">${t('clUp')}</button>
+      <button class="btn btn-b" onclick="cloudDownload()">${t('clDown')}</button>
+      <button class="btn btn-y" onclick="cloudSync()">${t('clSync')}</button>
+      <button class="btn btn-b" onclick="sendTelegramSummary()">📨 Telegram</button>
+    </div>
+    <div class="al al-w" style="margin-top:12px">${t('clDev')}</div>
+    <div class="al al-i">Admin Telegram ID: 5026942575 ｜ Module: ${esc(s.moduleKey)} ｜ ${VER}</div>
+  </div>
+  <div class="card"><div class="ct">📤 ${t('impResult')} / Export</div>
+    <div class="btnrow">
+      <button class="btn btn-g" onclick="exportExcel(RECORDS)">${t('expExcel')}</button>
+      <button class="btn btn-g" onclick="exportCsv(RECORDS)">${t('expCsv')}</button>
+      <button class="btn btn-g" onclick="exportJson()">${t('expJson')}</button>
+      <button class="btn btn-g" onclick="exportCompareJson()">${t('expCmp')}</button>
+    </div>
+  </div>`;
+}
+
+/* ── 匯出 ───────────────────────────────────────────────────────────────── */
+function recExportRow(r){const d=derive(r);return {Customer:r.customer,GarmentType:r.garmentType,PO:r.po,Style:r.style,Color:r.color,Size:r.size,
+  ETD:r.etd,ETA:r.indcEta,OpenQty:d.openQty,FabricItem:r.fabricItem,FabricReqNotCut:d.reqNotCut,FabricStock:d.fabStock,FabricShort:d.fabShort,
+  ActualCutStock:d.acs,Uncut:d.uncut,QtyInput:d.input,TotalPacked:d.packed,TotalShipped:d.totalShipped,FGStock:d.fg,
+  Unshipped:d.openOrderPcs,NotSewing:d.notSew,Line:r.lineNo,Status:BADGE[d.status][2]()};}
+function exportExcel(list){const rows=(list||RECORDS).map(recExportRow);const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'ALL CUSTOMER');XLSX.writeFile(wb,`VRT_Customer_Statistics_${TODAY}.xlsx`);}
+function exportCsv(list){const rows=(list||RECORDS).map(recExportRow);const ws=XLSX.utils.json_to_sheet(rows);const csv=XLSX.utils.sheet_to_csv(ws);dl(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),`VRT_Customer_Statistics_${TODAY}.csv`);}
+function exportJson(){dl(new Blob([JSON.stringify({tool:SETTINGS.moduleKey,version:VER,exportedAt:nowStamp(),records:RECORDS,importHistory:IMPORT_HISTORY},null,2)],{type:'application/json'}),`VRT_Customer_Statistics_${TODAY}.json`);}
+function exportCompareJson(){const p=buildComparePayload();try{localStorage.setItem(LS_CMP,JSON.stringify(p));}catch(e){}dl(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}),`VRT_Customer_Compare_${TODAY}.json`);toast('Compare JSON','ok');}
+
+/* ── 備份 / 還原 ────────────────────────────────────────────────────────── */
+function bkJson(){dl(new Blob([JSON.stringify({records:RECORDS,settings:SETTINGS,importHistory:IMPORT_HISTORY,version:VER,ts:nowStamp()},null,2)],{type:'application/json'}),`VRT_CustomerStats_Backup_${TODAY}.json`);toast(t('saved'),'ok');}
+function rsJson(file){const rd=new FileReader();rd.onload=e=>{try{const o=JSON.parse(e.target.result);if(Array.isArray(o.records))RECORDS=o.records;if(o.settings)SETTINGS={...SETTINGS,...o.settings};if(o.importHistory)IMPORT_HISTORY=o.importHistory;rebuildEvents();persist();toast(t('imported'),'ok');renderAll();}catch(err){toast('Restore failed','err');}};rd.readAsText(file);}
+
+/* ── 雲端 / Telegram（介面保留；實際需先設定並部署 GAS）─────────────────── */
+async function cloudUpload(){if(!SETTINGS.gasUrl){toast(t('noGas'),'warn');goTab('settings');return;}
+  try{toast(t('calc'));const payload={action:'push',tool:SETTINGS.moduleKey,version:VER,lastUpdated:nowStamp(),records:RECORDS,importHistory:IMPORT_HISTORY};
+    const r=await fetch(SETTINGS.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});await r.text();toast('☁️ Upload OK','ok');
+  }catch(e){toast('Upload failed','err');}}
+async function cloudDownload(){if(!SETTINGS.gasUrl){toast(t('noGas'),'warn');goTab('settings');return;}
+  try{toast(t('calc'));const r=await fetch(`${SETTINGS.gasUrl}?action=pull&tool=${encodeURIComponent(SETTINGS.moduleKey)}`,{redirect:'follow'});const j=await r.json();
+    // GAS 回應為包裝格式 {ok,data:{tool,chunked,data:PAYLOAD}}；也相容未包裝舊格式
+    let o=(j&&j.ok&&j.data)?j.data:j;
+    if(o&&o.data&&!Array.isArray(o.records)) o=o.data;
+    if(o&&Array.isArray(o.records)){RECORDS=o.records;if(o.importHistory)IMPORT_HISTORY=o.importHistory;rebuildEvents();persist();renderAll();toast('☁️ Download OK ('+RECORDS.length+')','ok');}else toast('No cloud data','warn');
+  }catch(e){toast('Download failed','err');}}
+async function cloudSync(){if(!SETTINGS.gasUrl){toast(t('clDev'),'warn');goTab('settings');return;}await cloudDownload();await cloudUpload();}
+async function sendTelegramSummary(){if(!SETTINGS.gasUrl){toast(t('noGas'),'warn');goTab('settings');return;}
+  try{const list=filteredRecords();const K=computeKPI(list);const D=list.map(derive);
+    const overdue=D.filter(d=>d.overdue).length,overdueQty=sum(D.filter(d=>d.overdue),d=>d.openOrderPcs);
+    const fabTop=fabricShortageRank(list).slice(0,5);const cutTop=groupSum(list,r=>r.customer+'/'+r.po).map(o=>({k:o.key,s:Math.max(o.openQty-o.acs,0)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
+    const un=groupSum(list,r=>r.customer).sort((a,b)=>b.unship-a.unship).slice(0,5);
+    let text=`<b>VRT Customer Statistics</b>\n${nowStamp()}\n`;
+    text+=`\n📦 訂單 ${fmt(K.totalOrder)} ｜ 未出 ${fmt(K.unshipped)}\n✂️ 已裁 ${fmt(K.actualCut)} ｜ 未裁 ${fmt(K.uncut)}\n🪡 車縫Input ${fmt(K.input)} ｜ 包裝 ${fmt(K.packed)}\n🚚 出貨 ${fmt(K.shipped)} ｜ FG ${fmt(K.fg)}\n`;
+    text+=`\n🔴 逾期未出 ${fmt(overdueQty)} pcs (${overdue} 單)\n🟠 布料缺口 ${fmt(K.fabShort)} yds\n`;
+    if(fabTop.length){text+=`\n<b>缺布 Top5</b>\n`+fabTop.map(x=>`• ${escTg(x.key)}: ${fmt(x.fabShort)} yds`).join('\n')+'\n';}
+    if(un.length){text+=`\n<b>未出客戶 Top5</b>\n`+un.map(x=>`• ${escTg(x.key)}: ${fmt(x.unship)} pcs`).join('\n')+'\n';}
+    const payload={action:'telegram',chatId:SETTINGS.tgChatId||'5026942575',text,parse_mode:'HTML'};
+    await fetch(SETTINGS.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
+    toast('📨 Telegram sent','ok');
+  }catch(e){toast('Send failed','err');}}
+function escTg(s){return String(s==null?'':s).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+
+/* ── Plan 匯入（Compare 用）─────────────────────────────────────────────── */
+function handlePlanFile(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const rd=new FileReader();
+  if(ext==='json'){rd.onload=e=>{try{let o=JSON.parse(e.target.result);PLAN_RECORDS=Array.isArray(o)?o:(o.records||[]);toast(fmt(PLAN_RECORDS.length)+' plan','ok');renderCompare();}catch(err){toast('JSON error','err');}};rd.readAsText(file);}
+  else{rd.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{raw:true,defval:''});
+    PLAN_RECORDS=rows.map(x=>({customer:x.customer||x.Customer||'',po:x.po||x.PO||'',style:x.style||x.Style||'',color:x.color||x.Color||'',size:x.size||x.Size||'',line:x.line||x.Line||'',sewingQty:num(x.sewingQty||x.sewQty||x.SewingQty||x.PlanQty||0)}));toast(fmt(PLAN_RECORDS.length)+' plan','ok');renderCompare();}catch(err){toast('Excel error','err');}};rd.readAsArrayBuffer(file);}
+}
+
+/* ── init ───────────────────────────────────────────────────────────────── */
+/* 清除既有資料中的總計/雜訊列（例如客戶欄為 "1" 的整表總計列），避免重複計入總數 */
+function purgeSummaryRows(){
+  const before=RECORDS.length;
+  RECORDS=RECORDS.filter(r=>!isSummaryRow(r)&&!isEmptyRow(r));
+  const removed=before-RECORDS.length;
+  if(removed>0){rebuildEvents();persist();toast('已排除 '+removed+' 筆總計/雜訊列','warn');}
+  return removed;
+}
+async function init(){
+  loadSettings();loadHistory();
+  try{const f=JSON.parse(localStorage.getItem(LS_FILTER)||'null');if(f){GF=f.GF||GF;MODE=f.MODE||MODE;CUR_PERIOD=f.CUR_PERIOD||'';}}catch(e){}
+  try{const cp=JSON.parse(localStorage.getItem(LS_CMP)||'null');if(cp&&Array.isArray(cp.records))PLAN_RECORDS=cp.records;}catch(e){}
+  await idbLoadAll();
+  purgeSummaryRows();
+  document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files.length)handleFiles(e.target.files);e.target.value='';});
+  document.getElementById('jsonInput').addEventListener('change',e=>{if(e.target.files[0])rsJson(e.target.files[0]);e.target.value='';});
+  document.getElementById('planInput').addEventListener('change',e=>{if(e.target.files[0])handlePlanFile(e.target.files[0]);e.target.value='';});
+  document.querySelector('#modeSw button[data-m="'+MODE+'"]')?.classList.add('on');
+  document.querySelectorAll('#modeSw button').forEach(b=>b.classList.toggle('on',b.dataset.m===MODE));
+  buildTabs();applyLang();ensurePeriod();renderModebar();refreshHeader();renderTab(CUR_TAB);
+}
+/* window scope（onclick 慣例）*/
+Object.assign(window,{toggleLang,setMode,periodNav,periodToday,goTab,resetFilter,cloudUpload,cloudDownload,cloudSync,
+  sendTelegramSummary,handleFiles,confirmImport,cancelImport,resolveDup,toggleDrill,FAB_DIM,renderFabric,cmpReadPlan,
+  cmpPasteParse,exportCompareJson,openEdit,saveEdit,delRec,batchDel,toggleSel,toggleAllSel,exportExcel,exportCsv,exportJson,
+  bkJson,closeModal,renderRecords,filteredRecords2,GF});
+window.addEventListener('DOMContentLoaded',init);
+if(document.readyState!=='loading')init();
+
+</script>
+</body>
+</html>
