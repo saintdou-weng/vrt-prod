@@ -153,7 +153,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · v1.0</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · v2.2 · Smart OCR</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -393,9 +393,9 @@ function toggleLang(){_lang=_lang==='zh'?'en':_lang==='en'?'km':'zh';localStorag
 
 /* ===== IndexedDB 儲存層 ===== */
 const IDB_NAME='vrt_spareparts', IDB_VER=2;
-const SP_STORES=['parts','txns','versions','meta','suppliers','invoices','ocrhist','images'];
-function openDB(){
-  const build=db=>{
+function openDB(){return new Promise((res,rej)=>{
+  const req=indexedDB.open(IDB_NAME,IDB_VER);
+  req.onupgradeneeded=e=>{const db=e.target.result;
     if(!db.objectStoreNames.contains('parts'))db.createObjectStore('parts',{keyPath:'id'});
     if(!db.objectStoreNames.contains('txns'))db.createObjectStore('txns',{keyPath:'id'});
     if(!db.objectStoreNames.contains('versions'))db.createObjectStore('versions',{keyPath:'id'});
@@ -405,17 +405,8 @@ function openDB(){
     if(!db.objectStoreNames.contains('ocrhist'))db.createObjectStore('ocrhist',{keyPath:'id'});
     if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'id'});
   };
-  const tryOpen=ver=>new Promise((res,rej)=>{
-    const req=ver?indexedDB.open(IDB_NAME,ver):indexedDB.open(IDB_NAME);
-    req.onupgradeneeded=e=>build(e.target.result);
-    req.onsuccess=e=>res(e.target.result); req.onerror=()=>rej(req.error);
-  });
-  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
-  return tryOpen(IDB_VER)
-    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
-    .then(db=>{ if(SP_STORES.every(s=>db.objectStoreNames.contains(s))) return db;
-      const nv=db.version+1; db.close(); return tryOpen(nv); });
-}
+  req.onsuccess=e=>res(e.target.result); req.onerror=e=>rej(e);
+});}
 async function idbPutAll(store,arr){const db=await openDB();return new Promise((res,rej)=>{
   const tx=db.transaction(store,'readwrite');const os=tx.objectStore(store);os.clear();
   arr.forEach(o=>os.put(o));tx.oncomplete=()=>res();tx.onerror=e=>rej(e);});}
@@ -453,9 +444,6 @@ async function loadAll(){
     SUPPLIERS=await idbGetAll('suppliers'); INVOICES=await idbGetAll('invoices'); OCRHIST=await idbGetAll('ocrhist');
     const s=await idbGetMeta('settings'); if(s)SET=Object.assign(SET,s);
     else{const ls=localStorage.getItem('vrt_sp_set');if(ls)SET=Object.assign(SET,JSON.parse(ls));}
-    // GAS URL 未設定時，自動沿用 Portal 共用 URL（vrt_portal_gas_url）
-    if(!SET.gasUrl){const pu=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
-      if(pu){SET.gasUrl=pu;SET.cloudTarget='gas';}}
   }catch(e){console.error(e);}
   if(!PARTS.length) seedDemo();
 }
@@ -531,10 +519,11 @@ function filteredTxns(){
 
 /* ===== 下拉填充 ===== */
 function fillFilterSelects(){
-  const opt=(arr,all)=>'<option value="">'+all+'</option>'+arr.map(a=>'<option>'+a+'</option>').join('');
-  $('fStore').innerHTML=opt(STORES,_lang==='en'?'All Stores':_lang==='km'?'ឃ្លាំងទាំងអស់':'全部倉庫');
-  $('fCat').innerHTML=opt(CATS,_lang==='en'?'All Categories':_lang==='km'?'ប្រភេទទាំងអស់':'全部分類');
-  $('fBrand').innerHTML=opt(BRANDS,_lang==='en'?'All Brands':_lang==='km'?'ម៉ាកទាំងអស់':'全部品牌');
+  const uniq=(base,key)=>{const s=new Set(base);PARTS.forEach(p=>{if(p[key])s.add(p[key]);});return [...s];};
+  const opt=(arr,all,cur)=>'<option value="">'+all+'</option>'+arr.map(a=>'<option '+(a===cur?'selected':'')+'>'+escapeHtml(a)+'</option>').join('');
+  $('fStore').innerHTML=opt(uniq(STORES,'location'),_lang==='en'?'All Stores':_lang==='km'?'ឃ្លាំងទាំងអស់':'全部倉庫',FILTER.store);
+  $('fCat').innerHTML=opt(uniq(CATS,'category'),_lang==='en'?'All Categories':_lang==='km'?'ប្រភេទទាំងអស់':'全部分類',FILTER.cat);
+  $('fBrand').innerHTML=opt(uniq(BRANDS,'brand'),_lang==='en'?'All Brands':_lang==='km'?'ម៉ាកទាំងអស់':'全部品牌',FILTER.brand);
 }
 
 /* ===== Tab 路由 ===== */
@@ -616,7 +605,7 @@ function priceAbnormalCount(){
   return c;
 }
 function priceHistory(partNo){
-  return TXNS.filter(x=>x.partNo===partNo&&x.type==='IN'&&x.unitPrice).map(x=>({date:x.date,price:+x.unitPrice}))
+  return TXNS.filter(x=>x.partNo===partNo&&x.type==='IN'&&x.unitPrice).map(x=>({date:x.date,price:+x.unitPrice,qty:+x.qty||0}))
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 }
 
@@ -663,7 +652,7 @@ function editPart(id){
       <div class="fld"><label>${t('colPartNo')}</label><input id="m_partNo" value="${escapeHtml(p.partNo||'')}"></div>
       <div class="fld"><label>${t('colName')}</label><input id="m_name" value="${escapeHtml(p.name||'')}"></div>
       <div class="fld"><label>${t('colSpec')}</label><input id="m_spec" value="${escapeHtml(p.spec||'')}"></div>
-      <div class="fld"><label>${t('colCat')}</label><select id="m_cat">${sel(CATS,p.category)}</select></div>
+      <div class="fld"><label>${t('colCat')}</label><select id="m_cat">${sel(CATS.includes(p.category)||!p.category?CATS:[p.category,...CATS],p.category)}</select></div>
       <div class="fld"><label>${t('colBrand')}</label><select id="m_brand">${sel(BRANDS,p.brand)}</select></div>
       <div class="fld"><label>${t('colMtype')}</label><select id="m_mt">${sel(MTYPES,p.machineType)}</select></div>
       <div class="fld"><label>${t('colLoc')}</label><select id="m_loc">${sel(STORES,p.location)}</select></div>
@@ -758,29 +747,40 @@ function renderMonthly(){
   fillFilterSelects();
   const year=(new Date()).getFullYear();
   const months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
+  const passF=x=>{const p=PARTS.find(z=>z.partNo===x.partNo)||{};
+    if(FILTER.store&&p.location!==FILTER.store)return false;
+    if(FILTER.cat&&p.category!==FILTER.cat)return false;
+    if(FILTER.brand&&p.brand!==FILTER.brand)return false;
+    if(FILTER.q){const s=(x.partNo+' '+(p.name||'')).toLowerCase();if(!s.includes(FILTER.q))return false;}
+    return true;};
+  const fparts=filteredParts();
   let rows=months.map(m=>{
-    const mtx=TXNS.filter(x=>ym(x.date)===m);
+    const mtx=TXNS.filter(x=>ym(x.date)===m&&passF(x));
     const inQ=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0),0);
     const outQ=mtx.filter(x=>x.type==='OUT').reduce((s,x)=>s+(+x.qty||0),0);
-    // 月底各零件結存與價值
-    let bal=0,val=0,priceSum=0,priceN=0;
-    PARTS.forEach(p=>{const b=balanceAtMonthEnd(p.partNo,m);if(b>0){bal+=b;val+=b*(+p.unitPrice||0);}});
+    // 月採購金額（IN 金額）＋月底結存價值
+    const inAmt=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0)*(+x.unitPrice||0),0);
+    let bal=0,val=0;
+    fparts.forEach(p=>{const b=balanceAtMonthEnd(p.partNo,m);if(b>0){bal+=b;val+=b*(+p.unitPrice||0);}});
     const prices=mtx.filter(x=>x.type==='IN'&&x.unitPrice).map(x=>+x.unitPrice);
     const avg=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
-    return {m,inQ,outQ,bal,avg,val};
+    return {m,inQ,outQ,inAmt,bal,avg,val};
   });
   const mlbl=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')} — ${year}</div><div class="tw"><table><thead><tr>
+  const catNote=FILTER.cat?` · ${escapeHtml(FILTER.cat)}`:'';
+  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')} — ${year}${catNote}</div><div class="tw"><table><thead><tr>
     <th>${t('monMonth')}</th><th class="num">${t('monIn')}</th><th class="num">${t('monOut')}</th>
+    <th class="num">${_lang==='en'?'Purchase $':'採購金額'}</th>
     <th class="num">${t('monBal')}</th><th class="num">${t('monAvg')}</th><th class="num">${t('monVal')}</th></tr></thead><tbody>`;
-  let tIn=0,tOut=0,tVal=0;
-  h+=rows.map((r,i)=>{tIn+=r.inQ;tOut+=r.outQ;tVal+=r.val;
+  let tIn=0,tOut=0,tAmt=0,tVal=0;
+  h+=rows.map((r,i)=>{tIn+=r.inQ;tOut+=r.outQ;tAmt+=r.inAmt;tVal+=r.val;
     return `<tr><td>${mlbl[i]}</td><td class="num">${num(r.inQ)}</td><td class="num">${num(r.outQ)}</td>
+      <td class="num">${r.inAmt?money(r.inAmt):'-'}</td>
       <td class="num">${num(r.bal)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.val)}</td></tr>`;}).join('');
   h+=`<tr style="font-weight:700;background:var(--soft)"><td>Grand Total</td><td class="num">${num(tIn)}</td><td class="num">${num(tOut)}</td>
-    <td class="num">-</td><td class="num">-</td><td class="num">${money(tVal)}</td></tr>`;
+    <td class="num">${money(tAmt)}</td><td class="num">-</td><td class="num">-</td><td class="num">${money(tVal)}</td></tr>`;
   h+=`</tbody></table></div>
-   <div class="al al-i" style="margin-top:12px">${_lang==='en'?'Month-end balance is accumulated from In/Out records (opening assumed 0).':_lang==='km'?'នៅសល់ចុងខែគណនាពីកំណត់ត្រាចូល/ចេញ។':'月底庫存由進出紀錄累積計算（期初假設為 0）。'}</div>
+   <div class="al al-i" style="margin-top:12px">${_lang==='en'?'Use the Category filter above to see monthly purchase amount per category. Month-end balance accumulates from In/Out (opening 0).':_lang==='km'?'ប្រើតម្រងប្រភេទខាងលើ ដើម្បីមើលទឹកប្រាក់ទិញប្រចាំខែតាមប្រភេទ។':'可用上方「分類」篩選，查看各類別每月採購金額；月底庫存由進出累積（期初 0）。'}</div>
    </div></div>`;
   $('app').innerHTML=h;
 }
@@ -788,11 +788,14 @@ function renderMonthly(){
 /* ========== PRICE ANALYSIS ========== */
 function renderPrice(){
   fillFilterSelects();
-  // 有兩筆以上 IN 價的零件
-  const parts=PARTS.filter(p=>priceHistory(p.partNo).length>=1);
+  // 有價格紀錄的零件（依目前分類/品牌/搜尋篩選）
+  let parts=PARTS.filter(p=>priceHistory(p.partNo).length>=1);
+  if(FILTER.cat)parts=parts.filter(p=>p.category===FILTER.cat);
+  if(FILTER.brand)parts=parts.filter(p=>p.brand===FILTER.brand);
+  if(FILTER.q)parts=parts.filter(p=>(p.partNo+' '+p.name+' '+p.spec).toLowerCase().includes(FILTER.q));
   const sel=$('priceSel')?$('priceSel').value:(parts[0]?parts[0].partNo:'');
   let h=`<div class="sec on"><div class="card"><div class="frow">
-    <span class="tb-lbl">${t('prSelect')}</span>
+    <span class="tb-lbl">${t('prSelect')} (${parts.length})</span>
     <select id="priceSel" onchange="renderPrice()">${parts.map(p=>`<option value="${escapeHtml(p.partNo)}" ${p.partNo===sel?'selected':''}>${escapeHtml(p.partNo)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
   </div>`;
   const hist=priceHistory(sel);
@@ -801,30 +804,34 @@ function renderPrice(){
     const avg=prices.reduce((a,b)=>a+b,0)/prices.length, mx=Math.max(...prices), mn=Math.min(...prices), last=prices[prices.length-1];
     const first=prices[0], chg=first?((last-first)/first*100):0;
     const pill=chg>0.5?`<span class="pill up">▲ ${chg.toFixed(1)}%</span>`:chg<-0.5?`<span class="pill down">▼ ${Math.abs(chg).toFixed(1)}%</span>`:`<span class="pill flat">≈ 0%</span>`;
+    const totQ=hist.reduce((s,x)=>s+(+x.qty||0),0);
     h+=`<div class="kpi-strip">
       <div class="kpi k-blue"><div class="kpi-n">${money(last)}</div><div class="kpi-l">${t('prLast')} ${pill}</div></div>
       <div class="kpi k-green"><div class="kpi-n">${money(avg)}</div><div class="kpi-l">${t('prAvg')}</div></div>
       <div class="kpi k-red"><div class="kpi-n">${money(mx)}</div><div class="kpi-l">${t('prMax')}</div></div>
-      <div class="kpi k-slate"><div class="kpi-n">${money(mn)}</div><div class="kpi-l">${t('prMin')}</div></div></div>`;
+      <div class="kpi k-slate"><div class="kpi-n">${money(mn)}</div><div class="kpi-l">${t('prMin')}</div></div>
+      <div class="kpi k-violet"><div class="kpi-n">${num(totQ)}</div><div class="kpi-l">${_lang==='en'?'Total Qty':'累計數量'}</div></div></div>`;
     // sparkline
     const max=mx||1;
     h+=`<div class="ct">${t('prTrend')}</div><div class="spark" style="margin-bottom:14px">`+
-       hist.map(x=>`<i style="height:${Math.max(6,x.price/max*34)}px" title="${x.date}: ${money(x.price)}"></i>`).join('')+`</div>`;
-    h+=`<div class="tw"><table><thead><tr><th>${t('colDate')}</th><th class="num">${t('colPrice')}</th><th class="num">Δ%</th></tr></thead><tbody>`;
+       hist.map(x=>`<i style="height:${Math.max(6,x.price/max*34)}px" title="${x.date}: ${money(x.price)} × ${num(x.qty)}"></i>`).join('')+`</div>`;
+    h+=`<div class="tw"><table><thead><tr><th>${t('colDate')}</th><th class="num">${t('colPrice')}</th><th class="num">Δ%</th><th class="num">${t('colQty')}</th><th class="num">ΔQty</th></tr></thead><tbody>`;
     h+=hist.map((x,i)=>{const prev=i>0?hist[i-1].price:0;const d=prev?((x.price-prev)/prev*100):0;
       const dp=i===0?'-':d>0.5?`<span class="pill up">▲${d.toFixed(1)}</span>`:d<-0.5?`<span class="pill down">▼${Math.abs(d).toFixed(1)}</span>`:`<span class="pill flat">0</span>`;
-      return `<tr><td class="mono">${x.date}</td><td class="num">${money(x.price)}</td><td class="num">${dp}</td></tr>`;}).join('');
+      const pq=i>0?hist[i-1].qty:0;const dq=(+x.qty||0)-(+pq||0);
+      const dqp=i===0?'-':dq>0?`<span class="pill up">▲${num(dq)}</span>`:dq<0?`<span class="pill down">▼${num(-dq)}</span>`:`<span class="pill flat">0</span>`;
+      return `<tr><td class="mono">${x.date}</td><td class="num">${money(x.price)}</td><td class="num">${dp}</td><td class="num">${num(x.qty)}</td><td class="num">${dqp}</td></tr>`;}).join('');
     h+=`</tbody></table></div>`;
   }else h+=`<div class="empty">${t('noData')}</div>`;
   h+=`</div>`;
-  // 同規格不同品牌比較
+  // 同規格不同品牌/料號比較
   const cur=PARTS.find(p=>p.partNo===sel);
   if(cur){
     const same=PARTS.filter(p=>p.spec&&p.spec===cur.spec);
     if(same.length>1){
       h+=`<div class="card"><div class="ct">⚖ ${t('prCompare')} — ${escapeHtml(cur.spec)}</div><div class="tw"><table><thead><tr>
         <th>${t('colBrand')}</th><th>${t('colPartNo')}</th><th class="num">${t('colPrice')}</th><th class="num">${t('colQty')}</th></tr></thead><tbody>`;
-      h+=same.sort((a,b)=>a.unitPrice-b.unitPrice).map(p=>`<tr><td><b>${escapeHtml(p.brand)}</b></td><td class="mono">${escapeHtml(p.partNo)}</td><td class="num">${money(p.unitPrice)}</td><td class="num">${num(p.qty)}</td></tr>`).join('');
+      h+=same.sort((a,b)=>a.unitPrice-b.unitPrice).map(p=>`<tr><td><b>${escapeHtml(p.brand||'-')}</b></td><td class="mono">${escapeHtml(p.partNo)}</td><td class="num">${money(p.unitPrice)}</td><td class="num">${num(p.qty)}</td></tr>`).join('');
       h+=`</tbody></table></div></div>`;
     }
   }
@@ -1085,12 +1092,13 @@ function clearAll(){if(!confirm(t('confirmDel')))return;PARTS=[];TXNS=[];VERSION
 
 /* ===== 本機備份 / 還原 ===== */
 function backupLocal(){
-  const blob=new Blob([JSON.stringify({parts:PARTS,txns:TXNS,versions:VERSIONS,settings:SET,ts:Date.now()},null,1)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify({parts:PARTS,txns:TXNS,versions:VERSIONS,suppliers:SUPPLIERS,invoices:INVOICES,ocrhist:OCRHIST,settings:SET,ts:Date.now()},null,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='VRT_SpareParts_Backup_'+todayStr()+'.json';a.click();
 }
 function restoreLocal(file){if(!file)return;const rd=new FileReader();
   rd.onload=e=>{try{const d=JSON.parse(e.target.result);
     if(d.parts)PARTS=d.parts;if(d.txns)TXNS=d.txns;if(d.versions)VERSIONS=d.versions;if(d.settings)SET=Object.assign(SET,d.settings);
+    if(d.suppliers)SUPPLIERS=d.suppliers;if(d.invoices)INVOICES=d.invoices;if(d.ocrhist)OCRHIST=d.ocrhist;
     saveAll(true);applyTheme();goTab('dashboard',null);}catch(err){toast('Restore error');}};
   rd.readAsText(file);}
 
@@ -1114,13 +1122,8 @@ async function cloudDownload(){
   if(SET.cloudTarget==='local'||!SET.gasUrl){toast(_lang==='en'?'Use Restore for local':'本機請用還原');return;}
   try{
     const res=await fetch(SET.gasUrl+'?action=pull&tool=spareparts',{redirect:'follow'});
-    const j=await res.json();
-    // GAS 回應層級：{ok,data:{tool,chunked,data:PAYLOAD}}；PAYLOAD 內 parts 可能在 data 下
-    let pay=(j&&j.ok&&j.data)?j.data:j;
-    if(pay&&pay.data&&!pay.parts) pay=pay.data;           // 剝 {tool,chunked,data}
-    let box=pay;
-    if(box&&box.data&&box.data.parts) box=box.data;        // 剝 {action,tool,data:{parts..}}
-    if(box&&box.parts){PARTS=box.parts;TXNS=box.txns||[];VERSIONS=box.versions||[];saveAll(true);goTab('dashboard',null);toast('☁️ Downloaded ('+PARTS.length+')');}
+    const d=await res.json();
+    if(d&&d.parts){PARTS=d.parts;TXNS=d.txns||[];VERSIONS=d.versions||[];saveAll(true);goTab('dashboard',null);toast('☁️ Downloaded');}
     else toast('No cloud data');
   }catch(e){console.error(e);toast('Download failed');}
 }
@@ -1207,6 +1210,7 @@ function renderOCR(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
     ${OCR_MODES.map(m=>`<div class="mode-card ${SET.ocrMode===m.k?'on':''}" onclick="setOcrMode('${m.k}')"><b>${m.ico} ${t('m'+m.k.charAt(0).toUpperCase()+m.k.slice(1))}</b></div>`).join('')}
     </div>
+    <div style="font-size:11px;color:var(--sub);margin:2px 0 8px">${engineStatus()}</div>
     <div class="drop" id="ocrDrop" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="ocrDropHandler(event)">
       <input type="file" accept="image/*,.pdf,.heic" multiple onchange="ocrFiles(this.files)">
       <div style="font-size:32px">📷</div>
@@ -1286,28 +1290,44 @@ function ocrDropHandler(e){e.preventDefault();e.currentTarget.classList.remove('
 async function ocrFiles(files){
   if(!files||!files.length)return;
   toast(_lang==='en'?'Loading files…':'載入檔案中…');
+  const before=_ocr.pages.length;
   for(const f of files){
     const ext=(f.name.split('.').pop()||'').toLowerCase();
     if(ext==='pdf'){await loadPdf(f);}
-    else{const url=await fileToDataUrl(f);_ocr.pages.push({dataUrl:url,name:f.name});}
+    else{const url=await fileToDataUrl(f);_ocr.pages.push({dataUrl:url,name:f.name,text:''});}
   }
-  _ocr.cur=0;renderOCR();
+  const added=_ocr.pages.length-before;
+  _ocr.cur=added?before:0;
+  if(!added){toast(_lang==='en'?'No page loaded — PDF engine may be blocked/offline':'未載入任何頁面 — PDF 引擎可能離線或被擋');renderOCR();return;}
+  // 數位 PDF（含文字圖層）→ 免 OCR 直接解析
+  const pg=_ocr.pages[_ocr.cur];
+  if(pg&&pg.text&&pg.text.replace(/\s/g,'').length>40){parseDigital(pg.text);toast(_lang==='en'?'Digital PDF — parsed without OCR':'數位 PDF — 免 OCR 直接解析');}
+  renderOCR();
 }
 function fileToDataUrl(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});}
 async function loadPdf(f){
+  if(!window.pdfjsLib){toast(_lang==='en'?'PDF engine not loaded (first use needs internet)':'PDF 引擎未載入（首次使用需連網）');return;}
   try{
-    if(!window.pdfjsLib){toast('PDF engine missing');return;}
-    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    try{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}catch(_){}
     const buf=await f.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:buf}).promise;
     for(let p=1;p<=pdf.numPages;p++){
       const page=await pdf.getPage(p);
+      let text='';try{const tc=await page.getTextContent();text=tc.items.map(i=>i.str).join(' ');}catch(_){}
       const vp=page.getViewport({scale:2});
       const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
       await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-      _ocr.pages.push({dataUrl:cv.toDataURL('image/png'),name:f.name+' p'+p});
+      _ocr.pages.push({dataUrl:cv.toDataURL('image/png'),name:f.name+' p'+p,text});
     }
-  }catch(e){console.error(e);toast('PDF load failed');}
+  }catch(e){console.error(e);toast('PDF: '+(e.message||'load failed'));}
+}
+/* 數位 PDF 文字直接結構化（免 OCR） */
+function parseDigital(text){
+  const lines=text.split(/\n|\s{3,}/).map(s=>s.trim()).filter(Boolean).map(s=>({text:dictFix(s),conf:99}));
+  _ocr.header=parseHeader(lines);
+  _ocr.lines=parseItems(lines);
+  if(!_ocr.lines.length)_ocr.lines=[blankLine()];
+  _ocr.raw=text;_ocr._oc=99;
 }
 
 /* ========== 裁切 ========== */
@@ -1341,27 +1361,35 @@ function applyCrop(box){
 /* ========== OCR 引擎（Tesseract / 可選 Vision API） ========== */
 async function ensureTess(){
   if(_tessWorker)return _tessWorker;
-  if(!window.Tesseract)throw new Error('Tesseract not loaded');
-  _tessWorker=await Tesseract.createWorker(SET.ocrLang||'eng',1,{logger:m=>{
-    if(m.status==='recognizing text'){_ocr.prog=Math.round(m.progress*100);const bar=document.querySelector('.ocr-progress i');if(bar)bar.style.width=_ocr.prog+'%';}
-  }});
-  return _tessWorker;
+  if(!window.Tesseract)throw new Error(_lang==='en'?'OCR engine not loaded (first use needs internet)':'OCR 引擎未載入（首次使用需連網下載）');
+  const langs=[SET.ocrLang||'eng','eng'];let err;
+  for(const lg of langs){
+    try{_tessWorker=await Tesseract.createWorker(lg,1,{logger:m=>{
+      if(m.status==='recognizing text'){_ocr.prog=Math.round(m.progress*100);const bar=document.querySelector('.ocr-progress i');if(bar)bar.style.width=_ocr.prog+'%';}}});
+      return _tessWorker;}
+    catch(e){err=e;console.warn('Tesseract lang failed:',lg,e);}
+  }
+  throw err||new Error('Tesseract init failed');
 }
 async function runOCR(){
-  if(!_ocr.pages.length){toast('No image');return;}
+  if(!_ocr.pages.length){toast(_lang==='en'?'Load an image/PDF first':'請先載入圖片/PDF');return;}
+  const pg=_ocr.pages[_ocr.cur];
+  // 含文字圖層 → 免 OCR
+  if(pg&&pg.text&&pg.text.replace(/\s/g,'').length>40&&!SET.visionUrl){parseDigital(pg.text);renderOCR();toast(_lang==='en'?'Parsed from PDF text':'由 PDF 文字解析');return;}
   _ocr.busy=true;_ocr.prog=0;renderOCR();
   try{
-    if(SET.visionUrl){ // 可選：外接 Vision AI
-      await runVision();
-    }else{
+    if(SET.visionUrl){await runVision();}
+    else{
       const worker=await ensureTess();
       const psm=(OCR_MODES.find(m=>m.k===SET.ocrMode)||{}).psm||6;
       try{await worker.setParameters({tessedit_pageseg_mode:String(psm)});}catch(_){}
-      const {data}=await worker.recognize(_ocr.pages[_ocr.cur].dataUrl);
-      _ocr.raw=data.text||'';
+      const {data}=await worker.recognize(pg.dataUrl);
+      _ocr.raw=data.text||'';_ocr._oc=Math.round(data.confidence||0);
       parseFromTess(data);
+      if(!_ocr.lines.length||(_ocr.lines.length===1&&!_ocr.lines[0].name))
+        toast(_lang==='en'?'OCR found little — enter rows manually →':'OCR 擷取有限 — 可於右側手動輸入');
     }
-  }catch(e){console.error(e);toast('OCR error: '+e.message);}
+  }catch(e){console.error(e);toast('OCR: '+e.message);if(!_ocr.lines.length)_ocr.lines=[blankLine()];}
   _ocr.busy=false;renderOCR();
 }
 async function runVision(){
@@ -1393,13 +1421,16 @@ function parseHeader(L){
   // 供應商：先比對既有，再取含英文字母且長度>4的前幾行
   const known=SUPPLIERS.find(s=>all.toUpperCase().includes((s.name||'').toUpperCase().slice(0,6)));
   if(known)h.supplier=known.name;
-  else{for(const l of L.slice(0,4)){if(/[A-Za-z\u4e00-\u9fff]{4,}/.test(l.text)&&!/invoice|發票/i.test(l.text)){h.supplier=l.text.replace(/\s{2,}/g,' ').trim();break;}}}
+  else{for(const l of L.slice(0,6)){if(/[A-Za-z\u4e00-\u9fff]{4,}/.test(l.text)&&!/invoice|發票|e-?mail|@|tel|attn|^\s*to\b|\bdate\b|local|statement|月結|page/i.test(l.text)){h.supplier=l.text.replace(/\s{2,}/g,' ').trim();break;}}}
   const inv=all.match(/no\.?\s*[:#]?\s*(\d{4,})/i)||all.match(/(\d{6})/);if(inv)h.invNo=inv[1];
-  const dm=all.match(/(\d{1,2})\s*[.\/\-]\s*(\d{1,2})\s*[.\/\-]\s*(\d{2,4})/);
-  if(dm){let[_,d,mo,y]=dm;y=y.length===2?'20'+y:y;h.date=y+'-'+pad(+mo)+'-'+pad(+d);}
-  else{const dm2=all.match(/(20\d{2})\s*[.\/\-]\s*(\d{1,2})\s*[.\/\-]\s*(\d{1,2})/);if(dm2)h.date=dm2[1]+'-'+pad(+dm2[2])+'-'+pad(+dm2[3]);}
+  // 日期：先 yyyy/mm/dd，再 dd.mm.yyyy
+  const dY=all.match(/(20\d{2})\s*[.\/\-]\s*(\d{1,2})\s*[.\/\-]\s*(\d{1,2})/);
+  const dD=all.match(/(\d{1,2})\s*[.\/\-]\s*(\d{1,2})\s*[.\/\-]\s*(20?\d{2})/);
+  if(dY)h.date=dY[1]+'-'+pad(+dY[2])+'-'+pad(+dY[3]);
+  else if(dD){let y=dD[3];y=y.length===2?'20'+y:y;h.date=y+'-'+pad(+dD[2])+'-'+pad(+dD[1]);}
   if(/usd|\$/i.test(all))h.currency='USD';else if(/khr|៛|riel/i.test(all))h.currency='KHR';else if(/twd|ntd|nt\$/i.test(all))h.currency='TWD';
-  const tot=all.match(/total[^\d]*(\d+(?:\.\d+)?)/i);if(tot)h.total=tot[1];
+  const gt=all.match(/grand\s*total[^\d]*([\d,]+(?:\.\d+)?)/i)||all.match(/總計[^\d]*([\d,]+(?:\.\d+)?)/)||all.match(/total[^\d]*([\d,]+(?:\.\d+)?)/i);
+  if(gt)h.total=gt[1].replace(/,/g,'');
   if(!h.date)h.date=todayStr();
   return h;
 }
@@ -1408,19 +1439,30 @@ function normLine(o){return Object.assign(blankLine(),o);}
 function parseItems(L){
   const items=[];
   L.forEach(l=>{
-    const txt=l.text;
-    if(/invoice|發票|name of goods|品名|^\s*total|總|supplier|^\s*name\b|\bdate\b|單價|unit\s*price|數量|\bqty\b/i.test(txt))return;
-    if(/\d{1,2}\s*[.\/\-]\s*\d{1,2}\s*[.\/\-]\s*\d{2,4}/.test(txt))return; // 日期行
-    const nums=(txt.match(/\d+(?:\.\d+)?/g)||[]).map(Number);
-    if(nums.length<2)return; // 需至少 數量+價 或 價+額
+    let txt=(l.text||'').replace(/(\d),(\d{3})/g,'$1$2'); // 去千分位
+    if(/invoice|發票|name of goods|品名|^\s*total|grand\s*total|sub\s*total|小計|總計|統計|balance|vat|稅|supplier|收貨|^\s*name\b|\bdate\b|單價|unit\s*price|數量|\bqty\b|page|e-?mail|tel|attn|local/i.test(txt))return;
+    // 移除列首日期（月結單每列都有日期）
+    const dm=txt.match(/20\d{2}\s*[.\/\-]\s*\d{1,2}\s*[.\/\-]\s*\d{1,2}|\d{1,2}\s*[.\/\-]\s*\d{1,2}\s*[.\/\-]\s*20?\d{2}/);
+    let core=dm?txt.replace(dm[0],' '):txt;
+    // 移除單據號 YI-000127 之類（保留於備註）
+    core=core.replace(/\b[A-Z]{1,4}-\d{4,}\b/g,' ');
+    const numMatches=[...core.matchAll(/\d+(?:\.\d+)?/g)];
+    if(numMatches.length<2)return; // 需至少 價+額
+    const vals=numMatches.map(m=>Number(m[0]));
     let qty=0,price=0,amount=0;
-    if(nums.length>=3){qty=nums[nums.length-3];price=nums[nums.length-2];amount=nums[nums.length-1];}
-    else{price=nums[nums.length-2];amount=nums[nums.length-1];qty=price?Math.round(amount/price):nums[0];}
-    let desc=txt.replace(/\d+(?:\.\d+)?/g,' ').replace(/[|=:]/g,' ').replace(/\s{2,}/g,' ').trim();
-    desc=desc.replace(/^no\.?\s*/i,'').trim();
+    if(vals.length>=3){qty=vals[vals.length-3];price=vals[vals.length-2];amount=vals[vals.length-1];}
+    else{price=vals[vals.length-2];amount=vals[vals.length-1];qty=price?Math.round(amount/price):vals[0];}
+    // 品名 = 數量數字之前的文字（保留 ES-94、SiRUBA-747KD 等料號）
+    const qtyIdx=numMatches.length>=3?numMatches[numMatches.length-3].index:numMatches[numMatches.length-2].index;
+    let desc=core.slice(0,qtyIdx)
+      .replace(/^\s*\d+\s+/,'')                       // 列首序號
+      .replace(/[|=:#]/g,' ')
+      .replace(/\b(個|支|包|打|把|張|條|套|桶|瓶|台|盒|pcs?|box|set|roll|kgs?|mtr?|米)\b/gi,' ')
+      .replace(/\s{2,}/g,' ').trim();
     if(!desc&&!amount)return;
     const cat=catFromText(desc);
-    items.push({partNo:genPartNo(desc,cat),name:desc||('Item '+(items.length+1)),spec:'',qty:qty||0,unitPrice:price||0,amount:amount||0,category:cat,conf:l.conf,raw:txt});
+    items.push({partNo:genPartNo(desc,cat),name:desc||('Item '+(items.length+1)),spec:'',
+      qty:qty||0,unitPrice:price||0,amount:amount||0,category:cat,conf:l.conf,raw:l.text});
   });
   return items;
 }
@@ -1436,10 +1478,15 @@ function genPartNo(name,cat){
 }
 
 /* ========== 右側可編輯面板 ========== */
+function engineStatus(){
+  const tk=window.Tesseract?'🟢':'🔴', pj=window.pdfjsLib?'🟢':'🔴';
+  const ok=window.Tesseract&&window.pdfjsLib;
+  const note=ok?'':(_lang==='en'?' — engines download from internet on first use':' — 引擎首次使用需連網下載');
+  return `OCR ${tk} Tesseract.js · PDF ${pj} pdf.js${note}`;
+}
 function renderOcrPanel(){
-  if(!_ocr.lines.length&&!_ocr.header.invNo)
-    return `<div class="empty">${_lang==='en'?'Run OCR to extract invoice':'按「開始辨識」擷取發票'}</div>`;
-  const H=_ocr.header;
+  if(!_ocr.lines.length)_ocr.lines=[blankLine()];
+  const H=_ocr.header||(_ocr.header={});
   const fld=(k,lbl,val)=>`<div class="fld"><label>${lbl}</label><input id="oh_${k}" value="${escapeHtml(val||'')}" oninput="onHeaderEdit('${k}',this.value)"></div>`;
   let h=`<div style="font-size:11px;font-weight:700;color:var(--sub);margin-bottom:8px">🧾 ${t('hdrTotal')} / Header</div>
    <div class="frm-grid">
