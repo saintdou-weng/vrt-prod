@@ -116,7 +116,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.13</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.14</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -1338,17 +1338,16 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 // Match: "Line 1","Line 8","LINE 09","Line G20","Line G25" — NOT "Line 1-A","Line 2-A"
 const LRE = /^(LINE|Line)\s+[A-Z]?\d+$/;
 
-// Normalize line names: "LINE 1" → "Line 1", "LINE 09" → "LINE 09" (keep Apron caps)
-// Garment lines 1-8 use "Line N", Apron/high-number use "LINE NN"
+// Normalize line names to a single canonical form: "LINE 01"/"Line 1"/"LINE 1" → "Line 1"
+// ★ v5.14: 線號不再用格式判斷線種。同一實體線不論做成衣或 apron/napkin/top 都算同一條。
+//   成衣/非成衣改由 splitGA() 依「實際產品別」判斷（Type of Product / section），與線號長相脫鉤。
 function normLineNo(s){
   const m=String(s||"").trim().match(/^(?:LINE|Line)\s+([A-Z]?)(\d+)$/i);
   if(!m) return String(s||"").trim();
-  const prefix=m[1], num=parseInt(m[2],10), numStr=m[2];
+  const prefix=m[1].toUpperCase(), num=parseInt(m[2],10);
   // Letter prefix (e.g. G20) → "Line G20"
   if(prefix) return "Line "+prefix+String(num);
-  // Leading zero = Apron (LINE 09, LINE 10) → keep "LINE NN"
-  if(numStr.startsWith("0")) return "LINE "+numStr;
-  // No leading zero = Garment → always "Line N" regardless of number
+  // 純數字線 → 一律 "Line N"（去大寫、去前導零），LINE 01 與 Line 1 合併為同一條
   return "Line "+String(num);
 }
 const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
@@ -3214,15 +3213,18 @@ function effClass(e){ return e>=45?"hi":e>=30?"md":e>0?"lo":"zero"; }
 /* ★ 目標型資料來源：VRT_Production_Daily report(target) 與 Daily Production Output report(dpo) 並行 */
 function isTgtSrc(r){ return r && (r.tSrc==="target" || r.tSrc==="dpo"); }
 
-/* ★ 成衣 / Apron 分流：優先用 Daily Output 明細(gPcs/aPcs)，其次 section，最後用線號格式（LINE 09 = Apron 線） */
+/* ★ v5.14 成衣／非成衣分流（A 方案：兩大類）
+   判斷完全依「實際產品別」，與線號長相無關（同一條線可今天成衣、明天 apron/napkin/top）：
+   1) Daily Output 明細已算好的 gPcs/aPcs 最準（aPcs 已含 apron+napkin+top 等所有非成衣）
+   2) 否則看 section：含 garment/成衣/sewing 以外的（apron/napkin/top…）一律歸「非成衣(Apron 欄)」
+   3) 無從判斷 → 不分流（例如僅有 VRT 目標報表、section="Sewing"），避免亂猜 */
 function splitGA(r){
   const pcs=r.pieces||0;
   if((r.gPcs||0)>0 || (r.aPcs||0)>0) return {g:r.gPcs||0, a:r.aPcs||0};
   const s=String(r.section||"").toLowerCase();
-  if(s.indexOf("apron")>=0)   return {g:0,   a:pcs};
-  if(s.indexOf("garment")>=0) return {g:pcs, a:0};
-  if(/^LINE\s+\d/.test(String(r.lineNo||""))) return {g:0, a:pcs};  // normLineNo：大寫 LINE + 前導零 = Apron
-  return {g:0, a:0};   // 未分類（例如僅有 VRT 目標報表、section="Sewing"）
+  if(!s) return {g:0, a:0};
+  if(/garment|成衣|sewing/.test(s)) return {g:pcs, a:0};
+  return {g:0, a:pcs};   // apron / napkin / top / 其他非成衣 → 全歸「非成衣」桶（Apron 欄）
 }
 
 /* ★ 同一天同線若同時有 target 與 dpo 記錄，只保留 target（欄位較完整），
@@ -5922,13 +5924,9 @@ function parseDailyOutputReport(wb, fname){
           gP=Math.round(gP/dTot*actual); aP=Math.max(0,Math.round(actual)-gP);
         }
         const section = (gP>0||aP>0) ? (gP>=aP?"Garment":"Apron") : "Sewing";
-        // ★ 線號對齊：本報表 Apron/Napkin 線寫成「Line 10」，但系統既有 Apron 日報為「LINE 10」（前導零格式）。
-        //   若不對齊，同一條線會被視為兩條，月報件數會重複計算。
-        let lineKey=lineNo;
-        if(section==="Apron"){
-          const mn=String(lineNo).match(/(\d+)\s*$/);
-          if(mn) lineKey="LINE "+String(parseInt(mn[1],10)).padStart(2,"0");
-        }
+        // ★ v5.14: 線號一律用 normLineNo 統一成「Line N」，不再依線種改寫格式。
+        //   （同一實體線做成衣或非成衣都是同一條，避免月報線別數重複計算。）
+        const lineKey=normLineNo(lineNo);
 
         // Comment 關鍵字 → Root Cause 標記（本格式無勾選欄，改以文字推論）
         const kw=remark.toLowerCase();
