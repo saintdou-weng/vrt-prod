@@ -98,7 +98,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   <div class="logo">✂️</div>
   <div>
     <div class="h-title">裁剪生產分析系統</div>
-    <div class="h-sub">CUTTING PRODUCTION · v3.4 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.5 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
@@ -512,17 +512,22 @@ const isDailyRec=r=>r.src!=='ref'&&r.src!=='summary'&&r.lineNo!=='Weekly Report'
    否則才用 target/dpo。避免裁縫連動 WIP 頁把車縫件數重複計成兩倍。
    傳入已篩好的車縫記錄陣列，回傳去重後的總件數。 */
 function sewPieces(recs){
-  const g={};
+  // ★ v3.5 車縫件數去重（同日只認單一來源）
+  //   車縫 DB 同時含三種來源：日報(norm) / 目標報表(target) / Daily Output(dpo)。
+  //   三者線號寫法不保證一致（dpo 的 Line 10 可能對不上 norm 的 lineNo），
+  //   用 date|lineNo 去重會漏配、造成重複相加。改用「同一天只認一種來源」：
+  //   當天有 norm 就整天只算 norm，其餘丟棄；沒有 norm 才用 target；再沒有才用 dpo。
+  //   （前提：日報成衣線與圍裙線同時上傳，故整天用同一來源不會誤刪某一 section。）
+  //   與車縫系統月報計數一致，讓裁縫連動 WIP 的車縫總量對回車縫月報。
+  const day={};
   (recs||[]).forEach(r=>{
-    const k=(r.date||'')+'|'+(r.lineNo||'');
-    if(!g[k])g[k]={norm:0,target:0,dpo:0};
+    const d=r.date||'';
+    if(!day[d])day[d]={norm:0,target:0,dpo:0};
     const src=(r.tSrc==='target')?'target':(r.tSrc==='dpo')?'dpo':'norm';
-    g[k][src]+=(r.pieces||0);
+    day[d][src]+=(r.pieces||0);
   });
   let tot=0;
-  // 同 date|line 單一來源優先序：日報(norm) > 目標報表(target) > Daily Output(dpo)
-  // 與車縫系統 reconcileTgtSrc 一致：三者並存時只取一種，不疊加。
-  Object.values(g).forEach(v=>{ tot += v.norm>0?v.norm : v.target>0?v.target : v.dpo; });
+  Object.values(day).forEach(v=>{ tot += v.norm>0?v.norm : v.target>0?v.target : v.dpo; });
   return tot;
 }
 
@@ -1955,7 +1960,11 @@ function renderWIP(){
     let sr=SEW.filter(r=>r.date.startsWith(prefix));
     if(sec){cr=cr.filter(r=>r.section===sec);sr=sr.filter(r=>r.section===sec);}
     const cutTotal=cr.reduce((s,r)=>s+r.pieces,0);
-    const sewTotal=sewPieces(sr);
+    // ★ v3.5：車縫總量在「全部」時 = 各 section 分別去重後相加（與下方明細表一致，
+    //   排除 section="Sewing" 之類非 Apron/Garment 的殘留來源，避免總量與明細對不上）
+    const sewTotal = sec
+      ? sewPieces(sr)
+      : ["Apron","Garment"].reduce((s,sc)=>s+sewPieces(sr.filter(r=>r.section===sc)),0);
     const cutStyles=[...new Set(cr.map(r=>r.styleNo).filter(Boolean))].length;
     const sewStyles=[...new Set(sr.map(r=>r.styleNo).filter(Boolean))].length;
     return{mm,prefix,label:MLBL[mm],cutTotal,sewTotal,cutStyles,sewStyles};
@@ -1984,7 +1993,8 @@ function renderWIP(){
       let cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix));
       let sr=SEW.filter(r=>r.date.startsWith(prefix));
       if(sec){cr=cr.filter(r=>r.section===sec);sr=sr.filter(r=>r.section===sec);}
-      return{mm,label:MLBL[mm],cut:cr.reduce((s,r)=>s+r.pieces,0),sew:sewPieces(sr)};
+      const sewV = sec ? sewPieces(sr) : ["Apron","Garment"].reduce((s,sc)=>s+sewPieces(sr.filter(r=>r.section===sc)),0);
+      return{mm,label:MLBL[mm],cut:cr.reduce((s,r)=>s+r.pieces,0),sew:sewV};
     });
     const mx=Math.max(...fullData.flatMap(m=>[m.cut,m.sew]),1);
     document.getElementById("wipChart").innerHTML=fullData.map(m=>`
