@@ -98,7 +98,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   <div class="logo">✂️</div>
   <div>
     <div class="h-title">裁剪生產分析系統</div>
-    <div class="h-sub">CUTTING PRODUCTION · v3.2 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.3 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
@@ -1860,37 +1860,61 @@ function renderMonthly(){
     document.getElementById("mBody").innerHTML=agg.map(g=>{const avg2=g.effs.length?(g.effs.reduce((a,b)=>a+b)/g.effs.length).toFixed(1):"-";return`<tr><td>${secBadge(g.section)}</td><td class="mono" style="font-weight:700">${g.lineNo}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(g.pieces)}</td><td class="r">${eb(parseFloat(avg2))}</td><td class="r">${g.styles.size}</td></tr>`;}).join("")||`<tr><td colspan="5" style="text-align:center;padding:40px;color:#8b95b8">本月無資料</td></tr>`;
 
   } else {
-    // ── 年報視圖 ─────────────────────────────────────────────
-    document.getElementById("mChartTitle").textContent=`${yr} 年各月走勢`;
-    document.getElementById("mTableTitle").textContent=`${yr} 年月別彙整`;
-    document.getElementById("mThead").innerHTML=`<tr><th>月份</th><th>Section</th><th class="r">月裁量</th><th class="r">平均效率</th><th class="r">款號數</th><th class="r">工作天</th></tr>`;
-    const md=Array.from({length:12},(_,i)=>{const mm=`${yr}-${String(i+1).padStart(2,"0")}`;let r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(mm));if(sec)r=r.filter(x=>x.section===sec);return{mm,l:ML[i],p:r.reduce((s,x)=>s+x.pieces,0),cur:mm===THIS_MONTH};});
-    const mx=Math.max(...md.map(x=>x.p),1);
-    document.getElementById("mChart").innerHTML=md.map(x=>`<div style="display:flex;align-items:flex-end;justify-content:center;height:80px"><div style="width:80%;background:${x.cur?"#3b9ef5":"#93c5fd"};border-radius:4px 4px 0 0;height:${Math.max(x.p?2:0,Math.round(x.p/mx*80))}px" title="${x.mm}: ${fmt(x.p)}件"></div></div>`).join("");
-    document.getElementById("mLbl").innerHTML=md.map(x=>`<div>${x.l.replace("月","")}</div>`).join("");
-    const totRows=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(yr));if(sec){const sf=sec;const tr2=totRows.filter(r=>r.section===sf);}
-    const yrRows=sec?totRows.filter(r=>r.section===sec):totRows;
+    // ── 年報視圖（★ 改為列出各年份，與 sewing 一致）─────────────
+    const allYrs=[...new Set(CUT.filter(isDailyRec).map(r=>r.date.slice(0,4)))].sort();
+    if(!allYrs.length)allYrs.push(TODAY.slice(0,4));
+    const thisYr=TODAY.slice(0,4);
+    document.getElementById("mChartTitle").textContent=`各年裁量走勢`;
+    document.getElementById("mTableTitle").textContent=`年別彙整（各年份）`;
+    document.getElementById("mThead").innerHTML=`<tr><th>年份</th><th>Section</th><th class="r">年裁量</th><th class="r">平均效率</th><th class="r">款號數</th><th class="r">工作天</th></tr>`;
+
+    // 圖表：每個年份一根長條（取代原本 12 個月）
+    const yd=allYrs.map(y=>{let r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(y));if(sec)r=r.filter(x=>x.section===sec);return{y,p:r.reduce((s,x)=>s+x.pieces,0),cur:y===yr};});
+    const ymx=Math.max(...yd.map(x=>x.p),1);
+    document.getElementById("mChart").style.gridTemplateColumns=`repeat(${yd.length},1fr)`;
+    document.getElementById("mLbl").style.gridTemplateColumns=`repeat(${yd.length},1fr)`;
+    document.getElementById("mChart").innerHTML=yd.map(x=>`<div style="display:flex;align-items:flex-end;justify-content:center;height:80px"><div style="width:60%;background:${x.cur?"#3b9ef5":"#93c5fd"};border-radius:4px 4px 0 0;height:${Math.max(x.p?2:0,Math.round(x.p/ymx*80))}px" title="${x.y}: ${fmt(x.p)}件"></div></div>`).join("");
+    document.getElementById("mLbl").innerHTML=yd.map(x=>`<div>${x.y}</div>`).join("");
+
+    // KPI：以目前選定年份為準（與月報一致）
+    const yrRows0=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(yr));
+    const yrRows=sec?yrRows0.filter(r=>r.section===sec):yrRows0;
     const yrPcs=yrRows.reduce((s,r)=>s+r.pieces,0),yrAe=yrRows.filter(r=>r.efficiency>0).map(r=>r.efficiency),yrAvg=yrAe.length?(yrAe.reduce((a,b)=>a+b)/yrAe.length).toFixed(1):"-";
     const yrStyles=[...new Set(yrRows.map(r=>r.styleNo).filter(Boolean))].length;
     const yrDays=[...new Set(yrRows.map(r=>r.date))].length;
     document.getElementById("mKpi").innerHTML=[{v:yr,l:"年份",c:"#3b9ef5"},{v:fmt(yrPcs),l:"年裁量",c:"#3b9ef5"},{v:yrAvg+"%",l:"平均效率",c:"#059669"},{v:yrStyles,l:"款號數",c:"#d97706"},{v:yrDays,l:"工作天",c:"#6b7a9e"}].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>8?"14px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
-    // Month breakdown table
+
+    // 年別表格：每個年份一列（有選 Section 時單列；未選時該年再分 Apron / Garment），新到舊
     const rows2=[];
-    Array.from({length:12},(_,i)=>{
-      const mm=`${yr}-${String(i+1).padStart(2,"0")}`;
+    allYrs.slice().reverse().forEach(y=>{
       const secs=sec?[sec]:["Apron","Garment"];
+      let yHasAny=false;
       secs.forEach(sc=>{
-        const r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(mm)&&x.section===sc);
+        const r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(y)&&x.section===sc);
         const pcs=r.reduce((s,x)=>s+x.pieces,0);
         if(!pcs)return;
+        yHasAny=true;
         const effs=r.filter(x=>x.efficiency>0).map(x=>x.efficiency);
         const avg3=effs.length?(effs.reduce((a,b)=>a+b)/effs.length).toFixed(1):"-";
         const sts=[...new Set(r.map(x=>x.styleNo).filter(Boolean))].length;
         const days=[...new Set(r.map(x=>x.date))].length;
-        rows2.push(`<tr><td class="mono" style="font-weight:600">${mm}</td><td>${secBadge(sc)}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(pcs)}</td><td class="r">${eb(parseFloat(avg3))}</td><td class="r">${sts}</td><td class="r">${days}</td></tr>`);
+        rows2.push(`<tr><td class="mono" style="font-weight:700;color:#3b9ef5">${y}</td><td>${secBadge(sc)}</td><td class="r" style="font-weight:700;color:#1d4ed8">${fmt(pcs)}</td><td class="r">${eb(parseFloat(avg3))}</td><td class="r">${sts}</td><td class="r">${days}</td></tr>`);
       });
+      // 未選 Section 且該年有兩個 Section 時，補一列該年合計
+      if(!sec&&yHasAny){
+        const ry=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(y));
+        const secCount=[...new Set(ry.map(x=>x.section))].filter(Boolean).length;
+        if(secCount>1){
+          const pcs=ry.reduce((s,x)=>s+x.pieces,0);
+          const effs=ry.filter(x=>x.efficiency>0).map(x=>x.efficiency);
+          const avg4=effs.length?(effs.reduce((a,b)=>a+b)/effs.length).toFixed(1):"-";
+          const sts=[...new Set(ry.map(x=>x.styleNo).filter(Boolean))].length;
+          const days=[...new Set(ry.map(x=>x.date))].length;
+          rows2.push(`<tr style="background:#f8fafc;border-top:2px solid #e2e8f0"><td class="mono" style="font-weight:700;color:#1e2640">${y}</td><td style="font-weight:600;color:#6b7a9e;font-size:12px">合計</td><td class="r" style="font-weight:700;color:#1e2640">${fmt(pcs)}</td><td class="r">${eb(parseFloat(avg4))}</td><td class="r">${sts}</td><td class="r">${days}</td></tr>`);
+        }
+      }
     });
-    document.getElementById("mBody").innerHTML=rows2.join("")||`<tr><td colspan="6" style="text-align:center;padding:40px;color:#8b95b8">${yr} 年無資料</td></tr>`;
+    document.getElementById("mBody").innerHTML=rows2.join("")||`<tr><td colspan="6" style="text-align:center;padding:40px;color:#8b95b8">無資料</td></tr>`;
   }
 }
 function shiftMonth(d){const[y,mo]=(document.getElementById("mMonth").value||THIS_MONTH).split("-").map(Number);const dt=new Date(y,mo-1+d,1);document.getElementById("mMonth").value=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;renderMonthly();}
@@ -2468,7 +2492,39 @@ function xls(type){
   let rows=[],h=[],fn="";
   if(type==="daily"){const d=document.getElementById("dDate").value||TODAY;rows=CUT.filter(r=>r.date===d);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪日報_${d}.xlsx`;}
   else if(type==="weekly"){const[s,e]=wb2(document.getElementById("wDate").value||TODAY);rows=CUT.filter(r=>r.date>=s&&r.date<=e);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪週報_${s}.xlsx`;}
-  else if(type==="monthly"){const m=document.getElementById("mMonth").value||THIS_MONTH;rows=CUT.filter(r=>r.date.startsWith(m));h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪月報_${m}.xlsx`;}
+  else if(type==="monthly"){
+    const secF=document.getElementById("mSec").value;
+    if(mView==="yr"){
+      // 年報視圖：匯出各年份彙整（與畫面一致）
+      const allYrs=[...new Set(CUT.filter(isDailyRec).map(r=>r.date.slice(0,4)))].sort().reverse();
+      const secs=secF?[secF]:["Apron","Garment"];
+      const aoa=[["年份","Section","年裁量","平均效率%","款號數","工作天"]];
+      allYrs.forEach(y=>{
+        secs.forEach(sc=>{
+          const r=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(y)&&x.section===sc);
+          const pcs=r.reduce((s,x)=>s+x.pieces,0); if(!pcs)return;
+          const effs=r.filter(x=>x.efficiency>0).map(x=>x.efficiency);
+          const avg=effs.length?+(effs.reduce((a,b)=>a+b)/effs.length).toFixed(1):"";
+          const sts=[...new Set(r.map(x=>x.styleNo).filter(Boolean))].length;
+          const days=[...new Set(r.map(x=>x.date))].length;
+          aoa.push([y,sc,pcs,avg,sts,days]);
+        });
+        if(!secF){
+          const ry=CUT.filter(x=>isDailyRec(x)&&x.date.startsWith(y));
+          if([...new Set(ry.map(x=>x.section))].filter(Boolean).length>1){
+            const pcs=ry.reduce((s,x)=>s+x.pieces,0);
+            const effs=ry.filter(x=>x.efficiency>0).map(x=>x.efficiency);
+            const avg=effs.length?+(effs.reduce((a,b)=>a+b)/effs.length).toFixed(1):"";
+            const sts=[...new Set(ry.map(x=>x.styleNo).filter(Boolean))].length;
+            const days=[...new Set(ry.map(x=>x.date))].length;
+            aoa.push([y,"合計",pcs,avg,sts,days]);
+          }
+        }
+      });
+      const wb3=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb3,XLSX.utils.aoa_to_sheet(aoa),"裁剪年報");
+      XLSX.writeFile(wb3,`裁剪年報_各年份.xlsx`);return;
+    }
+    const m=document.getElementById("mMonth").value||THIS_MONTH;rows=CUT.filter(r=>r.date.startsWith(m));if(secF)rows=rows.filter(r=>r.section===secF);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪月報_${m}.xlsx`;}
   else{rows=[...CUT].sort((a,b)=>b.date.localeCompare(a.date));h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪全記錄_${TODAY}.xlsx`;}
   const ws=XLSX.utils.aoa_to_sheet([h,...rows.map(r=>[r.date,r.section,r.lineNo,r.styleNo,r.fabricItem||'',r.fabricType||'',r.color||'',r.ydsPerPcs||'',r.totalYds||'',r.pieces,r.workers,r.efficiency])]);
   ws["!cols"]=[{wch:12},{wch:10},{wch:10},{wch:16},{wch:10},{wch:35},{wch:12},{wch:8},{wch:10},{wch:8},{wch:6},{wch:7}];
