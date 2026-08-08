@@ -98,7 +98,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   <div class="logo">✂️</div>
   <div>
     <div class="h-title">裁剪生產分析系統</div>
-    <div class="h-sub">CUTTING PRODUCTION · v3.6 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.7 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
@@ -361,10 +361,15 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
 
 <!-- ══ WIP ══ -->
 <div class="sec" id="sec-wip">
+  <div class="frow" style="margin-bottom:8px">
+    <button class="btn btn-sm" id="wBtnWk" onclick="setWipView('wk')">📆 週報</button>
+    <button class="btn btn-g btn-sm" id="wBtnMo" onclick="setWipView('mo')">🗓 月報</button>
+    <button class="btn btn-g btn-sm" id="wBtnYr" onclick="setWipView('yr')">📊 年報</button>
+  </div>
   <div class="frow">
-    <label>年份</label>
+    <label id="wipYrLbl">年份</label>
     <select id="wipYear" onchange="renderWIP()"></select>
-    <label>月份</label>
+    <label id="wipMoLbl">月份</label>
     <select id="wipMonth" onchange="renderWIP()">
       <option value="">全年</option>
       <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
@@ -372,11 +377,24 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
       <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
       <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
     </select>
+    <label id="wipWkLbl">週次</label>
+    <input type="date" id="wipWeek" onchange="renderWIP()" style="padding:6px 8px;border:1px solid #d5dcea;border-radius:6px">
+    <span id="wipWkMeta" style="font-size:12px;color:#6b7a9e"></span>
+    <button class="btn btn-g btn-sm" id="wipPrev" onclick="navWip(-1)">◀ 上期</button>
+    <button class="btn btn-g btn-sm" id="wipNext" onclick="navWip(1)">下期 ▶</button>
     <label>Section</label>
     <select id="wipSec" onchange="renderWIP()"><option value="">全部</option><option>Apron</option><option>Garment</option></select>
     <button class="btn btn-g btn-sm" onclick="refreshSew().then(renderWIP)">🔄 重整</button>
     <button class="btn btn-g btn-sm" onclick="refreshSew({cloudOnly:true}).then(renderWIP)" style="background:#f0f7ff;color:#1d6ec7;border-color:#bfdbfe" title="跳過本機快取，直接從 GAS 雲端重新拉取車縫資料">☁️ 雲端更新</button>
     <button class="btn btn-g btn-sm" onclick="xls('wip')" style="margin-left:auto;background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
+  </div>
+
+  <!-- ★ v3.7 期間彙整（週/月/年一期一列） -->
+  <div class="card" id="wipPeriodCard"><div class="ct" id="wipPeriodTitle">期間彙整</div>
+    <div class="tw"><table>
+      <thead id="wipPeriodHead"></thead>
+      <tbody id="wipPeriodBody"></tbody>
+    </table></div>
   </div>
 
   <!-- Summary KPIs -->
@@ -2005,14 +2023,169 @@ function renderMonthly(){
 }
 function shiftMonth(d){const[y,mo]=(document.getElementById("mMonth").value||THIS_MONTH).split("-").map(Number);const dt=new Date(y,mo-1+d,1);document.getElementById("mMonth").value=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;renderMonthly();}
 
+/* ═══ v3.7 裁縫連動 WIP：週/月/年檢視 ═══════════════════════════
+   三種檢視共用同一套規則：裁剪件數直接加總，車縫件數一律經 sewPieces()
+   去重（同一天只認 日報 > 目標報表 > Daily Output 其中一種來源）。 */
+let wipView="mo";
+
+function setWipView(v){
+  wipView=v;
+  if(v==="wk"&&!document.getElementById("wipWeek").value)
+    document.getElementById("wipWeek").value=TODAY;
+  renderWIP();
+}
+
+function navWip(step){
+  if(wipView==="wk"){
+    const el=document.getElementById("wipWeek");
+    const dt=new Date((el.value||TODAY)+"T00:00:00");
+    dt.setDate(dt.getDate()+step*7);
+    el.value=dt.toISOString().slice(0,10);
+  } else if(wipView==="mo"){
+    const ys=document.getElementById("wipYear"), ms=document.getElementById("wipMonth");
+    let y=parseInt(ys.value||TODAY.slice(0,4),10);
+    let m=parseInt(ms.value||TODAY.slice(5,7),10)+step;
+    if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+    if([...ys.options].some(o=>o.value===String(y))) ys.value=String(y);
+    ms.value=String(m).padStart(2,"0");
+  } else {
+    const ys=document.getElementById("wipYear");
+    const opts=[...ys.options].map(o=>o.value);
+    const i=opts.indexOf(ys.value);
+    const ni=i+step;                       // 年報：上/下一個有資料的年份
+    if(ni>=0&&ni<opts.length) ys.value=opts[ni];
+  }
+  renderWIP();
+}
+
+/* 依檢視回傳期間清單：[{key,label,pfx|範圍}]，用於期間彙整表 */
+function wipPeriods(yr){
+  const out=[];
+  if(wipView==="yr"){
+    [...new Set(CUT.filter(isDailyRec).map(r=>r.date.slice(0,4)))]
+      .concat([...new Set(SEW.map(r=>String(r.date).slice(0,4)))])
+      .filter((v,i,a)=>v&&a.indexOf(v)===i).sort().reverse()
+      .forEach(y=>out.push({key:y,label:y+" 年",test:d=>String(d).startsWith(y)}));
+  } else if(wipView==="mo"){
+    for(let i=12;i>=1;i--){
+      const mm=`${yr}-${String(i).padStart(2,"0")}`;
+      out.push({key:mm,label:mm,test:d=>String(d).startsWith(mm)});
+    }
+  } else {
+    // 週報：顯示該基準週往前 12 週
+    const base=document.getElementById("wipWeek").value||TODAY;
+    let [s]=wb2(base);
+    for(let i=0;i<12;i++){
+      const mn=new Date(s+"T00:00:00"); mn.setDate(mn.getDate()-i*7);
+      const a=mn.toISOString().slice(0,10);
+      const sn=new Date(mn); sn.setDate(mn.getDate()+6);
+      const b=sn.toISOString().slice(0,10);
+      out.push({key:a,label:`${a.slice(5)} ~ ${b.slice(5)}`,test:d=>String(d)>=a&&String(d)<=b});
+    }
+  }
+  return out;
+}
+
+function renderWipPeriods(sec){
+  const yr=document.getElementById("wipYear").value||TODAY.slice(0,4);
+  const periods=wipPeriods(yr);
+  const unit=wipView==="yr"?"年份":wipView==="mo"?"月份":"週次";
+  document.getElementById("wipPeriodTitle").textContent=
+    wipView==="yr"?"各年份 裁縫對照":wipView==="mo"?`${yr} 年 各月份 裁縫對照`:"近 12 週 裁縫對照";
+  document.getElementById("wipPeriodHead").innerHTML=
+    `<tr><th>${unit}</th><th class="r">裁剪總量</th><th class="r">車縫總量</th><th class="r">差額（裁－縫）</th><th class="r">車縫消化率</th><th class="r">狀態</th></tr>`;
+  const secs=sec?[sec]:["Apron","Garment"];
+  const rows=periods.map(p=>{
+    const cr=CUT.filter(r=>isDailyRec(r)&&p.test(r.date)&&(!sec||r.section===sec));
+    const cut=cr.reduce((s,r)=>s+r.pieces,0);
+    const sew=secs.reduce((s,sc)=>s+sewPieces(SEW.filter(r=>p.test(r.date)&&r.section===sc)),0);
+    if(!cut&&!sew)return"";
+    const d=cut-sew, rate=cut>0?Math.round(sew/cut*100):0;
+    const badge=!sew?`<span class="b bwn">車縫待更新</span>`
+      :rate>=100?`<span class="b bok">✓ 已消化</span>`
+      :rate>=80?`<span class="b bbl">消化中</span>`:`<span class="b bwn">生產中</span>`;
+    return`<tr>
+      <td class="mono" style="font-weight:700;color:#3b9ef5">${p.label}</td>
+      <td class="r" style="font-weight:700;color:#1d4ed8">${fmt(cut)}</td>
+      <td class="r" style="font-weight:700;color:#059669">${sew?fmt(sew):"—"}</td>
+      <td class="r" style="font-weight:700;color:${d>0?"#d97706":d<0?"#dc2626":"#059669"}">${sew?(d>=0?"+":"")+fmt(d):"—"}</td>
+      <td class="r">${sew?rate+"%":"—"}</td>
+      <td class="r">${badge}</td></tr>`;
+  }).filter(Boolean).join("");
+  document.getElementById("wipPeriodBody").innerHTML=rows||
+    `<tr><td colspan="6" style="text-align:center;padding:30px;color:#8b95b8">此範圍無資料</td></tr>`;
+}
+
 function renderWIP(){
   const yr=document.getElementById("wipYear").value||THIS_MONTH.slice(0,4);
-  const mo=document.getElementById("wipMonth").value; // '' = all months
   const sec=document.getElementById("wipSec").value;
+
+  // ★ v3.7 檢視切換：按鈕樣式 + 控制項顯示
+  const B=(id,on)=>{const b=document.getElementById(id);
+    b.className=on?"btn btn-sm":"btn btn-g btn-sm";
+    b.style.cssText=on?"background:#3b9ef5;color:#fff;border:none":"";};
+  B("wBtnWk",wipView==="wk"); B("wBtnMo",wipView==="mo"); B("wBtnYr",wipView==="yr");
+  const showWk=wipView==="wk", showMo=wipView==="mo", showYr=wipView!=="wk";
+  document.getElementById("wipWkLbl").style.display=showWk?"":"none";
+  document.getElementById("wipWeek").style.display=showWk?"":"none";
+  document.getElementById("wipWkMeta").style.display=showWk?"":"none";
+  document.getElementById("wipMoLbl").style.display=showMo?"":"none";
+  document.getElementById("wipMonth").style.display=showMo?"":"none";
+  document.getElementById("wipYrLbl").style.display=showYr?"":"none";
+  document.getElementById("wipYear").style.display=showYr?"":"none";
+
+  // 期間彙整表（週/月/年一期一列）
+  renderWipPeriods(sec);
+
+  // 週報：KPI 與明細以「該週」為範圍；月/年報維持原本月份邏輯
+  let mo=document.getElementById("wipMonth").value; // '' = all months
+  let wkRange=null;
+  if(showWk){
+    const base=document.getElementById("wipWeek").value||TODAY;
+    document.getElementById("wipWeek").value=base;
+    wkRange=wb2(base);
+    document.getElementById("wipWkMeta").textContent=`${wkRange[0]} ～ ${wkRange[1]}`;
+  } else if(wipView==="yr"){ mo=""; }
 
   // Determine which months to show
   const months=mo?[mo]:["01","02","03","04","05","06","07","08","09","10","11","12"];
   const MLBL={"01":"1月","02":"2月","03":"3月","04":"4月","05":"5月","06":"6月","07":"7月","08":"8月","09":"9月","10":"10月","11":"11月","12":"12月"};
+
+  // 週報模式：KPI 直接用該週範圍計算後提前結束圖表/月表的月份邏輯
+  if(showWk){
+    const inWk=d=>String(d)>=wkRange[0]&&String(d)<=wkRange[1];
+    const secs=sec?[sec]:["Apron","Garment"];
+    const cr=CUT.filter(r=>isDailyRec(r)&&inWk(r.date)&&(!sec||r.section===sec));
+    const totCut=cr.reduce((s,r)=>s+r.pieces,0);
+    const totSew=secs.reduce((s,sc)=>s+sewPieces(SEW.filter(r=>inWk(r.date)&&r.section===sc)),0);
+    const diff=totCut-totSew, rate=totCut>0?Math.round(totSew/totCut*100):0;
+    kpiEl("wipKpi",[
+      {v:fmt(totCut),l:"裁剪總量（件）",c:"#3b9ef5"},
+      {v:fmt(totSew),l:"車縫總量（件）",c:"#059669"},
+      {v:(diff>=0?"+":"")+fmt(diff),l:"差額（裁－縫）",c:diff>0?"#d97706":diff<0?"#dc2626":"#059669"},
+      {v:rate+"%",l:"車縫消化率",c:rate>=90?"#059669":rate>=70?"#d97706":"#dc2626"},
+      {v:!SEW.length?"未連線":"已連線",l:"車縫系統",c:SEW.length?"#059669":"#9ca3af"},
+    ]);
+    document.getElementById("wipChartCard").style.display="none";
+    // 明細表：該週 × Section
+    const rows=secs.map(sc=>{
+      const c2=CUT.filter(r=>isDailyRec(r)&&inWk(r.date)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
+      const s2=sewPieces(SEW.filter(r=>inWk(r.date)&&r.section===sc));
+      if(!c2&&!s2)return"";
+      const d2=c2-s2,r2=c2>0?Math.round(s2/c2*100):0;
+      const bw=Math.min(100,r2);
+      const badge=!s2?`<span class="b bwn">車縫待更新</span>`:r2>=100?`<span class="b bok">✓ 已消化</span>`:r2>=80?`<span class="b bbl">消化中</span>`:`<span class="b bwn">生產中</span>`;
+      return`<tr><td class="mono">${wkRange[0].slice(5)} ~ ${wkRange[1].slice(5)}</td><td>${secBadge(sc)}</td>
+        <td class="r" style="font-weight:700;color:#1d4ed8">${fmt(c2)}</td>
+        <td class="r" style="font-weight:700;color:#059669">${s2?fmt(s2):"—"}</td>
+        <td class="r" style="font-weight:700;color:${d2>0?"#d97706":d2<0?"#dc2626":"#059669"}">${s2?(d2>=0?"+":"")+fmt(d2):"—"}</td>
+        <td class="r"><div style="min-width:80px;display:inline-block"><div style="height:6px;background:#eef2f7;border-radius:3px;overflow:hidden"><div style="height:100%;width:${bw}%;background:${r2>=100?"#10b981":r2>=80?"#3b9ef5":"#f59e0b"}"></div></div><div style="font-size:10px;color:#6b7a9e;margin-top:2px">${r2}%</div></div></td>
+        <td class="r">${badge}</td></tr>`;
+    }).filter(Boolean).join("");
+    document.getElementById("wipMonthBody").innerHTML=rows||`<tr><td colspan="7" style="text-align:center;padding:40px;color:#8b95b8">本週無資料</td></tr>`;
+    renderWipSecCards(sec,r=>inWk(r.date));
+    return;
+  }
 
   // Aggregate by month+section
   const mData=months.map(mm=>{
@@ -2117,10 +2290,15 @@ function renderWIP(){
     }).join("");
   }
 
-  // Section summary cards
+  // Section summary cards（★ v3.7 抽成函式，週/月/年共用）
+  renderWipSecCards(sec, r=>String(r.date).startsWith(yr)&&(!mo||String(r.date).slice(5,7)===mo));
+}
+
+function renderWipSecCards(sec, inRange){
+  const secs=sec?[sec]:["Apron","Garment"];
   const secSummary=secs.map(sc=>{
-    const cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(yr)&&r.section===sc&&(!mo||r.date.slice(5,7)===mo));
-    const sr=SEW.filter(r=>r.date.startsWith(yr)&&r.section===sc&&(!mo||r.date.slice(5,7)===mo));
+    const cr=CUT.filter(r=>isDailyRec(r)&&inRange(r)&&r.section===sc);
+    const sr=SEW.filter(r=>inRange(r)&&r.section===sc);
     const cut=cr.reduce((s,r)=>s+r.pieces,0);
     const sew=sewPieces(sr);
     const rate=cut>0?Math.round(sew/cut*100):0;
@@ -2558,27 +2736,27 @@ function xls(type){
     XLSX.writeFile(wb2,`裁剪${qV==="fab"?'布料':'款號'}彙整_${TODAY}.xlsx`);return;
   }
   if(type==="wip"){
+    // ★ v3.7：依目前檢視（週/月/年）匯出對應期間
     const yr=document.getElementById("wipYear").value||THIS_MONTH.slice(0,4);
     const mo=document.getElementById("wipMonth").value;
     const sec=document.getElementById("wipSec").value;
-    const allMo=mo?[mo]:["01","02","03","04","05","06","07","08","09","10","11","12"];
     const secs=sec?[sec]:["Apron","Garment"];
-    const header=["月份","Section","裁剪總量","車縫總量","差額（裁－縫）","車縫消化率%"];
-    const data=[header];
-    allMo.forEach(mm=>{
+    const unit=wipView==="yr"?"年份":wipView==="mo"?"月份":"週次";
+    const data=[[unit,"Section","裁剪總量","車縫總量","差額（裁－縫）","車縫消化率%"]];
+    wipPeriods(yr).forEach(p=>{
       secs.forEach(sc=>{
-        const prefix=`${yr}-${mm}`;
-        const cut=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
-        const sew=sewPieces(SEW.filter(r=>r.date.startsWith(prefix)&&r.section===sc));
+        const cut=CUT.filter(r=>isDailyRec(r)&&p.test(r.date)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
+        const sew=sewPieces(SEW.filter(r=>p.test(r.date)&&r.section===sc));
         if(cut===0&&sew===0)return;
         const rate=cut>0?Math.round(sew/cut*100):0;
-        data.push([prefix,sc,cut,sew||"",cut-sew,sew?rate+"%" :""]);
+        data.push([p.label,sc,cut,sew||"",cut-sew,sew?rate+"%":""]);
       });
     });
     const ws=XLSX.utils.aoa_to_sheet(data);
-    ws["!cols"]=[{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}];
-    XLSX.utils.book_append_sheet(wb2,ws,"裁縫月度比對");
-    XLSX.writeFile(wb2,`裁縫月度比對_${yr}${mo||""}.xlsx`);return;
+    ws["!cols"]=[{wch:16},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}];
+    const tag=wipView==="yr"?"年度":wipView==="mo"?"月度":"週度";
+    XLSX.utils.book_append_sheet(wb2,ws,`裁縫${tag}比對`);
+    XLSX.writeFile(wb2,`裁縫${tag}比對_${wipView==="yr"?"各年":yr+(mo||"")}.xlsx`);return;
   }
   let rows=[],h=[],fn="";
   if(type==="daily"){const d=document.getElementById("dDate").value||TODAY;rows=CUT.filter(r=>r.date===d);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪日報_${d}.xlsx`;}
