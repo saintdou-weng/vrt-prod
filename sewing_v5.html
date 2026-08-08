@@ -116,7 +116,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.12</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.13</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -379,7 +379,9 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     </div>
     <div class="tw"><table><thead><tr>
       <th>期間</th><th>工作天</th><th>線別數</th><th>合計人數</th>
-      <th>🎯 目標 Target</th><th>合計件數</th><th>達成率 Achiev.%</th><th>平均效率</th><th>人均件數</th><th>箱數</th>
+      <th>合計件數</th>
+      <th>👕 成衣 Garment</th><th>成衣佔比 %</th><th>🧵 Apron</th><th>Apron 佔比 %</th>
+      <th>平均效率</th><th>人均件數</th><th>箱數</th>
     </tr></thead><tbody id="pBody"></tbody></table></div>
   </div>
 </div>
@@ -399,8 +401,10 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     <span id="tgtMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
   </div>
   <div id="tgtEmpty" class="card" style="display:none;text-align:center;padding:40px;color:#9ca3af">
-    尚未匯入含目標資料的報表（VRT_Production_Daily report）。<br>
-    <span style="font-size:12px">請至「📥 上傳報表」匯入 VRT_Production_Daily_report_YYYYMM.xlsx</span>
+    尚未匯入含目標資料的報表。<br>
+    <span style="font-size:12px">請至「📥 上傳報表」匯入下列任一種（可兩者並行，同日同線不會重複計算）：<br>
+    ① VRT_Production_Daily_report_YYYYMM.xlsx（含 Issue 勾選欄）<br>
+    ② Daily_Production_Output_Report_as_of_<Month>_<Year>.xlsx（含 LINE PRODUCTION STATUS 與 Comment）</span>
   </div>
   <!-- KPI -->
   <div id="tgtKpi" class="kpi-strip"></div>
@@ -949,7 +953,8 @@ function dedupAndNorm(all){
         issue:(ex.issue||r.issue||undefined),remark:(ex.remark||r.remark||"")});
     }
   });
-  return [...dedupMap.values()];
+  const out=[...dedupMap.values()];
+  return (typeof reconcileTgtSrc==="function") ? reconcileTgtSrc(out) : out;
 }
 
 async function loadDB(){
@@ -1928,6 +1933,8 @@ function renderFileList(){
 async function parseWorkbook(wb, fname) {
   // ★ v5.1: VRT_Production_Daily report（Dashboard + 01~31 sheets, 含 Target/Issue/Remarks）
   let result = (typeof parseVRTTargetReport==="function") ? parseVRTTargetReport(wb, fname) : null;
+  // ★ v5.13: VRT Daily Production Output report（每日工作表 + LINE PRODUCTION STATUS，含 Target/Comment）
+  if (!result && typeof parseDailyOutputReport==="function") result = parseDailyOutputReport(wb, fname);
   // Try weekly report first (has "Weekly Output Report" sheet)
   if (!result) result = parseWeeklyReport(wb, fname);
   if (!result) result = parseVRT(wb, fname);
@@ -2067,23 +2074,25 @@ async function confirmImport(){
   if(!pendingRecs.length) return;
   // Remove ALL old records for any date covered by this import, then add new
   // ★ v5.1: target 記錄（tSrc='target'）與一般日報記錄分開覆蓋，匯入目標報表不會刪除既有日報，反之亦然
+  // ★ 三種來源各自獨立覆蓋：一般日報(norm)／VRT 目標報表(target)／Daily Output 報表(dpo)
   const importDates=new Set(pendingRecs.map(r=>r.date));
-  const importHasTgt=pendingRecs.some(r=>r.tSrc==="target");
-  const importHasNorm=pendingRecs.some(r=>r.tSrc!=="target");
+  const importBuckets=new Set(pendingRecs.map(r=>r.tSrc||"norm"));
   DB=DB.filter(r=>{
     if(!importDates.has(r.date)) return true;
-    return (r.tSrc==="target") ? !importHasTgt : !importHasNorm;
+    return !importBuckets.has(r.tSrc||"norm");
   });
   // Dedup within the new batch itself (date|lineNo|styleNo)
   const map=new Map();
   pendingRecs.forEach(r=>map.set([normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||"",r.tSrc||""].join("|"),r));
   DB=[...DB,...map.values()];
+  const _beforeRec=DB.length; DB=reconcileTgtSrc(DB); const _tgtMerged=_beforeRec-DB.length;
   saveDB(); updateHeader(); renderDBCard();
   // ★ Save full DB to cloudIDB so it always has complete history across all years
   saveToCloudIDB(DB).catch(e=>console.warn("[VRT] cloudIDB save failed:", e));
   pendingFiles=[]; pendingRecs=[]; renderFileList();
   document.getElementById("previewArea").style.display="none";
-  document.getElementById("importMsg").textContent=`✓ ${DB.length.toLocaleString()} ${t("importedRecs")} | ${getMinDate(DB)} ~ ${getMaxDate(DB)}`;
+  document.getElementById("importMsg").textContent=`✓ ${DB.length.toLocaleString()} ${t("importedRecs")} | ${getMinDate(DB)} ~ ${getMaxDate(DB)}`
+    +(_tgtMerged>0?`（已合併 ${_tgtMerged} 筆重複目標資料，以 VRT 目標報表為準）`:"");
   document.getElementById("importMsg").style.color="#059669";
   rebuildAllSelectors();
   if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
@@ -3038,7 +3047,7 @@ function renderDashboard(){
 
   // ★ v5.1: Daily Production Target KPI — 取最新一個有目標資料的日期
   let tgtKpis=[];
-  const tgtDates=[...new Set(DB.filter(r=>r.tSrc==="target").map(r=>r.date))].sort();
+  const tgtDates=[...new Set(DB.filter(r=>isTgtSrc(r)).map(r=>r.date))].sort();
   if(tgtDates.length){
     const td=tgtDates[tgtDates.length-1];
     const tl=buildLineMap(DB.filter(r=>r.date===td)).filter(l=>l.hasTgt&&l.target>0);
@@ -3173,7 +3182,7 @@ function buildLineMap(recs){
       issues:{changeover:0,material:0,machine:0,manpower:0,quality:0,others:0},remarks:[]};
     const ld=k+"|"+(r.date||"");
     if(!pcsByLD[ld]) pcsByLD[ld]={norm:0,tgt:0,line:k};
-    if(r.tSrc==="target") pcsByLD[ld].tgt+=(r.pieces||0);
+    if(isTgtSrc(r)) pcsByLD[ld].tgt+=(r.pieces||0);
     else pcsByLD[ld].norm+=(r.pieces||0);
     lm[k].cartons+=(r.cartons||0);
     lm[k].otPcs+=(r.otPcs||0);
@@ -3182,7 +3191,7 @@ function buildLineMap(recs){
     if((r.workersOT||0)>lm[k].otWorkers) lm[k].otWorkers=r.workersOT||0;
     if(r.efficiency>lm[k].efficiency) lm[k].efficiency=r.efficiency;
     // ★ v5.1: Daily Production Target 欄位聚合
-    if(r.tSrc==="target"||(r.target||0)>0){
+    if(isTgtSrc(r)||(r.target||0)>0){
       lm[k].hasTgt=true; lm[k].tgtRecs++;
       lm[k].target+=(r.target||0);
       lm[k].tgtActual+=(r.pieces||0);
@@ -3201,6 +3210,36 @@ function buildLineMap(recs){
 }
 
 function effClass(e){ return e>=45?"hi":e>=30?"md":e>0?"lo":"zero"; }
+
+/* ★ 目標型資料來源：VRT_Production_Daily report(target) 與 Daily Production Output report(dpo) 並行 */
+function isTgtSrc(r){ return r && (r.tSrc==="target" || r.tSrc==="dpo"); }
+
+/* ★ 成衣 / Apron 分流：優先用 Daily Output 明細(gPcs/aPcs)，其次 section，最後用線號格式（LINE 09 = Apron 線） */
+function splitGA(r){
+  const pcs=r.pieces||0;
+  if((r.gPcs||0)>0 || (r.aPcs||0)>0) return {g:r.gPcs||0, a:r.aPcs||0};
+  const s=String(r.section||"").toLowerCase();
+  if(s.indexOf("apron")>=0)   return {g:0,   a:pcs};
+  if(s.indexOf("garment")>=0) return {g:pcs, a:0};
+  if(/^LINE\s+\d/.test(String(r.lineNo||""))) return {g:0, a:pcs};  // normLineNo：大寫 LINE + 前導零 = Apron
+  return {g:0, a:0};   // 未分類（例如僅有 VRT 目標報表、section="Sewing"）
+}
+
+/* ★ 同一天同線若同時有 target 與 dpo 記錄，只保留 target（欄位較完整），
+   並把 dpo 的成衣/Apron 分流與備註併入，避免目標與件數重複計算 */
+function reconcileTgtSrc(arr){
+  const tgt=new Map();
+  (arr||[]).forEach(r=>{ if(r.tSrc==="target") tgt.set(normalizeDate(r.date)+"|"+(r.lineNo||""),r); });
+  if(!tgt.size) return arr||[];
+  return (arr||[]).filter(r=>{
+    if(r.tSrc!=="dpo") return true;
+    const ex=tgt.get(normalizeDate(r.date)+"|"+(r.lineNo||""));
+    if(!ex) return true;
+    if(!(ex.gPcs>0)&&!(ex.aPcs>0)){ ex.gPcs=r.gPcs||0; ex.aPcs=r.aPcs||0; }
+    if(!ex.remark && r.remark) ex.remark=r.remark;
+    return false;
+  });
+}
 // ★ v5.1: 達成率判定（依 VRT_Production_Daily report 規則）
 function achMeta(a){
   if(a>=100) return {e:"🟢",t:"Excellent",c:"#059669",bg:"#ecfdf5"};
@@ -3570,38 +3609,50 @@ function getPKey(date){ return curPeriod==="yearly"?date.slice(0,4):date.slice(0
 
 function renderPeriod(){
   document.getElementById("ptitle").textContent=curPeriod==="yearly"?"年別報表":"月別報表";
-  if(!DB.length){ const pb=document.getElementById("pBody"); pb.innerHTML=""; pb.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:30px;color:#8b95b8">尚未有資料</td></tr>`; return; }
+  if(!DB.length){ const pb=document.getElementById("pBody"); pb.innerHTML=""; pb.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:30px;color:#8b95b8">尚未有資料</td></tr>`; return; }
   const map={};
-  const pcsDL={}; // ★ v5.1: period|date|line → {norm,tgt}，同日同線同時有日報與目標報表時只計日報件數
+  // ★ period|date|line → {norm,tgt}，同日同線同時有日報與目標報表時只計日報件數；g/a 為成衣/Apron 分流
+  const pcsDL={};
   DB.forEach(r=>{
     const k=getPKey(r.date);
-    if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,effs:[],cartons:0,tgt:0,tact:0};
+    if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,gPcs:0,aPcs:0,effs:[],cartons:0};
     map[k].dates.add(r.date); map[k].lines.add(r.lineNo);
     map[k].workers+=r.workers;
     const dlk=k+"|"+r.date+"|"+(r.lineNo||"");
-    if(!pcsDL[dlk]) pcsDL[dlk]={p:k,norm:0,tgt:0};
-    if(r.tSrc==="target"){ pcsDL[dlk].tgt+=(r.pieces||0); map[k].tgt+=(r.target||0); map[k].tact+=(r.pieces||0); }
-    else pcsDL[dlk].norm+=(r.pieces||0);
+    if(!pcsDL[dlk]) pcsDL[dlk]={p:k,norm:0,nG:0,nA:0,tgt:0,tG:0,tA:0};
+    const v=pcsDL[dlk], pcs=r.pieces||0;
+    const sp=splitGA(r);   // {g,a} — 依 section／Daily Output 明細分流
+    if(isTgtSrc(r)){ v.tgt+=pcs; v.tG+=sp.g; v.tA+=sp.a; }
+    else { v.norm+=pcs; v.nG+=sp.g; v.nA+=sp.a; }
     if(r.efficiency>0) map[k].effs.push(r.efficiency);
     map[k].cartons+=r.cartons||0;
   });
-  Object.values(pcsDL).forEach(v=>{ if(map[v.p]) map[v.p].pieces += (v.norm>0?v.norm:v.tgt); });
+  Object.values(pcsDL).forEach(v=>{
+    const m=map[v.p]; if(!m) return;
+    const useNorm=v.norm>0;
+    m.pieces += useNorm?v.norm:v.tgt;
+    m.gPcs   += useNorm?v.nG :v.tG;
+    m.aPcs   += useNorm?v.nA :v.tA;
+  });
   const periods=Object.keys(map).sort().reverse();
   const pBody=document.getElementById("pBody"); pBody.innerHTML="";
   pBody.innerHTML=periods.map(p=>{
     const d=map[p];
     const avgE=d.effs.length?Math.round(d.effs.reduce((s,v)=>s+v,0)/d.effs.length):0;
     const pp=d.workers>0?(d.pieces/d.workers).toFixed(1):"-";
-    const ach=d.tgt>0?Math.round(d.tact/d.tgt*1000)/10:0;
-    const am=achMeta(ach);
+    const gP=Math.round(d.gPcs), aP=Math.round(d.aPcs);
+    const gR=d.pieces>0?Math.round(gP/d.pieces*1000)/10:0;
+    const aR=d.pieces>0?Math.round(aP/d.pieces*1000)/10:0;
     return `<tr>
       <td class="mono" style="color:#f59e0b;font-weight:700">${p}</td>
       <td class="mono">${d.dates.size}</td>
       <td class="mono">${d.lines.size}</td>
       <td class="mono">${d.workers.toLocaleString()}</td>
-      <td class="mono" style="color:#7c3aed;font-weight:600">${d.tgt>0?d.tgt.toLocaleString():"--"}</td>
       <td class="mono" style="color:#1d4ed8;font-weight:600">${d.pieces.toLocaleString()}</td>
-      <td>${d.tgt>0?`<span class="b" style="background:${am.bg};color:${am.c};font-weight:700">${am.e} ${ach}%</span>`:"--"}</td>
+      <td class="mono" style="color:#059669;font-weight:600">${gP>0?gP.toLocaleString():"--"}</td>
+      <td>${gP>0?`<span class="b" style="background:#ecfdf5;color:#059669;font-weight:700">${gR}%</span>`:"--"}</td>
+      <td class="mono" style="color:#7c3aed;font-weight:600">${aP>0?aP.toLocaleString():"--"}</td>
+      <td>${aP>0?`<span class="b" style="background:#f5f3ff;color:#7c3aed;font-weight:700">${aR}%</span>`:"--"}</td>
       <td>${avgE>0?`<span class="b b${avgE>=45?"ok":avgE>=30?"wn":"bd"}">${avgE}%</span>`:"-"}</td>
       <td class="mono" style="color:#0369a1">${pp}</td>
       <td class="mono">${Math.round(d.cartons*10)/10||"-"}</td>
@@ -3688,22 +3739,34 @@ function exportExcel(mode){
     sheetName="所有記錄"; filename=`sewing_records_${new Date().toISOString().slice(0,10)}.xlsx`;
   } else {
     // period report
-    const map={};
+    const map={}; const pcsDL={};
     DB.forEach(r=>{
       const k=getPKey(r.date);
-      if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,effs:[],cartons:0};
+      if(!map[k]) map[k]={dates:new Set(),lines:new Set(),workers:0,pieces:0,gPcs:0,aPcs:0,effs:[],cartons:0};
       map[k].dates.add(r.date); map[k].lines.add(r.lineNo);
-      map[k].workers+=r.workers; map[k].pieces+=r.pieces;
+      map[k].workers+=r.workers;
+      const dlk=k+"|"+r.date+"|"+(r.lineNo||"");
+      if(!pcsDL[dlk]) pcsDL[dlk]={p:k,norm:0,nG:0,nA:0,tgt:0,tG:0,tA:0};
+      const v=pcsDL[dlk], pcs=r.pieces||0, sp=splitGA(r);
+      if(isTgtSrc(r)){ v.tgt+=pcs; v.tG+=sp.g; v.tA+=sp.a; }
+      else { v.norm+=pcs; v.nG+=sp.g; v.nA+=sp.a; }
       if(r.efficiency>0) map[k].effs.push(r.efficiency);
-      map[k].cartons+=r.cartons;
+      map[k].cartons+=r.cartons||0;
+    });
+    Object.values(pcsDL).forEach(v=>{
+      const m=map[v.p]; if(!m) return; const useNorm=v.norm>0;
+      m.pieces+=useNorm?v.norm:v.tgt; m.gPcs+=useNorm?v.nG:v.tG; m.aPcs+=useNorm?v.nA:v.tA;
     });
     const periods=Object.keys(map).sort().reverse();
-    rows=[["期間","工作天","線別數","合計人數","合計件數","平均效率%","人均件數","箱數"],
+    rows=[["期間","工作天","線別數","合計人數","合計件數","成衣 Garment","成衣佔比%","Apron","Apron佔比%","平均效率%","人均件數","箱數"],
       ...periods.map(p=>{
         const d=map[p];
         const avgE=d.effs.length?Math.round(d.effs.reduce((s,v)=>s+v,0)/d.effs.length):0;
-        return [p,d.dates.size,d.lines.size,d.workers,d.pieces,avgE||"",
-          d.workers>0?Math.round(d.pieces/d.workers*10)/10:"",Math.round(d.cartons*10)/10||""];
+        const gP=Math.round(d.gPcs), aP=Math.round(d.aPcs);
+        return [p,d.dates.size,d.lines.size,d.workers,d.pieces,
+          gP||"",d.pieces>0&&gP>0?Math.round(gP/d.pieces*1000)/10:"",
+          aP||"",d.pieces>0&&aP>0?Math.round(aP/d.pieces*1000)/10:"",
+          avgE||"",d.workers>0?Math.round(d.pieces/d.workers*10)/10:"",Math.round(d.cartons*10)/10||""];
       })];
     sheetName=curPeriod==="yearly"?"年別報表":"月別報表";
     filename=`sewing_${curPeriod}_${new Date().toISOString().slice(0,10)}.xlsx`;
@@ -5714,6 +5777,204 @@ async function renderAttCmp() {
    相容性：新增欄位皆為向下相容擴充；舊資料 target=0 / issue=false / remark=""
 ═══════════════════════════════════════════════════════════════════════════ */
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ★ v5.13 — VRT DAILY PRODUCTION OUTPUT REPORT 解析器（目標&根因 第二來源）
+   來源：Daily_Production_Output_Report_as_of_<Month>_<Year>.xlsx
+   結構：每日工作表（01~31 或自訂名）
+         · 上半部明細：Sewing Line # / ERP Selfkey # / Customer P.O. / Style /
+           Color / Size / Unit / Quantity (Pcs) / Total Ctns / Type of Product / SMV
+         · 下半部 SUMMARY「LINE PRODUCTION STATUS」：
+           Operator / Working Hour / Style Handles / Approx. Target 45% /
+           Actual Qty / Total Cartons / Achieved % / Eff% / Comment
+   產出：tSrc="dpo"，與 VRT_Production_Daily report（tSrc="target"）並行；
+         同日同線兩者並存時由 reconcileTgtSrc() 保留 target，不會重複計算。
+   ═══════════════════════════════════════════════════════════════════════════ */
+function parseDailyOutputReport(wb, fname){
+  try{
+    const SKIP=/^(summary|smv|monthly\s*summary|form|dashboard)$/i;
+    const cand=wb.SheetNames.filter(n=>!SKIP.test(String(n).trim()));
+    if(!cand.length) return null;
+
+    const joinRows=(rows,a,b)=>rows.slice(a,b).map(r=>(r||[]).map(c=>String(c==null?"":c)).join(" ")).join(" ");
+
+    // ── 特徵判斷：標題含 Daily Production Output，且有 Approx. Target / LINE PRODUCTION STATUS 區塊 ──
+    let looks=false;
+    for(const sn of cand.slice(0,8)){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+      if(!rows.length) continue;
+      const head=joinRows(rows,0,6), all=joinRows(rows,0,rows.length);
+      if(/Daily\s+Production\s+Output/i.test(head) &&
+         (/Approx\.?\s*Target/i.test(all) || /LINE\s+PRODUCTION\s+STATUS/i.test(all))){ looks=true; break; }
+    }
+    if(!looks) return null;
+
+    const recs=[], daysWithData=[];
+    const pct=v=>{ let n=parseFloat(v); if(isNaN(n)) return 0; if(n<=3) n*=100; return Math.round(n*10)/10; };
+
+    cand.forEach(sn=>{
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+      if(!rows.length) return;
+
+      // ── 1. 日期：「As of August 01, 2026」／「As of June 1, 2026」 ──
+      let date="";
+      for(let i=0;i<Math.min(8,rows.length);i++){
+        const line=(rows[i]||[]).map(c=>String(c==null?"":c)).join(" ");
+        const m=line.match(/As\s+of\s+([A-Za-z]+)\s+(\d{1,2})\s*,\s*(20\d{2})/i);
+        if(m){
+          const mo=MONTHS[m[1].toLowerCase().slice(0,3)];
+          if(mo) date=`${m[3]}-${String(mo).padStart(2,"0")}-${String(parseInt(m[2],10)).padStart(2,"0")}`;
+          break;
+        }
+      }
+      if(!date) return;
+
+      // ── 2. 明細區：依線別統計 成衣 / Apron 件數與箱數（GARMENT 以外皆歸 Apron 部門）──
+      const detail={};
+      let dHdr=-1, dc={line:0,qty:7,ctn:8,type:9,style:3};
+      for(let i=0;i<Math.min(12,rows.length);i++){
+        const r=rows[i]||[];
+        const joined=r.map(c=>String(c==null?"":c)).join("|");
+        if(/sewing\s*line/i.test(joined) && /quantity/i.test(joined)){
+          dHdr=i;
+          r.forEach((c,ci)=>{
+            const s=String(c==null?"":c).toLowerCase();
+            if(/sewing\s*line/.test(s)) dc.line=ci;
+            else if(/quantity/.test(s)) dc.qty=ci;
+            else if(/total\s*ctns|carton/.test(s)) dc.ctn=ci;
+            else if(/type\s*of\s*product/.test(s)) dc.type=ci;
+            else if(/^style/.test(s)) dc.style=ci;
+          });
+          break;
+        }
+      }
+      if(dHdr>=0){
+        for(let i=dHdr+1;i<rows.length;i++){
+          const r=rows[i]||[];
+          const raw=String(r[dc.line]==null?"":r[dc.line]).trim();
+          if(/^total/i.test(raw)) break;
+          if(!raw || !LRE.test(raw)) continue;
+          const qty=parseFloat(r[dc.qty])||0;
+          if(qty<=0) continue;
+          const key=normLineNo(raw);
+          const typ=String(r[dc.type]==null?"":r[dc.type]).trim().toUpperCase();
+          if(!detail[key]) detail[key]={g:0,a:0,styles:new Set(),types:{}};
+          if(/GARMENT/.test(typ)) detail[key].g+=qty; else detail[key].a+=qty;
+          if(typ) detail[key].types[typ]=(detail[key].types[typ]||0)+qty;
+          const st=String(r[dc.style]==null?"":r[dc.style]).trim();
+          if(st) detail[key].styles.add(st);
+        }
+      }
+
+      // ── 3. LINE PRODUCTION STATUS 區塊 ──
+      let sHdr=-1, cmtCol=-1;
+      const sc={ops:1,hr:2,styles:3,tgt:4,act:5,ctn:6,ach:7,eff:8};
+      for(let i=0;i<rows.length;i++){
+        const r=rows[i]||[];
+        const joined=r.map(c=>String(c==null?"":c)).join("|");
+        if(/approx\.?\s*target/i.test(joined) && /actual/i.test(joined)){
+          sHdr=i;
+          r.forEach((c,ci)=>{
+            const s=String(c==null?"":c).toLowerCase();
+            if(/operator|人數/.test(s)) sc.ops=ci;
+            else if(/working\s*hour|工時/.test(s)) sc.hr=ci;
+            else if(/style\s*handle|款數/.test(s)) sc.styles=ci;
+            else if(/approx.*target|target/.test(s)) sc.tgt=ci;
+            else if(/actual/.test(s)) sc.act=ci;
+            else if(/carton|ctns/.test(s)) sc.ctn=ci;
+            else if(/achiev|達成/.test(s)) sc.ach=ci;
+            else if(/eff/.test(s)) sc.eff=ci;
+            else if(/comment|remark|備註/.test(s)) cmtCol=ci;
+          });
+          // Comment 標題常在上一列（與 LINE PRODUCTION STATUS 同列）
+          if(cmtCol<0 && i>0){
+            (rows[i-1]||[]).forEach((c,ci)=>{
+              if(/comment|remark|備註/i.test(String(c==null?"":c))) cmtCol=ci;
+            });
+          }
+          break;
+        }
+      }
+      if(sHdr<0) return;
+      if(cmtCol<0) cmtCol=Math.max(sc.eff,sc.ach)+1;
+
+      let dayHas=false;
+      for(let i=sHdr+1;i<rows.length;i++){
+        const r=rows[i]||[];
+        const raw=String(r[0]==null?"":r[0]).trim();
+        if(/^total|^合計/i.test(raw)) break;
+        if(!raw || !LRE.test(raw)) continue;
+        const target=parseFloat(r[sc.tgt])||0;
+        const actual=parseFloat(r[sc.act])||0;
+        if(target<=0 && actual<=0) continue;      // 空線不入庫
+        const lineNo=normLineNo(raw);
+        const ops=parseFloat(r[sc.ops])||0;
+        const ctns=parseFloat(r[sc.ctn])||0;
+        let ach=pct(r[sc.ach]); if(!ach && target>0) ach=Math.round(actual/target*1000)/10;
+        const eff=Math.round(pct(r[sc.eff]));
+        const cmt=(typeof cleanField==="function")?cleanField(r[cmtCol]):String(r[cmtCol]==null?"":r[cmtCol]).trim();
+        const remark=String(cmt||"").replace(/\s+/g," ").trim();
+
+        // 成衣／Apron 分流：以明細為準，並依實際產量等比校正
+        const d=detail[lineNo]||{g:0,a:0,styles:new Set()};
+        let gP=d.g, aP=d.a; const dTot=gP+aP;
+        if(dTot>0 && actual>0 && Math.abs(dTot-actual)>1){
+          gP=Math.round(gP/dTot*actual); aP=Math.max(0,Math.round(actual)-gP);
+        }
+        const section = (gP>0||aP>0) ? (gP>=aP?"Garment":"Apron") : "Sewing";
+        // ★ 線號對齊：本報表 Apron/Napkin 線寫成「Line 10」，但系統既有 Apron 日報為「LINE 10」（前導零格式）。
+        //   若不對齊，同一條線會被視為兩條，月報件數會重複計算。
+        let lineKey=lineNo;
+        if(section==="Apron"){
+          const mn=String(lineNo).match(/(\d+)\s*$/);
+          if(mn) lineKey="LINE "+String(parseInt(mn[1],10)).padStart(2,"0");
+        }
+
+        // Comment 關鍵字 → Root Cause 標記（本格式無勾選欄，改以文字推論）
+        const kw=remark.toLowerCase();
+        const has=re=>re.test(remark)||re.test(kw);
+        const issue={
+          changeover: has(/換款|换款|換線|换线|changeover|change over/i),
+          material:   has(/缺料|欠料|物料|面料|布料|material|fabric/i),
+          machine:    has(/機器|机器|機台|机台|故障|machine|breakdown/i),
+          manpower:   has(/缺人|人手|人力|請假|请假|新人|manpower|absent/i),
+          quality:    has(/品質|品质|質量|质量|返工|返修|quality|defect|rework/i),
+          others:     false
+        };
+        if(remark && !Object.keys(issue).some(k=>issue[k])) issue.others=true;
+
+        recs.push({
+          id:uid(), date, section, lineNo:lineKey,
+          selfKey:"", po:"", styleNo:"", color:"", size:"",
+          pieces:Math.round(actual), workers:Math.round(ops*100)/100, efficiency:eff,
+          cartons:Math.round(ctns*10)/10, smv:0, normalPcs:0, otPcs:0, workersOT:0, hoursOT:0,
+          tSrc:"dpo",
+          target:Math.round(target),
+          achievement:ach,
+          gPcs:gP, aPcs:aP,
+          styleCount:(d.styles?d.styles.size:0)||parseFloat(r[sc.styles])||0,
+          issue, remark
+        });
+        dayHas=true;
+      }
+      if(dayHas) daysWithData.push(date);
+    });
+
+    if(!recs.length) return null;
+    daysWithData.sort();
+    const lineNames=[...new Set(recs.map(r=>r.lineNo))];
+    const gT=recs.reduce((s,r)=>s+(r.gPcs||0),0), aT=recs.reduce((s,r)=>s+(r.aPcs||0),0);
+    return {recs, summary:{
+      date: daysWithData.length>1
+        ? `${daysWithData[0]} ~ ${daysWithData[daysWithData.length-1]}（${daysWithData.length} 天）`
+        : daysWithData[0],
+      section:`🎯 Daily Output（目標來源｜成衣 ${gT.toLocaleString()} / Apron ${aT.toLocaleString()}）`,
+      lines:lineNames.length,
+      totalPcs: recs.reduce((s,r)=>s+r.pieces,0), lineNames
+    }};
+  }catch(e){ console.warn("[DailyOutputReport] parse error:", e); return null; }
+}
+
 /* ── 1. 解析器 ─────────────────────────────────────────────────────────── */
 function parseVRTTargetReport(wb, fname){
   try{
@@ -5832,7 +6093,7 @@ function parseVRTTargetReport(wb, fname){
 
 /* ── 2. 期間工具 ───────────────────────────────────────────────────────── */
 let TGT_MODE="day";
-function tgtDates(){ return [...new Set(DB.filter(r=>r.tSrc==="target").map(r=>r.date))].sort(); }
+function tgtDates(){ return [...new Set(DB.filter(r=>isTgtSrc(r)).map(r=>r.date))].sort(); }
 function tgtPKey(d){
   if(TGT_MODE==="week") return getWeekKey(d);
   if(TGT_MODE==="month") return d.slice(0,7);
