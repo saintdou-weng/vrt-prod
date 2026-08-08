@@ -98,7 +98,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   <div class="logo">✂️</div>
   <div>
     <div class="h-title">裁剪生產分析系統</div>
-    <div class="h-sub">CUTTING PRODUCTION · v3.3 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.4 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
@@ -505,6 +505,26 @@ const THIS_MONTH=TODAY.slice(0,7);
 const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 const LRE=/^(LINE|Line)\s+[A-Z]?\d+$/;
 const isDailyRec=r=>r.src!=='ref'&&r.src!=='summary'&&r.lineNo!=='Weekly Report'&&r.lineNo!=='Monthly Summary'&&r.lineNo!=='Summary'&&r.pieces>0;
+
+/* ★ v3.4 車縫件數去重：與車縫系統(sewing v5.14)完全一致的計數規則。
+   車縫 DB 現同時含三種來源（norm 日報 / target 目標報表 / dpo Daily Output），
+   同一天同一條線可能有多筆。規則：同 date|lineNo 若有 norm 記錄，只計 norm；
+   否則才用 target/dpo。避免裁縫連動 WIP 頁把車縫件數重複計成兩倍。
+   傳入已篩好的車縫記錄陣列，回傳去重後的總件數。 */
+function sewPieces(recs){
+  const g={};
+  (recs||[]).forEach(r=>{
+    const k=(r.date||'')+'|'+(r.lineNo||'');
+    if(!g[k])g[k]={norm:0,target:0,dpo:0};
+    const src=(r.tSrc==='target')?'target':(r.tSrc==='dpo')?'dpo':'norm';
+    g[k][src]+=(r.pieces||0);
+  });
+  let tot=0;
+  // 同 date|line 單一來源優先序：日報(norm) > 目標報表(target) > Daily Output(dpo)
+  // 與車縫系統 reconcileTgtSrc 一致：三者並存時只取一種，不疊加。
+  Object.values(g).forEach(v=>{ tot += v.norm>0?v.norm : v.target>0?v.target : v.dpo; });
+  return tot;
+}
 
 // ── IDB: CuttingProd（v2 與 cutting_plan 共用；含自我修復） ────────────────────
 const CUTPROD_STORES=["cutting_records","sewing_cache","plan_records","variance_records","history_records"];
@@ -1935,7 +1955,7 @@ function renderWIP(){
     let sr=SEW.filter(r=>r.date.startsWith(prefix));
     if(sec){cr=cr.filter(r=>r.section===sec);sr=sr.filter(r=>r.section===sec);}
     const cutTotal=cr.reduce((s,r)=>s+r.pieces,0);
-    const sewTotal=sr.reduce((s,r)=>s+r.pieces,0);
+    const sewTotal=sewPieces(sr);
     const cutStyles=[...new Set(cr.map(r=>r.styleNo).filter(Boolean))].length;
     const sewStyles=[...new Set(sr.map(r=>r.styleNo).filter(Boolean))].length;
     return{mm,prefix,label:MLBL[mm],cutTotal,sewTotal,cutStyles,sewStyles};
@@ -1964,7 +1984,7 @@ function renderWIP(){
       let cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix));
       let sr=SEW.filter(r=>r.date.startsWith(prefix));
       if(sec){cr=cr.filter(r=>r.section===sec);sr=sr.filter(r=>r.section===sec);}
-      return{mm,label:MLBL[mm],cut:cr.reduce((s,r)=>s+r.pieces,0),sew:sr.reduce((s,r)=>s+r.pieces,0)};
+      return{mm,label:MLBL[mm],cut:cr.reduce((s,r)=>s+r.pieces,0),sew:sewPieces(sr)};
     });
     const mx=Math.max(...fullData.flatMap(m=>[m.cut,m.sew]),1);
     document.getElementById("wipChart").innerHTML=fullData.map(m=>`
@@ -1988,7 +2008,7 @@ function renderWIP(){
       const cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix)&&r.section===sc);
       const sr=SEW.filter(r=>r.date.startsWith(prefix)&&r.section===sc);
       const cut=cr.reduce((s,r)=>s+r.pieces,0);
-      const sew=sr.reduce((s,r)=>s+r.pieces,0);
+      const sew=sewPieces(sr);
       if(cut===0&&sew===0)return;
       const d=cut-sew,r2=cut>0?Math.round(sew/cut*100):0;
       rows.push({mm,prefix,sec:sc,cut,sew,diff:d,rate:r2});
@@ -2031,7 +2051,7 @@ function renderWIP(){
     const cr=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(yr)&&r.section===sc&&(!mo||r.date.slice(5,7)===mo));
     const sr=SEW.filter(r=>r.date.startsWith(yr)&&r.section===sc&&(!mo||r.date.slice(5,7)===mo));
     const cut=cr.reduce((s,r)=>s+r.pieces,0);
-    const sew=sr.reduce((s,r)=>s+r.pieces,0);
+    const sew=sewPieces(sr);
     const rate=cut>0?Math.round(sew/cut*100):0;
     const styles=[...new Set(cr.map(r=>r.styleNo).filter(Boolean))].length;
     return{sc,cut,sew,diff:cut-sew,rate,styles};
@@ -2478,7 +2498,7 @@ function xls(type){
       secs.forEach(sc=>{
         const prefix=`${yr}-${mm}`;
         const cut=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(prefix)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
-        const sew=SEW.filter(r=>r.date.startsWith(prefix)&&r.section===sc).reduce((s,r)=>s+r.pieces,0);
+        const sew=sewPieces(SEW.filter(r=>r.date.startsWith(prefix)&&r.section===sc));
         if(cut===0&&sew===0)return;
         const rate=cut>0?Math.round(sew/cut*100):0;
         data.push([prefix,sc,cut,sew||"",cut-sew,sew?rate+"%" :""]);
