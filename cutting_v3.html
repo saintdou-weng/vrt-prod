@@ -98,7 +98,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   <div class="logo">✂️</div>
   <div>
     <div class="h-title">裁剪生產分析系統</div>
-    <div class="h-sub">CUTTING PRODUCTION · v3.5 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.6 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
@@ -344,6 +344,13 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
     <div id="mChart" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:80px"></div>
     <div id="mLbl" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:3px;font-size:9px;color:#9ca3af;text-align:center"></div>
   </div>
+  <div class="card" id="mMonListCard"><div class="ct" id="mMonListTitle">各月份彙整</div>
+    <div class="tw"><table>
+      <thead><tr><th>月份</th><th class="r">月裁量</th><th class="r">Apron</th><th class="r">Garment</th><th class="r">平均效率</th><th class="r">款號數</th><th class="r">工作天</th></tr></thead>
+      <tbody id="mMonListBody"></tbody>
+    </table></div>
+  </div>
+
   <div class="card"><div class="ct" id="mTableTitle">月別線別彙整</div>
     <div class="tw"><table>
       <thead id="mThead"><tr><th>Section</th><th>線別</th><th class="r">月裁量</th><th class="r">平均效率</th><th class="r">款號數</th></tr></thead>
@@ -607,12 +614,32 @@ async function loadSew(opts){
     let recs=[];
     if(d.chunked&&d.meta&&d.meta.totalChunks){
       const total=d.meta.totalChunks;
+      const expect=d.meta.recordCount||0;
+      let failed=[];
       for(let i=0;i<total;i++){
-        if(!opts.silent){_sewPullStatus(`☁️ 雲端拉取車縫中… ${i+1}/${total} 批`);}
-        const cr=await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`,{redirect:"follow"});
-        if(!cr.ok)continue;
-        const cd=await cr.json();
-        if(cd.ok&&Array.isArray(cd.data.records))recs=recs.concat(cd.data.records);
+        if(!opts.silent){_sewPullStatus(`☁️ 雲端拉取車縫中… ${i+1}/${total} 批（已 ${recs.length.toLocaleString()} 筆）`);}
+        // ★ v3.6：每批最多重試 3 次。原本失敗就 continue，會靜默漏批，
+        //   造成只拉到最近幾個月（例如 71,938 筆只拿到 3,029 筆、1~4月全空）。
+        let got=false;
+        for(let a=0;a<3&&!got;a++){
+          try{
+            const cr=await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`,{redirect:"follow"});
+            if(!cr.ok)throw new Error(`HTTP ${cr.status}`);
+            const cd=await cr.json();
+            if(cd.ok&&Array.isArray(cd.data.records)){recs=recs.concat(cd.data.records);got=true;}
+            else throw new Error(cd.error||"bad chunk");
+          }catch(ce){
+            if(a<2)await new Promise(r=>setTimeout(r,400*(a+1)));  // 退避後重試
+          }
+        }
+        if(!got)failed.push(i);
+      }
+      if(failed.length){
+        window._sewLastErr=`第 ${failed.join(",")} 批拉取失敗（共 ${failed.length}/${total} 批）`;
+        console.warn("[cutting] 車縫分批拉取不完整：",window._sewLastErr);
+      }else if(expect&&recs.length<expect*0.95){
+        window._sewLastErr=`雲端宣稱 ${expect.toLocaleString()} 筆，實得 ${recs.length.toLocaleString()} 筆`;
+        console.warn("[cutting] 車縫資料筆數不符：",window._sewLastErr);
       }
     }else if(!d.chunked&&d.data){
       const payload=d.data;
@@ -769,7 +796,10 @@ async function refreshSew(opts){
     const sewSecs=[...new Set(SEW.map(r=>r.section))].join('/');
     const stN=[...new Set(SEW.map(r=>r.styleNo).filter(Boolean))].length;
     const srcLabel=src==="cloud"?" ☁️ 雲端":src==="local"?" 📱 本機":src==="cache"?" 💾 快取":"";
-    el.innerHTML=`<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b>${srcLabel} — ${fmt(SEW.length)} 筆 · ${sewSecs} · 款號 ${stN} 款 · 最新 ${dates[0]||"-"}`;
+    // ★ v3.6：顯示涵蓋月份與不完整警示，避免「只拉到部分月份」卻沒人發現
+    const monN=[...new Set(SEW.map(r=>String(r.date).slice(0,7)))].length;
+    const warn=window._sewLastErr?`<div style="color:#dc2626;font-size:11px;margin-top:4px">⚠️ 車縫資料可能不完整：${window._sewLastErr} — 請按「☁️ 雲端更新」重試</div>`:"";
+    el.innerHTML=`<span class="conn-dot conn-live"></span><b>✅ 車縫系統已連線</b>${srcLabel} — ${fmt(SEW.length)} 筆 · 涵蓋 ${monN} 個月 · ${sewSecs} · 款號 ${stN} 款 · ${dates[dates.length-1]||"-"} ~ ${dates[0]||"-"}${warn}`;
     badge.innerHTML="⚡ 已連線車縫 DB";badge.style.cssText="background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4);color:#6ee7b7";
     // ★ 雲端更新後顯示浮動 Toast
     if(isCloudForced){
@@ -1868,6 +1898,11 @@ function renderMonthly(){
 
   if(mView==="mo"){
     // ── 月報視圖 ─────────────────────────────────────────────
+    // ★ v3.6 修正：年報會把圖表格線改成「年數」欄，切回月報必須還原成 12 欄，
+    //   否則 12 個月份標籤會擠成好幾排（版面錯亂）。
+    document.getElementById("mChart").style.gridTemplateColumns="repeat(12,1fr)";
+    document.getElementById("mLbl").style.gridTemplateColumns="repeat(12,1fr)";
+    document.getElementById("mMonListCard").style.display="";
     const m=document.getElementById("mMonth").value||THIS_MONTH;document.getElementById("mMonth").value=m;
     const myr=m.slice(0,4);
     document.getElementById("mChartTitle").textContent=`${myr} 年度月別走勢`;
@@ -1877,6 +1912,31 @@ function renderMonthly(){
     const mx=Math.max(...md.map(x=>x.p),1);
     document.getElementById("mChart").innerHTML=md.map(x=>`<div style="display:flex;align-items:flex-end;justify-content:center;height:80px"><div style="width:80%;background:${x.cur?"#3b9ef5":"#bfdbfe"};border-radius:4px 4px 0 0;height:${Math.max(x.p?2:0,Math.round(x.p/mx*80))}px" title="${x.mm}: ${fmt(x.p)}件"></div></div>`).join("");
     document.getElementById("mLbl").innerHTML=md.map(x=>`<div>${x.l}</div>`).join("");
+
+    // ★ v3.6 各月份彙整：整年每月一列，直接看得到各月數量（不必逐月切換）
+    document.getElementById("mMonListTitle").textContent=`${myr} 年 各月份彙整`;
+    const monRows=md.map(x=>{
+      let r=CUT.filter(z=>isDailyRec(z)&&z.date.startsWith(x.mm));
+      if(sec)r=r.filter(z=>z.section===sec);
+      if(!r.length)return"";
+      const ap=r.filter(z=>z.section==="Apron").reduce((s,z)=>s+z.pieces,0);
+      const ga=r.filter(z=>z.section==="Garment").reduce((s,z)=>s+z.pieces,0);
+      const ef=r.filter(z=>z.efficiency>0).map(z=>z.efficiency);
+      const av=ef.length?(ef.reduce((a,b)=>a+b)/ef.length).toFixed(1):"-";
+      const st=[...new Set(r.map(z=>z.styleNo).filter(Boolean))].length;
+      const dy=[...new Set(r.map(z=>z.date))].length;
+      const hi=x.mm===m;
+      return`<tr style="${hi?"background:#eff6ff":""}">
+        <td class="mono" style="font-weight:${hi?"700":"600"};color:${hi?"#1d4ed8":"#334155"};cursor:pointer" onclick="document.getElementById('mMonth').value='${x.mm}';renderMonthly();">${x.mm}${hi?" ◀":""}</td>
+        <td class="r" style="font-weight:700;color:#1d4ed8">${fmt(x.p)}</td>
+        <td class="r" style="color:#7c3aed">${ap?fmt(ap):"—"}</td>
+        <td class="r" style="color:#059669">${ga?fmt(ga):"—"}</td>
+        <td class="r">${eb(parseFloat(av))}</td>
+        <td class="r">${st}</td><td class="r">${dy}</td></tr>`;
+    }).filter(Boolean).join("");
+    const yTot=md.reduce((s,x)=>s+x.p,0);
+    document.getElementById("mMonListBody").innerHTML=(monRows||`<tr><td colspan="7" style="text-align:center;padding:30px;color:#8b95b8">${myr} 年無資料</td></tr>`)
+      +(monRows?`<tr style="background:#f8fafc;font-weight:700"><td class="mono">${myr} 合計</td><td class="r" style="color:#1d4ed8">${fmt(yTot)}</td><td colspan="5"></td></tr>`:"");
     let rows=CUT.filter(r=>isDailyRec(r)&&r.date.startsWith(m));if(sec)rows=rows.filter(r=>r.section===sec);
     const tp=rows.reduce((s,r)=>s+r.pieces,0),ae=rows.filter(r=>r.efficiency>0).map(r=>r.efficiency),avg=ae.length?(ae.reduce((a,b)=>a+b)/ae.length).toFixed(1):"-",styles=[...new Set(rows.map(r=>r.styleNo).filter(Boolean))].length;
     document.getElementById("mKpi").innerHTML=[{v:m,l:"月份",c:"#3b9ef5"},{v:fmt(tp),l:"月裁量",c:"#3b9ef5"},{v:avg+"%",l:"平均效率",c:"#059669"},{v:styles,l:"款號數",c:"#d97706"},{v:[...new Set(rows.map(r=>r.date))].length,l:"工作天",c:"#6b7a9e"}].map(k=>`<div class="kpi"><div class="kpi-n" style="color:${k.c};font-size:${String(k.v).length>8?"14px":"26px"}">${k.v}</div><div class="kpi-l">${k.l}</div></div>`).join("");
@@ -1886,6 +1946,7 @@ function renderMonthly(){
 
   } else {
     // ── 年報視圖（★ 改為列出各年份，與 sewing 一致）─────────────
+    document.getElementById("mMonListCard").style.display="none";
     const allYrs=[...new Set(CUT.filter(isDailyRec).map(r=>r.date.slice(0,4)))].sort();
     if(!allYrs.length)allYrs.push(TODAY.slice(0,4));
     const thisYr=TODAY.slice(0,4);
