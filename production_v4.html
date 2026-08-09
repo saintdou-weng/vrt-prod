@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 生產進度總表 v4</title>
+<title>VRT 生產進度總表 v4.1</title>
 <style>
 :root{
   --bg:#f0f2f7;--s1:#fff;--s2:#f7f8fc;--s3:#eef1f8;--bd:#e2e6f0;--bd2:#d0d5e8;
@@ -152,7 +152,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 
 <!-- HEADER -->
 <div class="hdr">
-  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4 · 訂單 × 裁剪 × 車縫 × SMV</div></div>
+  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.1 · 訂單 × 裁剪 × 車縫 × SMV · DB 自動連動</div></div>
   <div style="font-size:11px;color:#8bb5d8;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><span class="dot" id="d-ord"></span><span id="l-ord">訂單…</span></span>
     <span><span class="dot" id="d-cut"></span><span id="l-cut">裁剪…</span></span>
@@ -354,15 +354,15 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
       </div>
       <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
         <div style="color:var(--cyan);font-weight:700;font-size:12px;margin-bottom:5px">✂️ 裁剪<br><span style="color:var(--muted);font-weight:400">cutting_v3</span></div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">CuttingProd</b> v1<br>store: cutting_records</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">CuttingProd</b> current<br>store: cutting_records</div>
       </div>
       <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
         <div style="color:var(--amber);font-weight:700;font-size:12px;margin-bottom:5px">🧵 車縫<br><span style="color:var(--muted);font-weight:400">sewing_v5</span></div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.8">localStorage<br><b style="color:var(--t2)">sewing_prod_v1</b><br>（備份於此）</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">VRT_SewingProduction</b><br>store: daily_records</div>
       </div>
       <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
-        <div style="color:var(--teal);font-weight:700;font-size:12px;margin-bottom:5px">📐 SMV<br><span style="color:var(--muted);font-weight:400">smv_manager_v4</span></div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">SewingProd</b> v5<br>store: smv_snapshots</div>
+        <div style="color:var(--teal);font-weight:700;font-size:12px;margin-bottom:5px">📐 SMV<br><span style="color:var(--muted);font-weight:400">smv_manager_v5_final</span></div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">SewingProd</b> current<br>store: smv_snapshots</div>
       </div>
     </div>
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;font-size:12px;color:var(--t2);margin-bottom:9px">
@@ -400,9 +400,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 //  DATA SOURCES — 對應各系統的儲存位置
 // ══════════════════════════════════════════════════
 //  orders_v3    → IndexedDB: FactoryDB (v12)   → po_lines
-//  cutting_v3   → IndexedDB: CuttingProd (v1)  → cutting_records
-//  sewing_v5    → localStorage: sewing_prod_v1
-//  smv_manager  → IndexedDB: SewingProd (v5)   → smv_snapshots
+//  cutting_v3   → IndexedDB: CuttingProd (current) → cutting_records
+//  sewing_v6    → IndexedDB: VRT_SewingProduction → daily_records
+//  smv_manager  → IndexedDB: SewingProd (current) → smv_snapshots
 
 const SEW_LS   = 'sewing_prod_v1';
 const TODAY    = new Date().toISOString().slice(0,10);
@@ -456,84 +456,59 @@ async function loadAll(){
     document.getElementById('l-ord').textContent = '訂單 DB 離線';
   }
 
-  // 2. Cutting: CuttingProd v1
-  setL('讀取裁剪 (CuttingProd v1)…'); CUT=[];
+  // 2. Cutting: accept current DB version (cutting v3 may self-upgrade to v2+)
+  setL('讀取裁剪 (CuttingProd / cutting_records)…'); CUT=[];
   try{
-    const db = await idbOpen('CuttingProd', 1);
-    CUT      = await idbAll(db,'cutting_records');
-    setDot('d-cut', CUT.length ? 'ok' : 'warn');
-    document.getElementById('l-cut').textContent = CUT.length ? `裁剪 ${CUT.length} 筆` : '裁剪無資料（先開 cutting_v3.html 匯入）';
+    const db=await idbOpen('CuttingProd');
+    CUT=await idbAll(db,'cutting_records');
+    setDot('d-cut',CUT.length?'ok':'warn');
+    document.getElementById('l-cut').textContent=CUT.length?`裁剪 ${CUT.length.toLocaleString()} 筆`:'裁剪無資料（可按雲端「拉取全部」）';
+    try{db.close();}catch(_){}
   }catch(e){
     setDot('d-cut','err');
-    document.getElementById('l-cut').textContent = '裁剪 DB 離線';
+    document.getElementById('l-cut').textContent='裁剪 DB 離線：'+(e.message||'讀取失敗');
   }
 
-  // 3. Sewing: SewingCloudProd IDB（優先）→ localStorage fallback
-  setL('讀取車縫 (IDB + localStorage)…'); SEW=[];
-  try {
-    // 先試 SewingCloudProd IDB
-    let idbRecs = [];
-    try {
-      idbRecs = await new Promise((res) => {
-        const req = indexedDB.open('SewingCloudProd', 1);
-        req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
-        req.onsuccess = e => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
-          const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
-          q.onsuccess = () => res(q.result || []);
-          q.onerror   = () => res([]);
-        };
-        req.onerror = () => res([]);
-      });
-    } catch(e) { idbRecs = []; }
-
-    // localStorage
-    let lsRecs = [];
-    try { lsRecs = JSON.parse(localStorage.getItem(SEW_LS) || '[]'); } catch(e) {}
-
-    // 用較多筆數的那個，合併去重
-    const base = idbRecs.length >= lsRecs.length ? idbRecs : lsRecs;
-    SEW = base.filter(r => r?.pieces > 0);
-    const src = idbRecs.length >= lsRecs.length ? 'IDB' : 'localStorage';
-    setDot('d-sew', SEW.length ? 'ok' : 'warn');
-    document.getElementById('l-sew').textContent = SEW.length
-      ? `車縫 ${SEW.length.toLocaleString()} 筆`
-      : '車縫無資料（先開 sewing_v5.html 匯入）';
-  } catch(e) {
-    setDot('d-sew','err');
-    document.getElementById('l-sew').textContent = '車縫讀取失敗';
-  }
-
-  // 4. SMV: SewingProd v5 → smv_snapshots
-  setL('讀取 SMV (SewingProd v5)…'); SMV_MAP={}; SMV_INFO='';
+  // 3. Sewing: v6 primary IDB → cloud cache → legacy localStorage
+  setL('讀取車縫 (VRT_SewingProduction)…'); SEW=[];
   try{
-    const db    = await idbOpen('SewingProd', 7);
-    const snaps = await idbAll(db,'smv_snapshots');
+    let primary=[],cloud=[],legacy=[];
+    try{const d=await idbOpen('VRT_SewingProduction');primary=await idbAll(d,'daily_records');d.close();}catch(e){}
+    if(!primary.length){try{const d=await idbOpen('SewingCloudProd');cloud=await idbAll(d,'cloud_records');d.close();}catch(e){}}
+    if(!primary.length&&!cloud.length){try{legacy=JSON.parse(localStorage.getItem(SEW_LS)||'[]');}catch(e){legacy=[]}}
+    SEW=(primary.length?primary:cloud.length?cloud:legacy).filter(r=>r && Number(r.pieces||0)>0);
+    const src=primary.length?'VRT_SewingProduction':cloud.length?'Cloud cache':'legacy';
+    setDot('d-sew',SEW.length?'ok':'warn');
+    document.getElementById('l-sew').textContent=SEW.length?`車縫 ${SEW.length.toLocaleString()} 筆 · ${src}`:'車縫無資料（可按雲端「拉取全部」）';
+  }catch(e){
+    setDot('d-sew','err');
+    document.getElementById('l-sew').textContent='車縫讀取失敗：'+(e.message||'DB error');
+  }
+
+  // 4. SMV: accept current SewingProd version; missing store = no data, not fatal
+  setL('讀取 SMV (SewingProd / smv_snapshots)…'); SMV_MAP={}; SMV_INFO='';
+  try{
+    const db=await idbOpen('SewingProd');
+    const snaps=await idbAll(db,'smv_snapshots');
+    try{db.close();}catch(_){}
     if(snaps.length){
-      // Use the most recently imported snapshot (multiple sections → merge all)
-      snaps.sort((a,b)=> new Date(b.importDate)-new Date(a.importDate));
-      // Merge latest snapshot per section (Garment + Apron + Cutting)
-      const seen = new Set();
+      snaps.sort((a,b)=>new Date(b.importDate||b.reportDate||0)-new Date(a.importDate||a.reportDate||0));
+      const seen=new Set();
       snaps.forEach(s=>{
-        if(seen.has(s.section)) return;
-        seen.add(s.section);
-        (s.items||[]).forEach(i=>{
-          if(!i.style) return;
-          const sk = i.style.toUpperCase();
-          if(!SMV_MAP[sk]) SMV_MAP[sk] = {curSMV:i.curSMV,origSMV:i.origSMV,section:s.section,cust:i.cust,type:i.type||''};
-        });
+        const sec=s.section||'SMV';
+        if(seen.has(sec))return; seen.add(sec);
+        (s.items||[]).forEach(i=>{if(!i.style)return;const sk=String(i.style).toUpperCase();if(!SMV_MAP[sk])SMV_MAP[sk]={curSMV:i.curSMV,origSMV:i.origSMV,section:sec,cust:i.cust,type:i.type||''};});
       });
-      SMV_INFO = `最新：${snaps[0].section} ${fmtDate(snaps[0].importDate)} · 共 ${Object.keys(SMV_MAP).length} 款`;
+      SMV_INFO=`最新：${snaps[0].section||'SMV'} ${fmtDate(snaps[0].importDate||snaps[0].reportDate)} · 共 ${Object.keys(SMV_MAP).length} 款`;
       setDot('d-smv','ok');
-      document.getElementById('l-smv').textContent = `SMV ${Object.keys(SMV_MAP).length} 款`;
+      document.getElementById('l-smv').textContent=`SMV ${Object.keys(SMV_MAP).length} 款`;
     }else{
       setDot('d-smv','warn');
-      document.getElementById('l-smv').textContent = 'SMV 無資料（先開 smv_manager_v4.html 匯入）';
+      document.getElementById('l-smv').textContent='SMV 無資料（先開 smv_manager_v5_final.html 匯入）';
     }
   }catch(e){
     setDot('d-smv','warn');
-    document.getElementById('l-smv').textContent = 'SMV 未匯入';
+    document.getElementById('l-smv').textContent='SMV 尚未連動';
   }
 
   // 5. 排產產能 ProdPlanCapacity(唯讀)
@@ -1300,7 +1275,7 @@ function renderSmv(){
       <td class="r" style="color:${r.balance>0?'var(--amber)':'var(--muted)'}">${r.balance?fmt(r.balance):'—'}</td>
       <td class="r" style="color:var(--cyan)">${days?days+'天':'—'}</td>
     </tr>`;
-  }).join('')||`<tr><td colspan="11" style="text-align:center;padding:25px;color:var(--muted)">無 SMV 資料，請先在 smv_manager_v4.html 匯入</td></tr>`;
+  }).join('')||`<tr><td colspan="11" style="text-align:center;padding:25px;color:var(--muted)">無 SMV 資料，請先在 smv_manager_v5_final.html 匯入</td></tr>`;
 }
 
 // ══════════════════════════════════════════════════
@@ -1534,16 +1509,12 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
     for (const t of tools) {
       vcProdLog(`拉取 ${t.name}...`, 'i');
       try {
-        const r = await fetch(`${gasUrl}?action=pull&tool=${t.key}`, { redirect:'follow' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error);
-        if (!d.data || !d.data.data) { vcProdLog(`${t.name}：雲端無資料`, 'err'); continue; }
-        const cnt = await t.write(d.data.data);
-        vcProdLog(`✓ ${t.name} ${cnt} 筆`, 'ok');
-        anyOk = true;
-      } catch(e) {
-        vcProdLog(`✗ ${t.name}：${e.message}`, 'err');
-      }
+        const payload=await pullToolPayload(t.key);
+        if(!payload){vcProdLog(`${t.name}：雲端無資料`,'err');continue;}
+        const cnt=await t.write(payload);
+        vcProdLog(`✓ ${t.name} ${cnt} 筆`,'ok');
+        if(cnt>0)anyOk=true;
+      }catch(e){vcProdLog(`✗ ${t.name}：${e.message}`,'err');}
     }
 
     if (anyOk) {
@@ -1554,54 +1525,90 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
     btn.innerHTML = '⬇ 拉取全部（車縫＋裁剪＋訂單）';
   };
 
+  async function openCurrentOrRepair(dbName, stores){
+    const build=d=>Object.entries(stores).forEach(([name,opt])=>{if(!d.objectStoreNames.contains(name))d.createObjectStore(name,opt)});
+    const open=ver=>new Promise((res,rej)=>{
+      const q=ver?indexedDB.open(dbName,ver):indexedDB.open(dbName);
+      q.onupgradeneeded=e=>build(e.target.result);
+      q.onsuccess=e=>res(e.target.result);
+      q.onerror=()=>rej(q.error||new Error('Cannot open '+dbName));
+      q.onblocked=()=>rej(new Error(dbName+' 升級被其他分頁鎖住'));
+    });
+    let d=await open();
+    if(Object.keys(stores).every(s=>d.objectStoreNames.contains(s)))return d;
+    const nv=(d.version||1)+1;d.close();d=await open(nv);return d;
+  }
+
+  async function pullToolPayload(key){
+    // New chunked format first; fallback to legacy single payload.
+    try{
+      const mr=await fetch(`${gasUrl}?action=pull&meta=1&tool=${key}`,{redirect:'follow'});
+      const mj=await mr.json();
+      if(mj.ok&&mj.data){
+        const d=mj.data;
+        if(d.chunked&&d.meta&&d.meta.totalChunks){
+          let records=[];
+          for(let i=0;i<d.meta.totalChunks;i++){
+            const cr=await fetch(`${gasUrl}?action=pull&tool=${key}&chunk=${i}`,{redirect:'follow'});
+            const cj=await cr.json();
+            if(cj.ok&&Array.isArray(cj.data?.records))records=records.concat(cj.data.records);
+          }
+          return {records,meta:d.meta||{}};
+        }
+        if(!d.chunked&&d.data)return d.data;
+      }
+    }catch(e){}
+    const r=await fetch(`${gasUrl}?action=pull&tool=${key}`,{redirect:'follow'});
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error||'GAS error');
+    if(!j.data)return null;
+    return j.data.data||j.data;
+  }
+
   // ── 寫入各工具資料 ──────────────────────────
   async function writeSewing(data) {
-    let recs = [];
-    if (data.lsKeys && data.lsKeys.sewing_prod_v1)
-      recs = JSON.parse(data.lsKeys.sewing_prod_v1);
-    else if (data.records) recs = data.records;
+    let recs=[];
+    if(Array.isArray(data?.records))recs=data.records;
+    else if(data?.lsKeys?.sewing_prod_v1)recs=JSON.parse(data.lsKeys.sewing_prod_v1);
+    if(!recs.length)return 0;
 
-    // ★ 全量存入 SewingCloudProd IDB（和 sewing_v5 共用同一個 IDB）
-    try {
-      await new Promise((res, rej) => {
-        const req = indexedDB.open('SewingCloudProd', 1);
-        req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
-        req.onsuccess = e => {
-          const db = e.target.result;
-          const tx = db.transaction('cloud_records', 'readwrite');
-          const os = tx.objectStore('cloud_records');
-          os.clear();
-          recs.forEach(r => os.put(r));
-          tx.oncomplete = res;
-          tx.onerror = rej;
-        };
-        req.onerror = rej;
+    // Primary DB used by sewing v6.
+    try{
+      const stores={
+        daily_records:{keyPath:'id'},eff_records:{keyPath:'id'},system_meta:{keyPath:'key'},
+        analysis_history:{keyPath:'analysisDate'},analytics_monthly:{keyPath:'yearMonth'}
+      };
+      const d=await openCurrentOrRepair('VRT_SewingProduction',stores);
+      await new Promise((res,rej)=>{
+        const tx=d.transaction('daily_records','readwrite'),os=tx.objectStore('daily_records');
+        os.clear();recs.forEach(r=>{if(r&&r.id!=null)os.put(r)});
+        tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
       });
-    } catch(e) { console.warn('IDB write failed, falling back to localStorage', e); }
+      d.close();
+    }catch(e){console.warn('Primary sewing IDB write failed',e);}
 
-    // localStorage 存近 90 天備用
-    const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
-    const recent = recs.filter(r => (r.date||'') >= cutStr);
-    try { localStorage.setItem('sewing_prod_v1', JSON.stringify(recent)); } catch(e) {}
+    // Cloud cache for backward compatibility.
+    try{
+      const d=await openCurrentOrRepair('SewingCloudProd',{cloud_records:{keyPath:'id',autoIncrement:true}});
+      await new Promise((res,rej)=>{const tx=d.transaction('cloud_records','readwrite'),os=tx.objectStore('cloud_records');os.clear();recs.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+      d.close();
+    }catch(e){console.warn('SewingCloudProd write failed',e);}
+
+    const cutStr=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+    const recent=recs.filter(r=>(r.date||'')>=cutStr);
+    try{localStorage.setItem('sewing_prod_v1',JSON.stringify(recent));}catch(e){}
     return recs.length;
   }
 
-  function writeCutting(data) {
-    return new Promise((res) => {
-      const recs = data.idbStore?.records || data.records || [];
-      const req  = indexedDB.open('CuttingProd', 1);
-      req.onerror = () => res(0);
-      req.onsuccess = e => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('cutting_records')) { res(0); return; }
-        const tx = db.transaction('cutting_records','readwrite');
-        const os = tx.objectStore('cutting_records');
-        os.clear();
-        recs.forEach(r => os.put(r));
-        tx.oncomplete = () => res(recs.length);
-        tx.onerror    = () => res(0);
-      };
-    });
+  async function writeCutting(data) {
+    const recs=data?.idbStore?.records||data?.records||[];
+    if(!recs.length)return 0;
+    try{
+      const stores={cutting_records:{keyPath:'id'},sewing_cache:{keyPath:'id'},plan_records:{keyPath:'id'},variance_records:{keyPath:'id'},history_records:{keyPath:'id'}};
+      const d=await openCurrentOrRepair('CuttingProd',stores);
+      await new Promise((res,rej)=>{const tx=d.transaction('cutting_records','readwrite'),os=tx.objectStore('cutting_records');os.clear();recs.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+      d.close(); return recs.length;
+    }catch(e){console.warn('Cutting write failed',e);return 0;}
   }
 
   function writeOrders(data) {
