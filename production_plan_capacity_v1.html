@@ -113,6 +113,14 @@ tr:hover td{background:#fafbfc}
 .tag{font-size:10px;padding:1px 6px;border-radius:4px;background:#eef2ff;color:#4338ca;font-weight:600}
 @media print{.header,.tabs,.hicons,.btnrow,.filt,.no-print{display:none!important}.wrap{padding:0}.card{break-inside:avoid;box-shadow:none}}
 .imp-hist{font-size:11.5px;color:#4a5578;padding:6px 0;border-bottom:1px solid #eef0f6;display:flex;justify-content:space-between;gap:10px}
+
+/* v2 weekly revision comparison + integrated report generator */
+.cmp-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.cmp-toolbar select,.cmp-toolbar input{min-width:150px}.delta-up{color:#b45309;font-weight:700}.delta-down{color:#047857;font-weight:700}.delta-same{color:#64748b}
+.change-chip{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;margin:1px 2px}.ch-qty{background:#fef3c7;color:#92400e}.ch-date{background:#dbeafe;color:#1d4ed8}.ch-line{background:#ede9fe;color:#6d28d9}.ch-add{background:#d1fae5;color:#065f46}.ch-remove{background:#fee2e2;color:#991b1b}
+.report-frame{width:100%;height:calc(100vh - 190px);min-height:920px;border:1px solid #dbe3ef;border-radius:12px;background:#fff}.report-note{font-size:12px;color:#5b6b94;line-height:1.6;margin-bottom:10px}
+@media(max-width:700px){.report-frame{height:1100px;min-height:1100px}.cmp-toolbar>*{max-width:100%}}
+
 </style>
 </head>
 <body>
@@ -147,6 +155,8 @@ tr:hover td{background:#fafbfc}
   <div class="tab" data-tab="line" data-i18n="tabLine">🧵 線別產能</div>
   <div class="tab" data-tab="cutsew" data-i18n="tabCut">✂️ 裁縫比對</div>
   <div class="tab" data-tab="records" data-i18n="tabRecords">📋 全部資料</div>
+  <div class="tab" data-tab="comparison" data-i18n="tabCompare">🔄 排單變更</div>
+  <div class="tab" data-tab="reportgen" data-i18n="tabReport">📄 週分析報告</div>
   <div class="tab" data-tab="settings" data-i18n="tabSettings">⚙️ 設定</div>
 </div>
 
@@ -161,6 +171,8 @@ tr:hover td{background:#fafbfc}
   <div id="line" class="pane"></div>
   <div id="cutsew" class="pane"></div>
   <div id="records" class="pane"></div>
+  <div id="comparison" class="pane"></div>
+  <div id="reportgen" class="pane"></div>
   <div id="settings" class="pane"></div>
 </div>
 
@@ -184,18 +196,18 @@ tr:hover td{background:#fafbfc}
 </div></div>
 
 <div class="toast" id="toast"></div>
-<div class="ver">VRT Production Plan &amp; Capacity Control Center · v1.0</div>
+<div class="ver">VRT Production Plan &amp; Capacity Control Center · v2.0</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
-   VRT Production Plan & Capacity Control Center v1.0
+   VRT Production Plan & Capacity Control Center v2.0
    單頁生產排產與產能分析系統 — 依 Production Plan Excel 分析日/週/月/年產能
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 全域狀態 ──────────────────────────────────────────────────────────── */
-const VER = 'production_plan_capacity_v1';
+const VER = 'production_plan_capacity_v2';
 let DB = [];                 // 主資料
 let SMV_MAP = {};            // normalizeStyle(style) -> smv
 let IMPORT_HISTORY = [];     // 匯入紀錄
@@ -215,6 +227,8 @@ let PENDING_DUP = null;      // 待處理的重複匯入
 
 const LS_SET = 'ppc_settings';
 const LS_HIST = 'ppc_import_history';
+const LS_VERS = 'ppc_plan_versions_v2';
+let PLAN_VERSIONS = []; // compact weekly snapshots; newest first
 
 /* ── IndexedDB 主儲存 ─────────────────────────────────────────────────── */
 const IDB_NAME = 'ProdPlanCapacity', IDB_STORE = 'records', IDB_META = 'meta';
@@ -262,13 +276,15 @@ async function idbLoadAll(){
     SMV_MAP = meta || {};
   }catch(e){ console.warn('idbLoadAll',e); DB=[]; }
 }
-async function persist(){ await idbSaveAll(); saveSettings(); saveHistory(); refreshHeader(); }
+async function persist(){ await idbSaveAll(); saveSettings(); saveHistory(); saveVersions(); refreshHeader(); }
 
 function saveSettings(){ try{ localStorage.setItem(LS_SET, JSON.stringify(SETTINGS)); }catch(e){} }
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(LS_SET)||'null'); if(s) SETTINGS={...SETTINGS,...s}; }catch(e){}
   if(!SETTINGS.gasUrl){ const pu=(localStorage.getItem('vrt_portal_gas_url')||'').trim(); if(pu) SETTINGS.gasUrl=pu; } }
 function saveHistory(){ try{ localStorage.setItem(LS_HIST, JSON.stringify(IMPORT_HISTORY)); }catch(e){} }
 function loadHistory(){ try{ IMPORT_HISTORY=JSON.parse(localStorage.getItem(LS_HIST)||'[]'); }catch(e){ IMPORT_HISTORY=[]; } }
+function saveVersions(){ try{ localStorage.setItem(LS_VERS,JSON.stringify(PLAN_VERSIONS.slice(0,12))); }catch(e){ console.warn('saveVersions',e); } }
+function loadVersions(){ try{ PLAN_VERSIONS=JSON.parse(localStorage.getItem(LS_VERS)||'[]'); if(!Array.isArray(PLAN_VERSIONS)) PLAN_VERSIONS=[]; }catch(e){ PLAN_VERSIONS=[]; } }
 
 /* ── 多語系 ───────────────────────────────────────────────────────────── */
 const I18N = {
@@ -277,7 +293,7 @@ const I18N = {
     hRecords:'記錄', hSewing:'車縫 pcs', hLines:'線別',
     tabDash:'📊 儀錶板', tabUpload:'📥 匯入', tabDaily:'📅 日報', tabWeekly:'🗓️ 週報',
     tabMonthly:'📆 月報', tabYearly:'📈 年報', tabCust:'🏷️ 客戶/產品', tabLine:'🧵 線別產能',
-    tabCut:'✂️ 裁縫比對', tabRecords:'📋 全部資料', tabSettings:'⚙️ 設定',
+    tabCut:'✂️ 裁縫比對', tabRecords:'📋 全部資料', tabCompare:'🔄 排單變更', tabReport:'📄 週分析報告', tabSettings:'⚙️ 設定',
     btnCancel:'取消', btnSave:'儲存', btnAdd:'➕ 新增排產',
     dupTitle:'⚠️ 發現重複資料', dupSkip:'跳過', dupRev:'新增為修正版', dupReplace:'覆蓋',
     kTotalOrders:'總訂單量', kTotalSew:'總車縫量', kTotalCut:'總裁剪量', kCutSew:'裁剪對車縫比',
@@ -307,7 +323,7 @@ const I18N = {
     impExcel:'📥 匯入 Excel', expExcel:'📤 匯出 Excel', expCsv:'⬇ 匯出 CSV',
     bkJson:'💾 備份 JSON', rsJson:'📂 還原 JSON', clUp:'☁️ 雲端上傳', clDown:'☁️ 雲端下載',
     clSync:'🔄 雲端同步', tgPush:'📨 推送 Telegram', printR:'🖨 列印報告',
-    dropHint:'拖拉 Excel 到此，或點擊選擇檔案', dropSub:'支援 .xlsx / .xls / .csv，可一次匯入多月份',
+    dropHint:'拖拉 Excel 到此，或點擊選擇檔案', dropSub:'支援 .xlsx / .xls / .csv；每週請匯入一份最新 Production Plan（檔內可含多月份）',
     preview:'解析預覽', confirmImport:'✅ 確認匯入', reparse:'重新選擇',
     impHistory:'匯入紀錄', noHist:'尚無匯入紀錄',
     totalSew:'總車縫量', totalCut:'總裁剪量', totalGap:'總缺口',
@@ -324,7 +340,7 @@ const I18N = {
     hRecords:'Records', hSewing:'Sewing pcs', hLines:'Lines',
     tabDash:'📊 Dashboard', tabUpload:'📥 Import', tabDaily:'📅 Daily', tabWeekly:'🗓️ Weekly',
     tabMonthly:'📆 Monthly', tabYearly:'📈 Yearly', tabCust:'🏷️ Customer/Product', tabLine:'🧵 Line Capacity',
-    tabCut:'✂️ Cut vs Sewing', tabRecords:'📋 Records', tabSettings:'⚙️ Settings',
+    tabCut:'✂️ Cut vs Sewing', tabRecords:'📋 Records', tabCompare:'🔄 Plan Changes', tabReport:'📄 Weekly Report', tabSettings:'⚙️ Settings',
     btnCancel:'Cancel', btnSave:'Save', btnAdd:'➕ Add Plan',
     dupTitle:'⚠️ Duplicate Found', dupSkip:'Skip', dupRev:'Add as Revision', dupReplace:'Replace',
     kTotalOrders:'Total Orders', kTotalSew:'Total Sewing Qty', kTotalCut:'Total Cut Qty', kCutSew:'Cut vs Sewing %',
@@ -354,7 +370,7 @@ const I18N = {
     impExcel:'📥 Import Excel', expExcel:'📤 Export Excel', expCsv:'⬇ Export CSV',
     bkJson:'💾 Backup JSON', rsJson:'📂 Restore JSON', clUp:'☁️ Cloud Upload', clDown:'☁️ Cloud Download',
     clSync:'🔄 Cloud Sync', tgPush:'📨 Send Telegram', printR:'🖨 Print Report',
-    dropHint:'Drag Excel here, or click to choose file', dropSub:'.xlsx / .xls / .csv — multi-month import supported',
+    dropHint:'Drag Excel here, or click to choose file', dropSub:'.xlsx / .xls / .csv — import one weekly revision; the workbook may contain multiple months',
     preview:'Parse Preview', confirmImport:'✅ Confirm Import', reparse:'Choose Again',
     impHistory:'Import History', noHist:'No import history yet',
     totalSew:'Total Sewing', totalCut:'Total Cut', totalGap:'Total Gap',
@@ -371,7 +387,7 @@ const I18N = {
     hRecords:'កំណត់ត្រា', hSewing:'ដេរ pcs', hLines:'ខ្សែ',
     tabDash:'📊 ផ្ទាំង', tabUpload:'📥 នាំចូល', tabDaily:'📅 ថ្ងៃ', tabWeekly:'🗓️ សប្តាហ៍',
     tabMonthly:'📆 ខែ', tabYearly:'📈 ឆ្នាំ', tabCust:'🏷️ អតិថិជន/ផលិតផល', tabLine:'🧵 សមត្ថភាពខ្សែ',
-    tabCut:'✂️ កាត់ ធៀប ដេរ', tabRecords:'📋 ទិន្នន័យ', tabSettings:'⚙️ កំណត់',
+    tabCut:'✂️ កាត់ ធៀប ដេរ', tabRecords:'📋 ទិន្នន័យ', tabCompare:'🔄 ប្រែប្រួលផែនការ', tabReport:'📄 របាយការណ៍សប្តាហ៍', tabSettings:'⚙️ កំណត់',
     btnCancel:'បោះបង់', btnSave:'រក្សាទុក', btnAdd:'➕ បន្ថែម',
     dupTitle:'⚠️ ស្ទួន', dupSkip:'រំលង', dupRev:'បន្ថែមកំណែ', dupReplace:'ជំនួស',
     kTotalOrders:'ការបញ្ជាទិញសរុប', kTotalSew:'ដេរសរុប', kTotalCut:'កាត់សរុប', kCutSew:'កាត់/ដេរ %',
@@ -595,36 +611,21 @@ function buildSmvMapFromSheet(wb){
   }
 }
 
-function parseMainSheet(wb){
-  // 找主表：名稱含 PRODUCTION PLAN，否則取第一張非 Sheet1
-  let name = wb.SheetNames.find(n=>/production plan/i.test(n))
-          || wb.SheetNames.find(n=>!/^sheet1$/i.test(n))
-          || wb.SheetNames[0];
-  const ws=wb.Sheets[name];
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
-  // 找中文 header 列 (含 产品描述) 或英文 header (含 Products)
-  let hi=-1, engRow=-1;
-  for(let i=0;i<Math.min(8,rows.length);i++){
-    const line=rows[i].map(c=>String(c==null?'':c));
-    if(line.some(c=>c.includes('产品描述'))) { hi=i; }
-    if(line.some(c=>/products/i.test(c) && /tyle|type/i.test(line.join(' ')))) engRow=i;
-  }
-  // 資料起始列：中文header後隔英文header → +2；只有英文 → +1
-  let dataStart;
-  if(hi>=0){ dataStart = (engRow===hi+1)?hi+2:hi+1; }
-  else if(engRow>=0){ dataStart = engRow+1; }
-  else { dataStart = 4; } // 後備：預設第5列(index4)
-  const out=[];
-  for(let i=dataStart;i<rows.length;i++){
-    const row=rows[i]; if(!row || row.every(c=>c==null||c==='')) continue;
-    const rec={};
-    COL_ORDER.forEach((f,idx)=>{ rec[f]=row[idx]!==undefined?row[idx]:null; });
-    const nr=normalizeRecord(rec);
-    if(isEmptyRow(nr)) continue;
-    out.push(nr);
-  }
-  return {sheetName:name, records:out};
-}
+function hnorm(v){ return String(v==null?'':v).replace(/\s+/g,'').replace(/[()（）#_.\-/]/g,'').toUpperCase(); }
+function findHeaderRow(rows){let best={i:-1,score:-1};for(let i=0;i<Math.min(rows.length,12);i++){const h=(rows[i]||[]).map(hnorm),all=h.join('|');let score=0;if(h.some(x=>x==='CUSTOMER'))score+=3;if(h.some(x=>x.includes('STARTDATE')))score+=3;if(h.some(x=>x.includes('ACTUALCUT')))score+=2;if(h.some(x=>x.includes('ORDER')))score++;if(h.some(x=>x.includes('LINE')))score++;if(all.includes('PRODUCT'))score++;if(score>best.score)best={i,score};}return best.score>=6?best.i:-1;}
+function idxFirst(h,pred,fallback=-1){const a=[];h.forEach((x,i)=>{if(pred(x,i))a.push(i)});return a.length?a[0]:fallback}function idxLast(h,pred,fallback=-1){const a=[];h.forEach((x,i)=>{if(pred(x,i))a.push(i)});return a.length?a[a.length-1]:fallback}
+function sheetPeriod(name,records){const u=String(name||'').toUpperCase().replace(/_/g,' '),mm={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};let m=0;Object.keys(mm).some(k=>{if(new RegExp('(^|[^A-Z])'+k+'([^A-Z]|$)').test(u)){m=mm[k];return true}return false});let y=(u.match(/20\d{2}/)||[])[0];if(!y){const q=u.match(/[-\s](\d{2})(?:\D|$)/);if(q)y='20'+q[1]}if(y&&m)return `${y}-${String(m).padStart(2,'0')}`;const ds=records.map(r=>r.startDate||r.shipmentDate).filter(Boolean).sort();return ds.length?ds[Math.floor(ds.length/2)].slice(0,7):''}
+function parsePlanSheet(wb,name){const ws=wb.Sheets[name],rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null}),hi=findHeaderRow(rows);if(hi<0)return[];const h=(rows[hi]||[]).map(hnorm);const cProduct=idxFirst(h,x=>x.includes('PRODUCT'),0),cCustomer=idxFirst(h,x=>x==='CUSTOMER',2),cShip=idxFirst(h,x=>x.includes('SHIPMENTDATE'),3),cPo=idxFirst(h,x=>x.includes('ORDER')&&!x.includes('QTY')&&!x.includes('ORIGINAL'),4),cStyle=idxFirst(h,x=>x.includes('ARTICLE')||(x.includes('STYLE')&&!x.includes('PRODUCT')),5),cColor=idxFirst(h,x=>x==='COLOR',6),cSize=idxFirst(h,x=>x==='SIZE',7),cActual=idxFirst(h,x=>x.includes('ACTUALCUT'),-1),cSew=cActual>0?cActual-1:idxLast(h,x=>x.includes('SEWINGQTY'),9),hasPcsBox=h.some(x=>x.includes('PCSBOX')),cOrder=cActual>0?Math.max(0,cActual-(hasPcsBox?3:2)):8,cDaily=idxFirst(h,x=>x.includes('DAILYOUTPUT'),cActual+1),cSmv=idxFirst(h,x=>x==='SMV'||x.endsWith('SMV'),cDaily+1),cMan=idxFirst(h,x=>x.includes('MANPOWER'),cSmv+1),cWh=idxFirst(h,x=>x.includes('WORKINGHOURS'),cMan+1),cPlanHD=idxFirst(h,x=>x.includes('DAYMONTH')||x.includes('PLANNEDHOURS'),cWh+1),cEff=idxFirst(h,x=>x.includes('EFFICIENCYTARGET'),cPlanHD+1),cLine=idxLast(h,x=>x.includes('LINE'),-1),cStart=idxFirst(h,x=>x.includes('STARTDATE'),-1),cEnd=idxFirst(h,x=>x.includes('FINISHEDCUTPCS')||x.includes('ENDDATE'),-1),cFinish=idxFirst(h,x=>x.includes('FINISHDATE'),-1),cDays=idxFirst(h,x=>x.includes('NUMOFDAYS'),-1),cWeek=idxFirst(h,x=>x.includes('OUTPUTWEEK'),-1),cMonth=idxFirst(h,x=>x.includes('OUTPUTMONTH'),-1),cRemark=idxFirst(h,x=>x.includes('REMARK'),h.length-1);const out=[];for(let i=hi+1;i<rows.length;i++){const row=rows[i]||[];if(row.every(c=>c==null||c===''))continue;const rec={productType:row[cProduct],line:row[cLine],customer:row[cCustomer],shipmentDate:row[cShip],po:row[cPo],style:row[cStyle],color:row[cColor],size:row[cSize],orderQty:row[cOrder],sewingQty:row[cSew],cutQty:cActual>=0?row[cActual]:null,dailyOutput:row[cDaily],smv:row[cSmv],manpower:row[cMan],workingHours:row[cWh],plannedHoursOrDays:row[cPlanHD],efficiencyTarget:row[cEff],startDate:cStart>=0?row[cStart]:null,endDate:cEnd>=0?row[cEnd]:null,finishDate:cFinish>=0?row[cFinish]:null,planDays:cDays>=0?row[cDays]:null,weeklyOutput:cWeek>=0?row[cWeek]:null,monthlyOutput:cMonth>=0?row[cMonth]:null,remark:row[cRemark]};const nr=normalizeRecord(rec);if(isEmptyRow(nr)||!(nr.sewingQty>0)||!nr.line)continue;nr._srcSheet=name;nr._srcRow=i+1;out.push(nr)}const ym=sheetPeriod(name,out);out.forEach(r=>{r._srcMonth=ym||r._srcMonth;r._key=uniqueKey(r)});return out}
+function parseMainSheet(wb){const names=wb.SheetNames.filter(n=>/production\s*plan/i.test(String(n).replace(/_/g,' '))),use=names.length?names:[wb.SheetNames.find(n=>!/^sheet1$/i.test(n))||wb.SheetNames[0]];let records=[];use.forEach(n=>{records=records.concat(parsePlanSheet(wb,n))});return {sheetName:use.join(', '),records,sheets:use}}
+
+
+function compactPlanRecords(records){return records.map(r=>({productType:r.productType,line:r.line,customer:r.customer,po:r.po,style:r.styleRaw||r.style,color:r.color,size:r.size,sewingQty:r.sewingQty||0,startDate:r.startDate||'',endDate:r.endDate||'',manpower:r.manpower||0,_srcMonth:r._srcMonth||'',_srcFile:r._srcFile||'',_srcSheet:r._srcSheet||''}))}
+function snapshotMonths(records){return [...new Set((records||[]).map(r=>r._srcMonth||(r.startDate||'').slice(0,7)).filter(x=>/^20\d{2}-\d{2}$/.test(x)))].sort()}
+function makePlanVersion(records,files){return {schema:2,savedAt:new Date().toISOString(),files:files||[],months:snapshotMonths(records),records:compactPlanRecords(records)}}
+function versionItemKey(r){return [r.customer||'',r.po||'',r.style||'',r.color||'',r.size||''].join('|').toUpperCase()}
+function aggregateVersion(records,ym){const src=(records||[]).filter(r=>!ym||r._srcMonth===ym||(!r._srcMonth&&String(r.startDate||'').slice(0,7)===ym)),items=new Map(),lines=new Map();src.forEach(r=>{const k=versionItemKey(r),q=Number(r.sewingQty)||0,ln=r.line||'';let x=items.get(k);if(!x){x={key:k,customer:r.customer||'',po:r.po||'',style:r.style||'',color:r.color||'',size:r.size||'',qty:0,lines:new Set(),starts:[],ends:[]};items.set(k,x)}x.qty+=q;if(ln)x.lines.add(ln);if(r.startDate)x.starts.push(r.startDate);if(r.endDate)x.ends.push(r.endDate);if(ln){let l=lines.get(ln);if(!l){l={line:ln,qty:0,styles:new Set(),pos:new Set(),manpower:0,starts:[],ends:[]};lines.set(ln,l)}l.qty+=q;if(r.style)l.styles.add(r.style);if(r.po)l.pos.add(r.po);l.manpower=Math.max(l.manpower,Number(r.manpower)||0);if(r.startDate)l.starts.push(r.startDate);if(r.endDate)l.ends.push(r.endDate)}});return {records:src,items:new Map([...items].map(([k,x])=>[k,{...x,lines:[...x.lines].sort(),start:x.starts.sort()[0]||'',end:x.ends.sort().slice(-1)[0]||''}])),lines:new Map([...lines].map(([k,x])=>[k,{line:x.line,qty:x.qty,styles:x.styles.size,pos:x.pos.size,manpower:x.manpower,start:x.starts.sort()[0]||'',end:x.ends.sort().slice(-1)[0]||''}]))}}
+function comparePlanVersions(curV,prevV,ym){if(!curV||!prevV)return {comparable:false,reason:'尚無上次週版本 / No previous weekly version'};const c=aggregateVersion(curV.records,ym),p=aggregateVersion(prevV.records,ym),changes=[];let added=0,removed=0,qtyChanged=0,dateChanged=0,moved=0;const keys=new Set([...c.items.keys(),...p.items.keys()]);keys.forEach(k=>{const a=c.items.get(k),b=p.items.get(k);if(!b){added++;changes.push({type:'added',cur:a,prev:null,qtyDelta:a.qty});return}if(!a){removed++;changes.push({type:'removed',cur:null,prev:b,qtyDelta:-b.qty});return}const q=Math.round(a.qty)!==Math.round(b.qty),d=a.start!==b.start||a.end!==b.end,m=(a.lines||[]).join(',')!==(b.lines||[]).join(',');if(q)qtyChanged++;if(d)dateChanged++;if(m)moved++;if(q||d||m)changes.push({type:'changed',cur:a,prev:b,qtyDelta:a.qty-b.qty,qtyChanged:q,dateChanged:d,moved:m})});const lineKeys=new Set([...c.lines.keys(),...p.lines.keys()]),lineChanges=[...lineKeys].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true})).map(k=>{const a=c.lines.get(k)||{line:k,qty:0,styles:0,pos:0,manpower:0,start:'',end:''},b=p.lines.get(k)||{line:k,qty:0,styles:0,pos:0,manpower:0,start:'',end:''};return {line:k,prev:b,cur:a,qtyDelta:a.qty-b.qty,styleDelta:a.styles-b.styles,poDelta:a.pos-b.pos,manDelta:a.manpower-b.manpower,dateChanged:a.start!==b.start||a.end!==b.end}});return {comparable:true,ym,cur,prev:p,summary:{added,removed,qtyChanged,dateChanged,moved,totalDelta:c.records.reduce((s,r)=>s+(Number(r.sewingQty)||0),0)-p.records.reduce((s,r)=>s+(Number(r.sewingQty)||0),0)},changes,lineChanges}}
+function addPlanVersion(records,files){const v=makePlanVersion(records,files),sig=JSON.stringify(v.records.map(r=>[r._srcMonth,r.line,r.customer,r.po,r.style,r.color,r.size,r.sewingQty,r.startDate,r.endDate])),old=PLAN_VERSIONS[0],oldSig=old?JSON.stringify(old.records.map(r=>[r._srcMonth,r.line,r.customer,r.po,r.style,r.color,r.size,r.sewingQty,r.startDate,r.endDate])):'';if(sig!==oldSig)PLAN_VERSIONS.unshift(v);else PLAN_VERSIONS[0]=v;PLAN_VERSIONS=PLAN_VERSIONS.slice(0,12);saveVersions();return v}
 
 let PARSED_PREVIEW = null;
 function handleFiles(files){
@@ -652,29 +653,7 @@ function handleFiles(files){
   });
 }
 
-function confirmImport(){
-  if(!PARSED_PREVIEW||!PARSED_PREVIEW.records.length) return;
-  const incoming = PARSED_PREVIEW.records;
-  const existKeys = new Set(DB.map(r=>r._key));
-  let added=0, dups=[];
-  incoming.forEach(r=>{
-    if(existKeys.has(r._key)){ dups.push(r); }
-    else { DB.push(r); existKeys.add(r._key); added++; }
-  });
-  const doFinish=()=>{
-    IMPORT_HISTORY.unshift({ time:nowStamp(), files:PARSED_PREVIEW.files.join(', '),
-      count:incoming.length, added, dups:dups.length });
-    PARSED_PREVIEW=null;
-    persist(); renderAll();
-    toast(`${t('imported')}: +${added}${dups.length?(' / dup '+dups.length):''}`);
-  };
-  if(dups.length){
-    PENDING_DUP={dups, cb:doFinish};
-    document.getElementById('dupBody').innerHTML =
-      `${SETTINGS.lang==='zh'?'偵測到':'Detected'} <b>${dups.length}</b> ${SETTINGS.lang==='zh'?'筆重複資料 (相同 產品/線別/客戶/PO/款式/顏色/尺寸/上下線日)。請選擇處理方式：':'duplicate rows (same key). Choose how to handle:'}`;
-    document.getElementById('dupModal').classList.add('on');
-  } else { doFinish(); }
-}
+function confirmImport(){if(!PARSED_PREVIEW||!PARSED_PREVIEW.records.length)return;const incoming=PARSED_PREVIEW.records.map(normalizeRecord),prevCount=DB.length;DB=incoming;addPlanVersion(DB,PARSED_PREVIEW.files);IMPORT_HISTORY.unshift({time:nowStamp(),files:PARSED_PREVIEW.files.join(', '),count:incoming.length,added:incoming.length,dups:0,mode:'weekly-revision',previousCount:prevCount});PARSED_PREVIEW=null;persist();renderAll();toast(`${t('imported')}: ${incoming.length} rows · ${snapshotMonths(DB).join(', ')}`);setTimeout(()=>goTab('comparison'),100)}
 function resolveDup(mode){
   const {dups,cb}=PENDING_DUP||{};
   document.getElementById('dupModal').classList.remove('on');
@@ -775,7 +754,7 @@ function theoreticalCapacity(rec, days){
 let CUR_TAB='dashboard';
 let FILTERS={ daily:{date:'',cust:'',prod:'',line:''}, weekly:{ref:'',cust:'',prod:'',line:''},
   monthly:{ym:'',cust:'',prod:'',line:''}, yearly:{y:'',cust:'',prod:'',line:''},
-  records:{q:'',cust:'',po:'',style:'',line:'',date:''}, cutsew:{sort:'gap'} };
+  records:{q:'',cust:'',po:'',style:'',line:'',date:''}, cutsew:{sort:'gap'}, comparison:{ym:''} };
 
 function goTab(tab){
   CUR_TAB=tab;
@@ -787,7 +766,7 @@ function renderAll(){ applyLang(); refreshHeader(); renderTab(CUR_TAB); }
 function renderTab(tab){
   const r={dashboard:renderDashboard,upload:renderUpload,daily:renderDaily,weekly:renderWeekly,
     monthly:renderMonthly,yearly:renderYearly,custprod:renderCustProd,line:renderLineCap,
-    cutsew:renderCutSew,records:renderRecords,settings:renderSettings}[tab];
+    cutsew:renderCutSew,records:renderRecords,comparison:renderComparison,reportgen:renderReportGen,settings:renderSettings}[tab];
   if(r) r();
 }
 function refreshHeader(){
@@ -1013,9 +992,9 @@ function renderUpload(){
       <div class="drop" id="drop" onclick="document.getElementById('fileInput').click()">
         <div class="drop-i">📄</div>
         <div style="font-size:15px;font-weight:600;color:#4a5578">${t('dropHint')}</div>
-        <div style="font-size:12px;color:#8b95b8;margin-top:5px">${t('dropSub')}</div>
+        <div style="font-size:12px;color:#8b95b8;margin-top:5px">${t('dropSub')} · 每週更新檔會取代本次排單並自動保留上一版本供比較</div>
       </div>
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
     </div>
     ${preview}
     <div class="card"><div class="ct">🕐 ${t('impHistory')}</div>${hist}</div>`;
@@ -1578,7 +1557,7 @@ function exportCSV(){
   dl(blob,`VRT_Production_${todayStr()}.csv`); toast('⬇ CSV');
 }
 function backupJSON(){
-  const payload={version:VER,lastUpdated:nowStamp(),records:DB,settings:SETTINGS,importHistory:IMPORT_HISTORY,smvMap:SMV_MAP};
+  const payload={version:VER,lastUpdated:nowStamp(),records:DB,settings:SETTINGS,importHistory:IMPORT_HISTORY,smvMap:SMV_MAP,planVersions:PLAN_VERSIONS};
   dl(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),`VRT_ProdCapacity_backup_${todayStr()}.json`);
   toast('💾 JSON');
 }
@@ -1590,6 +1569,7 @@ function restoreJSON(){
       if(o.settings) SETTINGS={...SETTINGS,...o.settings};
       if(Array.isArray(o.importHistory)) IMPORT_HISTORY=o.importHistory;
       if(o.smvMap) SMV_MAP={...SMV_MAP,...o.smvMap};
+      if(Array.isArray(o.planVersions)) PLAN_VERSIONS=o.planVersions;
       persist(); renderAll(); toast('📂 '+t('imported'));
     }catch(err){ toast('Restore failed'); } };
     rd.readAsText(f); };
@@ -1602,7 +1582,7 @@ async function cloudUpload(){
   if(!SETTINGS.gasUrl){ toast(t('noGas')); goTab('settings'); return; }
   try{
     toast(t('calc'));
-    const payload={action:'push',tool:'prodplan',version:VER,lastUpdated:nowStamp(),records:DB,importHistory:IMPORT_HISTORY};
+    const payload={action:'push',tool:'prodplan',version:VER,lastUpdated:nowStamp(),records:DB,importHistory:IMPORT_HISTORY,planVersions:PLAN_VERSIONS};
     const r=await fetch(SETTINGS.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
     await r.text(); toast('☁️ Upload OK');
   }catch(e){ toast('Upload failed'); console.warn(e); }
@@ -1618,6 +1598,7 @@ async function cloudDownload(){
     if(o&&o.data&&!Array.isArray(o.records)) o=o.data;
     if(o&&Array.isArray(o.records)){ DB=o.records.map(normalizeRecord);
       if(o.settings) SETTINGS={...SETTINGS,...o.settings};
+      if(Array.isArray(o.planVersions)) PLAN_VERSIONS=o.planVersions;
       persist(); renderAll(); toast('☁️ Download OK ('+DB.length+')'); }
     else toast('No cloud data');
   }catch(e){ toast('Download failed'); console.warn(e); }
@@ -1637,6 +1618,13 @@ async function sendTelegramSummary(){
     toast('📨 Telegram sent');
   }catch(e){ toast('Send failed'); }
 }
+
+/* ── 每週排單版本比較 ────────────────────────────────────────────────── */
+function latestPlanMonth(){const ms=snapshotMonths(DB);return ms[ms.length-1]||todayStr().slice(0,7)}function changeChips(x){let s='';if(x.type==='added')return '<span class="change-chip ch-add">新增</span>';if(x.type==='removed')return '<span class="change-chip ch-remove">取消</span>';if(x.qtyChanged)s+='<span class="change-chip ch-qty">件數</span>';if(x.dateChanged)s+='<span class="change-chip ch-date">日期</span>';if(x.moved)s+='<span class="change-chip ch-line">移組</span>';return s||'-'}function fmtDelta(n){n=Math.round(Number(n)||0);return `<span class="${n>0?'delta-up':n<0?'delta-down':'delta-same'}">${n>0?'+':''}${fmt(n)}</span>`}
+function renderComparison(){const el=document.getElementById('comparison');if(!DB.length){el.innerHTML=emptyState();return}const cur=PLAN_VERSIONS[0]||makePlanVersion(DB,['current']),prev=PLAN_VERSIONS[1],months=cur.months||snapshotMonths(cur.records);let ym=FILTERS.comparison?.ym||latestPlanMonth();if(!months.includes(ym))ym=months[months.length-1]||ym;FILTERS.comparison=FILTERS.comparison||{};FILTERS.comparison.ym=ym;const c=comparePlanVersions(cur,prev,ym);let body=`<div class="card"><div class="ct">🔄 每週 Production Plan 變更</div><div class="cmp-toolbar"><label>月份 <select onchange="FILTERS.comparison.ym=this.value;renderComparison()">${months.map(m=>`<option ${m===ym?'selected':''}>${m}</option>`).join('')}</select></label><span class="pill">Current: ${esc(String(cur.savedAt||'').replace('T',' ').slice(0,16))}</span>${prev?`<span class="pill">Previous: ${esc(String(prev.savedAt||'').replace('T',' ').slice(0,16))}</span>`:''}</div>`;if(!c.comparable){el.innerHTML=body+`<div class="al al-i">${esc(c.reason)}。第一次使用新版時先匯入本週；下週再匯入更新檔後就會自動比較。若現在要測試，可先匯入舊週版本，再匯入最新版本。</div></div>`;return}body+=`<div class="kpis"><div class="kpi b"><div class="kpi-n">${fmtDelta(c.summary.totalDelta)}</div><div class="kpi-l">總排單差異 pcs</div></div><div class="kpi g"><div class="kpi-n">${c.summary.added}</div><div class="kpi-l">新增項目</div></div><div class="kpi r"><div class="kpi-n">${c.summary.removed}</div><div class="kpi-l">取消項目</div></div><div class="kpi a"><div class="kpi-n">${c.summary.qtyChanged}</div><div class="kpi-l">件數變更</div></div><div class="kpi p"><div class="kpi-n">${c.summary.dateChanged}</div><div class="kpi-l">日期變更</div></div><div class="kpi b"><div class="kpi-n">${c.summary.moved}</div><div class="kpi-l">移組</div></div></div></div>`;body+=`<div class="card"><div class="ct">🧵 各組安排變化</div><div class="tblwrap"><table><thead><tr><th>Line</th><th>Qty 上次→本次</th><th>Δ</th><th>款式</th><th>PO</th><th>人數</th><th>日期 上次→本次</th></tr></thead><tbody>${c.lineChanges.map(x=>`<tr><td><b>${esc(x.line)}</b></td><td>${fmt(x.prev.qty)} → ${fmt(x.cur.qty)}</td><td>${fmtDelta(x.qtyDelta)}</td><td>${x.prev.styles} → ${x.cur.styles} (${x.styleDelta>0?'+':''}${x.styleDelta})</td><td>${x.prev.pos} → ${x.cur.pos} (${x.poDelta>0?'+':''}${x.poDelta})</td><td>${x.prev.manpower} → ${x.cur.manpower}</td><td class="${x.dateChanged?'delta-up':''}">${esc(x.prev.start||'-')}~${esc(x.prev.end||'-')}<br>→ ${esc(x.cur.start||'-')}~${esc(x.cur.end||'-')}</td></tr>`).join('')}</tbody></table></div></div>`;const changed=c.changes.slice().sort((a,b)=>Math.abs(b.qtyDelta||0)-Math.abs(a.qtyDelta||0));body+=`<div class="card"><div class="ct">📋 PO / 款式 / 件數 / 日期變更 (${changed.length})</div><div class="tblwrap" style="max-height:520px;overflow:auto"><table><thead><tr><th>變更</th><th>Customer</th><th>PO</th><th>Style / Color / Size</th><th>Line 上次→本次</th><th>Qty 上次→本次</th><th>Start 上次→本次</th><th>End 上次→本次</th></tr></thead><tbody>${changed.map(x=>{const a=x.cur||{},b=x.prev||{};return `<tr><td>${changeChips(x)}</td><td>${esc(a.customer||b.customer)}</td><td>${esc(a.po||b.po)}</td><td>${esc(a.style||b.style)} / ${esc(a.color||b.color)} / ${esc(a.size||b.size)}</td><td>${esc((b.lines||[]).join(',')||'-')} → ${esc((a.lines||[]).join(',')||'-')}</td><td>${fmt(b.qty||0)} → ${fmt(a.qty||0)} ${fmtDelta(x.qtyDelta||0)}</td><td>${esc(b.start||'-')} → ${esc(a.start||'-')}</td><td>${esc(b.end||'-')} → ${esc(a.end||'-')}</td></tr>`}).join('')||'<tr><td colspan="8">No change</td></tr>'}</tbody></table></div></div>`;el.innerHTML=body}
+function sendPlanToReport(){const fr=document.getElementById('reportFrame');if(fr&&fr.contentWindow)fr.contentWindow.postMessage({type:'VRT_PLAN_DATA',records:DB,preferredMonth:(FILTERS.comparison&&FILTERS.comparison.ym)||latestPlanMonth()},'*')}
+window.addEventListener('message',e=>{if(e.data&&e.data.type==='VRT_REPORT_READY')sendPlanToReport()});
+function renderReportGen(){const el=document.getElementById('reportgen');if(!DB.length){el.innerHTML=emptyState();return}el.innerHTML=`<div class="card"><div class="ct">📄 四檔週分析報告</div><div class="report-note">Production Plan 已直接使用本平台目前資料，不必再重複匯入。只需補 Customer Statistics、Shipping Schedule、Fabric Delivery 三份檔案；月份自動抓目前排單月份，截止日預設今天（當月）或月底（過去月份），仍可自行選日期。</div><iframe id="reportFrame" class="report-frame" src="vrt_production_weekly_report_generator_v2.html?embed=1" onload="sendPlanToReport()"></iframe></div>`}
 
 /* ── 設定 ─────────────────────────────────────────────────────────────── */
 function renderSettings(){
@@ -1689,10 +1677,11 @@ document.querySelectorAll('.tab').forEach(el=>el.addEventListener('click',()=>go
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('on'); }));
 
 async function init(){
-  loadSettings(); loadHistory();
+  loadSettings(); loadHistory(); loadVersions();
   await idbLoadAll();
   applyLang(); refreshHeader();
   renderTab('dashboard');
+  const bad=DB.filter(r=>r.startDate&&/^19(00|01)/.test(r.startDate)).length;if(bad)setTimeout(()=>toast(`⚠️ 舊版有 ${bad} 筆 1900 日期，請重新匯入最新 Production Plan；新版會自動修正欄位。`),500);
 }
 init();
 
