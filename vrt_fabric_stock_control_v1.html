@@ -45,7 +45,7 @@ table.old-list col:nth-child(1){width:17%}table.old-list col:nth-child(2){width:
 </style>
 </head><body>
 <div class="header">
-  <div class="logo">🧶</div><div><div class="h-title" data-i="title">布料庫存管理</div><div class="h-sub">FABRIC STOCK · OLD STOCK USAGE + CURRENT INVENTORY · v1.2</div></div>
+  <div class="logo">🧶</div><div><div class="h-title" data-i="title">布料庫存管理</div><div class="h-sub">FABRIC STOCK · OLD STOCK USAGE + CURRENT INVENTORY · v1.3</div></div>
   <div class="h-stats"><div class="hstat"><div id="hCur" class="hstat-v">0</div><div class="hstat-l" data-i="currentQty">現有庫存</div></div><div class="hstat"><div id="hOld" class="hstat-v">0</div><div class="hstat-l" data-i="oldUsed">舊布已用</div></div><div class="hstat"><div id="hItems" class="hstat-v">0</div><div class="hstat-l" data-i="items">布料項目</div></div></div>
   <div class="lang-sw"><button class="lang-b on" data-l="zh" onclick="setLang('zh',this)">中</button><button class="lang-b" data-l="en" onclick="setLang('en',this)">EN</button><button class="lang-b" data-l="km" onclick="setLang('km',this)">ខ្មែរ</button></div>
 </div>
@@ -164,7 +164,97 @@ function renderOld(){
 function detailKV(k,v){return `<div class="detail"><div class="k">${esc(k)}</div><div class="v">${esc(v||'--')}</div></div>`}
 function rowDetailHtml(r,type){let fields=type==='cur'?[['Snapshot',r.snapshotDate],['Item Code',r.itemCode],['ERP',r.erpCode],[tx('fabric'),r.description],['Lot',r.lotNumber],[tx('customer'),r.customer],[tx('qty'),`${N(r.quantity)} ${r.unit}`],[tx('stockYear'),r.stockYear],[tx('quality'),r.quality],['Location',r.location],['Comment',r.comment],['Source',r.sourceFile]]:[['Use Date',r.useDate],['Item Code',r.itemCode],[tx('stockYear'),r.stockYear],[tx('fabric'),r.description],[tx('customer'),r.customer],[tx('qty'),`${N(r.quantity)} ${r.unit}`],['PO',r.po],['Style',r.style],['Source',r.sourceFile]];return `<div class="detailgrid">${fields.map(x=>detailKV(x[0],x[1])).join('')}</div>`}
 function openRowDetail(type,i){let r=(type==='cur'?window._curRows:window._oldRows)[i];if(!r)return;detailTitle.textContent=`${type==='cur'?tx('currentStock'):tx('oldUsage')} · ${r.itemCode}`;detailBody.innerHTML=rowDetailHtml(r,type);detailMask.classList.add('on')}
-function openGroupDetail(type,key,val){let rows=type==='cur'?currentFiltered().rows:oldFiltered();rows=rows.filter(r=>(norm(r[key])||'(Blank)')===val);detailTitle.textContent=`${val} · ${N(rows.reduce((s,r)=>s+num(r.quantity),0))} yd · ${N(rows.length)} rows`;let summary=type==='cur'?[['Item Code',uniq(rows,'itemCode').length],['ERP',uniq(rows,'erpCode').length],['Lot',uniq(rows,'lotNumber').length],['Location',uniq(rows,'location').length]]:[['Item Code',uniq(rows,'itemCode').length],[tx('customer'),uniq(rows,'customer').length],['PO',uniq(rows,'po').length],['Style',uniq(rows,'style').length]];detailBody.innerHTML=`<div class="detailgrid">${summary.map(x=>detailKV(x[0],x[1])).join('')}</div><div class="detail-list">${rows.slice(0,500).map(r=>`<div class="detail-row"><div class="top"><span>${esc(r.itemCode)} ${r.erpCode?`· ${esc(r.erpCode)}`:''}</span><span>${N(r.quantity)} ${esc(r.unit)}</span></div><div class="sub">${esc(r.description||'')}<br>${type==='cur'?`Lot: ${esc(r.lotNumber)} · Location: ${esc(r.location)} · Quality: ${esc(r.quality)} · Customer: ${esc(r.customer)}`:`${esc(r.useDate)} · Customer: ${esc(r.customer)} · PO: ${esc(r.po)} · Style: ${esc(r.style)}`}</div></div>`).join('')}</div>`;detailMask.classList.add('on')}
+function openGroupDetail(type,key,val){
+  let rows=[];
+  let extra='';
+
+  if(type==='cur'){
+    // 點 Location / ERP / Item / Quality / Lot 時：
+    // 以目前所選日/週/月/年之基礎資料為範圍，不受搜尋框與其他篩選器再次限制，
+    // 確保例如點 RACK02 會看到該期間內 RACK02 的所有布。
+    const base=currentPeriodRecords().rows || [];
+    rows=base.filter(r=>(norm(r[key])||'(Blank)')===val);
+
+    // 點「布種 Description」時，不只顯示目前列表：
+    // 額外用最新庫存快照按 Stock Year 統計歷年現存數量，避免多個 Snapshot 重複加總。
+    if(key==='description'){
+      const latest=latestSnapshotRecords().filter(r=>norm(r.description)===val);
+      const ym={};
+      latest.forEach(r=>{
+        const y=String(r.stockYear||'Unknown');
+        if(!ym[y]) ym[y]={qty:0,lots:new Set(),locs:new Set(),items:new Set(),erp:new Set()};
+        ym[y].qty+=num(r.quantity);
+        if(r.lotNumber) ym[y].lots.add(r.lotNumber);
+        if(r.location) ym[y].locs.add(r.location);
+        if(r.itemCode) ym[y].items.add(r.itemCode);
+        if(r.erpCode) ym[y].erp.add(r.erpCode);
+      });
+      const years=Object.entries(ym).sort((a,b)=>{
+        if(a[0]==='Unknown') return 1;
+        if(b[0]==='Unknown') return -1;
+        return Number(b[0])-Number(a[0]);
+      });
+      const total=latest.reduce((s,r)=>s+num(r.quantity),0);
+      extra=`
+        <div class="ct" style="margin-top:14px">📅 布種歷年現有庫存 / Stock by Fabric Year</div>
+        <div class="kpi-strip">
+          <div class="kpi blue"><div class="kpi-n">${N(total)}</div><div class="kpi-l">Current YARD</div></div>
+          <div class="kpi green"><div class="kpi-n">${N(years.length)}</div><div class="kpi-l">Stock Years</div></div>
+          <div class="kpi amber"><div class="kpi-n">${N(uniq(latest,'lotNumber').length)}</div><div class="kpi-l">Lots</div></div>
+          <div class="kpi violet"><div class="kpi-n">${N(uniq(latest,'location').length)}</div><div class="kpi-l">Locations</div></div>
+        </div>
+        <div class="tw" style="max-height:300px">
+          <table>
+            <thead><tr><th>Stock Year</th><th>YARD</th><th>Lots</th><th>Locations</th><th>ERP</th></tr></thead>
+            <tbody>${years.map(([y,x])=>`
+              <tr>
+                <td class="mono">${esc(y)}</td>
+                <td class="qtycell">${N(x.qty)}</td>
+                <td>${N(x.lots.size)}</td>
+                <td>${esc([...x.locs].join(', ')||'--')}</td>
+                <td>${esc([...x.erp].join(', ')||'--')}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+  } else {
+    // 舊庫存群組同樣不受搜尋框二次限制，按 Item/Customer/PO/Style 可看該期間完整群組。
+    const base=oldPeriodRecords() || [];
+    rows=base.filter(r=>(norm(r[key])||'(Blank)')===val);
+  }
+
+  detailTitle.textContent=`${val} · ${N(rows.reduce((s,r)=>s+num(r.quantity),0))} yd · ${N(rows.length)} rows`;
+
+  let summary=type==='cur'
+    ? [['Item Code',uniq(rows,'itemCode').length],['ERP',uniq(rows,'erpCode').length],['Lot',uniq(rows,'lotNumber').length],['Location',uniq(rows,'location').length]]
+    : [['Item Code',uniq(rows,'itemCode').length],[tx('customer'),uniq(rows,'customer').length],['PO',uniq(rows,'po').length],['Style',uniq(rows,'style').length]];
+
+  // Location popup 再補一個 Fabric count，讓 RACK02 一眼看有幾種布。
+  if(type==='cur' && key==='location'){
+    summary.splice(2,0,[tx('fabric'),uniq(rows,'description').length]);
+  }
+
+  detailBody.innerHTML=`
+    <div class="detailgrid">${summary.map(x=>detailKV(x[0],x[1])).join('')}</div>
+    ${extra}
+    <div class="ct" style="margin-top:14px">${type==='cur'&&key==='location'?'🧶 Location Fabric List':'📋 Detail List'}</div>
+    <div class="detail-list">${rows.slice(0,1000).map(r=>`
+      <div class="detail-row">
+        <div class="top">
+          <span>${esc(r.itemCode)} ${r.erpCode?`· ${esc(r.erpCode)}`:''}</span>
+          <span>${N(r.quantity)} ${esc(r.unit)}</span>
+        </div>
+        <div class="sub">
+          ${esc(r.description||'')}<br>
+          ${type==='cur'
+            ? `Lot: ${esc(r.lotNumber)} · Stock Year: ${esc(r.stockYear)} · Location: ${esc(r.location)} · Quality: ${esc(r.quality)} · Customer: ${esc(r.customer)}`
+            : `${esc(r.useDate)} · Customer: ${esc(r.customer)} · PO: ${esc(r.po)} · Style: ${esc(r.style)}`}
+        </div>
+      </div>`).join('')}
+    </div>`;
+  detailMask.classList.add('on');
+}
 function closeDetail(){detailMask.classList.remove('on')}
 function buildCompare(){let latest=latestSnapshotRecords(),map=new Map();latest.forEach(r=>{let x=map.get(r.itemCode)||{itemCode:r.itemCode,description:r.description,used:0,current:0,lots:new Set(),last:'',pos:new Set(),locs:new Set(),erp:new Set()};x.current+=r.quantity;x.description=x.description||r.description;x.lots.add(r.lotNumber);x.locs.add(r.location);x.erp.add(r.erpCode);map.set(r.itemCode,x)});DB.old.forEach(r=>{let x=map.get(r.itemCode)||{itemCode:r.itemCode,description:r.description,used:0,current:0,lots:new Set(),last:'',pos:new Set(),locs:new Set(),erp:new Set()};x.used+=r.quantity;x.description=x.description||r.description;if(r.useDate>x.last)x.last=r.useDate;if(r.po||r.style)x.pos.add([r.po,r.style].filter(Boolean).join('/'));map.set(r.itemCode,x)});return [...map.values()]}
 function renderCompare(){if(!window.cmpSearch)return;let q=(cmpSearch.value||'').toLowerCase(),st=cmpStatus.value,a=buildCompare().filter(x=>(!q||[x.itemCode,x.description,[...x.erp].join(' '),[...x.locs].join(' ')].join(' ').toLowerCase().includes(q))&&(!st||(st==='still'&&x.used>0&&x.current>0)||(st==='zero'&&x.used>0&&x.current===0)||(st==='unused'&&x.used===0&&x.current>0))).sort((a,b)=>b.used-a.used);cmpCards.innerHTML=a.map((x,i)=>`<div class="stockcard" onclick="openCompareDetail(${i})"><div class="sc-head"><div><div class="sc-title">${esc(x.itemCode)}</div><div class="sc-sub">${esc(x.description)}</div></div><div class="sc-qty">${N(x.current)} yd</div></div><div class="sc-grid"><div class="sc-cell"><div class="sc-v">${N(x.used)}</div><div class="sc-l">Old Used</div></div><div class="sc-cell"><div class="sc-v">${x.lots.size}</div><div class="sc-l">Current Lots</div></div><div class="sc-cell"><div class="sc-v">${x.locs.size}</div><div class="sc-l">Location</div></div><div class="sc-cell"><div class="sc-v">${esc(x.last||'--')}</div><div class="sc-l">Latest Use</div></div></div></div>`).join('')||'<div class="empty">No data</div>';cmpMeta.textContent=`${a.length} items`;window._cmpRows=a}
