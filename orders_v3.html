@@ -110,16 +110,36 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 .empty .ei{font-size:26px;margin-bottom:7px}
 /* color dot */
 .cd{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:middle}
+
+/* v3.1 — Weekly/PDF separation + Sewing-style periods */
+.period-seg{display:flex;border:1px solid var(--bor);border-radius:6px;overflow:hidden;background:#fff}
+.period-seg button{border:0;border-right:1px solid var(--bor);padding:5px 11px;background:#fff;color:var(--tx2);font-size:10px;font-weight:700;cursor:pointer}
+.period-seg button:last-child{border-right:0}.period-seg button.on{background:var(--acc);color:#fff}
+.period-nav{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.period-key{min-width:125px}
+.source-badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:9px;font-weight:700}.src-weekly{background:#dbeafe;color:#1e40af}.src-pdf{background:#ede9fe;color:#6d28d9}
+.rowclick{cursor:pointer}.rowclick:hover td{background:#f8fbff}.compound{line-height:1.35}.compound .p{font-weight:700}.compound .s{font-size:9px;color:var(--tx2);margin-top:2px}
+.pdf-kpis,.rec-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin-bottom:10px}
+.rec-ok{color:#047857;font-weight:700}.rec-warn{color:#b45309;font-weight:700}.rec-bad{color:#b91c1c;font-weight:700}
+#ordCloudVisible{font-size:10px;color:#94a3b8;white-space:nowrap}
+@media(max-width:760px){
+  .hdr{padding:9px 10px}.hdr>div:last-child{gap:6px!important}.link-no{display:none}#ordCloudVisible{display:block}
+  .pdf-table th,.pdf-table td,.rec-table th,.rec-table td{padding:6px 5px;white-space:normal}
+  .pdf-table th:nth-child(5),.pdf-table td:nth-child(5){display:none}
+  .rec-table th:nth-child(5),.rec-table td:nth-child(5){display:none}
+  .period-key{min-width:105px;max-width:145px}.fb{gap:5px}
+}
+
 </style>
 </head>
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3 · 企業級解析引擎</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.1 · Weekly 與客戶 PDF 分流</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
     <span style="font-size:10px;color:#6b7280" id="db-st">● DB…</span>
+    <span id="ordCloudVisible">☁ 尚未同步</span>
     <button id="ordCloudBtn" onclick="ordCloudToggle()" title="☁ 雲端同步"
       style="background:#1a2540;border:1px solid #2d3a6e;color:#93c5fd;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px">
       ☁ 同步
@@ -146,7 +166,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 <div class="tabbar">
   <span class="tab-sep">訂單</span>
   <button class="tb on" onclick="go('import',this)">📥 匯入</button>
-  <button class="tb" onclick="go('master',this)">📋 訂單總表</button>
+  <button class="tb" onclick="go('master',this)">📊 週報總覽</button>
+  <button class="tb" onclick="go('pdforders',this)">📄 客戶 PDF 訂單</button>
+  <button class="tb" onclick="go('reconcile',this)">🔎 PDF / 週報核對</button>
   <button class="tb" onclick="go('pivot',this)">🎨 尺碼色表</button>
   <span class="tab-sep">週報</span>
   <button class="tb" onclick="go('weekly',this)">📊 週報分析</button>
@@ -205,8 +227,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 <!-- ══════════════════════ MASTER TABLE ══════════════════════ -->
 <div id="pnl-master" class="pnl">
   <div class="info-box" style="margin-bottom:12px">
-    <strong>📌 數量以週報為主</strong>：總表以最新 Weekly Open Order Summary 的開放數量為準（各客戶 Garment/Apron/Top/Napkin）。
-    個別 PO 匯入數據作為尺寸色號明細補充。週報日期：<strong id="master-weekly-date">—</strong>
+    <strong>📌 本頁只看 Weekly Open Order Summary</strong>：不混入客戶 PDF PO，避免數量重複。
+    Weekly 是 VRT 開放訂單的管理基準；客戶 PDF 請到「客戶 PDF 訂單」，兩者差異請到「PDF / 週報核對」。週報日期：<strong id="master-weekly-date">—</strong>
   </div>
   <div class="krow" id="master-kpis"></div>
   <div class="fb">
@@ -223,23 +245,21 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
       <option value="mid">中 ($10K-$100K)</option>
       <option value="low">低 (&lt;$10K)</option>
     </select>
-    <div class="pts" style="display:flex;align-items:center;gap:5px">
+    <div class="period-nav">
+      <div class="period-seg" id="master-gran-seg">
+        <button data-g="day" onclick="setMasterGran('day')">日</button><button data-g="week" class="on" onclick="setMasterGran('week')">週</button><button data-g="month" onclick="setMasterGran('month')">月</button><button data-g="year" onclick="setMasterGran('year')">年</button>
+      </div>
+      <select id="f-gran" onchange="onGranChange()" style="display:none"><option value="day">日</option><option value="week" selected>週</option><option value="month">月</option><option value="year">年</option></select>
       <div class="pt" onclick="periodNav(-1)" title="上一期" style="padding:5px 9px;font-weight:700">◀</div>
-      <select id="f-gran" onchange="onGranChange()" title="時間粒度">
-        <option value="all">全部</option>
-        <option value="day">日</option>
-        <option value="week" selected>週</option>
-        <option value="month">月</option>
-        <option value="year">年</option>
-      </select>
-      <select id="f-period" onchange="renderMaster()" title="期間" style="min-width:130px"></select>
+      <select id="f-period" class="period-key" onchange="renderMaster()" title="日期 / 期間"></select>
       <div class="pt" onclick="periodNav(1)" title="下一期" style="padding:5px 9px;font-weight:700">▶</div>
+      <button class="btn bg2" style="font-size:10px;padding:4px 8px" onclick="masterLatest()">最新</button>
     </div>
     <input type="text" id="f-s" placeholder="搜尋客戶…" oninput="renderMaster()" style="min-width:120px">
     <button class="btn bg2" style="font-size:10px;padding:4px 8px" onclick="expMasterCsv()">⬇ CSV</button>
   </div>
   <div class="sec">
-    <div class="sh"><span class="st">訂單總表（週報為主）</span><span style="font-size:10px;color:var(--mu)" id="mc"></span></div>
+    <div class="sh"><span class="st">Weekly Open Order Summary（週報基準）</span><span style="font-size:10px;color:var(--mu)" id="mc"></span></div>
     <div class="tw">
       <table class="dt" id="mt">
         <thead><tr>
@@ -261,18 +281,35 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
       </table>
     </div>
   </div>
-  <!-- PO detail supplement -->
-  <div class="sec">
-    <div class="sh"><span class="st">PO明細補充（顏色/尺寸）</span><span style="font-size:10px;color:var(--mu)">來源：個別PO匯入，作為週報數量的顏色/尺寸細分</span></div>
-    <div class="tw">
-      <table class="dt">
-        <thead><tr>
-          <th>客戶</th><th>PO號碼</th><th>款式</th><th>SKU</th>
-          <th>顏色</th><th>尺寸</th><th class="num">數量</th><th>出貨日</th><th>格式</th>
-        </tr></thead>
-        <tbody id="po-sup-tbody"></tbody>
-      </table>
-    </div>
+</div>
+
+
+<!-- ══════════════════════ CUSTOMER PDF ORDERS ══════════════════════ -->
+<div id="pnl-pdforders" class="pnl">
+  <div class="info-box" style="margin-bottom:12px"><strong>📄 客戶 PDF / MSG PO 專區</strong>：只顯示客戶原始 PO，不把 Weekly Summary 數量加進來。日期全部顯示 YYYY-MM-DD，預設依「客戶要求出貨日」分日／週／月／年。</div>
+  <div class="fb" style="align-items:center">
+    <select id="pdf-date-basis" onchange="pdfBasisChange()"><option value="ship">依出貨日</option><option value="order">依下單日</option></select>
+    <div class="period-seg" id="pdf-gran-seg"><button data-g="day" onclick="setPdfGran('day')">日</button><button data-g="week" onclick="setPdfGran('week')">週</button><button data-g="month" class="on" onclick="setPdfGran('month')">月</button><button data-g="year" onclick="setPdfGran('year')">年</button></div>
+    <div class="pt" onclick="pdfPeriodNav(-1)" style="padding:5px 9px;font-weight:700">◀</div>
+    <select id="pdf-period" class="period-key" onchange="renderPdfOrders()"></select>
+    <div class="pt" onclick="pdfPeriodNav(1)" style="padding:5px 9px;font-weight:700">▶</div>
+    <button class="btn bg2" onclick="pdfLatest()" style="font-size:10px;padding:4px 8px">最新</button>
+    <select id="pdf-customer" onchange="renderPdfOrders()"><option value="">全部客戶</option></select>
+    <input id="pdf-search" placeholder="PO / 款式 / 客戶 / 檔名" oninput="renderPdfOrders()" style="min-width:180px">
+  </div>
+  <div class="pdf-kpis" id="pdf-kpis"></div>
+  <div class="sec"><div class="sh"><span class="st">客戶 PDF PO 清單</span><span id="pdf-count" style="font-size:10px;color:var(--mu)"></span></div>
+    <div class="tw"><table class="dt pdf-table"><thead><tr><th>客戶 / PO</th><th>下單日 → 要求出貨日</th><th>款式 / 明細</th><th class="num">數量</th><th class="num">金額</th><th>PDF來源</th></tr></thead><tbody id="pdf-orders-body"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ PDF / WEEKLY RECONCILIATION ══════════════════════ -->
+<div id="pnl-reconcile" class="pnl">
+  <div class="info-box" style="margin-bottom:12px"><strong>🔎 用途＝檢查 PDF 是否漏送／漏讀</strong>：Weekly Summary 仍是開放訂單基準；PDF 是客戶原始下單證據。本頁用客戶層級比較數量。<br><strong>限制：</strong>若 Weekly Summary 本身沒有 PO Number，就只能指出「哪個客戶、差多少數量」，不能憑空判斷缺的是哪一張 PO；點客戶可看到目前已讀到的 PDF PO 清單。</div>
+  <div class="fb"><span style="font-size:11px;font-weight:700">週報日期</span><select id="rec-week" onchange="renderReconcile()"></select><select id="rec-customer" onchange="renderReconcile()"><option value="">全部客戶</option></select></div>
+  <div class="rec-kpis" id="rec-kpis"></div>
+  <div class="sec"><div class="sh"><span class="st">Weekly vs PDF 覆蓋核對</span><span id="rec-count" style="font-size:10px;color:var(--mu)"></span></div>
+    <div class="tw"><table class="dt rec-table"><thead><tr><th>客戶</th><th class="num">Weekly Open pcs</th><th class="num">已讀 PDF pcs</th><th class="num">差異 Weekly-PDF</th><th class="num">PDF PO</th><th>狀態</th></tr></thead><tbody id="rec-body"></tbody></table></div>
   </div>
 </div>
 
@@ -679,10 +716,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
 const DBNAME='FactoryDB', DBVER=15;
 let db=null;
 let APP={
-  orders:[],weekly:[],imports:[],audit:[],
+  orders:[],headers:[],weekly:[],imports:[],audit:[],
   sewing:[],cutting:[], // from linked systems
   sortCol:'customer',sortDir:1,
-  period:'all',smvPeriod:'week',linkPeriod:'week',
+  period:'all',smvPeriod:'week',linkPeriod:'week',pdfGran:'month',pdfBasis:'ship',pdfPeriod:'',
   sets:{apiKey:'',useAi:false,swStore:'sewing_records',ctStore:'cutting_records'}
 };
 
@@ -722,6 +759,7 @@ function openDB(){
 }
 const dbAll=s=>new Promise((r,j)=>{const t=db.transaction(s,'readonly');const q=t.objectStore(s).getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
 const dbAdd=(s,d)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite');const q=t.objectStore(s).add(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
+const dbPut=(s,d)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite');const q=t.objectStore(s).put(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
 const dbClear=s=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).clear().onsuccess=()=>r()});
 const dbDel=(s,id)=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).delete(id).onsuccess=()=>r()});
 
@@ -790,8 +828,10 @@ async function tryReadLinkedStore(storeName){
 
 async function loadAll(){
   APP.orders=await dbAll('po_lines');
+  APP.headers=await dbAll('po_headers');
   APP.weekly=await dbAll('weekly_snapshots');
   APP.imports=await dbAll('order_imports');
+  for(const w of APP.weekly){const nd=normalizeWeeklyDate(w.as_of_date,'');if(nd&&nd!==w.as_of_date){w.as_of_date=nd;try{await dbPut('weekly_snapshots',w)}catch(e){}}}
   try{APP.audit=await dbAll('parse_audit');}catch(e){APP.audit=[];}
   // Read sewing: SewingCloudProd IDB first, then localStorage fallback
   APP.sewing=await readSewingFromLocalStorage();
@@ -1612,12 +1652,28 @@ async function parsePO(text,key,fileName,rowText){
 }
 
 
+
+// Weekly Summary 的數字日期按 VRT 報表習慣用 DD-MM-YYYY；客戶 PDF 日期仍由各客戶 Parser 自己判讀。
+function normalizeWeeklyDate(raw,fileName=''){
+  const mon={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12,JANUARY:1,FEBRUARY:2,MARCH:3,APRIL:4,JUNE:6,JULY:7,AUGUST:8,SEPTEMBER:9,OCTOBER:10,NOVEMBER:11,DECEMBER:12};
+  const pad=n=>String(n).padStart(2,'0'), yy=y=>+y<100?2000+(+y):+y;
+  const fs=String(fileName||'').replace(/_/g,' '), fm=fs.match(/(JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)[-\s](\d{1,2})[-\s](\d{2,4})/i);
+  if(fm){let mo=mon[fm[1].toUpperCase()],y=yy(fm[3]);if(mo)return `${y}-${pad(mo)}-${pad(+fm[2])}`}
+  const s=String(raw||'').replace(/^AS OF\s*/i,'').trim();if(!s)return null;
+  let m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);
+  if(m){let a=+m[1],b=+m[2],y=yy(m[3]),d,mo;if(a>12){d=a;mo=b}else if(b>12){mo=a;d=b}else{d=a;mo=b}if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${pad(mo)}-${pad(d)}`}
+  return DateEngine.normalize(s);
+}
+function canonicalCustomer(v){let s=String(v||'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();if(/AMERICAN DAWN|\bADI\b/.test(s))return'ADI';if(/WHITE PLAINS|\bWPL\b/.test(s))return'WPL';if(/NORTHERN UNIFORM|\bNU\b/.test(s))return'NU';if(/ALSCO.*MALAYSIA/.test(s))return'ALSCO MALAYSIA';if(/ALSCO.*(SINGAPORE|PTE)/.test(s))return'ALSCO SINGAPORE';if(/AUSTRALIAN LINEN|\bALS\b/.test(s))return'ALS';if(/LECHNER/.test(s))return'LECHNER';if(/MAGNUS/.test(s))return'MAGNUS';if(/VESTIS/.test(s))return'VESTIS';if(/DICKSON/.test(s))return'DICKSON';return s}
+
 // ══ WEEKLY PARSER ══
-function parseWeekly(buf,asOf){
+function parseWeekly(buf,asOf,fileName=''){
+  asOf=normalizeWeeklyDate(asOf,fileName)||'';
   const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
   const wsn=wb.SheetNames.find(n=>n.toLowerCase().includes('backlog')||n.toLowerCase().includes('summary'))||wb.SheetNames[0];
   const rows=XLSX.utils.sheet_to_json(wb.Sheets[wsn],{header:1,defval:null});
-  for(const row of rows.slice(0,6)){const c=(row||[]).find(c=>typeof c==='string'&&c.includes('AS OF'));if(c)asOf=c.replace('AS OF','').trim();}
+  for(const row of rows.slice(0,8)){const c=(row||[]).find(c=>typeof c==='string'&&c.toUpperCase().includes('AS OF'));if(c&&!asOf)asOf=normalizeWeeklyDate(c,fileName)||asOf;}
+  asOf=normalizeWeeklyDate(asOf,fileName)||asOf;
   let hr=-1;for(let i=0;i<rows.length;i++)if((rows[i]||[]).some(c=>typeof c==='string'&&c.includes('CUSTOMER'))){hr=i;break;}
   if(hr===-1)return null;
   const skip=new Set(['CUSTOMER','Total Order Backlog','Total Ratio','GRAND TOTAL','AVR.','DAY TO','WEEK TO','TOTAL MIN','EST AVR','TOTAL MIN PRODUCE WEEK 1','TOTAL MIN PRODUCE WEEK 2','TOTAL MIN PRODUCE WEEK 3','TOTAL MIN PRODUCE WEEK 4','TOTAL MIN PRODUCE WEEK 5','GRAND TOTAL MIN PRODUCED','GRAND TOTAL (QTY OPEN PCS)','GRAND TOTAL (QTY OPEN YDS)','GRAND TOTAL (QTY OPEN CTNS)','GRAND TOTAL (CTNS SCANNED)','GRAND TOTAL (OPEN SMV)','GRAND TOTAL (OPEN AMOUNT)','EST AVR. PRODUCE MIN PER WEEK','DAY TO COMPLETE SCHEDULE','WEEK TO COMPLETE SCHEDULE','AVR. MIN PER DAY']);
@@ -1647,7 +1703,7 @@ function parseWeekly(buf,asOf){
 const pn=v=>{if(v==null)return 0;if(typeof v==='number')return isNaN(v)?0:Math.round(v*100)/100;const n=parseFloat(v.toString().replace(/[,$]/g,''));return isNaN(n)?0:n;};
 
 // ══ MAIN IMPORT（v4：支援直接 .pdf/.xlsx，並寫入 parse_audit） ══
-async function importPoText(t,subj,fileName,rowText){
+async function importPoText(t,subj,fileName,rowText,fileHash=''){
   const key=APP.sets.apiKey;
   const parsed=await parsePO(t,key,fileName,rowText);
   if(!parsed||!parsed.lines.length){
@@ -1656,9 +1712,9 @@ async function importPoText(t,subj,fileName,rowText){
     return 0;
   }
   log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行 · 信心${parsed._audit.avgConfidence}%`,'info');
-  const hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:fileName,source_date:nowLocal()});
-  for(const ln of parsed.lines){await dbAdd('po_lines',{...ln,po_id:hid,customer:parsed.header.customer,po_number:parsed.header.po_number});}
-  await dbAdd('order_imports',{type:'po',subject:subj,file_name:fileName,rows:parsed.lines.length,imported_at:nowLocal()});
+  const hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:fileName,source_hash:fileHash,source_date:nowLocal()});
+  for(const ln of parsed.lines){await dbAdd('po_lines',{...ln,po_id:hid,customer:parsed.header.customer,po_number:parsed.header.po_number,source_file:fileName,source_email:subj,source_hash:fileHash,source_type:'pdf'});}
+  await dbAdd('order_imports',{type:'po',subject:subj,file_name:fileName,file_hash:fileHash,rows:parsed.lines.length,imported_at:nowLocal()});
   await dbAdd('parse_audit',parsed._audit);
   const a=parsed._audit;
   if(a.totalMatch===false) log(`⚠ 總額不符：明細 $${a.computedTotal} ≠ 表頭 $${a.declaredTotal}（見 解析品質）`,'warn');
@@ -1675,21 +1731,23 @@ async function processFile(file){
     // ── 直接拖入 PDF ──
     if(ext==='pdf'){
       log('識別: PDF 採購訂單（直接匯入）','info');
+      const fh=hashBuf(buf);if(APP.imports.some(i=>i.type==='po'&&i.file_hash===fh)){log('↷ 已匯入相同 PDF，跳過避免重複','warn');return;}
       const t=await pdfText(buf);
       if(!t||t.length<20){log('⚠ PDF文字提取失敗（掃描圖片PDF需Gemini AI）','warn');return;}
       const rt=await pdfTextRows(buf);
-      await importPoText(t,file.name,file.name,rt);
+      await importPoText(t,file.name,file.name,rt,fh);
       await loadAll();refreshAll();return;
     }
     // ── 直接拖入 Excel（週報） ──
     if(ext==='xls'||ext==='xlsx'){
       log('識別: 週報（直接匯入）','info');
+      const fh=hashBuf(buf);if(APP.imports.some(i=>i.type==='weekly'&&i.file_hash===fh)){log('↷ 已匯入相同週報，跳過','warn');return;}
       const dm=file.name.match(/(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\w+[-\/]\d+[-\/]\d+)/);
-      const result=parseWeekly(buf,dm?dm[1]:'');
+      const result=parseWeekly(buf,dm?dm[1]:'',file.name);
       if(!result){log('❌ 週報解析失敗','err');return;}
       let saved=0;for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
       log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
-      await dbAdd('order_imports',{type:'weekly',subject:file.name,file_name:file.name,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
+      await dbAdd('order_imports',{type:'weekly',subject:file.name,file_name:file.name,file_hash:fh,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
       await loadAll();refreshAll();return;
     }
     // ── .msg 郵件（原有流程，完全保留） ──
@@ -1699,13 +1757,14 @@ async function processFile(file){
       log('識別: 週報','info');
       const xlsxBuf=extractXlsx(buf);
       if(!xlsxBuf){log('❌ 找不到XLS','err');return;}
+      const fh=hashBuf(xlsxBuf);if(APP.imports.some(i=>i.type==='weekly'&&i.file_hash===fh)){log('↷ 已匯入相同週報，跳過','warn');return;}
       const dm=subj.match(/(\w+[-\/]\d+[-\/]\d+|\d{4}[-\/]\d{2}[-\/]\d{2})/);
-      const result=parseWeekly(xlsxBuf,dm?dm[1]:'');
+      const result=parseWeekly(xlsxBuf,dm?dm[1]:'',file.name+' '+subj);
       if(!result){log('❌ 週報解析失敗','err');return;}
       let saved=0;
       for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
       log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
-      await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
+      await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,file_hash:fh,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
     }else{
       log('識別: 採購訂單','info');
       const pdfs=extractPdfs(buf);
@@ -1717,8 +1776,9 @@ async function processFile(file){
         log(`解析: ${pn2}`,'info');
         const t=await pdfText(pd);
         if(!t||t.length<20){log(`⚠ ${pn2} 文字提取失敗（可能為掃描圖片PDF，需Gemini AI）`,'warn');continue;}
+        const ph=hashBuf(pd);if(APP.imports.some(i=>i.type==='po'&&i.file_hash===ph)){log(`↷ ${pn2} 已匯入，跳過`,'warn');continue;}
         const rt=await pdfTextRows(pd);
-        await importPoText(t,subj,pn2,rt);
+        await importPoText(t,subj,pn2,rt,ph);
       }
     }
     await loadAll();refreshAll();
@@ -1740,13 +1800,10 @@ function renderMaster(){
   const gran=(document.getElementById('f-gran')||{}).value||'all';
   const psel=document.getElementById('f-period');
   if(psel){
-    if(gran==='all'){psel.innerHTML='<option value="">全部期間</option>';psel.disabled=true;}
-    else{
-      psel.disabled=false;const keep=psel.value;
-      const keys=[...new Set(APP.weekly.map(w=>periodKey(w.as_of_date,gran)).filter(Boolean))].sort().reverse();
-      psel.innerHTML=keys.length?keys.map(k=>`<option value="${k}">${periodLabel(k,gran)}</option>`).join(''):'<option value="">—</option>';
-      if(keep&&keys.includes(keep))psel.value=keep;
-    }
+    psel.disabled=false;const keep=psel.value;
+    const keys=[...new Set(APP.weekly.map(w=>periodKey(w.as_of_date,gran)).filter(Boolean))].sort();
+    psel.innerHTML=keys.length?keys.map(k=>`<option value="${k}">${periodLabel(k,gran)}</option>`).join(''):'<option value="">—</option>';
+    if(keep&&keys.includes(keep))psel.value=keep;else if(keys.length)psel.value=keys[keys.length-1];
   }
   const{map,date}=weeklyForPeriod(gran,psel?psel.value:'');
   document.getElementById('master-weekly-date').textContent=date||'—';
@@ -1790,8 +1847,8 @@ function renderMaster(){
     const total=(r.garment||0)+(r.apron||0)+(r.topNapkin||0);
     const pct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0;
     const pctColor=pct<20?'var(--red)':pct<60?'var(--ylw)':'var(--grn)';
-    return`<tr>
-      <td><strong>${r.customer}</strong></td>
+    return`<tr class="rowclick" onclick="openWeeklyCustomer(${JSON.stringify(r.customer)},${JSON.stringify(r.as_of_date||'')})">
+      <td><strong>${r.customer}</strong><div class="subtxt"><span class="source-badge src-weekly">WEEKLY</span></div></td>
       <td class="mono" style="font-size:10px">${r.as_of_date||'-'}</td>
       <td class="num">${(r.garment||0).toLocaleString()}</td>
       <td class="num">${(r.apron||0).toLocaleString()}</td>
@@ -1812,21 +1869,6 @@ function renderMaster(){
     </tr>`;
   }).join(''):`<tr><td colspan="13" style="text-align:center;padding:20px;color:var(--mu)">無週報資料，請先匯入 VRT Weekly Summary</td></tr>`;
 
-  // PO supplement
-  let poRows=APP.orders;
-  if(fC)poRows=poRows.filter(o=>o.customer===fC);
-  const posup=document.getElementById('po-sup-tbody');
-  posup.innerHTML=poRows.slice(0,200).map(o=>`<tr>
-    <td style="font-size:11px">${o.customer}</td>
-    <td class="mono" style="font-size:10px">${o.po_number||'-'}</td>
-    <td class="mono" style="font-size:10px">${o.style_code||'-'}</td>
-    <td class="mono" style="font-size:10px">${o.sku||'-'}</td>
-    <td>${clrDot(o.color)}${o.color||'-'}</td>
-    <td class="ctr"><span class="bd bb" style="font-size:9px">${o.size||'-'}</span></td>
-    <td class="num">${(o.qty||0).toLocaleString()}</td>
-    <td class="mono" style="font-size:10px">${o.ship_date||o.cancel_date||'-'}</td>
-    <td><span class="bd bp" style="font-size:9px">${o.format||'-'}</span></td>
-  </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--mu)">尚無PO明細</td></tr>`;
 }
 
 function srt(col){if(APP.sortCol===col)APP.sortDir*=-1;else{APP.sortCol=col;APP.sortDir=1;}renderMaster();}
@@ -1855,14 +1897,56 @@ function weeklyForPeriod(gran,selKey){
   inP.filter(w=>w.as_of_date===latest).forEach(w=>{map[w.customer]=w;});
   return{map,date:latest};
 }
-function onGranChange(){renderMaster();}
-function periodNav(dir){
-  const psel=document.getElementById('f-period');if(!psel||psel.disabled)return;
-  const opts=[...psel.options].map(o=>o.value);const idx=opts.indexOf(psel.value);
-  const next=idx-dir; // 期間清單為新→舊排序：◀(-1)=較舊、▶(1)=較新
-  if(next>=0&&next<opts.length){psel.value=opts[next];renderMaster();}
+function setMasterGran(g){const s=document.getElementById('f-gran');if(s)s.value=g;document.querySelectorAll('#master-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));const p=document.getElementById('f-period');if(p)p.value='';renderMaster()}
+function onGranChange(){setMasterGran(document.getElementById('f-gran').value||'week')}
+function periodNav(dir){const p=document.getElementById('f-period');if(!p||!p.options.length)return;let i=p.selectedIndex;i=Math.max(0,Math.min(p.options.length-1,i+dir));p.selectedIndex=i;renderMaster()}
+function masterLatest(){const p=document.getElementById('f-period');if(p&&p.options.length){p.selectedIndex=p.options.length-1;renderMaster()}}
+window.onGranChange=onGranChange;window.periodNav=periodNav;window.setMasterGran=setMasterGran;window.masterLatest=masterLatest;
+
+
+// ══ RENDER: PDF ORDERS (客戶原始 PO，不混 Weekly) ══
+function headerMap(){const m={};(APP.headers||[]).forEach(h=>m[h.id]=h);return m}
+function uniquePdfOrders(){const seen=new Map();for(const o of APP.orders){const x=orderMetaRaw(o),k=(x.source_hash||'')?`${x.source_hash}|${x.sku||x.style_code||''}|${x.color||''}|${x.size||''}|${x.qty||0}|${x.ship_date||x.cancel_date||''}`:[x.customer,x.po_number,x.sku,x.style_code,x.color,x.size,x.qty,x.ship_date||x.cancel_date,x.ext_price].join('|');if(!seen.has(k))seen.set(k,o)}return [...seen.values()]}
+function orderMetaRaw(o){const h=headerMap()[o.po_id]||{};return{...o,order_date:o.order_date||h.order_date||'',source_file:o.source_file||h.source_file||'',source_email:o.source_email||h.source_email||'',source_hash:o.source_hash||h.source_hash||'',format:o.format||h.format||o.parser||'',customer:o.customer||h.customer||'UNKNOWN',po_number:o.po_number||h.po_number||''}}
+function orderMeta(o){const x=orderMetaRaw(o);return{...x,order_date:DateEngine.normalize(x.order_date)||x.order_date||''}}
+function pdfDate(o){const x=orderMeta(o);return APP.pdfBasis==='order'?(DateEngine.normalize(x.order_date)||''):(DateEngine.normalize(x.ship_date||x.cancel_date)||'')}
+function pdfPeriodKey(o,g){const d=pdfDate(o);if(!d)return null;return periodKey(d,g)}
+function pdfPeriods(){return [...new Set(uniquePdfOrders().map(o=>pdfPeriodKey(o,APP.pdfGran)).filter(Boolean))].sort()}
+function setPdfGran(g){APP.pdfGran=g;APP.pdfPeriod='';document.querySelectorAll('#pdf-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));renderPdfOrders()}
+function pdfBasisChange(){APP.pdfBasis=document.getElementById('pdf-date-basis').value;APP.pdfPeriod='';renderPdfOrders()}
+function pdfPeriodNav(dir){const p=document.getElementById('pdf-period');if(!p||!p.options.length)return;let i=Math.max(0,Math.min(p.options.length-1,p.selectedIndex+dir));p.selectedIndex=i;APP.pdfPeriod=p.value;renderPdfOrders()}
+function pdfLatest(){const p=document.getElementById('pdf-period');if(p&&p.options.length){p.selectedIndex=p.options.length-1;APP.pdfPeriod=p.value;renderPdfOrders()}}
+function pdfGroups(){
+  const hm=headerMap(),m={};
+  uniquePdfOrders().forEach(o=>{const h=hm[o.po_id]||{},x=orderMeta(o),key=(o.po_id||'')+'|'+x.customer+'|'+x.po_number+'|'+(x.source_file||'');let g=m[key]||(m[key]={key,po_id:o.po_id,customer:x.customer,po:x.po_number,orderDates:[],shipDates:[],qty:0,amount:0,styles:new Set(),colors:new Set(),sizes:new Set(),lines:[],source:x.source_file||x.parser||'-',format:x.format||x.parser||'-'});if(x.order_date)g.orderDates.push(DateEngine.normalize(x.order_date)||x.order_date);let sd=DateEngine.normalize(x.ship_date||x.cancel_date);if(sd)g.shipDates.push(sd);g.qty+=Number(x.qty)||0;g.amount+=Number(x.ext_price)||0;if(x.style_code)g.styles.add(x.style_code);if(x.color)g.colors.add(x.color);if(x.size)g.sizes.add(x.size);g.lines.push(x)});
+  return Object.values(m).map(g=>({...g,orderDate:g.orderDates.filter(Boolean).sort()[0]||'',shipDate:g.shipDates.filter(Boolean).sort()[0]||'',styles:[...g.styles],colors:[...g.colors],sizes:[...g.sizes]}));
 }
-window.onGranChange=onGranChange;window.periodNav=periodNav;
+function pdfGroupDate(g){return APP.pdfBasis==='order'?g.orderDate:g.shipDate}
+function renderPdfOrders(){
+  const pe=document.getElementById('pdf-period');if(!pe)return;const ps=pdfPeriods();if(!APP.pdfPeriod||!ps.includes(APP.pdfPeriod))APP.pdfPeriod=ps[ps.length-1]||'';pe.innerHTML=ps.map(k=>`<option value="${k}" ${k===APP.pdfPeriod?'selected':''}>${periodLabel(k,APP.pdfGran)}</option>`).join('')||'<option>—</option>';pe.value=APP.pdfPeriod;
+  const cust=document.getElementById('pdf-customer'),cv=cust.value,customers=[...new Set(uniquePdfOrders().map(o=>orderMeta(o).customer).filter(Boolean))].sort();cust.innerHTML='<option value="">全部客戶</option>'+customers.map(c=>`<option value="${c}" ${c===cv?'selected':''}>${c}</option>`).join('');
+  const q=(document.getElementById('pdf-search').value||'').toLowerCase();let gs=pdfGroups().filter(g=>{const d=pdfGroupDate(g),pk=d?periodKey(d,APP.pdfGran):null;if(APP.pdfPeriod&&pk!==APP.pdfPeriod)return false;if(cv&&g.customer!==cv)return false;if(q&&![g.customer,g.po,g.source,g.styles.join(' ')].join(' ').toLowerCase().includes(q))return false;return true}).sort((a,b)=>(pdfGroupDate(a)||'').localeCompare(pdfGroupDate(b)||''));
+  const qty=gs.reduce((a,g)=>a+g.qty,0),amt=gs.reduce((a,g)=>a+g.amount,0),undated=pdfGroups().filter(g=>!pdfGroupDate(g)).length;
+  document.getElementById('pdf-kpis').innerHTML=`<div class="kc ac"><div class="kl">PDF PO</div><div class="kv">${gs.length}</div></div><div class="kc"><div class="kl">數量 pcs</div><div class="kv">${qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv">$${(amt/1000).toFixed(1)}K</div></div><div class="kc"><div class="kl">客戶</div><div class="kv">${new Set(gs.map(g=>g.customer)).size}</div></div><div class="kc yl"><div class="kl">無${APP.pdfBasis==='order'?'下單':'出貨'}日</div><div class="kv">${undated}</div></div>`;
+  document.getElementById('pdf-count').textContent=`${gs.length} PO · 日期基準：${APP.pdfBasis==='order'?'下單日':'要求出貨日'}`;
+  document.getElementById('pdf-orders-body').innerHTML=gs.map((g,i)=>`<tr class="rowclick" onclick="openPdfGroup(${JSON.stringify(g.key)})"><td><div class="compound"><div class="p">${g.customer}</div><div class="s">PO ${g.po||'-'}</div></div></td><td class="mono">${g.orderDate||'-'}<br><span style="color:var(--acc)">→ ${g.shipDate||'-'}</span></td><td><div class="compound"><div class="p">${g.styles.slice(0,3).join(', ')||'-'}</div><div class="s">${g.lines.length} lines · ${g.colors.length} colors · ${g.sizes.length} sizes</div></div></td><td class="num"><strong>${g.qty.toLocaleString()}</strong></td><td class="num">$${g.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td><td><span class="source-badge src-pdf">PDF</span><div class="subtxt" title="${g.source}">${g.source.length>28?g.source.slice(0,26)+'…':g.source}</div></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--mu)">此期間沒有 PDF 訂單</td></tr>';
+}
+function openPdfGroup(key){const g=pdfGroups().find(x=>x.key===key);if(!g)return;const lines=g.lines;openOrderModal(`📄 ${g.customer} · PO ${g.po||'-'}`,`<div class="krow"><div class="kc"><div class="kl">下單日</div><div class="kv" style="font-size:16px">${g.orderDate||'-'}</div></div><div class="kc"><div class="kl">要求出貨日</div><div class="kv" style="font-size:16px">${g.shipDate||'-'}</div></div><div class="kc ac"><div class="kl">數量</div><div class="kv">${g.qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv">$${g.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div></div><div class="info-box" style="margin:10px 0"><b>來源 PDF：</b>${g.source}<br><b>Parser：</b>${g.format}</div><div class="tw"><table class="dt"><thead><tr><th>Style / SKU</th><th>Color</th><th>Size</th><th class="num">Qty</th><th>Ship Date</th><th class="num">Price</th></tr></thead><tbody>${lines.map(x=>`<tr><td>${x.style_code||'-'}<div class="subtxt">${x.sku||''}</div></td><td>${x.color||'-'}</td><td>${x.size||'-'}</td><td class="num">${(x.qty||0).toLocaleString()}</td><td class="mono">${DateEngine.normalize(x.ship_date||x.cancel_date)||x.ship_date||x.cancel_date||'-'}</td><td class="num">${x.unit_price?'$'+Number(x.unit_price).toFixed(2):'-'}</td></tr>`).join('')}</tbody></table></div>`)}
+function openOrderModal(title,html){let m=document.getElementById('ord-detail-modal');if(!m){m=document.createElement('div');m.id='ord-detail-modal';m.style.cssText='position:fixed;inset:0;background:#0008;z-index:10001;display:none;padding:20px;overflow:auto';m.innerHTML='<div id="ord-detail-box" style="width:min(980px,100%);margin:4vh auto;background:white;border-radius:10px;padding:16px"></div>';m.onclick=e=>{if(e.target===m)m.style.display='none'};document.body.appendChild(m)}document.getElementById('ord-detail-box').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:12px"><b style="font-size:15px">${title}</b><button class="btn bg2" onclick="document.getElementById('ord-detail-modal').style.display='none'">✕</button></div>${html}`;m.style.display='block'}
+
+// ══ PDF ↔ WEEKLY RECONCILIATION ══
+function uniqueWeeklySnapshots(){const m={};for(const w of APP.weekly){const k=(w.as_of_date||'')+'|'+canonicalCustomer(w.customer);if(!m[k]||(w.id||0)>(m[k].id||0))m[k]=w}return Object.values(m)}
+function weeklyDates(){return [...new Set(uniqueWeeklySnapshots().map(w=>w.as_of_date).filter(Boolean))].sort()}
+function pdfExpectedAt(asOf){return uniquePdfOrders().map(orderMeta).filter(o=>{const od=DateEngine.normalize(o.order_date),sd=DateEngine.normalize(o.ship_date||o.cancel_date);if(od&&od>asOf)return false;if(sd&&sd<asOf)return false;return true})}
+function recData(asOf){
+  const wk={};uniqueWeeklySnapshots().filter(w=>w.as_of_date===asOf).forEach(w=>{const k=canonicalCustomer(w.customer),x=wk[k]||(wk[k]={key:k,names:new Set(),weekly:0,garment:0,apron:0,top:0});x.names.add(w.customer);x.garment+=w.garment||0;x.apron+=w.apron||0;x.top+=w.topNapkin||0;x.weekly+=(w.garment||0)+(w.apron||0)+(w.topNapkin||0)});
+  const pdf={};pdfExpectedAt(asOf).forEach(o=>{const k=canonicalCustomer(o.customer),x=pdf[k]||(pdf[k]={key:k,names:new Set(),qty:0,pos:new Set(),lines:[]});x.names.add(o.customer);x.qty+=Number(o.qty)||0;x.pos.add(o.po_number||('ROW'+o.id));x.lines.push(o)});
+  const keys=new Set([...Object.keys(wk),...Object.keys(pdf)]);return [...keys].map(k=>{const a=wk[k]||{weekly:0,names:new Set()},b=pdf[k]||{qty:0,pos:new Set(),names:new Set(),lines:[]},gap=a.weekly-b.qty,tol=Math.max(50,a.weekly*.05);let status=a.weekly>0&&b.qty===0?'缺 PDF':Math.abs(gap)<=tol?'接近':gap>0?'PDF 少於週報':'PDF 多於週報';return{key:k,w:a,p:b,gap,status}}).sort((a,b)=>Math.abs(b.gap)-Math.abs(a.gap));
+}
+function renderReconcile(){const ws=document.getElementById('rec-week');if(!ws)return;const ds=weeklyDates(),keep=ws.value;ws.innerHTML=ds.map(d=>`<option ${d===keep?'selected':''}>${d}</option>`).join('')||'<option>—</option>';if(keep&&ds.includes(keep))ws.value=keep;else if(ds.length)ws.value=ds[ds.length-1];const asOf=ws.value,all=recData(asOf),cs=document.getElementById('rec-customer'),cv=cs.value,names=all.map(x=>x.key).sort();cs.innerHTML='<option value="">全部客戶</option>'+names.map(n=>`<option ${n===cv?'selected':''}>${n}</option>`).join('');let rows=cv?all.filter(x=>x.key===cv):all;const wtot=rows.reduce((s,x)=>s+x.w.weekly,0),ptot=rows.reduce((s,x)=>s+x.p.qty,0),g=wtot-ptot,bad=rows.filter(x=>x.status==='缺 PDF'||x.status==='PDF 少於週報').length,match=rows.filter(x=>x.status==='接近').length;document.getElementById('rec-kpis').innerHTML=`<div class="kc ac"><div class="kl">Weekly Open</div><div class="kv">${wtot.toLocaleString()}</div></div><div class="kc"><div class="kl">PDF 對應量</div><div class="kv">${ptot.toLocaleString()}</div></div><div class="kc ${g>0?'yl':'gr'}"><div class="kl">差異 Weekly-PDF</div><div class="kv">${g>=0?'+':''}${g.toLocaleString()}</div></div><div class="kc gr"><div class="kl">接近</div><div class="kv">${match}</div></div><div class="kc rd"><div class="kl">可能缺 PDF</div><div class="kv">${bad}</div></div>`;document.getElementById('rec-count').textContent=`${rows.length} 客戶 · as of ${asOf}`;document.getElementById('rec-body').innerHTML=rows.map(x=>{const cls=x.status==='接近'?'rec-ok':x.status==='PDF 多於週報'?'rec-warn':'rec-bad';return`<tr class="rowclick" onclick="openRecDetail(${JSON.stringify(x.key)},${JSON.stringify(asOf)})"><td><b>${x.key}</b><div class="subtxt">Weekly: ${[...x.w.names||[]].join(', ')||'-'}<br>PDF: ${[...x.p.names||[]].join(', ')||'-'}</div></td><td class="num">${x.w.weekly.toLocaleString()}</td><td class="num">${x.p.qty.toLocaleString()}</td><td class="num ${x.gap>0?'rec-bad':x.gap<0?'rec-warn':'rec-ok'}">${x.gap>=0?'+':''}${x.gap.toLocaleString()}</td><td class="num">${x.p.pos?.size||0}</td><td class="${cls}">${x.status}</td></tr>`}).join('')||'<tr><td colspan="6">無可比較資料</td></tr>'}
+function openRecDetail(key,asOf){const x=recData(asOf).find(r=>r.key===key);if(!x)return;const gs=pdfGroups().filter(g=>canonicalCustomer(g.customer)===key);openOrderModal(`🔎 ${key} · ${asOf}`,`<div class="krow"><div class="kc ac"><div class="kl">Weekly Open</div><div class="kv">${x.w.weekly.toLocaleString()}</div></div><div class="kc"><div class="kl">Garment / Apron / Top</div><div class="kv" style="font-size:14px">${(x.w.garment||0).toLocaleString()} / ${(x.w.apron||0).toLocaleString()} / ${(x.w.top||0).toLocaleString()}</div></div><div class="kc"><div class="kl">PDF 對應量</div><div class="kv">${x.p.qty.toLocaleString()}</div></div></div><div class="info-box" style="margin:10px 0">Weekly 沒有 PO Number 時，系統只能判斷此客戶「數量覆蓋是否足夠」。下面列出目前已匯入的 PDF PO，供人工確認哪張未收到或解析不完整。</div><div class="tw"><table class="dt"><thead><tr><th>PO</th><th>下單日</th><th>出貨日</th><th class="num">Qty</th><th>PDF</th></tr></thead><tbody>${gs.map(g=>`<tr><td class="mono">${g.po||'-'}</td><td>${g.orderDate||'-'}</td><td>${g.shipDate||'-'}</td><td class="num">${g.qty.toLocaleString()}</td><td>${g.source}</td></tr>`).join('')||'<tr><td colspan="5">尚無此客戶 PDF</td></tr>'}</tbody></table></div>`)}
+function openWeeklyCustomer(customer,asOf){const w=APP.weekly.find(x=>x.customer===customer&&x.as_of_date===asOf);if(!w)return;const gs=pdfGroups().filter(g=>canonicalCustomer(g.customer)===canonicalCustomer(customer));openOrderModal(`📊 ${customer} · Weekly ${asOf}`,`<div class="krow"><div class="kc"><div class="kl">Garment</div><div class="kv">${(w.garment||0).toLocaleString()}</div></div><div class="kc"><div class="kl">Apron</div><div class="kv">${(w.apron||0).toLocaleString()}</div></div><div class="kc"><div class="kl">Top/Napkin</div><div class="kv">${(w.topNapkin||0).toLocaleString()}</div></div><div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${(w.unproducedCtns||0).toLocaleString()}</div></div></div><div class="info-box" style="margin:10px 0">本卡上方全部來自 Weekly Summary；下方 PDF PO 只是核對資料，不會加回 Weekly 數量。</div><div class="tw"><table class="dt"><thead><tr><th>PDF PO</th><th>下單日</th><th>出貨日</th><th class="num">Qty</th><th>來源</th></tr></thead><tbody>${gs.map(g=>`<tr><td>${g.po||'-'}</td><td>${g.orderDate||'-'}</td><td>${g.shipDate||'-'}</td><td class="num">${g.qty.toLocaleString()}</td><td>${g.source}</td></tr>`).join('')||'<tr><td colspan="5">尚無 PDF PO</td></tr>'}</tbody></table></div>`)}
+window.setPdfGran=setPdfGran;window.pdfBasisChange=pdfBasisChange;window.pdfPeriodNav=pdfPeriodNav;window.pdfLatest=pdfLatest;window.openPdfGroup=openPdfGroup;window.renderPdfOrders=renderPdfOrders;window.renderReconcile=renderReconcile;window.openRecDetail=openRecDetail;window.openWeeklyCustomer=openWeeklyCustomer;
 
 // ══ RENDER: PIVOT ══
 function renderPivotInit(){
@@ -2434,19 +2518,19 @@ function dl(rows,name){const csv=rows.map(r=>(Array.isArray(r)?r:Object.values(r
 
 // ══ BACKUP/RESTORE ══
 async function backup(){
-  const b={po_headers:await dbAll('po_headers'),po_lines:await dbAll('po_lines'),weekly_snapshots:await dbAll('weekly_snapshots'),order_imports:await dbAll('order_imports'),v:3,exported_at:new Date().toISOString()};
+  const b={po_headers:await dbAll('po_headers'),po_lines:await dbAll('po_lines'),weekly_snapshots:await dbAll('weekly_snapshots'),order_imports:await dbAll('order_imports'),parse_audit:await dbAll('parse_audit'),v:3.1,exported_at:new Date().toISOString()};
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(b,null,2)],{type:'application/json'}));a.download=`orders_v3_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();
 }
 async function restore(e){
   const f=e.target.files[0];if(!f)return;
   const b=JSON.parse(await f.text());
-  for(const[s,d]of[['po_lines',b.po_lines],['po_headers',b.po_headers],['weekly_snapshots',b.weekly_snapshots],['order_imports',b.order_imports]]){
+  for(const[s,d]of[['po_lines',b.po_lines],['po_headers',b.po_headers],['weekly_snapshots',b.weekly_snapshots],['order_imports',b.order_imports],['parse_audit',b.parse_audit]]){
     if(d){await dbClear(s);for(const r of d)await dbAdd(s,r);}
   }
   await loadAll();refreshAll();alert(`還原成功 ${b.po_lines?.length||0}筆PO, ${b.weekly_snapshots?.length||0}筆週報`);
 }
 async function ccAll(){if(!confirm('清除匯入記錄？'))return;await dbClear('order_imports');await loadAll();renderRecentList();}
-async function ccOrders(){if(!confirm('⚠️ 清除全部訂單資料？'))return;for(const s of['po_lines','po_headers','weekly_snapshots','order_imports'])await dbClear(s);await loadAll();refreshAll();alert('已清除');}
+async function ccOrders(){if(!confirm('⚠️ 清除全部訂單資料？'))return;for(const s of['po_lines','po_headers','weekly_snapshots','order_imports','parse_audit'])await dbClear(s);await loadAll();refreshAll();alert('已清除');}
 
 // ══ DRAG DROP ══
 function dov(e){e.preventDefault();e.currentTarget.classList.add('ov');}
@@ -2460,8 +2544,8 @@ function renderRecentList(){
   if(!APP.imports.length){el.innerHTML='<div class="empty"><div class="ei">📭</div><p>尚未匯入</p></div>';return;}
   const sorted=[...APP.imports].sort((a,b)=>b.id-a.id).slice(0,20);
   el.innerHTML=sorted.map(imp=>`<div class="recent-item" style="display:flex;align-items:center;gap:7px;background:var(--sur2);border:1px solid var(--bor);border-radius:4px;padding:7px 10px;margin-bottom:5px">
-    <span>${imp.type==='weekly'?'📊':'📋'}</span>
-    <div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${imp.type==='weekly'?'週報 '+imp.as_of:imp.subject||imp.file_name}</div>
+    <span>${imp.type==='weekly'?'📊':'📄'}</span>
+    <div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${imp.type==='weekly'?'WEEKLY · '+imp.as_of:'PDF · '+(imp.file_name||imp.subject)}</div>
     <div style="font-size:9px;color:var(--tx2)">${imp.rows}筆 · ${new Date(imp.imported_at).toLocaleString('zh-TW')}</div></div>
     <button style="background:none;border:none;color:var(--mu);cursor:pointer;font-size:13px" onclick="delImp(${imp.id})">×</button>
   </div>`).join('');
@@ -2498,6 +2582,8 @@ function go(tab,btn){
   document.getElementById('pnl-'+tab).classList.add('on');
   if(btn)btn.classList.add('on');
   if(tab==='master')renderMaster();
+  if(tab==='pdforders')renderPdfOrders();
+  if(tab==='reconcile')renderReconcile();
   if(tab==='pivot')renderPivotInit();
   if(tab==='weekly')renderWeekly();
   if(tab==='smv')renderSmv();
@@ -2574,7 +2660,7 @@ async function clearQc(){if(!confirm('清除解析審計（不影響訂單資料
 window.renderQC=renderQC;window.renderTemplates=renderTemplates;window.expQcCsv=expQcCsv;window.clearQc=clearQc;
 
 function refreshAll(){
-  renderRecentList();renderMaster();renderWeeklyDateSelect();renderSmv();renderCarton();renderLink();renderQC();updateDbStats();
+  renderRecentList();renderMaster();renderPdfOrders();renderReconcile();renderWeeklyDateSelect();renderSmv();renderCarton();renderLink();renderQC();updateDbStats();
 }
 
 // ══ INIT ══
@@ -2584,8 +2670,8 @@ async function init(){
     document.getElementById('db-st').textContent='● DB已連接';
     document.getElementById('db-st').style.color='var(--grn)';
     await loadAll();loadSets();refreshAll();
-    log('VRT 訂單管理系統 v3 就緒','info');
-    log('訂單總表以週報數量為主，個別PO提供顏色/尺寸明細','info');
+    log('VRT 訂單管理系統 v3.1 就緒','info');
+    log('Weekly 與客戶 PDF 已分頁：Weekly 不再混入 PDF 數量','info');
     log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
     // 開啟時自動從雲端同步訂單
     ordersAutoSync();
@@ -2599,11 +2685,11 @@ async function init(){
 async function ordersAutoSync(){
   const gasUrl = (localStorage.getItem('vrt_portal_gas_url')||'').trim();
   if (!gasUrl) return;
-  log('☁ 從雲端同步訂單資料...','info');
+  log('☁ 從雲端同步訂單資料...','info');const vv=document.getElementById('ordCloudVisible');if(vv)vv.textContent='☁ 自動下載中…';
   try {
     const r = await fetch(`${gasUrl}?action=pull&tool=orders`, { redirect:'follow' });
     const d = await r.json();
-    if (!d.ok || !d.data || !d.data.data) { log('☁ 雲端無訂單資料（使用本機）','warn'); return; }
+    if (!d.ok || !d.data || !d.data.data) { log('☁ 雲端無訂單資料（使用本機）','warn');if(vv){vv.textContent='☁ 雲端無資料 · 使用本機';vv.style.color='#fbbf24'} return; }
     const payload = d.data.data;
     let restored = false;
     // 還原 localStorage orderSetsV3
@@ -2628,19 +2714,21 @@ async function ordersAutoSync(){
         } catch(e) { log(`☁ 還原 ${storeName} 失敗: ${e.message}`,'warn'); }
       }
       if (restored) {
+        APP.headers = await dbAll('po_headers');
         APP.orders = await dbAll('po_lines');
         APP.weekly = await dbAll('weekly_snapshots');
         APP.imports = await dbAll('order_imports');
+        APP.audit = await dbAll('parse_audit');
       }
     }
     if (restored) {
       refreshAll();
-      log(`☁ 雲端訂單同步完成（${APP.orders.length} 筆 PO）`,'ok');
+      log(`☁ 雲端訂單同步完成（${APP.orders.length} 筆 PO）`,'ok');if(vv){vv.textContent=`☁ 已下載 PO ${APP.orders.length} / Weekly ${APP.weekly.length}`;vv.style.color='#4ade80'}
     } else {
       log('☁ 雲端訂單格式不符','warn');
     }
   } catch(e) {
-    log('☁ 雲端離線，使用本機訂單資料','warn');
+    log('☁ 雲端離線，使用本機訂單資料','warn');if(vv){vv.textContent='☁ 離線 · 使用本機';vv.style.color='#f87171'}
   }
 }
 
@@ -2671,9 +2759,11 @@ async function ordCloudPush(){
   ordLog('讀取訂單資料...','i');
   try {
     // 讀取所有 FactoryDB 資料
+    const poHeaders = await dbAll('po_headers');
     const poLines   = await dbAll('po_lines');
     const weekly    = await dbAll('weekly_snapshots');
     const imports   = await dbAll('order_imports');
+    const audit     = await dbAll('parse_audit');
     const setsRaw   = localStorage.getItem('orderSetsV3') || '{}';
     ordLog(`推送 PO ${poLines.length} 筆，週報 ${weekly.length} 筆...`,'i');
     const payload = {
@@ -2681,9 +2771,7 @@ async function ordCloudPush(){
       recordCount: poLines.length,
       lsKeys:{ orderSetsV3: setsRaw },
       idbData:{
-        po_lines: poLines,
-        weekly_snapshots: weekly,
-        order_imports: imports,
+        po_headers: poHeaders, po_lines: poLines, weekly_snapshots: weekly, order_imports: imports, parse_audit: audit,
       },
       summary:{
         totalPOs: poLines.length,
@@ -2702,7 +2790,7 @@ async function ordCloudPush(){
           records: poLines.slice(i*CHUNK,(i+1)*CHUNK),
           ...(isLast ? {
             lsKeys:{ orderSetsV3: setsRaw },
-            idbData:{ weekly_snapshots: weekly, order_imports: imports },
+            idbData:{ po_headers:poHeaders, weekly_snapshots:weekly, order_imports:imports, parse_audit:audit },
             summary: payload.summary,
           } : {})
         };
@@ -2779,7 +2867,7 @@ function ordLog(msg,type){
   const cls=type==='ok'?'color:#4ade80':type==='err'?'color:#f87171':'color:#60a5fa';
   el.innerHTML+=`<span style="${cls}">[${t}] ${msg}</span>\n`;
   el.scrollTop=el.scrollHeight;
-  document.getElementById('ordCloudStatus').textContent=msg;
+  document.getElementById('ordCloudStatus').textContent=msg;const v=document.getElementById('ordCloudVisible');if(v){v.textContent='☁ '+msg;v.style.color=type==='ok'?'#4ade80':type==='err'?'#f87171':'#93c5fd'}
 }
 document.addEventListener('click',e=>{
   if(_ordPanelOpen&&!e.target.closest('#ordCloudPanel')&&!e.target.closest('#ordCloudBtn')){
