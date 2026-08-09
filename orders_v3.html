@@ -134,7 +134,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.1 · Weekly 與客戶 PDF 分流</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.2 · Weekly 日期/期末快照修正</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
@@ -343,7 +343,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
     <select id="wd2" onchange="renderWeekly()" style="background:#fff;border:1px solid var(--bor);color:var(--tx);border-radius:4px;padding:5px 8px;font-size:11px">
       <option value="">上一週（自動）</option>
     </select>
-    <span style="font-size:11px;color:var(--mu)">共 <span id="wc">0</span> 份週報</span>
+    <span style="font-size:11px;color:var(--mu)">共 <span id="wc">0</span> 份週報 · Weekly 原表日期固定 <b>MM-DD-YYYY</b>，畫面統一 YYYY-MM-DD</span>
     <button class="btn bg2" style="font-size:10px;padding:4px 8px;margin-left:auto" onclick="expWeeklyCsv()">⬇ 匯出CSV</button>
   </div>
 
@@ -368,11 +368,31 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   <!-- ★ MULTI-WEEK TREND TABLE (all weeks, per customer) -->
   <div class="sec" style="margin-bottom:12px">
     <div class="sh">
-      <span class="st">📈 每週訂單增減 & 完成進度趨勢（全客戶）</span>
+      <span class="st">📈 每週 Open Order / Produced-Scanned / Un-produced 變化（全客戶）</span>
       <span style="font-size:9px;color:var(--mu)" id="w-trend-range"></span>
     </div>
     <div class="tw" id="w-trend-table-wrap">
       <div class="empty"><div class="ei">📊</div><p>匯入多份週報後顯示趨勢</p></div>
+    </div>
+  </div>
+
+
+  <!-- ★ MONTH / YEAR PERIOD-END SNAPSHOT SUMMARY -->
+  <div class="sec" style="margin-bottom:12px">
+    <div class="sh" style="flex-wrap:wrap;gap:8px">
+      <span class="st">📅 月／年週報對比（期末／最新快照）</span>
+      <div class="seg" id="w-period-seg" style="margin-left:auto">
+        <button class="on" data-mode="month" onclick="setWeeklyPeriodMode('month')">月報</button>
+        <button data-mode="year" onclick="setWeeklyPeriodMode('year')">年報</button>
+      </div>
+      <span style="font-size:9px;color:var(--mu)" id="w-period-count"></span>
+    </div>
+    <div class="info-box" style="margin:0 10px 10px">
+      Weekly Open Order 是「某一天的未完成訂單快照」，<strong>月／年不能把每週數字相加</strong>。
+      本表每月／每年取該期間<strong>最後一份 Weekly</strong>作期末快照，並與上一期間比較 Open PCS、Open CTNS、Produced-Scanned、Un-produced 與 Open Amount。
+    </div>
+    <div class="tw" id="w-period-wrap">
+      <div class="empty"><div class="ei">📅</div><p>匯入週報後顯示月／年比較</p></div>
     </div>
   </div>
 
@@ -396,8 +416,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
       <table class="dt">
         <thead><tr>
           <th>客戶</th><th class="num">成衣</th><th class="num">圍裙</th><th class="num">上衣/餐巾</th>
-          <th class="num">布料(碼)</th><th class="num">開放箱</th><th class="num">已生產</th>
-          <th class="num">未生產</th><th class="num" style="color:var(--acc)">週增減(箱)</th>
+          <th class="num">布料(碼)</th><th class="num">Open CTNS</th><th class="num">Produced-Scanned</th>
+          <th class="num">Un-produced</th><th class="num" style="color:var(--acc)">Δ Open CTNS</th>
           <th class="num">完成率</th><th class="num">開放金額</th><th>備註</th>
         </tr></thead>
         <tbody id="wtb"></tbody>
@@ -826,12 +846,42 @@ async function tryReadLinkedStore(storeName){
   });
 }
 
+
+function weeklyImportSourceDate(imp){return imp?normalizeWeeklyDate(imp.as_of||'',`${imp.file_name||''} ${imp.subject||''}`):null}
+async function repairWeeklyHistory(){
+  const imports=(APP.imports||[]).filter(i=>i.type==='weekly').sort((a,b)=>String(a.imported_at||'').localeCompare(String(b.imported_at||''))||(Number(a.id)||0)-(Number(b.id)||0));
+  let fixed=0;
+  for(const imp of imports){const nd=weeklyImportSourceDate(imp);if(nd&&nd!==imp.as_of){imp.as_of=nd;try{await dbPut('order_imports',imp);fixed++}catch(e){}}}
+  const byHash={};for(const imp of imports)if(imp.file_hash)byHash[imp.file_hash]=weeklyImportSourceDate(imp);
+  for(const w of wk){const nd=(w.source_hash&&byHash[w.source_hash])||normalizeWeeklyDate(w.as_of_date,w.source_file||'');if(nd&&nd!==w.as_of_date){w.as_of_date=nd;try{await dbPut('weekly_snapshots',w);fixed++}catch(e){}}}
+  // 舊資料沒有 source_file/source_hash 時，只在數量完全對得上 import rows 才按匯入順序重建，避免亂猜。
+  const old=(APP.weekly||[]).filter(w=>!w.source_hash&&!w.source_file).sort((a,b)=>(Number(a.id)||0)-(Number(b.id)||0));
+  const oldImports=imports.filter(i=>Number(i.rows)>0),expected=oldImports.reduce((s,i)=>s+(Number(i.rows)||0),0);
+  if(old.length&&old.length===expected){
+    let pos=0;
+    for(const imp of oldImports){const nd=weeklyImportSourceDate(imp),cnt=Number(imp.rows)||0,block=old.slice(pos,pos+cnt);pos+=cnt;if(!nd)continue;for(const w of block){if(w.as_of_date!==nd){w.as_of_date=nd;try{await dbPut('weekly_snapshots',w);fixed++}catch(e){}}}}
+  }
+  return fixed;
+}
+function validWeeklySnapshots(){
+  const m={},verified=new Set((APP.imports||[]).filter(i=>i.type==='weekly').map(weeklyImportSourceDate).filter(Boolean));
+  for(const w of APP.weekly||[]){
+    const d=normalizeWeeklyDate(w.as_of_date,w.source_file||'');if(!d)continue;
+    // 有 import metadata 時，只顯示能對上實際 Weekly 匯入日期的 legacy snapshot，避免舊版誤讀 2024/2025 混進來。
+    if(verified.size&&!verified.has(d)&&!w.source_file&&!w.source_hash)continue;
+    const x={...w,as_of_date:d},k=d+'|'+canonicalCustomer(w.customer);
+    if(!m[k]||(Number(x.id)||0)>(Number(m[k].id)||0))m[k]=x;
+  }
+  return Object.values(m);
+}
+
 async function loadAll(){
   APP.orders=await dbAll('po_lines');
   APP.headers=await dbAll('po_headers');
   APP.weekly=await dbAll('weekly_snapshots');
   APP.imports=await dbAll('order_imports');
-  for(const w of APP.weekly){const nd=normalizeWeeklyDate(w.as_of_date,'');if(nd&&nd!==w.as_of_date){w.as_of_date=nd;try{await dbPut('weekly_snapshots',w)}catch(e){}}}
+  const repaired=await repairWeeklyHistory();
+  if(repaired){APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');}
   try{APP.audit=await dbAll('parse_audit');}catch(e){APP.audit=[];}
   // Read sewing: SewingCloudProd IDB first, then localStorage fallback
   APP.sewing=await readSewingFromLocalStorage();
@@ -1653,17 +1703,25 @@ async function parsePO(text,key,fileName,rowText){
 
 
 
-// Weekly Summary 的數字日期按 VRT 報表習慣用 DD-MM-YYYY；客戶 PDF 日期仍由各客戶 Parser 自己判讀。
+// Weekly Summary 原表「AS OF 08-03-2026」= 2026-08-03，固定使用 MM-DD-YYYY。
+// 客戶 PDF 日期仍由各客戶 Parser 自己判讀，兩者不要混用。
 function normalizeWeeklyDate(raw,fileName=''){
   const mon={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12,JANUARY:1,FEBRUARY:2,MARCH:3,APRIL:4,JUNE:6,JULY:7,AUGUST:8,SEPTEMBER:9,OCTOBER:10,NOVEMBER:11,DECEMBER:12};
-  const pad=n=>String(n).padStart(2,'0'), yy=y=>+y<100?2000+(+y):+y;
-  const fs=String(fileName||'').replace(/_/g,' '), fm=fs.match(/(JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)[-\s](\d{1,2})[-\s](\d{2,4})/i);
-  if(fm){let mo=mon[fm[1].toUpperCase()],y=yy(fm[3]);if(mo)return `${y}-${pad(mo)}-${pad(+fm[2])}`}
-  const s=String(raw||'').replace(/^AS OF\s*/i,'').trim();if(!s)return null;
-  let m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/);
-  if(m){let a=+m[1],b=+m[2],y=yy(m[3]),d,mo;if(a>12){d=a;mo=b}else if(b>12){mo=a;d=b}else{d=a;mo=b}if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${pad(mo)}-${pad(d)}`}
-  return DateEngine.normalize(s);
+  const pad=n=>String(n).padStart(2,'0'),yy=y=>+y<100?2000+(+y):+y;
+  const parseOne=(v)=>{
+    const s=String(v||'').replace(/^AS OF\s*/i,'').trim();if(!s)return null;
+    let m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+    if(m){const y=+m[1],mo=+m[2],d=+m[3];if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${pad(mo)}-${pad(d)}`}
+    m=s.match(/(JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)[-\s\/.](\d{1,2})[-\s\/.](\d{2,4})/i);
+    if(m){const mo=mon[m[1].toUpperCase()],d=+m[2],y=yy(m[3]);if(mo&&d>=1&&d<=31)return `${y}-${pad(mo)}-${pad(d)}`}
+    m=s.match(/(?:^|\b)(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})(?:\b|$)/);
+    if(m){const mo=+m[1],d=+m[2],y=yy(m[3]);if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${pad(mo)}-${pad(d)}`}
+    return null;
+  };
+  return parseOne(String(fileName||'').replace(/_/g,' '))||parseOne(raw)||DateEngine.normalize(raw);
 }
+function weeklyDateSort(a,b){return String(a||'').localeCompare(String(b||''))}
+
 function canonicalCustomer(v){let s=String(v||'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();if(/AMERICAN DAWN|\bADI\b/.test(s))return'ADI';if(/WHITE PLAINS|\bWPL\b/.test(s))return'WPL';if(/NORTHERN UNIFORM|\bNU\b/.test(s))return'NU';if(/ALSCO.*MALAYSIA/.test(s))return'ALSCO MALAYSIA';if(/ALSCO.*(SINGAPORE|PTE)/.test(s))return'ALSCO SINGAPORE';if(/AUSTRALIAN LINEN|\bALS\b/.test(s))return'ALS';if(/LECHNER/.test(s))return'LECHNER';if(/MAGNUS/.test(s))return'MAGNUS';if(/VESTIS/.test(s))return'VESTIS';if(/DICKSON/.test(s))return'DICKSON';return s}
 
 // ══ WEEKLY PARSER ══
@@ -1696,7 +1754,7 @@ function parseWeekly(buf,asOf,fileName=''){
   for(let i=hr+2;i<rows.length;i++){
     const row=rows[i]||[];const cu=(row[1]||'').toString().trim();
     if(isSkipRow(cu))continue;
-    snaps.push({customer:cu,as_of_date:asOf,garment:pn(row[3]),apron:pn(row[4]),topNapkin:pn(row[5]),fabric:pn(row[6]),totalOpenCtns:pn(row[7]),producedCtns:pn(row[8]),unproducedCtns:pn(row[7])-pn(row[8]),openSmv:pn(row[10]),openAmount:pn(row[11]),remark:(row[12]||'').toString().trim()});
+    snaps.push({customer:cu,as_of_date:asOf,garment:pn(row[3]),apron:pn(row[4]),topNapkin:pn(row[5]),fabric:pn(row[6]),totalOpenCtns:pn(row[7]),producedCtns:pn(row[8]),unproducedCtns:row[9]!=null?pn(row[9]):pn(row[7])-pn(row[8]),openSmv:pn(row[10]),openAmount:pn(row[11]),remark:(row[12]||'').toString().trim()});
   }
   return{asOf,snapshots:snaps};
 }
@@ -1745,7 +1803,7 @@ async function processFile(file){
       const dm=file.name.match(/(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\w+[-\/]\d+[-\/]\d+)/);
       const result=parseWeekly(buf,dm?dm[1]:'',file.name);
       if(!result){log('❌ 週報解析失敗','err');return;}
-      let saved=0;for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
+      let saved=0;for(const s of result.snapshots){await dbAdd('weekly_snapshots',{...s,source_file:file.name,source_hash:fh,imported_at:nowLocal()});saved++;}
       log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
       await dbAdd('order_imports',{type:'weekly',subject:file.name,file_name:file.name,file_hash:fh,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
       await loadAll();refreshAll();return;
@@ -1762,7 +1820,7 @@ async function processFile(file){
       const result=parseWeekly(xlsxBuf,dm?dm[1]:'',file.name+' '+subj);
       if(!result){log('❌ 週報解析失敗','err');return;}
       let saved=0;
-      for(const s of result.snapshots){await dbAdd('weekly_snapshots',s);saved++;}
+      for(const s of result.snapshots){await dbAdd('weekly_snapshots',{...s,source_file:file.name,source_hash:fh,source_subject:subj,imported_at:nowLocal()});saved++;}
       log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
       await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,file_hash:fh,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
     }else{
@@ -1787,12 +1845,9 @@ async function processFile(file){
 
 // ══ RENDER: MASTER TABLE (Weekly as primary) ══
 function latestWeeklyByCustomer(){
-  if(!APP.weekly.length)return{map:{},date:null};
-  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
-  const latest=dates[0];
-  const map={};
-  APP.weekly.filter(w=>w.as_of_date===latest).forEach(w=>{map[w.customer]=w;});
-  return{map,date:latest};
+  const wk=validWeeklySnapshots();if(!wk.length)return{map:{},date:null};
+  const dates=[...new Set(wk.map(w=>w.as_of_date))].filter(Boolean).sort(weeklyDateSort),latest=dates[dates.length-1],map={};
+  wk.filter(w=>w.as_of_date===latest).forEach(w=>map[w.customer]=w);return{map,date:latest};
 }
 
 function renderMaster(){
@@ -1801,7 +1856,7 @@ function renderMaster(){
   const psel=document.getElementById('f-period');
   if(psel){
     psel.disabled=false;const keep=psel.value;
-    const keys=[...new Set(APP.weekly.map(w=>periodKey(w.as_of_date,gran)).filter(Boolean))].sort();
+    const keys=[...new Set(validWeeklySnapshots().map(w=>periodKey(w.as_of_date,gran)).filter(Boolean))].sort();
     psel.innerHTML=keys.length?keys.map(k=>`<option value="${k}">${periodLabel(k,gran)}</option>`).join(''):'<option value="">—</option>';
     if(keep&&keys.includes(keep))psel.value=keep;else if(keys.length)psel.value=keys[keys.length-1];
   }
@@ -1856,8 +1911,8 @@ function renderMaster(){
       <td class="num"><strong>${total.toLocaleString()}</strong></td>
       <td class="num">${r.fabric?(r.fabric).toLocaleString():'-'}</td>
       <td class="num">${(r.totalOpenCtns||0).toLocaleString()}</td>
-      <td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}</td>
-      <td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}</td>
+      <td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}${diffProd!==null?`<div style="font-size:8px;color:${diffProd>=0?'var(--grn)':'var(--red)'}">${diffProd>=0?'+':''}${diffProd.toLocaleString()}</div>`:''}</td>
+      <td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}${diffUnprod!==null?`<div style="font-size:8px;color:${diffUnprod<=0?'var(--grn)':'var(--red)'}">${diffUnprod>=0?'+':''}${diffUnprod.toLocaleString()}</div>`:''}</td>
       <td class="num">$${(r.openAmount||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
       <td class="ctr" style="min-width:80px">
         <div style="display:flex;align-items:center;gap:5px">
@@ -1889,13 +1944,10 @@ function periodLabel(k,gran){
   return k;
 }
 function weeklyForPeriod(gran,selKey){
-  if(gran==='all'||!APP.weekly.length)return latestWeeklyByCustomer();
-  const inP=APP.weekly.filter(w=>periodKey(w.as_of_date,gran)===selKey);
-  if(!inP.length)return{map:{},date:selKey||null};
-  const dates=[...new Set(inP.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
-  const latest=dates[0],map={};
-  inP.filter(w=>w.as_of_date===latest).forEach(w=>{map[w.customer]=w;});
-  return{map,date:latest};
+  const wk=validWeeklySnapshots();if(gran==='all'||!wk.length)return latestWeeklyByCustomer();
+  const inP=wk.filter(w=>periodKey(w.as_of_date,gran)===selKey);if(!inP.length)return{map:{},date:selKey||null};
+  const dates=[...new Set(inP.map(w=>w.as_of_date))].filter(Boolean).sort(weeklyDateSort),latest=dates[dates.length-1],map={};
+  inP.filter(w=>w.as_of_date===latest).forEach(w=>map[w.customer]=w);return{map,date:latest};
 }
 function setMasterGran(g){const s=document.getElementById('f-gran');if(s)s.value=g;document.querySelectorAll('#master-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));const p=document.getElementById('f-period');if(p)p.value='';renderMaster()}
 function onGranChange(){setMasterGran(document.getElementById('f-gran').value||'week')}
@@ -1935,8 +1987,8 @@ function openPdfGroup(key){const g=pdfGroups().find(x=>x.key===key);if(!g)return
 function openOrderModal(title,html){let m=document.getElementById('ord-detail-modal');if(!m){m=document.createElement('div');m.id='ord-detail-modal';m.style.cssText='position:fixed;inset:0;background:#0008;z-index:10001;display:none;padding:20px;overflow:auto';m.innerHTML='<div id="ord-detail-box" style="width:min(980px,100%);margin:4vh auto;background:white;border-radius:10px;padding:16px"></div>';m.onclick=e=>{if(e.target===m)m.style.display='none'};document.body.appendChild(m)}document.getElementById('ord-detail-box').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:12px"><b style="font-size:15px">${title}</b><button class="btn bg2" onclick="document.getElementById('ord-detail-modal').style.display='none'">✕</button></div>${html}`;m.style.display='block'}
 
 // ══ PDF ↔ WEEKLY RECONCILIATION ══
-function uniqueWeeklySnapshots(){const m={};for(const w of APP.weekly){const k=(w.as_of_date||'')+'|'+canonicalCustomer(w.customer);if(!m[k]||(w.id||0)>(m[k].id||0))m[k]=w}return Object.values(m)}
-function weeklyDates(){return [...new Set(uniqueWeeklySnapshots().map(w=>w.as_of_date).filter(Boolean))].sort()}
+function uniqueWeeklySnapshots(){return validWeeklySnapshots()}
+function weeklyDates(){return [...new Set(validWeeklySnapshots().map(w=>w.as_of_date).filter(Boolean))].sort(weeklyDateSort)}
 function pdfExpectedAt(asOf){return uniquePdfOrders().map(orderMeta).filter(o=>{const od=DateEngine.normalize(o.order_date),sd=DateEngine.normalize(o.ship_date||o.cancel_date);if(od&&od>asOf)return false;if(sd&&sd<asOf)return false;return true})}
 function recData(asOf){
   const wk={};uniqueWeeklySnapshots().filter(w=>w.as_of_date===asOf).forEach(w=>{const k=canonicalCustomer(w.customer),x=wk[k]||(wk[k]={key:k,names:new Set(),weekly:0,garment:0,apron:0,top:0});x.names.add(w.customer);x.garment+=w.garment||0;x.apron+=w.apron||0;x.top+=w.topNapkin||0;x.weekly+=(w.garment||0)+(w.apron||0)+(w.topNapkin||0)});
@@ -1945,7 +1997,7 @@ function recData(asOf){
 }
 function renderReconcile(){const ws=document.getElementById('rec-week');if(!ws)return;const ds=weeklyDates(),keep=ws.value;ws.innerHTML=ds.map(d=>`<option ${d===keep?'selected':''}>${d}</option>`).join('')||'<option>—</option>';if(keep&&ds.includes(keep))ws.value=keep;else if(ds.length)ws.value=ds[ds.length-1];const asOf=ws.value,all=recData(asOf),cs=document.getElementById('rec-customer'),cv=cs.value,names=all.map(x=>x.key).sort();cs.innerHTML='<option value="">全部客戶</option>'+names.map(n=>`<option ${n===cv?'selected':''}>${n}</option>`).join('');let rows=cv?all.filter(x=>x.key===cv):all;const wtot=rows.reduce((s,x)=>s+x.w.weekly,0),ptot=rows.reduce((s,x)=>s+x.p.qty,0),g=wtot-ptot,bad=rows.filter(x=>x.status==='缺 PDF'||x.status==='PDF 少於週報').length,match=rows.filter(x=>x.status==='接近').length;document.getElementById('rec-kpis').innerHTML=`<div class="kc ac"><div class="kl">Weekly Open</div><div class="kv">${wtot.toLocaleString()}</div></div><div class="kc"><div class="kl">PDF 對應量</div><div class="kv">${ptot.toLocaleString()}</div></div><div class="kc ${g>0?'yl':'gr'}"><div class="kl">差異 Weekly-PDF</div><div class="kv">${g>=0?'+':''}${g.toLocaleString()}</div></div><div class="kc gr"><div class="kl">接近</div><div class="kv">${match}</div></div><div class="kc rd"><div class="kl">可能缺 PDF</div><div class="kv">${bad}</div></div>`;document.getElementById('rec-count').textContent=`${rows.length} 客戶 · as of ${asOf}`;document.getElementById('rec-body').innerHTML=rows.map(x=>{const cls=x.status==='接近'?'rec-ok':x.status==='PDF 多於週報'?'rec-warn':'rec-bad';return`<tr class="rowclick" onclick="openRecDetail(${JSON.stringify(x.key)},${JSON.stringify(asOf)})"><td><b>${x.key}</b><div class="subtxt">Weekly: ${[...x.w.names||[]].join(', ')||'-'}<br>PDF: ${[...x.p.names||[]].join(', ')||'-'}</div></td><td class="num">${x.w.weekly.toLocaleString()}</td><td class="num">${x.p.qty.toLocaleString()}</td><td class="num ${x.gap>0?'rec-bad':x.gap<0?'rec-warn':'rec-ok'}">${x.gap>=0?'+':''}${x.gap.toLocaleString()}</td><td class="num">${x.p.pos?.size||0}</td><td class="${cls}">${x.status}</td></tr>`}).join('')||'<tr><td colspan="6">無可比較資料</td></tr>'}
 function openRecDetail(key,asOf){const x=recData(asOf).find(r=>r.key===key);if(!x)return;const gs=pdfGroups().filter(g=>canonicalCustomer(g.customer)===key);openOrderModal(`🔎 ${key} · ${asOf}`,`<div class="krow"><div class="kc ac"><div class="kl">Weekly Open</div><div class="kv">${x.w.weekly.toLocaleString()}</div></div><div class="kc"><div class="kl">Garment / Apron / Top</div><div class="kv" style="font-size:14px">${(x.w.garment||0).toLocaleString()} / ${(x.w.apron||0).toLocaleString()} / ${(x.w.top||0).toLocaleString()}</div></div><div class="kc"><div class="kl">PDF 對應量</div><div class="kv">${x.p.qty.toLocaleString()}</div></div></div><div class="info-box" style="margin:10px 0">Weekly 沒有 PO Number 時，系統只能判斷此客戶「數量覆蓋是否足夠」。下面列出目前已匯入的 PDF PO，供人工確認哪張未收到或解析不完整。</div><div class="tw"><table class="dt"><thead><tr><th>PO</th><th>下單日</th><th>出貨日</th><th class="num">Qty</th><th>PDF</th></tr></thead><tbody>${gs.map(g=>`<tr><td class="mono">${g.po||'-'}</td><td>${g.orderDate||'-'}</td><td>${g.shipDate||'-'}</td><td class="num">${g.qty.toLocaleString()}</td><td>${g.source}</td></tr>`).join('')||'<tr><td colspan="5">尚無此客戶 PDF</td></tr>'}</tbody></table></div>`)}
-function openWeeklyCustomer(customer,asOf){const w=APP.weekly.find(x=>x.customer===customer&&x.as_of_date===asOf);if(!w)return;const gs=pdfGroups().filter(g=>canonicalCustomer(g.customer)===canonicalCustomer(customer));openOrderModal(`📊 ${customer} · Weekly ${asOf}`,`<div class="krow"><div class="kc"><div class="kl">Garment</div><div class="kv">${(w.garment||0).toLocaleString()}</div></div><div class="kc"><div class="kl">Apron</div><div class="kv">${(w.apron||0).toLocaleString()}</div></div><div class="kc"><div class="kl">Top/Napkin</div><div class="kv">${(w.topNapkin||0).toLocaleString()}</div></div><div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${(w.unproducedCtns||0).toLocaleString()}</div></div></div><div class="info-box" style="margin:10px 0">本卡上方全部來自 Weekly Summary；下方 PDF PO 只是核對資料，不會加回 Weekly 數量。</div><div class="tw"><table class="dt"><thead><tr><th>PDF PO</th><th>下單日</th><th>出貨日</th><th class="num">Qty</th><th>來源</th></tr></thead><tbody>${gs.map(g=>`<tr><td>${g.po||'-'}</td><td>${g.orderDate||'-'}</td><td>${g.shipDate||'-'}</td><td class="num">${g.qty.toLocaleString()}</td><td>${g.source}</td></tr>`).join('')||'<tr><td colspan="5">尚無 PDF PO</td></tr>'}</tbody></table></div>`)}
+function openWeeklyCustomer(customer,asOf){const w=validWeeklySnapshots().find(x=>x.customer===customer&&x.as_of_date===normalizeWeeklyDate(asOf,''));if(!w)return;const gs=pdfGroups().filter(g=>canonicalCustomer(g.customer)===canonicalCustomer(customer));openOrderModal(`📊 ${customer} · Weekly ${asOf}`,`<div class="krow"><div class="kc"><div class="kl">Garment</div><div class="kv">${(w.garment||0).toLocaleString()}</div></div><div class="kc"><div class="kl">Apron</div><div class="kv">${(w.apron||0).toLocaleString()}</div></div><div class="kc"><div class="kl">Top/Napkin</div><div class="kv">${(w.topNapkin||0).toLocaleString()}</div></div><div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${(w.unproducedCtns||0).toLocaleString()}</div></div></div><div class="info-box" style="margin:10px 0">本卡上方全部來自 Weekly Summary；下方 PDF PO 只是核對資料，不會加回 Weekly 數量。</div><div class="tw"><table class="dt"><thead><tr><th>PDF PO</th><th>下單日</th><th>出貨日</th><th class="num">Qty</th><th>來源</th></tr></thead><tbody>${gs.map(g=>`<tr><td>${g.po||'-'}</td><td>${g.orderDate||'-'}</td><td>${g.shipDate||'-'}</td><td class="num">${g.qty.toLocaleString()}</td><td>${g.source}</td></tr>`).join('')||'<tr><td colspan="5">尚無 PDF PO</td></tr>'}</tbody></table></div>`)}
 window.setPdfGran=setPdfGran;window.pdfBasisChange=pdfBasisChange;window.pdfPeriodNav=pdfPeriodNav;window.pdfLatest=pdfLatest;window.openPdfGroup=openPdfGroup;window.renderPdfOrders=renderPdfOrders;window.renderReconcile=renderReconcile;window.openRecDetail=openRecDetail;window.openWeeklyCustomer=openWeeklyCustomer;
 
 // ══ RENDER: PIVOT ══
@@ -1980,23 +2032,20 @@ function renderPivot(){
 
 // ══ RENDER: WEEKLY ══
 function renderWeeklyDateSelect(){
-  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
-  const wd=document.getElementById('wd');const wdc=wd.value;
-  wd.innerHTML='<option value="">選擇週報日期</option>'+dates.map(d=>`<option value="${d}" ${d===wdc?'selected':''}>${d}</option>`).join('');
-  const wd2=document.getElementById('wd2');const wd2c=wd2.value;
-  wd2.innerHTML='<option value="">上一週（自動）</option>'+dates.map(d=>`<option value="${d}" ${d===wd2c?'selected':''}>${d}</option>`).join('');
-  document.getElementById('wc').textContent=dates.length;
-  if(dates.length){wd.value=dates[0];renderWeekly();}
+  const dates=weeklyDates().slice().sort(weeklyDateSort).reverse(),wd=document.getElementById('wd'),wd2=document.getElementById('wd2');if(!wd||!wd2)return;
+  const keep=normalizeWeeklyDate(wd.value,'')||wd.value;
+  wd.innerHTML='<option value="">選擇週報日期</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  wd2.innerHTML='<option value="">上一週（自動）</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(keep&&dates.includes(keep))wd.value=keep;else if(dates.length)wd.value=dates[0];
+  document.getElementById('wc').textContent=dates.length;if(dates.length)renderWeekly();
 }
 
 function renderWeekly(){
-  const allDates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
-  const date=document.getElementById('wd').value||allDates[0]||'';
-  const manualDate2=document.getElementById('wd2').value;
-  const dateIdx=allDates.indexOf(date);
-  const date2=manualDate2||(dateIdx>=0&&dateIdx<allDates.length-1?allDates[dateIdx+1]:'');
-  const rows=date?APP.weekly.filter(w=>w.as_of_date===date):[];
-  const rows2=date2?APP.weekly.filter(w=>w.as_of_date===date2):[];
+  const wk=validWeeklySnapshots(),allDates=[...new Set(wk.map(w=>w.as_of_date))].filter(Boolean).sort(weeklyDateSort).reverse();
+  const date=normalizeWeeklyDate(document.getElementById('wd').value,'')||allDates[0]||'';
+  const manualDate2=normalizeWeeklyDate(document.getElementById('wd2').value,'')||document.getElementById('wd2').value;
+  const dateIdx=allDates.indexOf(date),date2=manualDate2||(dateIdx>=0&&dateIdx<allDates.length-1?allDates[dateIdx+1]:'');
+  const rows=date?wk.filter(w=>w.as_of_date===date):[],rows2=date2?wk.filter(w=>w.as_of_date===date2):[];
   document.getElementById('wasof').textContent=date?`主要: ${date}${date2?' ← 對比: '+date2:''}`:''
 
   const totG=rows.reduce((s,r)=>s+(r.garment||0),0);
@@ -2010,6 +2059,7 @@ function renderWeekly(){
   const totA2=rows2.reduce((s,r)=>s+(r.apron||0),0);
   const totT2=rows2.reduce((s,r)=>s+(r.topNapkin||0),0);
   const totOpen2=rows2.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
+  const totProd2=rows2.reduce((s,r)=>s+(r.producedCtns||0),0);
   const totUnprod2=rows2.reduce((s,r)=>s+(r.unproducedCtns||0),0);
   const totAmt2=rows2.reduce((s,r)=>s+(r.openAmount||0),0);
   const pctOverall=totOpen>0?Math.round(totProd/totOpen*100):0;
@@ -2026,8 +2076,9 @@ function renderWeekly(){
     <div class="kc ac"><div class="kl">成衣開放</div><div class="kv">${totG.toLocaleString()}</div>${chg(totG,totG2)}</div>
     <div class="kc"><div class="kl">圍裙開放</div><div class="kv">${totA.toLocaleString()}</div>${chg(totA,totA2)}</div>
     <div class="kc"><div class="kl">上衣/餐巾</div><div class="kv">${totT.toLocaleString()}</div>${chg(totT,totT2)}</div>
-    <div class="kc ${pctOverall>=80?'gr':pctOverall>=40?'yl':'rd'}"><div class="kl">整體完成率</div><div class="kv">${pctOverall}%</div><div class="ks">${totProd}/${totOpen} 箱</div></div>
-    <div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${totUnprod.toLocaleString()}</div>${chg(totUnprod,totUnprod2)}</div>
+    <div class="kc ${pctOverall>=80?'gr':pctOverall>=40?'yl':'rd'}"><div class="kl">Produced-Scanned / Open</div><div class="kv">${pctOverall}%</div><div class="ks">${totProd.toLocaleString()} / ${totOpen.toLocaleString()} 箱</div></div>
+    <div class="kc gr"><div class="kl">Produced-Scanned 箱</div><div class="kv">${totProd.toLocaleString()}</div>${chg(totProd,totProd2)}</div>
+    <div class="kc yl"><div class="kl">Un-produced 箱</div><div class="kv">${totUnprod.toLocaleString()}</div>${chg(totUnprod,totUnprod2)}</div>
     <div class="kc"><div class="kl">開放金額</div><div class="kv" style="font-size:15px">$${(totAmt/1000).toFixed(0)}K</div>${chg(Math.round(totAmt),Math.round(totAmt2))}</div>`;
 
   document.getElementById('wtypes').innerHTML=rows.length?`
@@ -2072,6 +2123,8 @@ function renderWeekly(){
   tb.innerHTML=rows.length?rows.map(r=>{
     const r2=rows2.find(x=>x.customer===r.customer);
     const diffCtns=r2!==undefined?(r.totalOpenCtns||0)-(r2.totalOpenCtns||0):null;
+    const diffProd=r2!==undefined?(r.producedCtns||0)-(r2.producedCtns||0):null;
+    const diffUnprod=r2!==undefined?(r.unproducedCtns||0)-(r2.unproducedCtns||0):null;
     const dCls=diffCtns===null?'':diffCtns<0?'diff-pos':diffCtns>0?'diff-neg':'diff-zero';
     const pct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0;
     const pctCol=pct>=80?'var(--grn)':pct>=40?'var(--ylw)':'var(--red)';
@@ -2091,9 +2144,9 @@ function renderWeekly(){
     </tr>`;
   }).join(''):`<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mu)">選擇週報日期</td></tr>`;
 
-  renderWeekTrend(allDates);
+  renderWeekTrend(allDates);renderWeeklyPeriodSummary();
   const custSel=document.getElementById('w-cust-sel');
-  const custs=[...new Set(APP.weekly.map(w=>w.customer))].sort();
+  const custs=[...new Set(validWeeklySnapshots().map(w=>w.customer))].sort();
   const curC=custSel?custSel.value:'';
   if(custSel)custSel.innerHTML='<option value="">選擇客戶</option>'+custs.map(cu=>`<option value="${cu}" ${cu===curC?'selected':''}>${cu}</option>`).join('');
   if(curC)renderCustomerTrend();
@@ -2106,9 +2159,9 @@ function renderWeekTrend(allDates){
   const dates=allDates.slice(0,8).reverse();
   const rangeEl=document.getElementById('w-trend-range');
   if(rangeEl)rangeEl.textContent=`${dates[0]} → ${dates[dates.length-1]}（${dates.length}週）`;
-  const custs=[...new Set(APP.weekly.filter(w=>dates.includes(w.as_of_date)).map(w=>w.customer))].sort();
+  const wk=validWeeklySnapshots();const custs=[...new Set(wk.filter(w=>dates.includes(w.as_of_date)).map(w=>w.customer))].sort();
   const dm={};
-  for(const w of APP.weekly){
+  for(const w of wk){
     if(!dates.includes(w.as_of_date))continue;
     if(!dm[w.customer])dm[w.customer]={};
     dm[w.customer][w.as_of_date]=w;
@@ -2154,11 +2207,11 @@ function renderWeekTrend(allDates){
   }
 
   const totRow=dates.map((d,i)=>{
-    const wr=APP.weekly.filter(w=>w.as_of_date===d);
+    const wr=wk.filter(w=>w.as_of_date===d);
     const tc=wr.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
     const tp=wr.reduce((s,r)=>s+(r.producedCtns||0),0);
     const pct=tc?Math.round(tp/tc*100):0;
-    const prev=i>0?APP.weekly.filter(w=>w.as_of_date===dates[i-1]).reduce((s,r)=>s+(r.totalOpenCtns||0),0):null;
+    const prev=i>0?wk.filter(w=>w.as_of_date===dates[i-1]).reduce((s,r)=>s+(r.totalOpenCtns||0),0):null;
     const dv=prev!==null?tc-prev:null;
     const dc=dv===null?'':dv<0?'diff-pos':dv>0?'diff-neg':'diff-zero';
     const pc=pct>=80?'var(--grn)':pct>=40?'var(--ylw)':'var(--red)';
@@ -2172,11 +2225,20 @@ function renderWeekTrend(allDates){
   wrap.innerHTML=html;
 }
 
+
+let WEEKLY_PERIOD_MODE='month';
+function setWeeklyPeriodMode(mode){WEEKLY_PERIOD_MODE=mode;document.querySelectorAll('#w-period-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));renderWeeklyPeriodSummary()}
+function weeklySnapshotTotal(date){const rs=validWeeklySnapshots().filter(w=>w.as_of_date===date);return{date,customers:rs.length,garment:rs.reduce((s,r)=>s+(r.garment||0),0),apron:rs.reduce((s,r)=>s+(r.apron||0),0),top:rs.reduce((s,r)=>s+(r.topNapkin||0),0),openPcs:rs.reduce((s,r)=>s+(r.garment||0)+(r.apron||0)+(r.topNapkin||0),0),openCtn:rs.reduce((s,r)=>s+(r.totalOpenCtns||0),0),produced:rs.reduce((s,r)=>s+(r.producedCtns||0),0),unproduced:rs.reduce((s,r)=>s+(r.unproducedCtns||0),0),amount:rs.reduce((s,r)=>s+(r.openAmount||0),0),smv:rs.reduce((s,r)=>s+(r.openSmv||0),0)}}
+function weeklyPeriodRows(mode=WEEKLY_PERIOD_MODE){const dates=weeklyDates().slice().sort(weeklyDateSort),groups={};for(const d of dates){const k=mode==='year'?d.slice(0,4):d.slice(0,7);(groups[k]=groups[k]||[]).push(d)}const asc=Object.keys(groups).sort().map(k=>{const ds=groups[k].slice().sort(weeklyDateSort),last=ds[ds.length-1],x=weeklySnapshotTotal(last);return{period:k,lastDate:last,weeklyCount:ds.length,...x}});asc.forEach((x,i)=>{const p=i?asc[i-1]:null;x.deltaPcs=p?x.openPcs-p.openPcs:null;x.deltaUnprod=p?x.unproduced-p.unproduced:null;x.deltaOpenCtn=p?x.openCtn-p.openCtn:null;x.deltaProduced=p?x.produced-p.produced:null;x.deltaAmount=p?x.amount-p.amount:null});return asc.reverse()}
+function weeklyDeltaCell(v,goodDown=false){if(v==null)return'—';const cls=v===0?'diff-zero':goodDown?(v<0?'diff-pos':'diff-neg'):(v>0?'diff-pos':'diff-neg');return`<span class="${cls}">${v>0?'+':''}${Number(v).toLocaleString(undefined,{maximumFractionDigits:1})}</span>`}
+function renderWeeklyPeriodSummary(){const wrap=document.getElementById('w-period-wrap');if(!wrap)return;const rows=weeklyPeriodRows(),cnt=document.getElementById('w-period-count');if(cnt)cnt.textContent=`${rows.length} 個${WEEKLY_PERIOD_MODE==='month'?'月份':'年份'}`;if(!rows.length){wrap.innerHTML='<div class="empty"><div class="ei">📅</div><p>尚無週報</p></div>';return}wrap.innerHTML=`<table class="dt" style="min-width:1120px"><thead><tr><th>期間</th><th>期末 Weekly 日期</th><th class="num">週報份數</th><th class="num">Open PCS</th><th class="num">Garment</th><th class="num">Apron</th><th class="num">Top/Napkin</th><th class="num">Open CTNS</th><th class="num">Produced-Scanned</th><th class="num">Un-produced</th><th class="num">Open Amount</th><th class="num">Δ Open PCS</th><th class="num">Δ Produced-Scanned</th><th class="num">Δ Un-produced</th></tr></thead><tbody>${rows.map(x=>`<tr><td><strong style="color:var(--acc)">${x.period}</strong></td><td class="mono">${x.lastDate}</td><td class="num">${x.weeklyCount}</td><td class="num"><strong>${x.openPcs.toLocaleString()}</strong></td><td class="num">${x.garment.toLocaleString()}</td><td class="num">${x.apron.toLocaleString()}</td><td class="num">${x.top.toLocaleString()}</td><td class="num">${x.openCtn.toLocaleString(undefined,{maximumFractionDigits:1})}</td><td class="num" style="color:var(--grn)">${x.produced.toLocaleString(undefined,{maximumFractionDigits:1})}</td><td class="num" style="color:var(--ylw)">${x.unproduced.toLocaleString(undefined,{maximumFractionDigits:1})}</td><td class="num">$${x.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td><td class="num">${weeklyDeltaCell(x.deltaPcs,true)}</td><td class="num">${weeklyDeltaCell(x.deltaProduced,false)}</td><td class="num">${weeklyDeltaCell(x.deltaUnprod,true)}</td></tr>`).join('')}</tbody></table>`}
+window.setWeeklyPeriodMode=setWeeklyPeriodMode;
+
 function renderCustomerTrend(){
   const cu=document.getElementById('w-cust-sel').value;
   const el=document.getElementById('w-cust-detail');
   if(!cu){el.innerHTML='<div class="empty"><div class="ei">👤</div><p>選擇客戶</p></div>';return;}
-  const snaps=APP.weekly.filter(w=>w.customer===cu).sort((a,b)=>a.as_of_date.localeCompare(b.as_of_date));
+  const snaps=validWeeklySnapshots().filter(w=>w.customer===cu).sort((a,b)=>weeklyDateSort(a.as_of_date,b.as_of_date));
   if(!snaps.length){el.innerHTML='<div class="empty"><p>無此客戶週報資料</p></div>';return;}
   let html=`<div style="overflow-x:auto;padding:8px 12px">
   <table class="dt"><thead><tr>
@@ -2220,7 +2282,7 @@ function renderCustomerTrend(){
 function expWeeklyCsv(){
   if(!APP.weekly.length){alert('無週報資料');return;}
   const hdrs=['客戶','週報日期','成衣','圍裙','上衣/餐巾','開放箱','已生產','未生產','完成率%','開放金額'];
-  const data=APP.weekly.map(r=>[r.customer,r.as_of_date,r.garment,r.apron,r.topNapkin,r.totalOpenCtns,r.producedCtns,r.unproducedCtns,r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0,r.openAmount]);
+  const data=validWeeklySnapshots().map(r=>[r.customer,r.as_of_date,r.garment,r.apron,r.topNapkin,r.totalOpenCtns,r.producedCtns,r.unproducedCtns,r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0,r.openAmount]);
   const csv=[hdrs,...data].map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
   a.download=`weekly_${new Date().toISOString().slice(0,10)}.csv`;a.click();
@@ -2230,9 +2292,9 @@ function expWeeklyCsv(){
 // ══ RENDER: SMV ══
 function setSmvPeriod(p,el){APP.smvPeriod=p;document.querySelectorAll('#pnl-smv .pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderSmv();}
 function renderSmv(){
-  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const dates=weeklyDates().slice().sort(weeklyDateSort).reverse();
   const latest=dates[0]||'';
-  const rows=latest?APP.weekly.filter(w=>w.as_of_date===latest):[];
+  const rows=latest?validWeeklySnapshots().filter(w=>w.as_of_date===latest):[];
   const totSmv=rows.reduce((s,r)=>s+(r.openSmv||0),0);
   // Sewing actual output - try to read from sewing system
   const sewMinutes=calcSewingMinutes();
@@ -2291,9 +2353,9 @@ function renderSmv(){
 
 // ══ RENDER: CARTON ══
 function renderCarton(){
-  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const dates=weeklyDates().slice().sort(weeklyDateSort).reverse();
   const latest=dates[0]||'';
-  const rows=latest?APP.weekly.filter(w=>w.as_of_date===latest):[];
+  const rows=latest?validWeeklySnapshots().filter(w=>w.as_of_date===latest):[];
   const totOpen=rows.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
   const totProd=rows.reduce((s,r)=>s+(r.producedCtns||0),0);
   const totUnprod=rows.reduce((s,r)=>s+(r.unproducedCtns||0),0);
@@ -2348,9 +2410,9 @@ function renderCarton(){
 // ══ RENDER: LINK ══
 function setLinkPeriod(p,el){APP.linkPeriod=p;document.querySelectorAll('#pnl-link .pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderLink();}
 function renderLink(){
-  const dates=[...new Set(APP.weekly.map(w=>w.as_of_date))].filter(Boolean).sort().reverse();
+  const dates=weeklyDates().slice().sort(weeklyDateSort).reverse();
   const latest=dates[0]||'';
-  const wRows=latest?APP.weekly.filter(w=>w.as_of_date===latest):[];
+  const wRows=latest?validWeeklySnapshots().filter(w=>w.as_of_date===latest):[];
   const fC=document.getElementById('lk-c').value;
   // Fill customer filter
   const custs=[...new Set(wRows.map(r=>r.customer))].sort();const lsel=document.getElementById('lk-c');const lc=lsel.value;
@@ -2410,7 +2472,7 @@ function renderLink(){
 
   // Trend: multi-week comparison
   if(dates.length>=2){
-    const td=dates.slice(0,8).reverse().map(d=>{const r=APP.weekly.filter(w=>w.as_of_date===d);return{date:d,order:r.reduce((s,x)=>s+(x.garment||0)+(x.apron||0)+(x.topNapkin||0),0),unprod:r.reduce((s,x)=>s+(x.unproducedCtns||0),0)};});
+    const td=dates.slice(0,8).reverse().map(d=>{const r=validWeeklySnapshots().filter(w=>w.as_of_date===d);return{date:d,order:r.reduce((s,x)=>s+(x.garment||0)+(x.apron||0)+(x.topNapkin||0),0),unprod:r.reduce((s,x)=>s+(x.unproducedCtns||0),0)};});
     const mxO=Math.max(...td.map(x=>x.order),1);
     document.getElementById('lk-trend').innerHTML=`
       <div style="font-size:10px;color:var(--tx2);margin-bottom:6px"><span style="color:var(--acc)">■</span> 開放件數 &nbsp;<span style="color:var(--ylw)">■</span> 未生產箱數</div>
@@ -2518,7 +2580,7 @@ function dl(rows,name){const csv=rows.map(r=>(Array.isArray(r)?r:Object.values(r
 
 // ══ BACKUP/RESTORE ══
 async function backup(){
-  const b={po_headers:await dbAll('po_headers'),po_lines:await dbAll('po_lines'),weekly_snapshots:await dbAll('weekly_snapshots'),order_imports:await dbAll('order_imports'),parse_audit:await dbAll('parse_audit'),v:3.1,exported_at:new Date().toISOString()};
+  const b={po_headers:await dbAll('po_headers'),po_lines:await dbAll('po_lines'),weekly_snapshots:await dbAll('weekly_snapshots'),order_imports:await dbAll('order_imports'),parse_audit:await dbAll('parse_audit'),v:3.2,exported_at:new Date().toISOString()};
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(b,null,2)],{type:'application/json'}));a.download=`orders_v3_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();
 }
 async function restore(e){
@@ -2660,7 +2722,7 @@ async function clearQc(){if(!confirm('清除解析審計（不影響訂單資料
 window.renderQC=renderQC;window.renderTemplates=renderTemplates;window.expQcCsv=expQcCsv;window.clearQc=clearQc;
 
 function refreshAll(){
-  renderRecentList();renderMaster();renderPdfOrders();renderReconcile();renderWeeklyDateSelect();renderSmv();renderCarton();renderLink();renderQC();updateDbStats();
+  renderRecentList();renderMaster();renderPdfOrders();renderReconcile();renderWeeklyDateSelect();renderWeeklyPeriodSummary();renderSmv();renderCarton();renderLink();renderQC();updateDbStats();
 }
 
 // ══ INIT ══
