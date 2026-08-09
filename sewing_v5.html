@@ -116,7 +116,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.14</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v6.0</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -647,7 +647,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
       <span style="font-style:italic">No production records found. Import the daily reports under the Upload tab first, then return to this page.</span>
     </div>
     <div id="wrBody" style="display:none">
-      <div id="wrSrc" style="font-size:11px;color:#64748b;margin-bottom:12px"></div>
+      <div id="wrSrc" style="font-size:11px;color:#64748b;margin-bottom:8px"></div>
+      <div id="wrAudit" style="font-size:11px;color:#365314;background:#f7fee7;border:1px solid #bef264;border-radius:7px;padding:8px 10px;margin-bottom:12px;line-height:1.6"></div>
       <div style="display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start;margin-bottom:14px">
         <div><label class="wrlbl">選擇週別 Select week</label>
           <select id="wrWeek" onchange="wCompute()" style="width:100%;padding:7px 9px;border:1px solid #d7e0e9;border-radius:7px;font-family:inherit"></select></div>
@@ -39670,6 +39671,7 @@ while (n === a[++i] && n === a[++i] && n === a[++i] && n === a[++i] && n === a[+
 (function () {
 'use strict';
 
+/* v6 weekly report fix: de-duplicate Daily vs target/DPO and use reported line efficiency as official basis */
 const WCFG = {
   targetEff: 0.30, greenEff: 0.30, amberEff: 0.27,
   lowLineEff: 0.25, criticalLineEff: 0.20,
@@ -39686,47 +39688,125 @@ const wDate = s => { if (!s) return null; const m = String(s).match(/(\d{4})[-\/
 function wWeekKey(d) { const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dw = t.getDay(); t.setDate(t.getDate() - (dw === 0 ? 6 : dw - 1)); return wYmd(t); }
 function wWeekLabel(k) { const s = wDate(k), e = new Date(s); e.setDate(e.getDate() + 5); return `${s.getMonth() + 1}/${s.getDate()}–${e.getMonth() + 1}/${e.getDate()}`; }
 
-let WS = { recs: [], weeks: [], months: [], ctx: null };
+let WS = { recs: [], weeks: [], months: [], ctx: null, audit: {} };
 
 /* ---------- 從系統 DB 取線日記錄 build line-day records from the system DB ---------- */
+function wIssueText(issue) {
+  if (!issue) return '';
+  if (typeof issue === 'string') return issue.trim();
+  if (typeof issue !== 'object') return '';
+  const labels = { changeover:'換款 Changeover', material:'缺料 Material', machine:'機修 Machine', manpower:'人力 Manpower', quality:'品質 Quality', others:'其他 Others' };
+  return Object.keys(labels).filter(k => !!issue[k]).map(k => labels[k]).join('、');
+}
+function wEffFrac(v) {
+  const x = wnum(v); if (!x) return 0; return x > 1 ? x / 100 : x;
+}
+function wPickEff(rows) {
+  const valid = (rows || []).filter(r => wEffFrac(r.efficiency) > 0);
+  if (!valid.length) return 0;
+  const withWorkers = valid.filter(r => wnum(r.workers) > 0);
+  if (withWorkers.length) {
+    const den = withWorkers.reduce((s,r)=>s+wnum(r.workers),0);
+    return den ? withWorkers.reduce((s,r)=>s+wEffFrac(r.efficiency)*wnum(r.workers),0)/den : 0;
+  }
+  const vals = [...new Set(valid.map(r => Math.round(wEffFrac(r.efficiency)*10000)/10000))];
+  return vals.reduce((s,v)=>s+v,0)/(vals.length||1);
+}
+function wSplitProduct(r) {
+  if (typeof splitGA === 'function') { const x = splitGA(r); return {GARMENT:wnum(x.g), APRON:wnum(x.a)}; }
+  if (wnum(r.gPcs) || wnum(r.aPcs)) return {GARMENT:wnum(r.gPcs), APRON:wnum(r.aPcs)};
+  const sec=String(r.section||'').toLowerCase();
+  return /garment|sewing|成衣/.test(sec) ? {GARMENT:wnum(r.pieces),APRON:0} : {GARMENT:0,APRON:wnum(r.pieces)};
+}
+
+/* ---------- 從系統 DB 取線日記錄 build canonical line-day records ----------
+   v6 原則：同一天同一線只計一套實績。
+   1) 有一般 Daily Output/款式明細 → 件數、箱數、SMV 結構以明細為主。
+   2) target / dpo 只補目標、Issue、備註；不得再把件數加一次。
+   3) 官方效率優先採日報已存 efficiency，以人數×480 加權；SMV×件數只在效率缺失時 fallback。
+*/
 function wBuild() {
   const src = (typeof DB !== 'undefined' && DB.length) ? DB : [];
-  const by = {};
+  const groups = {};
   src.forEach(r => {
     const d = wDate(r.date), L = wLine(r.lineNo); if (!d || !L) return;
-    if (r.section && !/sew/i.test(r.section) && String(r.section).trim() !== '') { /* 仍納入，僅記錄 keep but note */ }
     const k = wYmd(d) + '|' + L;
-    const o = by[k] || (by[k] = { date: wYmd(d), line: L, pieces: 0, workers: 0, cartons: 0, target: 0,
-      stdMin: 0, avail: 0, products: {}, remark: '', styles: 0 });
-    o.pieces += wnum(r.pieces);
-    o.workers = Math.max(o.workers, wnum(r.workers));
-    o.cartons += wnum(r.cartons);
-    o.target += wnum(r.target);
-    o.styles = Math.max(o.styles, wnum(r.styleCount));
-    if (wnum(r.smv) > 0 && wnum(r.pieces) > 0) o.stdMin += wnum(r.smv) * wnum(r.pieces);
-    else if (wnum(r.efficiency) > 0 && wnum(r.workers) > 0) {
-      const e = wnum(r.efficiency) > 1 ? wnum(r.efficiency) / 100 : wnum(r.efficiency);
-      o.stdMin += e * wnum(r.workers) * WCFG.minutesPerDay;
-    }
-    if (wnum(r.gPcs)) o.products.GARMENT = (o.products.GARMENT || 0) + wnum(r.gPcs);
-    if (wnum(r.aPcs)) o.products.APRON = (o.products.APRON || 0) + wnum(r.aPcs);
-    const rm = [r.remark, r.issue].filter(x => x && String(x).trim()).join('；');
-    if (rm && !o.remark) o.remark = String(rm).replace(/\s+/g, ' ').trim();
+    (groups[k] = groups[k] || []).push(r);
   });
-  WS.recs = Object.values(by).map(o => { if (!o.avail) o.avail = o.workers * WCFG.minutesPerDay; return o; })
-    .filter(o => o.workers > 0 || o.pieces > 0)
-    .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.line.localeCompare(b.line));
+
+  const audit = { rawRows: src.length, lineDays: 0, detailLineDays: 0, targetOnlyLineDays: 0,
+    reportedEff: 0, smvFallback: 0, noEff: 0, suppressedRows: 0 };
+
+  const built = [];
+  Object.keys(groups).forEach(k => {
+    const arr = groups[k];
+    const normal = arr.filter(r => !(typeof isTgtSrc === 'function' ? isTgtSrc(r) : (r.tSrc==='target'||r.tSrc==='dpo')));
+    const tgt = arr.filter(r => r.tSrc === 'target');
+    const dpo = arr.filter(r => r.tSrc === 'dpo');
+    const aux = tgt.length ? tgt : dpo;                 // target 比 dpo 欄位完整
+    const hasNormalActual = normal.some(r => wnum(r.pieces) > 0);
+    const actualRows = hasNormalActual ? normal : aux;
+    const metaRows = arr;
+    if (!actualRows.length) return;
+
+    const d = wDate(arr[0].date), L = wLine(arr[0].lineNo);
+    const pieces = actualRows.reduce((s,r)=>s+wnum(r.pieces),0);
+    const workers = Math.max(0, ...actualRows.map(r=>wnum(r.workers)), ...aux.map(r=>wnum(r.workers)), ...normal.map(r=>wnum(r.workers)));
+    const avail = workers * WCFG.minutesPerDay;
+    const cartons = (hasNormalActual ? normal : aux).reduce((s,r)=>s+wnum(r.cartons),0);
+    const target = Math.max(0, ...metaRows.map(r=>wnum(r.target)));
+
+    // 效率：先用實際採用來源的日報效率；沒有才向輔助來源找。
+    let eff = wPickEff(actualRows);
+    if (!eff) eff = wPickEff(aux);
+    if (!eff) eff = wPickEff(normal);
+
+    // SMV 標準分鐘只做 fallback / 健檢，不再和 efficiency-derived minutes 疊加。
+    const smvRows = hasNormalActual ? normal : actualRows;
+    const smvStd = smvRows.reduce((s,r)=>s + (wnum(r.smv)>0 && wnum(r.pieces)>0 ? wnum(r.smv)*wnum(r.pieces) : 0),0);
+    let stdMin = 0, effMethod = 'none';
+    if (eff > 0 && avail > 0) { stdMin = eff * avail; effMethod = 'reported-eff'; audit.reportedEff++; }
+    else if (smvStd > 0 && avail > 0) { stdMin = smvStd; eff = stdMin/avail; effMethod = 'smv-fallback'; audit.smvFallback++; }
+    else { audit.noEff++; }
+
+    const products = {};
+    (hasNormalActual ? normal : (dpo.length ? dpo : actualRows)).forEach(r => {
+      const sp=wSplitProduct(r);
+      if (sp.GARMENT) products.GARMENT=(products.GARMENT||0)+sp.GARMENT;
+      if (sp.APRON) products.APRON=(products.APRON||0)+sp.APRON;
+    });
+
+    const styleSet = new Set(normal.map(r=>String(r.styleNo||'').trim()).filter(Boolean));
+    const styles = styleSet.size || Math.max(0, ...metaRows.map(r=>wnum(r.styleCount)));
+    const remarks = [];
+    metaRows.forEach(r=>{
+      const a=String(r.remark||'').replace(/\s+/g,' ').trim(); if(a) remarks.push(a);
+      const b=wIssueText(r.issue); if(b) remarks.push(b);
+    });
+    const remark=[...new Set(remarks)].join('；');
+
+    built.push({ date:wYmd(d), line:L, pieces, workers, cartons, target, stdMin, avail,
+      products, remark, styles, eff, effMethod, smvStd, source:hasNormalActual?'DETAIL':'TARGET' });
+
+    audit.lineDays++;
+    if (hasNormalActual) audit.detailLineDays++; else audit.targetOnlyLineDays++;
+    audit.suppressedRows += Math.max(0, arr.length - actualRows.length);
+  });
+
+  WS.audit = audit;
+  WS.recs = built.filter(o => o.workers > 0 || o.pieces > 0)
+    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.line.localeCompare(b.line,undefined,{numeric:true}));
   const wk = {}, mo = {};
   WS.recs.forEach(r => { const d = wDate(r.date); (wk[wWeekKey(d)] = wk[wWeekKey(d)] || []).push(r); (mo[r.date.slice(0, 7)] = mo[r.date.slice(0, 7)] || []).push(r); });
-  WS.weeks = Object.keys(wk).sort().map(k => ({ key: k, label: wWeekLabel(k), recs: wk[k] }));
-  WS.months = Object.keys(mo).sort().map(k => ({ key: k, recs: mo[k] }));
+  WS.weeks = Object.keys(wk).sort().map(k => ({ key:k, label:wWeekLabel(k), recs:wk[k] }));
+  WS.months = Object.keys(mo).sort().map(k => ({ key:k, recs:mo[k] }));
 }
 
 /* ---------- 彙總 aggregate ---------- */
 function wAgg(recs) {
-  const A = { qty: 0, std: 0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [] };
+  const A = { qty: 0, std: 0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [], methods:{reported:0,smv:0,none:0}, sources:{DETAIL:0,TARGET:0} };
   recs.forEach(r => {
-    A.qty += r.pieces; A.std += r.stdMin; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target;
+    A.qty += r.pieces; A.std += r.stdMin; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target; if(r.effMethod==='reported-eff')A.methods.reported++;else if(r.effMethod==='smv-fallback')A.methods.smv++;else A.methods.none++; if(r.source)A.sources[r.source]=(A.sources[r.source]||0)+1;
     const D = A.days[r.date] || (A.days[r.date] = { date: r.date, qty: 0, std: 0, avail: 0, op: 0, ctn: 0, lines: 0 });
     D.qty += r.pieces; D.std += r.stdMin; D.avail += r.avail; D.op += r.workers; D.ctn += r.cartons; if (r.workers) D.lines++;
     const L = A.lines[r.line] || (A.lines[r.line] = { qty: 0, std: 0, avail: 0, op: 0, days: 0, zero: 0, styles: 0, remark: '' });
@@ -39800,8 +39880,8 @@ function wRules(c) {
     en: `${zero.map(k => `${k} on ${M.lines[k].zero} day(s)`).join(', ')} were staffed but produced nothing.` });
   const q = M.dayList.map(d => d.qty).filter(x => x > 0), e = M.dayList.map(d => d.eff);
   if (q.length > 2 && (Math.max(...q) - Math.min(...q)) / Math.min(...q) > 0.5) R.push({ sev: 'AMBER',
-    zh: `每日件數波動 ${wF(Math.min(...q))}–${wF(Math.max(...q))} 件（差 ${wP((Math.max(...q) - Math.min(...q)) / Math.min(...q), 0)}），但效率區間僅 ${wP(Math.min(...e))}–${wP(Math.max(...e))}。波動來自產品組合，不是產線不穩。`,
-    en: `Daily volume ranged ${wF(Math.min(...q))}–${wF(Math.max(...q))} pieces, a ${wP((Math.max(...q) - Math.min(...q)) / Math.min(...q), 0)} swing, while efficiency stayed within ${wP(Math.min(...e))}–${wP(Math.max(...e))}. The swing reflects product mix, not unstable lines.` });
+    zh: `每日件數波動 ${wF(Math.min(...q))}–${wF(Math.max(...q))} 件（差 ${wP((Math.max(...q) - Math.min(...q)) / Math.min(...q), 0)}），但效率區間僅 ${wP(Math.min(...e))}–${wP(Math.max(...e))}。單靠件數波動不能判定產線不穩，需配合效率、款式/SMV、換款與現場備註共同判斷。`,
+    en: `Daily volume ranged ${wF(Math.min(...q))}–${wF(Math.max(...q))} pieces, a ${wP((Math.max(...q) - Math.min(...q)) / Math.min(...q), 0)} swing, while efficiency stayed within ${wP(Math.min(...e))}–${wP(Math.max(...e))}. Volume alone is not sufficient to diagnose line stability; efficiency, style/SMV mix, changeovers and shop-floor remarks should be reviewed together.` });
   if (M.achieve != null && M.target > 0) R.push({ sev: M.achieve < WCFG.planAttainAlert ? 'RED' : 'GREEN',
     zh: `目標達成率 ${wP(M.achieve)}（目標 ${wF(M.target)} 件、實績 ${wF(M.qty)} 件）。`,
     en: `Target attainment was ${wP(M.achieve)} — ${wF(M.target)} targeted against ${wF(M.qty)} actual.` });
@@ -39829,6 +39909,9 @@ function wCompute() {
 /* ---------- 畫面 render ---------- */
 function wRender() {
   const c = WS.ctx, M = c.M;
+  const a=WS.audit||{};
+  const ae=document.getElementById('wrAudit');
+  if(ae) ae.innerHTML=`✅ v6 計算口徑：同日同線只取一套實績；已抑制重複來源 <b>${wF(a.suppressedRows||0)}</b> 筆。官方效率以日報 efficiency × 人數 × 480 加權，SMV 只在效率缺失時補算。<br><span style="color:#64748b">Canonical line-day records: ${wF(a.lineDays||0)} · Detail source: ${wF(a.detailLineDays||0)} · Target/DPO-only: ${wF(a.targetOnlyLineDays||0)} · Efficiency fallback: ${wF(a.smvFallback||0)}</span>`;
   const kp = [[wF(M.qty), '本期產出（件）', 'Output'], [wF(M.dailyAvg), '日均產量（件）', 'Daily average'],
     [wP(M.eff), '加權效率', 'Weighted efficiency'], [M.perHead.toFixed(1), '人均產出（件）', 'Per operator-day'],
     [c.W ? wD(c.W.effPP) + 'pp' : '—', '較上週效率', 'vs prior week'],
@@ -39910,8 +39993,8 @@ function wExport() {
     .forEach(r => cr.push(dr(cw, [r[0]].concat(cols.map(x => r[1](x[1]))), { fill: r[0].indexOf('效率') >= 0 ? LBLUE : undefined })));
   add(tb(cw, cr));
   if (c.W) { add(PP(T('')));
-    add(bi(`與上週相比，效率${c.W.effPP >= 0 ? '上升' : '下降'} ${Math.abs(c.W.effPP * 100).toFixed(1)} 個百分點，日均產量 ${wD(c.W.dailyAvg)}%，人均 ${wD(c.W.perHead)}%。件數與效率變動方向不同時，通常來自產品組合而非產線表現。`,
-      `Against the prior week efficiency ${c.W.effPP >= 0 ? 'rose' : 'fell'} ${Math.abs(c.W.effPP * 100).toFixed(1)} points with daily output ${wD(c.W.dailyAvg)}% and output per operator ${wD(c.W.perHead)}%. Where volume and efficiency move in different directions the cause is usually product mix rather than line performance.`)); }
+    add(bi(`與上週相比，效率${c.W.effPP >= 0 ? '上升' : '下降'} ${Math.abs(c.W.effPP * 100).toFixed(1)} 個百分點，日均產量 ${wD(c.W.dailyAvg)}%，人均 ${wD(c.W.perHead)}%。件數與效率變動方向不同時，不直接判定原因；應再檢查產品組合、換款、缺料、人力與現場備註。`,
+      `Against the prior week efficiency ${c.W.effPP >= 0 ? 'rose' : 'fell'} ${Math.abs(c.W.effPP * 100).toFixed(1)} points with daily output ${wD(c.W.dailyAvg)}% and output per operator ${wD(c.W.perHead)}%. Where volume and efficiency move in different directions, no cause is inferred automatically; product mix, changeovers, material, manpower and shop-floor remarks should be checked.`)); }
 
   add(H('三、每日產能表現', '3. Daily Capacity Performance'));
   const dw = [1000, 800, 700, 1100, 1200, 950, 950, 1000, 1000, 1000];
@@ -39940,9 +40023,10 @@ function wExport() {
   const nw = [4850, 4850];
   add(tb(nw, [hr(nw, ['項目 Item', '說明 Description']),
     dr(nw, ['資料來源 Source', '本系統 daily_records，共 ' + WS.recs.length + ' 筆線日記錄\nThe daily_records store of this system, ' + WS.recs.length + ' line-day records']),
-    dr(nw, ['加權效率 Weighted efficiency', 'Σ標準工時 ÷ Σ可用人時，納入所有有人產線\nΣ standard minutes ÷ Σ available minutes across all staffed lines']),
+    dr(nw, ['加權效率 Weighted efficiency', '以日報線別效率為主：Σ(效率×人數×480) ÷ Σ(人數×480)，同一天同一線只計一次\nPrimary basis: Σ(reported line efficiency × operators × 480) ÷ Σ(operators × 480), one record set per line-day']),
     dr(nw, ['週別切分 Week definition', '週一至週六為一週\nWeeks run Monday to Saturday']),
-    dr(nw, ['標準工時來源 Standard minutes', '優先採用 SMV×件數；無 SMV 時以 效率×人數×480 反推\nSMV × pieces where available, otherwise derived as efficiency × operators × 480']),
+    dr(nw, ['SMV 用途 SMV role', 'SMV×件數只作產品結構/健檢；僅在日報效率缺失時才作效率 fallback，不與日報效率重複相加\nSMV × pieces is used for mix/data checks and only as an efficiency fallback when reported efficiency is missing']),
+    dr(nw, ['重複來源處理 Duplicate-source control', '同日同線若 Daily 明細與 target/dpo 同時存在，實績只取 Daily 明細；target/dpo 只補目標、Issue、備註。全庫已抑制 ' + String((WS.audit&&WS.audit.suppressedRows)||0) + ' 筆重複來源\nWhen detail and target/DPO coexist for a line-day, actuals come from detail only; target/DPO supplies target/issues/remarks. Suppressed duplicate-source rows: ' + String((WS.audit&&WS.audit.suppressedRows)||0)]),
     dr(nw, ['備註筆數 Remarks', String(M.remarks.length) + ' 筆\n' + M.remarks.length + ' entries'])]));
   add(PP(T('')), PP(T('')));
   add(tb([3233, 3233, 3234], [dr([3233, 3233, 3234], ['製表 / Prepared\n\n____________________', '覆核 / Reviewed\n\n____________________', '核准 / Approved\n\n____________________'], { all: true })]));
@@ -39979,7 +40063,7 @@ function initWReport() {
   const keep = sel.value;
   sel.innerHTML = WS.weeks.map((w, i) => `<option value="${i}">${w.label}（${new Set(w.recs.map(r => r.date)).size} 日）</option>`).join('');
   sel.value = (keep !== '' && WS.weeks[keep]) ? keep : String(WS.weeks.length - 1);
-  document.getElementById('wrSrc').textContent = `資料來源：本系統 ${WS.recs.length} 筆線日記錄，涵蓋 ${WS.weeks[0].label} 至 ${WS.weeks[WS.weeks.length - 1].label}　/　Source: ${WS.recs.length} line-day records from ${WS.weeks[0].label} to ${WS.weeks[WS.weeks.length - 1].label}`;
+  document.getElementById('wrSrc').textContent = `資料來源：本系統 ${WS.recs.length} 筆 canonical 線日記錄，涵蓋 ${WS.weeks[0].label} 至 ${WS.weeks[WS.weeks.length - 1].label}　/　Source: ${WS.recs.length} canonical line-day records from ${WS.weeks[0].label} to ${WS.weeks[WS.weeks.length - 1].label}`;
   wCompute();
 }
 
