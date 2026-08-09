@@ -933,8 +933,7 @@ function setMode(m){MODE=m;document.querySelectorAll('#modeSw button').forEach(b
   ensurePeriod();renderModebar();saveFilter();
   if(['daily','weekly','monthly','yearly','dashboard','line','shipping'].includes(CUR_TAB))renderTab(CUR_TAB);}
 function ensurePeriod(){
-  const dates=RECORDS.map(r=>r.etd||r.shippedDateRaw&&parseAnyDate(r.shippedDateRaw)||r.poDate).filter(Boolean).sort();
-  const ref=CUR_PERIOD&&isValidRef(CUR_PERIOD,MODE)?refToDate(CUR_PERIOD):(dates.length?dates[dates.length-1]:TODAY);
+  const ref=CUR_PERIOD&&isValidRef(CUR_PERIOD,MODE)?refToDate(CUR_PERIOD):TODAY;
   CUR_PERIOD=periodKeyOf(ref||TODAY,MODE);
 }
 function isValidRef(p,mode){if(mode==='day')return /^\d{4}-\d{2}-\d{2}$/.test(p);if(mode==='week')return /^\d{4}-W\d{2}$/.test(p);if(mode==='month')return /^\d{4}-\d{2}$/.test(p);return /^\d{4}$/.test(p);}
@@ -986,9 +985,9 @@ function barRow(name,val,max,cls){const w=max>0?Math.max(val/max*100,1):0;
 function kpiCard(cls,val,unit,label){return `<div class="kpi ${cls}"><div class="kpi-n">${val}<span class="kpi-u">${unit||''}</span></div><div class="kpi-l">${label}</div></div>`;}
 function renderDashboard(){
   if(!RECORDS.length)return emptyState('dashboard');
-  const list=filteredRecords();const K=computeKPI(list);
+  const all=filteredRecords();const list=all.filter(r=>r.etd&&inPeriod(r.etd));const K=computeKPI(list);
   const el=document.getElementById('dashboard');
-  el.innerHTML=`${filterBar()}
+  el.innerHTML=`${filterBar()}<div class="al al-i">📅 ${esc(CUR_PERIOD)} · Dashboard 依 ETD 統計；切換 日 / 週 / 月 / 年 會同步更新下方卡片。</div>
   <div class="kpis">
     ${kpiCard('','<span>'+fmt(K.totalOrder)+'</span>','pcs',t('kTotalOrder'))}
     ${kpiCard('a',fmt(K.openOrder),'pcs',t('kOpenOrder'))}
@@ -1327,7 +1326,7 @@ function renderFabric(){
   const grp=groupSum(list,dimFn).map(o=>({...o,coverage:o.fabReq>0?o.fabStock/o.fabReq:1})).sort((a,b)=>b.fabShort-a.fabShort);
   const totReq=sum(list.map(derive),d=>d.reqNotCut),totStock=sum(list.map(derive),d=>d.fabStock),totShort=sum(list.map(derive),d=>d.fabShort);
   const el=document.getElementById('fabric');
-  el.innerHTML=`${filterBar()}
+  el.innerHTML=`${filterBar()}<div class="al al-i">📅 ${esc(CUR_PERIOD)} · Dashboard 依 ETD 統計；切換 日 / 週 / 月 / 年 會同步更新下方卡片。</div>
   <div class="kpis">
     ${kpiCard('o',fmt(totReq),'yds',t('reqNotCut'))}
     ${kpiCard('o',fmt(totStock),'yds',t('stockYds'))}
@@ -1372,7 +1371,7 @@ function renderCutting(){
   const totOpen=sum(D,d=>d.openQty),totCut=sum(D,d=>d.acs),totUncut=sum(D,d=>d.uncut),totOver=sum(D,d=>d.overCut);
   const el=document.getElementById('cutting');
   const shortRank=groupSum(list,r=>r.customer+' / '+r.po+' / '+r.style).map(o=>({key:o.key,short:Math.max(o.openQty-o.acs,0),uncut:o.uncut})).filter(x=>x.short>0).sort((a,b)=>b.short-a.short);
-  el.innerHTML=`${filterBar()}
+  el.innerHTML=`${filterBar()}<div class="al al-i">📅 ${esc(CUR_PERIOD)} · Dashboard 依 ETD 統計；切換 日 / 週 / 月 / 年 會同步更新下方卡片。</div>
   <div class="kpis">
     ${kpiCard('',fmt(totOpen),'pcs',t('openQty'))}
     ${kpiCard('c',fmt(totCut),'pcs',t('cut'))}
@@ -1451,7 +1450,7 @@ function renderShipping(){
   const dueSoon=list.map(r=>({r,d:derive(r)})).filter(x=>x.d.dueSoon).sort((a,b)=>a.r.etd<b.r.etd?-1:1);
   const el=document.getElementById('shipping');
   const shipByP=eventPeriodSum(shipEvs,MODE);
-  el.innerHTML=`${filterBar()}
+  el.innerHTML=`${filterBar()}<div class="al al-i">📅 ${esc(CUR_PERIOD)} · Dashboard 依 ETD 統計；切換 日 / 週 / 月 / 年 會同步更新下方卡片。</div>
   <div class="kpis">
     ${kpiCard('g',fmt(totShip),'pcs',t('kShipped'))}
     ${kpiCard('r',fmt(totUn),'pcs',t('kUnshipped'))}
@@ -1712,7 +1711,7 @@ async function cloudDownload(){if(!SETTINGS.gasUrl){toast(t('noGas'),'warn');goT
   }catch(e){toast('Download failed','err');}}
 async function cloudSync(){if(!SETTINGS.gasUrl){toast(t('clDev'),'warn');goTab('settings');return;}await cloudDownload();await cloudUpload();}
 async function sendTelegramSummary(){if(!SETTINGS.gasUrl){toast(t('noGas'),'warn');goTab('settings');return;}
-  try{const list=filteredRecords();const K=computeKPI(list);const D=list.map(derive);
+  try{const all=filteredRecords();const list=all.filter(r=>r.etd&&inPeriod(r.etd));const K=computeKPI(list);const D=list.map(derive);
     const overdue=D.filter(d=>d.overdue).length,overdueQty=sum(D.filter(d=>d.overdue),d=>d.openOrderPcs);
     const fabTop=fabricShortageRank(list).slice(0,5);const cutTop=groupSum(list,r=>r.customer+'/'+r.po).map(o=>({k:o.key,s:Math.max(o.openQty-o.acs,0)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
     const un=groupSum(list,r=>r.customer).sort((a,b)=>b.unship-a.unship).slice(0,5);
@@ -1747,7 +1746,7 @@ function purgeSummaryRows(){
 }
 async function init(){
   loadSettings();loadHistory();
-  try{const f=JSON.parse(localStorage.getItem(LS_FILTER)||'null');if(f){GF=f.GF||GF;MODE=f.MODE||MODE;CUR_PERIOD=f.CUR_PERIOD||'';}}catch(e){}
+  try{const f=JSON.parse(localStorage.getItem(LS_FILTER)||'null');if(f){GF=f.GF||GF;MODE=f.MODE||MODE;}CUR_PERIOD='';}catch(e){CUR_PERIOD='';}
   try{const cp=JSON.parse(localStorage.getItem(LS_CMP)||'null');if(cp&&Array.isArray(cp.records))PLAN_RECORDS=cp.records;}catch(e){}
   await idbLoadAll();
   purgeSummaryRows();
