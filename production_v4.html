@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 生產進度總表 v4.1</title>
+<title>VRT 生產進度總表 v4.2</title>
 <style>
 :root{
   --bg:#f0f2f7;--s1:#fff;--s2:#f7f8fc;--s3:#eef1f8;--bd:#e2e6f0;--bd2:#d0d5e8;
@@ -152,7 +152,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 
 <!-- HEADER -->
 <div class="hdr">
-  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.1 · 訂單 × 裁剪 × 車縫 × SMV · DB 自動連動</div></div>
+  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.2 · 訂單 × 裁剪 × 車縫 × SMV · DB 自動連動</div></div>
   <div style="font-size:11px;color:#8bb5d8;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><span class="dot" id="d-ord"></span><span id="l-ord">訂單…</span></span>
     <span><span class="dot" id="d-cut"></span><span id="l-cut">裁剪…</span></span>
@@ -410,7 +410,7 @@ const PALETTE  = ['#1d6ec7','#059669','#d97706','#7c3aed','#0369a1','#dc2626','#
 const MO       = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 
 let ORDERS=[], CUT=[], SEW=[], STYLES=[], SMV_MAP={}, SMV_INFO='';
-let PLAN=[], CSTAT=[];   // 排產產能 / 客戶統計(唯讀連動)
+let PLAN=[], CSTAT=[]; let STYLE_IX=new Map();   // 排產產能 / 客戶統計(唯讀連動)
 let CUST_CLR={}, _CI=0, SCHED=null;
 
 // ── IDB helpers ─────────────────────────────────
@@ -517,10 +517,31 @@ async function loadAll(){
     const db = await idbOpen('ProdPlanCapacity');
     PLAN = await idbAll(db,'records');
   }catch(e){}
+  // ★ v4.2 修正：production_plan_capacity_v1 實際存在 localStorage('vrt_prodplan_v3_data')，
+  //   並非 IndexedDB('ProdPlanCapacity')，導致一直顯示「排產無資料」。
+  if(!PLAN.length){
+    try{
+      const raw=localStorage.getItem('vrt_prodplan_v3_data');
+      if(raw){ const d=JSON.parse(raw); PLAN=(d&&d.records)||(Array.isArray(d)?d:[]); }
+    }catch(e){}
+  }
   try{
     const db = await idbOpen('VRTCustomerStatistics');
     CSTAT = await idbAll(db,'records');
   }catch(e){}
+  // ★ v4.2：客戶統計實際存在 IndexedDB('vrt_custstats_v31')/store 'data'/key 'current'
+  if(!CSTAT.length){
+    try{
+      const db=await idbOpen('vrt_custstats_v31');
+      const cur=await new Promise(res=>{
+        try{ const q=db.transaction('data','readonly').objectStore('data').get('current');
+          q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null);
+        }catch(_){res(null);}
+      });
+      db.close&&db.close();
+      if(cur) CSTAT=cur.details||cur.customers||[];
+    }catch(e){}
+  }
   setDot('d-plan', PLAN.length ? 'ok' : 'warn');
   document.getElementById('l-plan').textContent = PLAN.length
     ? `排產 ${PLAN.length} 筆${CSTAT.length?` · 客統 ${CSTAT.length} 筆`:''}`
@@ -574,8 +595,28 @@ function buildStyles(){
   });
 
   // Sewing
+  // ★ v4.2 修正：車縫 DB 現含三種來源（日報 norm / 目標報表 target / Daily Output dpo），
+  //   同一天同一條線會有重複記錄。直接加總會膨脹（曾出現 26,393,951 件）。
+  //   規則與車縫/裁剪系統一致：同一天只認 norm > target > dpo 其中一種來源。
+  const _sewDedup=(()=>{
+    const byDay={};
+    SEW.forEach(r=>{
+      const d=String(r.date||''); if(!byDay[d]) byDay[d]={norm:0,target:0,dpo:0};
+      const src=(r.tSrc==='target')?'target':(r.tSrc==='dpo')?'dpo':'norm';
+      byDay[d][src]++;
+    });
+    const pick={};
+    Object.keys(byDay).forEach(d=>{
+      const v=byDay[d];
+      pick[d]= v.norm>0?'norm' : v.target>0?'target' : 'dpo';
+    });
+    return SEW.filter(r=>{
+      const src=(r.tSrc==='target')?'target':(r.tSrc==='dpo')?'dpo':'norm';
+      return src===pick[String(r.date||'')];
+    });
+  })();
   const sM = {};
-  SEW.filter(r=>r.pieces>0).forEach(r=>{
+  _sewDedup.filter(r=>r.pieces>0).forEach(r=>{
     const sk = nsk(r.styleNo); if(!sk) return;
     if(!sM[sk]) sM[sk]={pcs:0,dates:[],secs:new Set(),lines:new Set()};
     sM[sk].pcs += r.pieces;
@@ -606,6 +647,8 @@ function buildStyles(){
     });
   });
 
+  // ★ v4.2 效能：建立款號索引，取代迴圈內的 STYLES.find()（2400+ 款時是 O(n²) 主因）
+  STYLE_IX = new Map(STYLES.map(r=>[r.sk,r]));
   const tO = STYLES.reduce((s,r)=>s+r.qty,0);
   const tS = STYLES.reduce((s,r)=>s+r.sewPcs,0);
   document.getElementById('h-styles').textContent = STYLES.length.toLocaleString();
@@ -687,7 +730,7 @@ function sbBuild(){
   const all = new Set([...STYLES.map(s=>s.sk), ...Object.keys(pM)]);
   const items = [];
   all.forEach(sk=>{
-    const st = STYLES.find(s=>s.sk===sk);
+    const st = STYLE_IX.get(sk);
     const pl = pM[sk], cs = cM[sk];
     const qty    = (st&&st.qty) || (pl&&pl.planQty) || (cs&&cs.openQty) || 0;
     const sewPcs = st?st.sewPcs:0, cutPcs = st?st.cutPcs:0;
@@ -854,7 +897,7 @@ function buildSchedule(){
       ld.curStyle=top;
       const {cap,src}=dailyCap(top,ld.workers,workMins);
       ld.dailyCap=cap; ld.capSrc=src;
-      const sr=STYLES.find(s=>s.sk===top);
+      const sr=STYLE_IX.get(top);
       ld.curBalance=sr?Math.max(0,sr.balance):0;
       ld.daysToFinish=cap>0?Math.ceil(ld.curBalance/cap):0;
     }else{
@@ -905,7 +948,7 @@ function buildSchedule(){
     lAsgn[ln]=[];
     if(ld.curStyle){
       const endD=addDays(TODAY, ld.daysToFinish||0);
-      const sr=STYLES.find(s=>s.sk===ld.curStyle);
+      const sr=STYLE_IX.get(ld.curStyle);
       lAsgn[ln].push({sk:ld.curStyle,start:TODAY,end:endD,inProg:true,
         customer:sr?.customer||'',qty:ld.curBalance,shipDate:sr?.shipDate||'',
         sewPct:sr?.sewPct||0, capSrc:ld.capSrc||'avg'});
@@ -913,16 +956,26 @@ function buildSchedule(){
     }else{lFree[ln]=TODAY;}
   });
 
+  // ★ v4.2 效能修正：原本 while 迴圈會把全部待排款（可達數千款）一路排到數年後，
+  //   甘特圖因此要畫上萬個區塊而卡死。改為只排到「可視期間 + 緩衝」為止，
+  //   其餘計入未排入數量，畫面才不會凍結。
+  const _hz=parseInt(document.getElementById('g-wks')?.value)||12;
+  const HORIZON=addDays(TODAY,(_hz*7)+60);
+  let _unplanned=0;
   ['Garment','Apron'].forEach(sec=>{
     const secLines=Object.keys(lines).filter(ln=>lines[ln].section===sec);
     if(!secLines.length) return;
     const queue=[...(sQ[sec]||[])];
+    let guard=0;
     while(queue.length){
+      if(++guard>4000) break;                       // 安全閥，避免極端資料造成無限迴圈
       secLines.sort((a,b)=>(lFree[a]||TODAY).localeCompare(lFree[b]||TODAY));
       const ln=secLines[0], ld=lines[ln];
+      if((lFree[ln]||TODAY)>HORIZON){ _unplanned+=queue.length; break; }  // 全線都排滿了
       const item=queue.shift();
       const {cap,src}=dailyCap(item.sk, ld.workers, workMins);
-      const daysN=item.qty>0?Math.ceil(item.qty/cap):1;
+      const safeCap=cap>0?cap:1;
+      const daysN=item.qty>0?Math.min(Math.ceil(item.qty/safeCap),365):1;  // 單款最多佔一年
       const startD=lFree[ln]||TODAY;
       const endD=addDays(startD,daysN);
       lAsgn[ln].push({sk:item.sk,start:startD,end:endD,inProg:false,
@@ -930,7 +983,9 @@ function buildSchedule(){
         pri:item.pri, priLabel:item.priLabel, capSrc:src});
       lFree[ln]=addDays(endD,1);
     }
+    _unplanned+=queue.length;
   });
+  window._schedUnplanned=_unplanned;
 
   return{lines, lAsgn, sQ, custRank, maxQty, priScore, priLabel, workMins};
 }
@@ -959,7 +1014,12 @@ function renderKrow(){
   const done=STYLES.filter(r=>r.status==='done').length;
   const tO=STYLES.reduce((s,r)=>s+r.qty,0);
   const tS=STYLES.reduce((s,r)=>s+r.sewPcs,0);
-  const pct=tO>0?Math.round(tS/tO*100):0;
+  // ★ v4.2：整體完成率只看「有訂單的款」，且每款封頂 100%，
+  //   否則歷史車縫實績（含往年、無訂單款）會把完成率灌成 142301%。
+  const ordered=STYLES.filter(r=>r.qty>0);
+  const tOrd=ordered.reduce((s,r)=>s+r.qty,0);
+  const tDone=ordered.reduce((s,r)=>s+Math.min(r.sewPcs,r.qty),0);
+  const pct=tOrd>0?Math.round(tDone/tOrd*100):0;
   const hasDL=STYLES.filter(r=>r.shipDate).length;
   const smvCnt=Object.keys(SMV_MAP).length;
   document.getElementById('krow').innerHTML=[
@@ -969,7 +1029,7 @@ function renderKrow(){
     {l:'車縫中',v:inSew,c:'am',s:'進行中'},
     {l:'完成',v:done,c:'gr',s:''},
     {l:'有交期款',v:hasDL,c:'re',s:'需優先'},
-    {l:'整體完成率',v:pct+'%',c:'gr',s:`縫 ${fmt(tS)} 件`},
+    {l:'整體完成率',v:pct+'%',c:'gr',s:`已完成 ${fmt(tDone)} / 訂單 ${fmt(tOrd)} 件`},
     {l:'SMV款數',v:smvCnt,c:'te',s:smvCnt?'已連動產能':'尚未匯入'},
   ].map(k=>`<div class="kpi ${k.c}"><div class="kv">${k.v}</div><div class="kl">${k.l}</div>${k.s?`<div class="ks">${k.s}</div>`:''}</div>`).join('');
 }
@@ -1058,7 +1118,9 @@ function renderGantt(){
   let lineList=Object.keys(lines);
   if(fSec) lineList=lineList.filter(ln=>lines[ln].section===fSec);
   lineList.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-  document.getElementById('g-meta').textContent=`${lineList.length} 條線 · ${wks} 週`;
+  const _up=window._schedUnplanned||0;
+  document.getElementById('g-meta').textContent=
+    `${lineList.length} 條線 · ${wks} 週`+(_up?` · 另有 ${_up.toLocaleString()} 款超出可視期間未排入`:'');
 
   // Legend
   const legends=[];
@@ -1236,7 +1298,7 @@ function renderSmv(){
   const allSKs=new Set([...Object.keys(SMV_MAP),...STYLES.map(s=>s.sk)]);
   let rows=[...allSKs].map(sk=>{
     const smv=SMV_MAP[sk];
-    const st=STYLES.find(s=>s.sk===sk);
+    const st=STYLE_IX.get(sk);
     if(!smv) return null; // only show styles with SMV
     const smvCap=smv.curSMV>0?Math.floor(wkr*wm/smv.curSMV):0;
     const hist=histAvg(sk);
@@ -1282,7 +1344,7 @@ function renderSmv(){
 //  STYLE DETAIL MODAL
 // ══════════════════════════════════════════════════
 function showDetail(sk){
-  const r=STYLES.find(x=>x.sk===sk); if(!r) return;
+  const r=STYLE_IX.get(sk); if(!r) return;
   const{priLabel}=SCHED||{priLabel:()=>({c:'p4',t:'—'})};
   const pl=priLabel(r);
   const smvD=SMV_MAP[sk];
