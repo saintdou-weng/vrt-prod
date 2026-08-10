@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SMV 管理系統 v5</title>
+<title>SMV 管理系統 v5.2 Mobile Fix</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -109,7 +109,7 @@ tr:hover td{background:#eff6ff}
 <body>
 <div class="hdr">
   <div class="hdr-logo">📐</div>
-  <div><h1>SMV 管理系統 v5</h1><small>Standard Minute Value · 自動比對異動 · 工時分析</small></div>
+  <div><h1>SMV 管理系統 v5.2</h1><small>Standard Minute Value · Mobile DB Fix · 自動比對異動 · 工時分析</small></div>
   <div class="hdr-stats">
     <div><div class="hs-v" id="hSnaps">0</div><div class="hs-l">版本數</div></div>
     <div><div class="hs-v" id="hStyles">0</div><div class="hs-l">款式數</div></div>
@@ -497,63 +497,148 @@ function parseSMVSheet(wb,filename){
 }
 
 // ══════════════════════════════════════════════════════
-// IndexedDB (SewingProd v7)
+// IndexedDB — v5.2 MOBILE SAFE
+// 重要：SMV 不再把主資料寫進舊 SewingProd。
+// 某些 Android Chrome / WebView 的 SewingProd 是舊 schema，會出現
+// "One of the specified object stores was not found"。改用獨立 DB，避免和
+// Sewing / 舊版 SMV 共用 schema；第一次會盡量從舊 DB 搬資料。
 // ══════════════════════════════════════════════════════
 let db=null,allSnaps=[],SEW_DB=[],dbReady=false;
 
-async function openDB(){
+const SMV_DB_NAME='VRT_SMV_Manager_v52';
+const SMV_STORE='smv_snapshots';
+const LEGACY_SMV_DB_NAME='SewingProd';
+
+function ensureSmvStore(d){
+  if(!d.objectStoreNames.contains(SMV_STORE)){
+    const st=d.createObjectStore(SMV_STORE,{keyPath:'id',autoIncrement:true});
+    st.createIndex('by_date','reportDate');
+  }
+}
+function _openPrimary(ver){
   return new Promise((res,rej)=>{
-    const req=indexedDB.open('SewingProd',7);
-    req.onupgradeneeded=e=>{
+    let done=false;
+    const req=ver?indexedDB.open(SMV_DB_NAME,ver):indexedDB.open(SMV_DB_NAME,1);
+    req.onupgradeneeded=e=>ensureSmvStore(e.target.result);
+    req.onsuccess=e=>{
+      if(done)return; done=true;
       const d=e.target.result;
-      if(!d.objectStoreNames.contains('smv_snapshots')){
-        const s=d.createObjectStore('smv_snapshots',{keyPath:'id',autoIncrement:true});
-        s.createIndex('by_date','reportDate');
-      }
+      d.onversionchange=()=>{try{d.close()}catch(_){ } if(db===d)db=null;};
+      res(d);
     };
-    req.onsuccess=e=>{db=e.target.result;res(db);};
-    req.onerror=e=>rej(e.target.error);
-    req.onblocked=()=>{
-      // 提示關閉其他分頁，並在 3 秒後重試
-      showErr('資料庫升級中，請關閉其他 SMV 分頁後，重新整理本頁面');
-      setTimeout(()=>location.reload(), 4000);
+    req.onerror=()=>{if(done)return;done=true;rej(req.error||new Error('Cannot open '+SMV_DB_NAME));};
+    req.onblocked=()=>{if(done)return;done=true;rej(new Error('SMV DB 被其他頁面鎖住，請關閉其他 SMV 分頁後重試'));};
+  });
+}
+async function openDB(force=false){
+  if(!force && db && db.objectStoreNames.contains(SMV_STORE)) return db;
+  try{if(db)db.close();}catch(_){ }
+  db=null;
+  let d=await _openPrimary();
+  if(!d.objectStoreNames.contains(SMV_STORE)){
+    const next=(d.version||1)+1; d.close(); d=await _openPrimary(next);
+  }
+  if(!d.objectStoreNames.contains(SMV_STORE)){d.close();throw new Error('Mobile SMV DB 建立失敗');}
+  db=d; return db;
+}
+async function _withStore(mode,fn,retry=true){
+  try{
+    const d=await openDB();
+    if(!d.objectStoreNames.contains(SMV_STORE)) throw new Error('store missing');
+    return await new Promise((res,rej)=>{
+      let tx,st,ret;
+      try{tx=d.transaction(SMV_STORE,mode);st=tx.objectStore(SMV_STORE);ret=fn(st,tx);}catch(e){rej(e);return;}
+      tx.oncomplete=()=>res(ret);
+      tx.onerror=()=>rej(tx.error||new Error('IndexedDB transaction failed'));
+      tx.onabort=()=>rej(tx.error||new Error('IndexedDB transaction aborted'));
+    });
+  }catch(e){
+    const msg=String(e&&e.message||e);
+    if(retry && /object store|store missing|transaction/i.test(msg)){
+      await openDB(true);
+      return _withStore(mode,fn,false);
+    }
+    throw e;
+  }
+}
+function dbAdd(o){return _withStore('readwrite',st=>st.add(o));}
+function dbAll(){return _withStore('readonly',st=>new Promise((res,rej)=>{const q=st.getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>rej(q.error);}));}
+function dbDel(id){return _withStore('readwrite',st=>st.delete(id));}
+async function dbReplaceAll(records){
+  records=Array.isArray(records)?records:[];
+  return _withStore('readwrite',st=>{st.clear();records.forEach(x=>st.put(x));return records.length;});
+}
+
+// 舊 SewingProd 若能讀就搬一次；讀不到直接略過，不再讓手機卡死。
+async function _readLegacySmv(){
+  return new Promise(res=>{
+    let req;
+    try{req=indexedDB.open(LEGACY_SMV_DB_NAME);}catch(_){res([]);return;}
+    req.onupgradeneeded=e=>{try{e.target.transaction.abort()}catch(_){ } res([]);};
+    req.onerror=()=>res([]);
+    req.onsuccess=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains(SMV_STORE)){try{d.close()}catch(_){ }res([]);return;}
+      try{
+        const q=d.transaction(SMV_STORE,'readonly').objectStore(SMV_STORE).getAll();
+        q.onsuccess=()=>{const a=q.result||[];try{d.close()}catch(_){ }res(a)};
+        q.onerror=()=>{try{d.close()}catch(_){ }res([])};
+      }catch(_){try{d.close()}catch(__){ }res([])}
     };
   });
 }
-const idbStore=mode=>{if(!db)throw new Error('DB未就緒');return db.transaction('smv_snapshots',mode).objectStore('smv_snapshots');};
-function dbAdd(o){return new Promise((r,j)=>{const q=idbStore('readwrite').add(o);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error);});}
-function dbAll(){return new Promise((r,j)=>{const q=idbStore('readonly').getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error);});}
-function dbDel(id){return new Promise((r,j)=>{const q=idbStore('readwrite').delete(id);q.onsuccess=r;q.onerror=()=>j(q.error);});}
+async function migrateLegacySmvOnce(){
+  try{
+    const own=await dbAll(); if(own.length)return own;
+    const old=await _readLegacySmv();
+    if(old.length){await dbReplaceAll(old);return old;}
+  }catch(e){console.warn('Legacy SMV migration skipped',e);}
+  return [];
+}
 
 // Load sewing data from localStorage (sewing_v5 LS key)
+async function _readCurrentIDB(dbName,store){
+  return new Promise(res=>{
+    let created=false;
+    const req=indexedDB.open(dbName);
+    req.onupgradeneeded=e=>{ created=true; try{e.target.transaction.abort();}catch(_){} res([]); };
+    req.onerror=()=>res([]);
+    req.onsuccess=e=>{
+      const d=e.target.result;
+      if(created || !d.objectStoreNames.contains(store)){ try{d.close();}catch(_){} res([]); return; }
+      try{
+        const q=d.transaction(store,'readonly').objectStore(store).getAll();
+        q.onsuccess=()=>{const out=q.result||[];d.close();res(out)};
+        q.onerror=()=>{d.close();res([])};
+      }catch(_){d.close();res([])}
+    };
+  });
+}
+
+// Load sewing data: v6 primary IDB → cloud cache → legacy localStorage
 async function loadSewingData(){
-  // 優先讀 SewingCloudProd IDB（車縫雲端同步後的全量資料）
-  try {
-    const idbRecs = await new Promise(res => {
-      const req = indexedDB.open('SewingCloudProd', 1);
-      req.onupgradeneeded = e => e.target.result.createObjectStore('cloud_records', { keyPath:'id', autoIncrement:true });
-      req.onsuccess = e => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains('cloud_records')) { res([]); return; }
-        const q = db.transaction('cloud_records','readonly').objectStore('cloud_records').getAll();
-        q.onsuccess = () => res(q.result || []);
-        q.onerror   = () => res([]);
-      };
-      req.onerror = () => res([]);
-    });
-    if (idbRecs.length > 0) {
-      SEW_DB = idbRecs;
-      document.getElementById('hSewing').textContent = SEW_DB.length.toLocaleString();
+  try{
+    const primary=await _readCurrentIDB('VRT_SewingProduction','daily_records');
+    if(primary.length){
+      SEW_DB=primary;
+      document.getElementById('hSewing').textContent=SEW_DB.length.toLocaleString();
       return SEW_DB;
     }
-  } catch(e) {}
-  // Fallback: localStorage
-  try {
-    const raw = localStorage.getItem('sewing_prod_v1') || '[]';
-    SEW_DB = JSON.parse(raw);
-    document.getElementById('hSewing').textContent = SEW_DB.length.toLocaleString();
+  }catch(e){}
+  try{
+    const cloud=await _readCurrentIDB('SewingCloudProd','cloud_records');
+    if(cloud.length){
+      SEW_DB=cloud;
+      document.getElementById('hSewing').textContent=SEW_DB.length.toLocaleString();
+      return SEW_DB;
+    }
+  }catch(e){}
+  try{
+    const raw=localStorage.getItem('sewing_prod_v1')||'[]';
+    SEW_DB=JSON.parse(raw);
+    document.getElementById('hSewing').textContent=SEW_DB.length.toLocaleString();
     return SEW_DB;
-  } catch(e) { SEW_DB = []; return []; }
+  }catch(e){SEW_DB=[];document.getElementById('hSewing').textContent='0';return[];}
 }
 
 // Build SMV dictionary from latest snapshot per section
@@ -1117,11 +1202,12 @@ function exportHistCSV(){if(!viewSnap)return;const rows=[['款式','客戶','類
 // ══════════════════════════════════════════════════════
 openDB().then(async()=>{
   dbReady=true;
+  await migrateLegacySmvOnce();
   allSnaps=await dbAll();
   allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));
   loadSewingData(); // async, non-blocking
   updateHeader();
-  console.log('SMV v5 ready. Snaps:',allSnaps.length,' Sewing:',SEW_DB.length);
+  console.log('SMV v5.2 mobile-safe ready. Snaps:',allSnaps.length,' Sewing:',SEW_DB.length,' DB:',SMV_DB_NAME,' version:',db?.version);
   initFolderScan();
 }).catch(e=>{showErr('資料庫錯誤：'+e.message);console.error(e);});
 // ═══════════════════════ FOLDER SCAN ════════════════════════════════════════
@@ -1215,6 +1301,7 @@ async function scanAllFolders(silent=false){
     <button class="vscp-btn vscp-push" id="vsPushBtn" onclick="vsPush()">☁ 推送</button>
     <button class="vscp-btn vscp-pull" id="vsPullBtn" onclick="vsPull()">⬇ 拉取</button>
   </div>
+  <button class="vscp-btn" style="background:#25130f;border:1px solid #b45309;color:#fdba74" onclick="vsMobileRepair()">📱 手機 DB 修復</button>
   <div>
     <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
     <div class="vscp-gasrow">
@@ -1253,44 +1340,28 @@ async function scanAllFolders(silent=false){
     const el = document.getElementById('vsStatus');
     try {
       const cnt = typeof allSnaps !== 'undefined' ? allSnaps.length : 0;
-      el.textContent = `快照 ${cnt} 筆`;
+      el.textContent = `快照 ${cnt} 筆 · v5.2 Mobile DB`;
       el.className = 'vscp-s ok';
     } catch(e) { el.textContent = '讀取中...'; }
   }
 
   window.vsPush = async function(){
     if (!gasUrl){ vsLog('請先填入 GAS URL','err'); return; }
-    vsBusy(true);
-    vsLog('推送 SMV 快照...','i');
+    vsBusy(true); vsLog('推送 SMV 快照...','i');
     try {
-      // 讀取 smv_snapshots IDB
-      const snaps = await new Promise((res,rej) => {
-        const req = indexedDB.open('SewingProd', 7);
-        req.onupgradeneeded = e => {
-          const d = e.target.result;
-          if (!d.objectStoreNames.contains('smv_snapshots'))
-            d.createObjectStore('smv_snapshots', {keyPath:'id', autoIncrement:true});
-        };
-        req.onsuccess = e => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains('smv_snapshots')){ res([]); return; }
-          const q = db.transaction('smv_snapshots','readonly').objectStore('smv_snapshots').getAll();
-          q.onsuccess = () => res(q.result || []);
-          q.onerror   = () => res([]);
-        };
-        req.onerror = () => res([]);
-      });
-      const payload = {
-        tool:'smv', recordCount: snaps.length,
-        idbStore:{ db:'SewingProd', ver:7, store:'smv_snapshots', records: snaps },
-        summary:{ snapshotCount: snaps.length }
+      if(!db || !db.objectStoreNames.contains(SMV_STORE)) await openDB();
+      const snaps=await dbAll();
+      const payload={
+        tool:'smv', recordCount:snaps.length,
+        idbStore:{db:SMV_DB_NAME,ver:db.version,store:SMV_STORE,records:snaps},
+        summary:{snapshotCount:snaps.length}
       };
-      const r = await fetch(gasUrl,{ method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload), redirect:'follow' });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
+      const r=await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload),redirect:'follow'});
+      const d=await r.json();
+      if(!d.ok)throw new Error(d.error);
       vsLog(`✓ 推送完成（${snaps.length} 快照）`,'ok');
-    } catch(e){ vsLog('✗ '+e.message,'err'); }
-    finally { vsBusy(false); }
+    }catch(e){vsLog('✗ '+e.message,'err');}
+    finally{vsBusy(false);}
   };
 
   window.vsPull = async function(){
@@ -1305,16 +1376,8 @@ async function scanAllFolders(silent=false){
       if (!d.data || !d.data.data){ vsLog('雲端尚無 SMV 資料','err'); return; }
       const snaps = d.data.data.idbStore?.records || d.data.data.records || [];
 
-      // 使用主程式已開好的 db 變數（避免 store-not-found 問題）
-      if (!db) { vsLog('DB 未就緒，請重新整理頁面後再試','err'); return; }
-      await new Promise((res,rej) => {
-        const tx = db.transaction('smv_snapshots','readwrite');
-        const os = tx.objectStore('smv_snapshots');
-        os.clear();
-        snaps.forEach(s => os.put(s));
-        tx.oncomplete = () => res(snaps.length);
-        tx.onerror = e => rej(e.target.error);
-      });
+      // v5.2：手機改寫獨立 SMV DB；若 transaction 發生 schema 問題會自動重開重試一次。
+      await dbReplaceAll(snaps);
 
       // 重新載入畫面
       allSnaps = await dbAll();
@@ -1324,6 +1387,20 @@ async function scanAllFolders(silent=false){
       if (confirm(`已拉取 ${snaps.length} 個 SMV 快照\n立即重新整理？`)) location.reload();
     } catch(e){ vsLog('✗ '+e.message,'err'); }
     finally { vsBusy(false); }
+  };
+
+  window.vsMobileRepair = async function(){
+    if(!confirm('只重建 SMV 專用手機資料庫，不會刪除 Sewing / Cutting 資料。確定修復？'))return;
+    vsBusy(true);vsLog('手機 SMV DB 修復中...','i');
+    try{
+      try{if(db)db.close()}catch(_){ } db=null;
+      await new Promise((res,rej)=>{const q=indexedDB.deleteDatabase(SMV_DB_NAME);q.onsuccess=res;q.onerror=()=>rej(q.error);q.onblocked=()=>rej(new Error('DB 被其他 SMV 分頁鎖住'));});
+      await openDB(true); dbReady=true; allSnaps=[];
+      const old=await _readLegacySmv(); if(old.length){await dbReplaceAll(old);allSnaps=await dbAll();}
+      updateHeader();
+      vsLog(`✓ 手機 DB 已重建（${allSnaps.length} 快照）`,'ok');
+    }catch(e){vsLog('✗ 修復失敗：'+e.message,'err');}
+    finally{vsBusy(false);}
   };
 
   function vsBusy(on){
