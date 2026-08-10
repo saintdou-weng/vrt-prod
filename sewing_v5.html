@@ -116,7 +116,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v6.0</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v6.1</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -668,6 +668,23 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   </div>
   <div class="card" id="wrCard4" style="display:none">
     <div class="ct">🏭 各組績效（含週對週變動）　Line Performance with Week-on-Week Movement</div><div class="wrscroll" id="wrLines"></div>
+  </div>
+  <div class="card" id="wrCardPlan" style="display:none">
+    <div class="ct">🎯 計畫執行狀況（對照排單）　Plan Execution vs Production Schedule</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:10px">
+      計畫值來自「排產產能」模組，依起訖日攤分至本週工作日。件數與工時雙口徑並列——工時才是產能利用的正確判讀。<br>
+      <span style="font-style:italic">Plan figures come from the Production Plan module, apportioned across this week's working days. Both piece and work-hour bases are shown; work hours are the correct basis for capacity utilisation.</span>
+    </div>
+    <div class="wrscroll" id="wrPlan"></div>
+    <div id="wrPlanNote" style="margin-top:10px"></div>
+  </div>
+  <div class="card" id="wrCardLinePlan" style="display:none">
+    <div class="ct">🏭 各組達標情形（計畫 vs 實績）　Line Attainment against Schedule</div>
+    <div class="wrscroll" id="wrLinePlan"></div>
+  </div>
+  <div class="card" id="wrCardMix" style="display:none">
+    <div class="ct">📦 產品結構與人力　Product Mix and Manpower</div>
+    <div class="wrscroll" id="wrMix"></div>
   </div>
   <div class="card" id="wrCard5" style="display:none">
     <div class="ct">⚠️ 自動判定的異常　Automatically Detected Exceptions</div>
@@ -39672,6 +39689,176 @@ while (n === a[++i] && n === a[++i] && n === a[++i] && n === a[++i] && n === a[+
 'use strict';
 
 /* v6 weekly report fix: de-duplicate Daily vs target/DPO and use reported line efficiency as official basis */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ★ v6.1 排單連動模組 Plan Integration
+   來源：production_plan_capacity_v1 存於 localStorage['vrt_prodplan_v3_data']
+        （同一 GitHub Pages 網域，localStorage 互通，不需另外匯入）
+   產出：本週各品類計畫件數／計畫工時、各組計畫件數與計畫人力，
+        以及「計畫外生產」偵測 —— 對應 weekly output 報告的第三、五段。
+   ═══════════════════════════════════════════════════════════════════════ */
+const WPLAN = { records: [], loaded: false, savedAt: '', styleProd: {}, styleSmv: {} };
+
+function wLoadPlan() {
+  WPLAN.records = []; WPLAN.loaded = false; WPLAN.savedAt = '';
+  try {
+    const raw = localStorage.getItem('vrt_prodplan_v3_data');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    const recs = (d && d.records) || (Array.isArray(d) ? d : []);
+    if (!recs.length) return;
+    WPLAN.records = recs;
+    WPLAN.savedAt = (d && d.savedAt) || '';
+    WPLAN.loaded = true;
+    recs.forEach(r => {
+      const st = String(r.style || '').trim().toUpperCase();
+      if (!st) return;
+      const p = String(r.product || '').trim().toUpperCase();
+      if (p && !WPLAN.styleProd[st]) WPLAN.styleProd[st] = p;
+      const s = wnum(r.smv);
+      if (s > 0 && !WPLAN.styleSmv[st]) WPLAN.styleSmv[st] = s;
+    });
+  } catch (e) { console.warn('[wreport] 排單讀取失敗', e); }
+}
+
+/* 品類正規化：計畫用 product 欄，實績用款號回查，最後才用 section */
+function wProdKey(p) {
+  const s = String(p || '').toUpperCase();
+  if (/NAPKIN|餐巾/.test(s)) return 'NAPKIN';
+  if (/APRON|圍裙/.test(s)) return 'APRON';
+  if (/TOP|上衣/.test(s)) return 'TOP';
+  if (/GARMENT|成衣/.test(s)) return 'GARMENT';
+  return s ? 'OTHER' : '';
+}
+const WPROD_LABEL = { GARMENT:['成衣','Garment'], NAPKIN:['餐巾','Napkin'], APRON:['圍裙','Apron'], TOP:['上衣','Top'], OTHER:['其他','Other'] };
+
+/* 工作日展開：把一筆排單的件數依起訖日平均分攤到工作日（週日不排） */
+function wPlanDays(sd, ed) {
+  const a = wDate(sd), b = wDate(ed) || a;
+  if (!a) return [];
+  const out = [];
+  const cur = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const end = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  let guard = 0;
+  while (cur <= end && guard++ < 400) {
+    if (cur.getDay() !== 0) out.push(wYmd(cur));   // 週日不列入
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out.length ? out : [wYmd(a)];
+}
+
+/* 取某週（週一起算，週一~週六）的計畫彙總 */
+function wPlanForWeek(weekKey) {
+  const res = { has: false, byProd: {}, byLine: {}, qty: 0, stdMin: 0, manpower: 0, lines: 0, unplannedNote: [] };
+  if (!WPLAN.loaded) return res;
+  const wk = new Set();
+  const s = wDate(weekKey);
+  for (let i = 0; i < 6; i++) { const d = new Date(s); d.setDate(s.getDate() + i); wk.add(wYmd(d)); }
+
+  const lineMan = {};
+  WPLAN.records.forEach(r => {
+    const qty = wnum(r.sewingQty); if (qty <= 0) return;
+    const days = wPlanDays(r.startDate, r.endDate);
+    if (!days.length) return;
+    const hit = days.filter(d => wk.has(d)).length;
+    if (!hit) return;
+    const share = qty * (hit / days.length);
+    const pk = wProdKey(r.product) || 'OTHER';
+    const smv = wnum(r.smv) || WPLAN.styleSmv[String(r.style || '').trim().toUpperCase()] || 0;
+    const L = wLine(r.line) || String(r.line || '').trim();
+    res.byProd[pk] = res.byProd[pk] || { qty: 0, stdMin: 0, smvNum: 0, smvDen: 0 };
+    res.byProd[pk].qty += share;
+    if (smv > 0) { res.byProd[pk].stdMin += share * smv; res.byProd[pk].smvNum += share * smv; res.byProd[pk].smvDen += share; }
+    if (L) {
+      res.byLine[L] = res.byLine[L] || { qty: 0, stdMin: 0, styles: new Set() };
+      res.byLine[L].qty += share;
+      if (smv > 0) res.byLine[L].stdMin += share * smv;
+      if (r.style) res.byLine[L].styles.add(String(r.style).trim());
+      const mp = wnum(r.manpower);
+      if (mp > 0) lineMan[L] = Math.max(lineMan[L] || 0, mp);
+    }
+    res.qty += share; res.stdMin += share * smv;
+    res.has = true;
+  });
+  res.manpower = Object.values(lineMan).reduce((a, b) => a + b, 0);
+  res.lineMan = lineMan;
+  res.lines = Object.keys(res.byLine).length;
+  return res;
+}
+
+/* 實績：依款號回查品類；查不到用 section 推定（Apron 段的非成衣視為餐巾/圍裙群） */
+function wActualByProduct(recs) {
+  const out = {};
+  const src = WS._rawByDateLine || null;
+  recs.forEach(r => {
+    const g = wnum(r.products && r.products.GARMENT), a = wnum(r.products && r.products.APRON);
+    // 以線日層級的 GARMENT/APRON 拆分為底，再用款號細分 NAPKIN/TOP
+    if (g > 0) { out.GARMENT = out.GARMENT || { qty: 0, stdMin: 0 }; out.GARMENT.qty += g; }
+    if (a > 0) { out.APRON_GROUP = out.APRON_GROUP || { qty: 0, stdMin: 0 }; out.APRON_GROUP.qty += a; }
+    if (!g && !a && r.pieces > 0) { out.OTHER = out.OTHER || { qty: 0, stdMin: 0 }; out.OTHER.qty += r.pieces; }
+    // 工時依線日標準工時按件數比例分攤
+    const tot = g + a || r.pieces || 0;
+    if (tot > 0 && r.stdMin > 0) {
+      if (g > 0 && out.GARMENT) out.GARMENT.stdMin += r.stdMin * (g / tot);
+      if (a > 0 && out.APRON_GROUP) out.APRON_GROUP.stdMin += r.stdMin * (a / tot);
+      if (!g && !a && out.OTHER) out.OTHER.stdMin += r.stdMin;
+    }
+  });
+  return out;
+}
+
+/* 計畫執行比對（件數 + 工時雙口徑） */
+function wPlanExec(weekKey, M) {
+  const P = wPlanForWeek(weekKey);
+  if (!P.has) return null;
+  const A = wActualByProduct(M.recs || []);
+  // 計畫的餐巾+上衣+圍裙合併對應實績的 APRON_GROUP（車縫日報只分 Garment/Apron 兩段）
+  const planG = (P.byProd.GARMENT || {}).qty || 0;
+  const planGmin = (P.byProd.GARMENT || {}).stdMin || 0;
+  const planNTA = ['NAPKIN', 'TOP', 'APRON', 'OTHER'].reduce((s, k) => s + ((P.byProd[k] || {}).qty || 0), 0);
+  const planNTAmin = ['NAPKIN', 'TOP', 'APRON', 'OTHER'].reduce((s, k) => s + ((P.byProd[k] || {}).stdMin || 0), 0);
+  const actG = (A.GARMENT || {}).qty || 0, actGmin = (A.GARMENT || {}).stdMin || 0;
+  const actNTA = ((A.APRON_GROUP || {}).qty || 0) + ((A.OTHER || {}).qty || 0);
+  const actNTAmin = ((A.APRON_GROUP || {}).stdMin || 0) + ((A.OTHER || {}).stdMin || 0);
+
+  const rows = [
+    { key:'GARMENT', zh:'成衣', en:'Garment', plan:planG, act:actG, planMin:planGmin, actMin:actGmin },
+    { key:'NTA', zh:'餐巾／圍裙／上衣', en:'Napkin / Apron / Top', plan:planNTA, act:actNTA, planMin:planNTAmin, actMin:actNTAmin },
+  ];
+  rows.forEach(r => {
+    r.gap = r.act - r.plan;
+    r.attain = r.plan > 0 ? r.act / r.plan : (r.act > 0 ? null : 0);   // null = 計畫外
+    r.minAttain = r.planMin > 0 ? r.actMin / r.planMin : null;
+  });
+  const totPlan = planG + planNTA, totAct = actG + actNTA;
+  const totPlanMin = planGmin + planNTAmin, totActMin = actGmin + actNTAmin;
+  return {
+    rows, P,
+    totPlan, totAct, gap: totAct - totPlan,
+    attain: totPlan > 0 ? totAct / totPlan : null,
+    minAttain: totPlanMin > 0 ? totActMin / totPlanMin : null,
+    totPlanMin, totActMin,
+    planMan: P.manpower, actMan: M.avgOp,
+    planLines: P.lines, actLines: Object.keys(M.lines).length
+  };
+}
+
+/* 各組：計畫 vs 實績達標 */
+function wLinePlanRows(weekKey, M) {
+  const P = wPlanForWeek(weekKey);
+  const keys = new Set([...Object.keys(M.lines), ...Object.keys(P.byLine || {})]);
+  return [...keys].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => {
+    const L = M.lines[k] || { qty: 0, avgOp: 0, eff: 0, std: 0 };
+    const pl = (P.byLine || {})[k] || { qty: 0, stdMin: 0 };
+    const planMan = (P.lineMan || {})[k] || 0;
+    const attain = pl.qty > 0 ? L.qty / pl.qty : (L.qty > 0 ? null : 0);
+    return { line:k, planQty:pl.qty, actQty:L.qty, attain,
+      planMin:pl.stdMin, actMin:L.std, eff:L.eff,
+      planMan, actMan:L.avgOp, manGap: planMan > 0 ? L.avgOp - planMan : null,
+      state: pl.qty <= 0 && L.qty > 0 ? 'UNPLANNED' : (attain == null ? 'NA' : attain >= 0.95 ? 'GREEN' : attain >= 0.8 ? 'AMBER' : 'RED') };
+  });
+}
+
 const WCFG = {
   targetEff: 0.30, greenEff: 0.30, amberEff: 0.27,
   lowLineEff: 0.25, criticalLineEff: 0.20,
@@ -39804,7 +39991,7 @@ function wBuild() {
 
 /* ---------- 彙總 aggregate ---------- */
 function wAgg(recs) {
-  const A = { qty: 0, std: 0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [], methods:{reported:0,smv:0,none:0}, sources:{DETAIL:0,TARGET:0} };
+  const A = { qty: 0, std: 0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [], methods:{reported:0,smv:0,none:0}, sources:{DETAIL:0,TARGET:0}, recs: recs };
   recs.forEach(r => {
     A.qty += r.pieces; A.std += r.stdMin; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target; if(r.effMethod==='reported-eff')A.methods.reported++;else if(r.effMethod==='smv-fallback')A.methods.smv++;else A.methods.none++; if(r.source)A.sources[r.source]=(A.sources[r.source]||0)+1;
     const D = A.days[r.date] || (A.days[r.date] = { date: r.date, qty: 0, std: 0, avail: 0, op: 0, ctn: 0, lines: 0 });
@@ -39885,6 +40072,43 @@ function wRules(c) {
   if (M.achieve != null && M.target > 0) R.push({ sev: M.achieve < WCFG.planAttainAlert ? 'RED' : 'GREEN',
     zh: `目標達成率 ${wP(M.achieve)}（目標 ${wF(M.target)} 件、實績 ${wF(M.qty)} 件）。`,
     en: `Target attainment was ${wP(M.achieve)} — ${wF(M.target)} targeted against ${wF(M.qty)} actual.` });
+
+  /* ★ v6.1 排單相關判定 —— 需要 ctx.plan / ctx.linePlan */
+  const P = c.plan, LP = c.linePlan;
+  if (P) {
+    if (P.attain != null) R.push({ sev: P.attain >= 0.95 ? 'GREEN' : P.attain >= WCFG.planAttainAlert ? 'AMBER' : 'RED',
+      zh: `計畫執行：本週排單 ${wF(P.totPlan)} 件，實績 ${wF(P.totAct)} 件，達成率 ${wP(P.attain)}${P.minAttain != null ? `；以工時計 ${wP(P.minAttain)}` : ''}。`,
+      en: `Plan execution: ${wF(P.totPlan)} pieces scheduled against ${wF(P.totAct)} actual — ${wP(P.attain)} attainment${P.minAttain != null ? `, or ${wP(P.minAttain)} measured in work hours` : ''}.` });
+
+    const worst = P.rows.filter(r => r.plan > 0 && r.attain != null).sort((a, b) => a.attain - b.attain)[0];
+    if (worst && worst.attain < WCFG.planAttainAlert) R.push({ sev: 'RED',
+      zh: `最大缺口在${worst.zh}：計畫 ${wF(worst.plan)} 件，實際 ${wF(worst.act)} 件（${wP(worst.attain)}），短少 ${wF(Math.abs(worst.gap))} 件。這是本週計畫未達成的主因，需在下週排程補回或調整交期承諾。`,
+      en: `The principal gap is in ${worst.en}: ${wF(worst.plan)} planned against ${wF(worst.act)} actual (${wP(worst.attain)}), short by ${wF(Math.abs(worst.gap))} pieces. This drives the weekly shortfall and must be recovered in next week's schedule or reflected in delivery commitments.` });
+
+    const unp = P.rows.filter(r => r.plan <= 0 && r.act > 0);
+    unp.forEach(r => R.push({ sev: 'AMBER',
+      zh: `計畫外生產：${r.zh} 本週排單為零，實際卻做了 ${wF(r.act)} 件（約 ${wF(r.actMin)} 標準分鐘）。這部分產能未列入計畫，是其他品類落後的直接原因之一，需確認插單來源並回寫排程。`,
+      en: `Unplanned production: ${r.en} carries zero schedule this week yet ${wF(r.act)} pieces (about ${wF(r.actMin)} standard minutes) were produced. This capacity sits outside the plan and partly explains shortfalls elsewhere; the insertion should be confirmed and written back into the schedule.` }));
+
+    if (P.minAttain != null && P.attain != null && P.minAttain < P.attain - 0.03) R.push({ sev: 'AMBER',
+      zh: `件數與工時口徑落差 ${((P.attain - P.minAttain) * 100).toFixed(1)} 個百分點：實際做的產品工時內涵低於計畫，代表產能利用比件數表面數字更差。排產可行性評估應改用工時口徑。`,
+      en: `Piece and work-hour attainment differ by ${((P.attain - P.minAttain) * 100).toFixed(1)} points: actual work content ran below plan, so capacity utilisation is weaker than the piece count suggests. Schedule feasibility should be assessed on work hours.` });
+
+    if (P.planMan > 0) { const g = M.avgOp - P.planMan;
+      if (g < -1) R.push({ sev: 'RED',
+        zh: `人力缺口：計畫日均 ${P.planMan.toFixed(1)} 人，實際 ${M.avgOp.toFixed(1)} 人，短少 ${Math.abs(g).toFixed(1)} 人（${wP(M.avgOp / P.planMan)}）。以現有人力執行原排單並不可行，需補人或重排。`,
+        en: `Manpower shortfall: ${P.planMan.toFixed(1)} planned daily against ${M.avgOp.toFixed(1)} actual, short by ${Math.abs(g).toFixed(1)} (${wP(M.avgOp / P.planMan)}). The original schedule is not executable at current staffing; either add people or re-plan.` }); }
+  }
+  if (LP) {
+    const behind = LP.filter(r => r.state === 'RED');
+    if (behind.length) R.push({ sev: 'RED',
+      zh: `未達標組別：${behind.map(r => `${r.line}（${r.attain == null ? '計畫外' : wP(r.attain)}）`).join('、')}。以計畫件數為基準低於 80%，需逐組確認是人力、換款還是物料造成。`,
+      en: `Lines behind schedule: ${behind.map(r => `${r.line} at ${r.attain == null ? 'unplanned' : wP(r.attain)}`).join(', ')} — below 80% of planned pieces. Each should be checked for manpower, changeover or material causes.` });
+    const over = LP.filter(r => r.attain != null && r.attain >= 1.1);
+    if (over.length) R.push({ sev: 'GREEN',
+      zh: `超前組別：${over.map(r => `${r.line}（${wP(r.attain)}）`).join('、')}。可考慮把落後品類的工作量移轉過來平衡負荷。`,
+      en: `Lines ahead of schedule: ${over.map(r => `${r.line} at ${wP(r.attain)}`).join(', ')}. Work from lagging categories could be shifted here to balance load.` });
+  }
   return R;
 }
 
@@ -39902,8 +40126,107 @@ function wCompute() {
   WS.ctx = { M: cur, prev, prevLabel: prev ? WS.weeks[i - 1].label : '', W: wCmp(cur, prev),
     mtd, lastMonth, lastMonthLabel: lastMonth ? WS.months[mi - 1].key : '', MM: wCmp(mtd, lastMonth),
     trend, label: WS.weeks[i].label, monthKey: mk, notes: (document.getElementById('wrNotes').value || '').trim() };
+  WS.ctx.plan = wPlanExec(WS.weeks[i].key || wWeekKey(wDate(WS.weeks[i].recs[0].date)), cur);
+  WS.ctx.linePlan = WPLAN.loaded ? wLinePlanRows(WS.weeks[i].key || wWeekKey(wDate(WS.weeks[i].recs[0].date)), cur) : null;
   WS.ctx.findings = wRules(WS.ctx);
+  wRenderPlan();
   wRender();
+}
+
+/* ---------- 排單比對 render ---------- */
+function wRenderPlan() {
+  const c = WS.ctx, M = c.M, P = c.plan;
+  const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? 'block' : 'none'; };
+
+  // ── 產品結構與人力（無排單也能出）──
+  const A = wActualByProduct(M.recs || []);
+  const totQ = Object.values(A).reduce((s, x) => s + x.qty, 0) || 1;
+  const totM = Object.values(A).reduce((s, x) => s + x.stdMin, 0) || 1;
+  const pLabel = { GARMENT:['成衣','Garment'], APRON_GROUP:['餐巾／圍裙／上衣','Napkin / Apron / Top'], OTHER:['未分類','Unclassified'] };
+  let mx = `<table class="wrt"><thead><tr><th>品類 Product</th><th>件數 Pieces</th><th>件% Pcs%</th><th>標準工時 Std-min</th><th>工時% Work%</th><th>實際SMV Actual</th><th>排單標準 Plan std</th></tr></thead><tbody>`;
+  Object.keys(A).forEach(k => {
+    const x = A[k], lab = pLabel[k] || [k, k];
+    const actSmv = x.qty > 0 ? x.stdMin / x.qty : 0;
+    let planSmv = null;
+    if (P) { const pr = k === 'GARMENT' ? P.rows[0] : (k === 'APRON_GROUP' ? P.rows[1] : null);
+      if (pr && pr.plan > 0 && pr.planMin > 0) planSmv = pr.planMin / pr.plan; }
+    const dev = (planSmv && actSmv) ? (actSmv - planSmv) / planSmv : null;
+    mx += `<tr><td style="text-align:left">${lab[0]}<br><span style="font-size:10px;color:#64748b">${lab[1]}</span></td>
+      <td>${wF(x.qty)}</td><td>${wP(x.qty / totQ)}</td><td>${wF(x.stdMin)}</td><td>${wP(x.stdMin / totM)}</td>
+      <td><b>${actSmv ? actSmv.toFixed(3) : '—'}</b></td>
+      <td>${planSmv ? planSmv.toFixed(3) + (dev != null && Math.abs(dev) > 0.2 ? ` <span style="color:#c00000;font-weight:700">(差 ${(dev*100).toFixed(0)}%)</span>` : '') : '—'}</td></tr>`;
+  });
+  mx += `</tbody></table>`;
+  mx += `<table class="wrt" style="margin-top:12px"><thead><tr><th>人力項目 Manpower</th><th>計畫 Plan</th><th>實際 Actual</th><th>差異 Gap</th></tr></thead><tbody>
+    <tr><td style="text-align:left">有效組別 Active lines</td><td>${P ? P.planLines || '—' : '—'}</td><td>${Object.keys(M.lines).length}</td><td>${P && P.planLines ? (Object.keys(M.lines).length - P.planLines >= 0 ? '+' : '') + (Object.keys(M.lines).length - P.planLines) : '—'}</td></tr>
+    <tr><td style="text-align:left">日均人力 Daily manpower</td><td>${P && P.planMan ? P.planMan.toFixed(1) : '—'}</td><td>${M.avgOp.toFixed(2)}</td><td style="color:${P && P.planMan && M.avgOp < P.planMan ? '#c00000' : '#059669'};font-weight:700">${P && P.planMan ? ((M.avgOp - P.planMan >= 0 ? '+' : '') + (M.avgOp - P.planMan).toFixed(2)) : '—'}</td></tr>
+    <tr><td style="text-align:left">可用工時 Available minutes</td><td>${P && P.planMan ? wF(P.planMan * WCFG.minutesPerDay * M.nDays) : '—'}</td><td>${wF(M.avail)}</td><td>—</td></tr>
+  </tbody></table>`;
+  document.getElementById('wrMix').innerHTML = mx;
+
+  if (!P) {
+    show('wrCardPlan', false); show('wrCardLinePlan', false);
+    const note = document.getElementById('wrPlanNote');
+    if (note) note.innerHTML = '';
+    return;
+  }
+  show('wrCardPlan', true); show('wrCardLinePlan', true);
+
+  // ── 品類計畫 vs 實績 ──
+  let h = `<table class="wrt"><thead><tr><th>品類 Product</th><th>計畫件數 Plan</th><th>實績件數 Actual</th><th>差異 Gap</th><th>達成率 Attain</th><th>計畫工時 Plan min</th><th>實績工時 Actual min</th><th>工時達成 By hours</th><th>判定 Assessment</th></tr></thead><tbody>`;
+  P.rows.forEach(r => {
+    const at = r.attain, cls = at == null ? 'wr-AMBER' : at >= 0.95 ? 'wr-GREEN' : at >= 0.8 ? '' : 'wr-RED';
+    const asses = at == null ? '★計畫外生產 Unplanned'
+      : at >= 0.95 ? '達成計畫 On plan'
+      : at >= 0.8 ? '接近計畫，可接受 Close to plan'
+      : '★主要缺口 Principal gap';
+    h += `<tr class="${cls}"><td style="text-align:left">${r.zh}<br><span style="font-size:10px;color:#64748b">${r.en}</span></td>
+      <td>${wF(r.plan)}</td><td>${wF(r.act)}</td>
+      <td style="color:${r.gap < 0 ? '#c00000' : '#059669'};font-weight:700">${r.gap >= 0 ? '+' : ''}${wF(r.gap)}</td>
+      <td><b>${at == null ? '計畫外' : wP(at)}</b></td>
+      <td>${wF(r.planMin)}</td><td>${wF(r.actMin)}</td>
+      <td>${r.minAttain == null ? '—' : wP(r.minAttain)}</td>
+      <td style="text-align:left;font-size:11px">${asses}</td></tr>`;
+  });
+  h += `<tr style="background:#eef4fa;font-weight:700"><td>合計 Total</td><td>${wF(P.totPlan)}</td><td>${wF(P.totAct)}</td>
+    <td style="color:${P.gap < 0 ? '#c00000' : '#059669'}">${P.gap >= 0 ? '+' : ''}${wF(P.gap)}</td>
+    <td>${P.attain == null ? '—' : wP(P.attain)}</td><td>${wF(P.totPlanMin)}</td><td>${wF(P.totActMin)}</td>
+    <td>${P.minAttain == null ? '—' : wP(P.minAttain)}</td><td></td></tr></tbody></table>`;
+  document.getElementById('wrPlan').innerHTML = h;
+
+  // 說明：件數與工時口徑落差
+  const nb = [];
+  if (P.attain != null && P.minAttain != null) {
+    const diff = (P.attain - P.minAttain) * 100;
+    if (Math.abs(diff) >= 3) nb.push(Math.abs(diff).toFixed(1) + '個百分點');
+  }
+  const note = document.getElementById('wrPlanNote');
+  if (note) {
+    let t = '';
+    if (P.minAttain != null && P.attain != null && P.minAttain < P.attain) {
+      t = `<div class="wrf wrf-AMBER"><div style="font-size:13px">以工時計的達成率 ${wP(P.minAttain)} 低於以件數計的 ${wP(P.attain)}${nb.length ? `（差 ${nb[0]}）` : ''}。代表實際做的是相對低工時的產品組合，產能利用低於件數表面顯示的水準——判讀產能請以工時為準。</div><div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:3px">Attainment measured in work hours (${wP(P.minAttain)}) is below the piece-based figure (${wP(P.attain)}), indicating a lower work-content mix than planned. Work hours are the correct basis for judging capacity utilisation.</div></div>`;
+    } else if (P.minAttain != null && P.attain != null) {
+      t = `<div class="wrf wrf-GREEN"><div style="font-size:13px">工時達成率 ${wP(P.minAttain)} 不低於件數達成率 ${wP(P.attain)}，代表實際生產的工時內涵符合或高於計畫。</div><div style="font-size:11.5px;color:#64748b;font-style:italic;margin-top:3px">Work-hour attainment of ${wP(P.minAttain)} is at or above the piece-based figure, indicating work content met or exceeded plan.</div></div>`;
+    }
+    note.innerHTML = t;
+  }
+
+  // ── 各組達標 ──
+  let l = `<table class="wrt"><thead><tr><th>組 Line</th><th>計畫件數 Plan</th><th>實績件數 Actual</th><th>達成率 Attain</th><th>計畫工時</th><th>實績工時</th><th>效率 Eff.</th><th>計畫人力</th><th>實際人力</th><th>人力差</th><th>判定</th></tr></thead><tbody>`;
+  (c.linePlan || []).forEach(r => {
+    const cls = r.state === 'GREEN' ? 'wr-GREEN' : r.state === 'RED' ? 'wr-RED' : r.state === 'AMBER' ? 'wr-AMBER' : '';
+    const st = r.state === 'UNPLANNED' ? '★計畫外 Unplanned'
+      : r.state === 'GREEN' ? '達標 On plan'
+      : r.state === 'AMBER' ? '略低 Slightly behind'
+      : r.state === 'RED' ? '★未達標 Behind' : '—';
+    l += `<tr class="${cls}"><td><b>${r.line}</b></td><td>${r.planQty ? wF(r.planQty) : '—'}</td><td>${wF(r.actQty)}</td>
+      <td><b>${r.attain == null ? '計畫外' : wP(r.attain)}</b></td>
+      <td>${r.planMin ? wF(r.planMin) : '—'}</td><td>${wF(r.actMin)}</td><td>${wP(r.eff)}</td>
+      <td>${r.planMan ? r.planMan.toFixed(1) : '—'}</td><td>${r.actMan.toFixed(1)}</td>
+      <td style="color:${r.manGap == null ? '#64748b' : r.manGap < 0 ? '#c00000' : '#059669'};font-weight:700">${r.manGap == null ? '—' : (r.manGap >= 0 ? '+' : '') + r.manGap.toFixed(1)}</td>
+      <td style="font-size:11px">${st}</td></tr>`;
+  });
+  document.getElementById('wrLinePlan').innerHTML = l + '</tbody></table>';
 }
 
 /* ---------- 畫面 render ---------- */
@@ -40019,7 +40342,68 @@ function wExport() {
   add(bi('綠色為達管理目標、黃色為偏低、紅色為需重點改善。「較上週」欄顯示各組效率的週對週變動，是找出改善或退步來源最快的一欄。備註直接取自日報，是異常原因的第一手來源。',
     'Green marks lines at the management target, amber below it and red requiring priority attention. The "vs prior" column shows each line\'s week-on-week movement and is the fastest way to locate the source of improvement or decline. Remarks come directly from the daily report and are the first-hand record of causes.'));
 
-  add(H('五、資料說明', '5. Notes on the Data'));
+  /* ★ v6.1 新增：計畫執行 + 各組達標 + 產品結構與人力 */
+  if (c.plan) {
+    const P = c.plan;
+    add(H('五、計畫執行狀況', '5. Plan Execution against Schedule'));
+    const pw = [1900, 1150, 1150, 1050, 950, 1150, 1150, 1200];
+    const prs = [hr(pw, ['品類\nProduct', '計畫件數\nPlan', '實績件數\nActual', '差異\nGap', '達成率\nAttain', '計畫工時\nPlan min', '實績工時\nActual min', '工時達成\nBy hours'])];
+    P.rows.forEach(r => prs.push(dr(pw, [`${r.zh}\n${r.en}`, wF(r.plan), wF(r.act), (r.gap >= 0 ? '+' : '') + wF(r.gap), r.attain == null ? '計畫外\nUnplanned' : wP(r.attain), wF(r.planMin), wF(r.actMin), r.minAttain == null ? '—' : wP(r.minAttain)],
+      { fill: r.attain == null ? LYEL : r.attain >= 0.95 ? LGREEN : r.attain >= 0.8 ? undefined : LRED })));
+    prs.push(dr(pw, ['合計 Total', wF(P.totPlan), wF(P.totAct), (P.gap >= 0 ? '+' : '') + wF(P.gap), P.attain == null ? '—' : wP(P.attain), wF(P.totPlanMin), wF(P.totActMin), P.minAttain == null ? '—' : wP(P.minAttain)], { fill: LGRAY, bold: true }));
+    add(tb(pw, prs));
+    add(PP(T('')));
+    if (P.minAttain != null && P.attain != null) add(bi(
+      `以工時計的達成率 ${wP(P.minAttain)}${P.minAttain < P.attain ? '低於' : '不低於'}以件數計的 ${wP(P.attain)}。工時才是判斷產能利用的正確口徑：件數會被產品組合稀釋，低 SMV 的品項做得多會讓件數好看，但實際佔用的產能並沒有那麼多。`,
+      `Attainment measured in work hours (${wP(P.minAttain)}) is ${P.minAttain < P.attain ? 'below' : 'at or above'} the piece-based figure (${wP(P.attain)}). Work hours are the correct basis for capacity utilisation: piece counts are diluted by product mix, and a heavier weighting of low-SMV items flatters the count without consuming proportionate capacity.`));
+
+    add(H('六、各組達標情形', '6. Line Attainment against Schedule'));
+    const aw = [750, 1050, 1050, 900, 1000, 1000, 800, 900, 900, 1350];
+    const ars = [hr(aw, ['組\nLine', '計畫件數\nPlan', '實績件數\nActual', '達成率\nAttain', '計畫工時\nPlan min', '實績工時\nActual min', '效率\nEff.', '計畫人力\nPlan HC', '實際人力\nActual HC', '判定\nAssessment'])];
+    (c.linePlan || []).forEach(r => ars.push(dr(aw, [r.line, r.planQty ? wF(r.planQty) : '—', wF(r.actQty), r.attain == null ? '計畫外' : wP(r.attain), r.planMin ? wF(r.planMin) : '—', wF(r.actMin), wP(r.eff), r.planMan ? r.planMan.toFixed(1) : '—', r.actMan.toFixed(1),
+      r.state === 'UNPLANNED' ? '計畫外\nUnplanned' : r.state === 'GREEN' ? '達標\nOn plan' : r.state === 'AMBER' ? '略低\nSlightly behind' : r.state === 'RED' ? '未達標\nBehind' : '—'],
+      { fill: r.state === 'GREEN' ? LGREEN : r.state === 'RED' ? LRED : r.state === 'AMBER' || r.state === 'UNPLANNED' ? LYEL : undefined })));
+    add(tb(aw, ars));
+    add(PP(T('')));
+    add(bi('達成率以該組本週排定件數為分母。計畫外表示排單未安排該組生產，但實際有產出——這類產能未列入計畫，需回頭確認插單來源。人力欄可直接看出排單假設的人數與現場實際的落差。',
+      'Attainment uses each line\'s scheduled pieces for the week as the denominator. "Unplanned" indicates output on a line the schedule did not allocate; such capacity sits outside the plan and the insertion should be traced. The manpower columns show the gap between the staffing the schedule assumed and what was actually available.'));
+  }
+
+  add(H(c.plan ? '七、產品結構與人力' : '五、產品結構與人力', c.plan ? '7. Product Mix and Manpower' : '5. Product Mix and Manpower'));
+  {
+    const A = wActualByProduct(M.recs || []);
+    const totQ = Object.values(A).reduce((x, y) => x + y.qty, 0) || 1;
+    const totM2 = Object.values(A).reduce((x, y) => x + y.stdMin, 0) || 1;
+    const lab = { GARMENT:['成衣','Garment'], APRON_GROUP:['餐巾／圍裙／上衣','Napkin / Apron / Top'], OTHER:['未分類','Unclassified'] };
+    const mw = [2000, 1250, 900, 1350, 900, 1250, 2050];
+    const mrs = [hr(mw, ['品類\nProduct', '件數\nPieces', '件%\nPcs%', '標準工時\nStd-min', '工時%\nWork%', '實際SMV\nActual', '對照排單標準\nvs plan std'])];
+    Object.keys(A).forEach(k => { const x = A[k], L = lab[k] || [k, k];
+      const actSmv = x.qty > 0 ? x.stdMin / x.qty : 0;
+      let planSmv = null;
+      if (c.plan) { const pr = k === 'GARMENT' ? c.plan.rows[0] : (k === 'APRON_GROUP' ? c.plan.rows[1] : null);
+        if (pr && pr.plan > 0 && pr.planMin > 0) planSmv = pr.planMin / pr.plan; }
+      const dev = (planSmv && actSmv) ? (actSmv - planSmv) / planSmv : null;
+      mrs.push(dr(mw, [`${L[0]}\n${L[1]}`, wF(x.qty), wP(x.qty / totQ), wF(x.stdMin), wP(x.stdMin / totM2), actSmv ? actSmv.toFixed(3) : '—',
+        planSmv ? planSmv.toFixed(3) + (dev != null && Math.abs(dev) > 0.2 ? `（差 ${(dev * 100).toFixed(0)}%）` : '') : '—'],
+        { fill: dev != null && Math.abs(dev) > 0.2 ? LYEL : undefined })); });
+    add(tb(mw, mrs));
+    add(PP(T('')));
+    add(bi('件數與工時的排序通常不同：件數多的品類不一定佔工時多。實際 SMV 與排單使用的標準值若差距超過兩成，代表排單的可行性評估失真——不是款式難度改變，就是 SMV 需要重測。',
+      'Pieces and work hours rank differently: the category with the most pieces is not necessarily the one consuming the most capacity. Where actual SMV diverges from the planning standard by more than twenty per cent, schedule feasibility is being mis-assessed — either the work content has changed or the SMV needs re-study.'));
+    const hw = [3200, 2200, 2200, 2100];
+    const hrs2 = [hr(hw, ['項目 Item', '計畫 Plan', '實際 Actual', '差異 Gap'])];
+    const pm = c.plan ? c.plan.planMan : 0, pl = c.plan ? c.plan.planLines : 0;
+    hrs2.push(dr(hw, ['有效組別 Active lines', pl || '—', String(Object.keys(M.lines).length), pl ? ((Object.keys(M.lines).length - pl >= 0 ? '+' : '') + (Object.keys(M.lines).length - pl)) : '—']));
+    hrs2.push(dr(hw, ['日均人力 Daily manpower', pm ? pm.toFixed(1) : '—', M.avgOp.toFixed(2), pm ? ((M.avgOp - pm >= 0 ? '+' : '') + (M.avgOp - pm).toFixed(2)) : '—'], { fill: pm && M.avgOp < pm - 1 ? LRED : undefined }));
+    hrs2.push(dr(hw, ['可用工時 Available minutes', pm ? wF(pm * WCFG.minutesPerDay * M.nDays) : '—', wF(M.avail), '—']));
+    add(tb(hw, hrs2));
+    add(PP(T('')));
+    if (pm && M.avgOp < pm - 1) add(bi(
+      `實際人力較計畫少 ${(pm - M.avgOp).toFixed(1)} 人（${wP(M.avgOp / pm)}）。排單是以 ${pm.toFixed(1)} 人的產能推算的，人力不到位，計畫本身就不可行，需補人或重排交期。`,
+      `Actual manpower ran ${(pm - M.avgOp).toFixed(1)} below plan (${wP(M.avgOp / pm)}). The schedule was built on ${pm.toFixed(1)} operators; with staffing short, the plan is not executable as written and either headcount or delivery dates must move.`));
+  }
+
+  add(H(c.plan ? '八、資料說明' : '六、資料說明', c.plan ? '8. Notes on the Data' : '6. Notes on the Data'));
   const nw = [4850, 4850];
   add(tb(nw, [hr(nw, ['項目 Item', '說明 Description']),
     dr(nw, ['資料來源 Source', '本系統 daily_records，共 ' + WS.recs.length + ' 筆線日記錄\nThe daily_records store of this system, ' + WS.recs.length + ' line-day records']),
@@ -40049,21 +40433,25 @@ function wExport() {
 
 /* ---------- 進入分頁 on tab enter ---------- */
 function initWReport() {
+  wLoadPlan();
   wBuild();
   const sel = document.getElementById('wrWeek');
   if (!WS.weeks.length) {
     document.getElementById('wrBody').style.display = 'none';
     document.getElementById('wrEmpty').style.display = 'block';
-    ['wrCard2','wrCard3','wrCard4','wrCard5','wrCard6'].forEach(id=>document.getElementById(id).style.display='none');
+    ['wrCard2','wrCard3','wrCard4','wrCard5','wrCard6','wrCardPlan','wrCardLinePlan','wrCardMix'].forEach(id=>document.getElementById(id).style.display='none');
     return;
   }
   document.getElementById('wrBody').style.display = 'block';
   document.getElementById('wrEmpty').style.display = 'none';
-  ['wrCard2','wrCard3','wrCard4','wrCard5','wrCard6'].forEach(id=>document.getElementById(id).style.display='block');
+  ['wrCard2','wrCard3','wrCard4','wrCard5','wrCard6','wrCardMix'].forEach(id=>document.getElementById(id).style.display='block');
   const keep = sel.value;
   sel.innerHTML = WS.weeks.map((w, i) => `<option value="${i}">${w.label}（${new Set(w.recs.map(r => r.date)).size} 日）</option>`).join('');
   sel.value = (keep !== '' && WS.weeks[keep]) ? keep : String(WS.weeks.length - 1);
-  document.getElementById('wrSrc').textContent = `資料來源：本系統 ${WS.recs.length} 筆 canonical 線日記錄，涵蓋 ${WS.weeks[0].label} 至 ${WS.weeks[WS.weeks.length - 1].label}　/　Source: ${WS.recs.length} canonical line-day records from ${WS.weeks[0].label} to ${WS.weeks[WS.weeks.length - 1].label}`;
+  document.getElementById('wrSrc').innerHTML = `資料來源：本系統 ${WS.recs.length} 筆 canonical 線日記錄，涵蓋 ${WS.weeks[0].label} 至 ${WS.weeks[WS.weeks.length - 1].label}　/　Source: ${WS.recs.length} canonical line-day records from ${WS.weeks[0].label} to ${WS.weeks[WS.weeks.length - 1].label}`
+    + (WPLAN.loaded
+        ? `<br>🎯 已連動排單：${WPLAN.records.length} 筆排產記錄${WPLAN.savedAt ? `（${String(WPLAN.savedAt).slice(0,10)} 存檔）` : ''}　/　Production schedule linked: ${WPLAN.records.length} records`
+        : `<br><span style="color:#bf8f00">⚠️ 未偵測到排單資料 —— 請先開啟「排產產能」模組匯入當月計畫，本頁的計畫執行與各組達標段落才會出現。／No schedule found; import the monthly plan in the Production Plan module to enable plan-execution sections.</span>`);
   wCompute();
 }
 
