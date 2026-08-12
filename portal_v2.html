@@ -41,6 +41,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 .mc-ship .mcard-stripe{background:linear-gradient(90deg,#3b82f6,transparent)}
 .mc-prod .mcard-stripe{background:linear-gradient(90deg,#a78bfa,transparent)}
 .mc-smv  .mcard-stripe{background:linear-gradient(90deg,#ef4444,transparent)}
+.mc-ie   .mcard-stripe{background:linear-gradient(90deg,#22c55e,#14b8a6,transparent)}
 .mc-cutplan .mcard-stripe{background:linear-gradient(90deg,#ec4899,transparent)}
 .mc-pod  .mcard-stripe{background:linear-gradient(90deg,#06b6d4,transparent)}
 .mc-bom  .mcard-stripe{background:linear-gradient(90deg,#f97316,transparent)}
@@ -340,6 +341,23 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         <button class="btn-pull" id="pl-smv" onclick="pull('smv')">⬇ 拉取</button>
       </div>
     </div>
+    <div class="mcard mc-ie" id="card-ie_smv">
+      <div class="mcard-stripe"></div>
+      <div class="mc-head">
+        <div class="mc-icon">📋</div>
+        <div class="mc-info">
+          <div class="mc-title">IE／SMV 更新報告</div>
+          <div class="mc-sub">新款／現在舊款 · 週月摘要 · 簽核生效 · OBD／PI Study 匯入</div>
+        </div>
+        <span class="mc-badge badge-none" id="bd-ie_smv">--</span>
+      </div>
+      <div class="mc-sync" id="st-ie_smv">雲端：未查詢</div>
+      <div class="mc-actions">
+        <button class="btn-open" onclick="location.href='smv_manager_v5_final.html?tab=ie'">📂 開啟</button>
+        <button class="btn-push" id="pp-ie_smv" onclick="push('ie_smv')">☁ 推送</button>
+        <button class="btn-pull" id="pl-ie_smv" onclick="pull('ie_smv')">⬇ 拉取</button>
+      </div>
+    </div>
   </div>
 
   <div class="gtitle">📦 倉儲出貨 WAREHOUSE · SHIPPING</div>
@@ -495,12 +513,55 @@ const TOOLS = {
   },
   smv: {
     read: async () => {
-      const raw = localStorage.getItem('sewing_prod_v1') || '[]';
-      return { tool:'smv', recordCount: JSON.parse(raw).length, lsKeys: { sewing_prod_v1: raw }};
+      const recs = await idbGetAll('VRT_SMV_Manager_v52', 1, 'smv_snapshots');
+      let ieState = await idbKvGet('vrt_ie_smv_integrated_v2', 1, 'state', 'main');
+      if (!ieState) {
+        const raw = localStorage.getItem('vrt_ie_smv_integrated_v2');
+        if (raw) try { ieState = JSON.parse(raw); } catch(e) {}
+      }
+      if (!recs.length && !ieState) return null;
+      return { tool:'smv', recordCount: recs.length, idbStore: { db:'VRT_SMV_Manager_v52', ver:1, store:'smv_snapshots', records:recs }, ieSmvState:ieState||null, summary:{snapshotCount:recs.length,ieUpdates:(ieState?.updates||[]).length,iePending:(ieState?.updates||[]).filter(x=>x.approval!=='approved').length} };
     },
-    write: (data) => {
-      // SMV uses sewing_prod_v1 — no separate key
-      return 0;
+    write: async (data) => {
+      const remote = data.idbStore?.records || data.records || [];
+      let merged=[];
+      if (remote.length) {
+        const local = await idbGetAll('VRT_SMV_Manager_v52', 1, 'smv_snapshots');
+        merged = mergeSmvSnapshots(local, remote);
+        await idbReplaceAll('VRT_SMV_Manager_v52', 1, 'smv_snapshots', merged);
+      }
+      if (data.ieSmvState && Number(data.ieSmvState.schemaVersion)>=2) {
+        let localIE = await idbKvGet('vrt_ie_smv_integrated_v2', 1, 'state', 'main');
+        const mergedIE = mergeIESmvState(localIE, data.ieSmvState);
+        await idbKvPut('vrt_ie_smv_integrated_v2', 1, 'state', 'main', mergedIE);
+        try { localStorage.setItem('vrt_ie_smv_integrated_v2', JSON.stringify(mergedIE)); } catch(e) {}
+      }
+      return merged.length || (data.ieSmvState?.updates||[]).length;
+    }
+  },
+  ie_smv: {
+    cloudTool: 'smv',
+    read: async () => {
+      const combined = await TOOLS.smv.read();
+      const state = combined?.ieSmvState;
+      if (!state || Number(state.schemaVersion) < 2) return null;
+      combined.tool='smv';
+      combined.recordCount=(state.updates||[]).length;
+      combined.summary=Object.assign({},combined.summary||{},{updates:(state.updates||[]).length,styles:(state.styles||[]).length,pending:(state.updates||[]).filter(x=>x.approval!=='approved').length});
+      return combined;
+    },
+    write: async (data) => {
+      const remote = data.ieSmvState || data.state;
+      if (!remote || Number(remote.schemaVersion) < 2) return 0;
+      let local = await idbKvGet('vrt_ie_smv_integrated_v2', 1, 'state', 'main');
+      if (!local) {
+        const raw = localStorage.getItem('vrt_ie_smv_integrated_v2');
+        if (raw) try { local = JSON.parse(raw); } catch(e) {}
+      }
+      const merged = mergeIESmvState(local, remote);
+      await idbKvPut('vrt_ie_smv_integrated_v2', 1, 'state', 'main', merged);
+      try { localStorage.setItem('vrt_ie_smv_integrated_v2', JSON.stringify(merged)); } catch(e) {}
+      return (merged.updates||[]).length;
     }
   },
   cuttingplan: {
@@ -655,6 +716,42 @@ const TOOLS = {
   },
 };
 
+// SMV / IE cloud pulls always merge. Local-only versions are retained and a
+// smaller or incomplete incoming record cannot silently replace a richer one.
+function mergeSmvSnapshots(local, remote) {
+  const key = s => [s.section||'',s.reportDate||'',s.fileName||'',s.source||''].join('|');
+  const completeness = s => (s.items||[]).length*100 + (s.items||[]).filter(i=>i&&i.style&&i.curSMV!=null).length*10 + (s.importedAt?1:0);
+  const map = new Map();
+  [...(local||[]),...(remote||[])].forEach(s => {
+    if (!s) return;
+    const k=key(s), old=map.get(k);
+    if (!old || completeness(s)>completeness(old) || (completeness(s)===completeness(old)&&String(s.importedAt||'')>String(old.importedAt||''))) map.set(k,JSON.parse(JSON.stringify(s)));
+  });
+  return [...map.values()].sort((a,b)=>String(b.reportDate||'').localeCompare(String(a.reportDate||''))||String(b.importedAt||'').localeCompare(String(a.importedAt||''))).map((s,i)=>Object.assign(s,{id:i+1}));
+}
+
+function mergeIESmvState(local, remote) {
+  if (!remote || Number(remote.schemaVersion)<2) throw new Error('無效的 IE／SMV 雲端資料');
+  if (!local || Number(local.schemaVersion)<2) local={schemaVersion:2,settings:{},updates:[],styles:[],operations:[],importLog:[]};
+  const remoteNewer=String(remote.generatedAt||'')>String(local.generatedAt||'');
+  const score=r=>{
+    if(!r)return-1;let s=0;
+    Object.keys(r).forEach(k=>{const v=r[k];if(Array.isArray(v))s+=Math.min(v.length,10);else if(v!==null&&v!==undefined&&v!=='')s++;});
+    if(r.approval==='approved')s+=8;if(r.effectiveDate)s+=5;if(r.currentSmv!=null)s+=3;if(r.smv!=null)s+=3;if(r.missingSmvCount===0)s+=2;return s;
+  };
+  const merge=(a,b,keyFn)=>{const m=new Map();(a||[]).forEach(r=>m.set(keyFn(r),JSON.parse(JSON.stringify(r))));(b||[]).forEach(r=>{const k=keyFn(r),old=m.get(k);if(!old)m.set(k,JSON.parse(JSON.stringify(r)));else if(score(r)>score(old)||(score(r)===score(old)&&remoteNewer))m.set(k,Object.assign({},old,JSON.parse(JSON.stringify(r))));else m.set(k,Object.assign({},JSON.parse(JSON.stringify(r)),old));});return [...m.values()];};
+  return {
+    schemaVersion:Math.max(Number(local.schemaVersion)||2,Number(remote.schemaVersion)||2),
+    generatedAt:new Date().toISOString(),
+    settings:Object.assign({},remoteNewer?local.settings:remote.settings,remoteNewer?remote.settings:local.settings),
+    updates:merge(local.updates,remote.updates,r=>r.id||[r.style,r.module,r.testDate,r.currentSmv].join('|')),
+    styles:merge(local.styles,remote.styles,r=>r.id||[r.style,r.module,r.testDate,r.currentSmv].join('|')),
+    operations:merge(local.operations,remote.operations,r=>[r.detailId,r.no,r.description,r.sourceFile].join('|')),
+    importLog:merge(local.importLog,remote.importLog,r=>[r.timestamp,r.file,r.detectedType,r.result].join('|')).sort((a,b)=>String(a.timestamp||'').localeCompare(String(b.timestamp||''))),
+    integration:Object.assign({},local.integration||{},remote.integration||{},{lastCloudMergeAt:new Date().toISOString()})
+  };
+}
+
 // ═══ 生產流程鏈渲染 ═══
 function flowGo(id){ const el=document.getElementById(id); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 0 0 2px #38bdf8'; setTimeout(()=>el.style.boxShadow='',1600); } }
 window.flowGo = flowGo;
@@ -730,8 +827,8 @@ async function fetchStatus() {
     if (!d.ok) return;
     const data = d.data || {};
     renderFlow(data);
-    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts','prodplan','custstats','fabric','monthship'].forEach(t => {
-      const info = data[t];
+    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','ie_smv','bom','fg','spareparts','prodplan','custstats','fabric','monthship'].forEach(t => {
+      const info = data[t] || (t==='ie_smv' ? data.smv : null);
       const stEl = document.getElementById('st-' + t);
       const bdEl = document.getElementById('bd-' + t);
       if (!stEl) return;
@@ -806,7 +903,8 @@ async function pull(tool) {
   if (pullBtn) { pullBtn.disabled = true; pullBtn.innerHTML = '<span class="spin">⏳</span>'; }
   log(`拉取 ${tool}...`, 'info');
   try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=${tool}`, { redirect:'follow' });
+    const cloudTool = cfg.cloudTool || tool;
+    const r = await fetch(`${gasUrl}?action=pull&tool=${cloudTool}`, { redirect:'follow' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
     if (!d.data || !d.data.data) { log(`${tool} 雲端尚無資料`, 'err'); return; }
@@ -831,6 +929,8 @@ const IDB_SCHEMAS = {
   'CuttingCloudPlan': { ver: 1, stores: { cloud_records:{keyPath:'id', autoIncrement:true} } },
   'vrt_pocc_db':      { ver: 1, stores: { records:{keyPath:'id'} } },
   'VRT_FGInventory':  { ver: 1, stores: { fg_records:{keyPath:'id'}, system_meta:{keyPath:'key'} } },
+  'VRT_SMV_Manager_v52': { ver: 1, stores: { smv_snapshots:{keyPath:'id', autoIncrement:true} } },
+  'vrt_ie_smv_integrated_v2': { ver: 1, stores: { state:null } },
   'vrt_bom2_v1':      { ver: 1, stores: { kv:null } },
   'vrt_spareparts':   { ver: 2, stores: { parts:{keyPath:'id'}, txns:{keyPath:'id'}, versions:{keyPath:'id'}, meta:{keyPath:'k'}, suppliers:{keyPath:'id'}, invoices:{keyPath:'id'}, ocrhist:{keyPath:'id'}, images:{keyPath:'id'} } },
   'ProdPlanCapacity': { ver: 1, stores: { records:{keyPath:'id'}, meta:{keyPath:'k'} } },
@@ -892,6 +992,18 @@ function idbPutAll(dbName, ver, store, records) {
     if (!db.objectStoreNames.contains(store)) { db.close(); res(0); return; }
     const tx = db.transaction(store, 'readwrite');
     const os = tx.objectStore(store);
+    records.forEach(r => os.put(r));
+    tx.oncomplete = () => { db.close(); res(records.length); };
+    tx.onerror    = e  => { db.close(); rej(e); };
+  }));
+}
+
+function idbReplaceAll(dbName, ver, store, records) {
+  return openHealedDB(dbName).then(db => new Promise((res, rej) => {
+    if (!db.objectStoreNames.contains(store)) { db.close(); res(0); return; }
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    os.clear();
     records.forEach(r => os.put(r));
     tx.oncomplete = () => { db.close(); res(records.length); };
     tx.onerror    = e  => { db.close(); rej(e); };
