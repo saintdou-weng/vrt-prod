@@ -130,6 +130,59 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 }
 
 </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
 
@@ -2761,54 +2814,8 @@ async function init(){
 }
 
 async function ordersAutoSync(){
-  const gasUrl = (localStorage.getItem('vrt_portal_gas_url')||'').trim();
-  if (!gasUrl) return;
-  log('☁ 從雲端同步訂單資料...','info');const vv=document.getElementById('ordCloudVisible');if(vv)vv.textContent='☁ 自動下載中…';
-  try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=orders`, { redirect:'follow' });
-    const d = await r.json();
-    if (!d.ok || !d.data || !d.data.data) { log('☁ 雲端無訂單資料（使用本機）','warn');if(vv){vv.textContent='☁ 雲端無資料 · 使用本機';vv.style.color='#fbbf24'} return; }
-    const payload = d.data.data;
-    let restored = false;
-    // 還原 localStorage orderSetsV3
-    if (payload.lsKeys && payload.lsKeys.orderSetsV3) {
-      localStorage.setItem('orderSetsV3', payload.lsKeys.orderSetsV3);
-      loadSets();
-      restored = true;
-    }
-    // 還原 FactoryDB（po_lines, weekly_snapshots, order_imports）
-    if (payload.idbData) {
-      for (const [storeName, records] of Object.entries(payload.idbData)) {
-        if (!records || !records.length) continue;
-        try {
-          await new Promise((res,rej) => {
-            const tx = db.transaction(storeName,'readwrite');
-            const os = tx.objectStore(storeName);
-            os.clear();
-            records.forEach(r => os.put(r));
-            tx.oncomplete = res; tx.onerror = rej;
-          });
-          restored = true;
-        } catch(e) { log(`☁ 還原 ${storeName} 失敗: ${e.message}`,'warn'); }
-      }
-      if (restored) {
-        APP.headers = await dbAll('po_headers');
-        APP.orders = await dbAll('po_lines');
-        APP.weekly = await dbAll('weekly_snapshots');
-        APP.imports = await dbAll('order_imports');
-        APP.audit = await dbAll('parse_audit');
-      }
-    }
-    if (restored) {
-      refreshAll();
-      log(`☁ 雲端訂單同步完成（${APP.orders.length} 筆 PO）`,'ok');if(vv){vv.textContent=`☁ 已下載 PO ${APP.orders.length} / Weekly ${APP.weekly.length}`;vv.style.color='#4ade80'}
-    } else {
-      log('☁ 雲端訂單格式不符','warn');
-    }
-  } catch(e) {
-    log('☁ 自動拉取失敗：'+e.message,'warn');
-    if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}
-  }
+  const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl)return;const vv=document.getElementById('ordCloudVisible');if(vv)vv.textContent='☁ 自動比對中…';
+  try{const local=await dbAll('po_lines');const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,onStatus:m=>{if(vv)vv.textContent='☁ '+m},apply:async(recs,meta)=>{const write=async(storeName,records)=>{if(!Array.isArray(records)||!db.objectStoreNames.contains(storeName))return;await new Promise((res,rej)=>{const tx=db.transaction(storeName,'readwrite'),os=tx.objectStore(storeName);os.clear();records.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})};await write('po_lines',recs);if(meta&&meta.idbData)for(const [k,v] of Object.entries(meta.idbData))await write(k,v);if(meta&&meta.lsKeys&&meta.lsKeys.orderSetsV3){localStorage.setItem('orderSetsV3',meta.lsKeys.orderSetsV3);loadSets()}APP.headers=await dbAll('po_headers');APP.orders=await dbAll('po_lines');APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');APP.audit=await dbAll('parse_audit');refreshAll();}});if(!res.ok){log('☁ 雲端無訂單資料（使用本機）','warn');return;}log(`☁ 智慧同步完成 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');if(vv){vv.textContent=`☁ 已同步 · ↓${res.downloaded||0} · =${res.unchanged||0}${res.pendingUpload?' · ↑待 '+res.pendingUpload:''}`;vv.style.color='#4ade80'}}catch(e){log('☁ 自動拉取失敗：'+e.message,'warn');if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}}
 }
 
 // ── 訂單雲端同步面板 ──────────────────────────
@@ -2832,113 +2839,30 @@ function ordSaveGas(){
   ordLog('GAS URL 已儲存','i');
 }
 async function ordCloudPush(){
-  const gasUrl = (localStorage.getItem('vrt_portal_gas_url')||'').trim();
-  if (!gasUrl){ ordLog('請先填入 GAS URL','err'); return; }
-  ordSetBusy(true);
-  ordLog('讀取訂單資料...','i');
-  try {
-    // 讀取所有 FactoryDB 資料
-    const poHeaders = await dbAll('po_headers');
-    const poLines   = await dbAll('po_lines');
-    const weekly    = await dbAll('weekly_snapshots');
-    const imports   = await dbAll('order_imports');
-    const audit     = await dbAll('parse_audit');
-    const setsRaw   = localStorage.getItem('orderSetsV3') || '{}';
-    ordLog(`推送 PO ${poLines.length} 筆，週報 ${weekly.length} 筆...`,'i');
-    const payload = {
-      tool:'orders',
-      recordCount: poLines.length,
-      lsKeys:{ orderSetsV3: setsRaw },
-      idbData:{
-        po_headers: poHeaders, po_lines: poLines, weekly_snapshots: weekly, order_imports: imports, parse_audit: audit,
-      },
-      summary:{
-        totalPOs: poLines.length,
-        weeklySnapshots: weekly.length,
-      }
-    };
-    // 分批推送 po_lines（若超過 2000 筆）
-    const CHUNK = 2000;
-    if (poLines.length > CHUNK) {
-      const chunks = Math.ceil(poLines.length / CHUNK);
-      ordLog(`PO 資料分 ${chunks} 批推送...`,'i');
-      for (let i = 0; i < chunks; i++) {
-        const isLast = i === chunks - 1;
-        const chunk = {
-          tool:'orders', chunk:i, totalChunks:chunks, recordCount:poLines.length,
-          records: poLines.slice(i*CHUNK,(i+1)*CHUNK),
-          ...(isLast ? {
-            lsKeys:{ orderSetsV3: setsRaw },
-            idbData:{ po_headers:poHeaders, weekly_snapshots:weekly, order_imports:imports, parse_audit:audit },
-            summary: payload.summary,
-          } : {})
-        };
-        const r = await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(chunk),redirect:'follow'});
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error);
-        ordLog(`第 ${i+1}/${chunks} 批完成`,'i');
-      }
-    } else {
-      const r = await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload),redirect:'follow'});
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-    }
-    ordLog(`✓ 推送完成（PO ${poLines.length} 筆）`,'ok');
-    document.getElementById('ordCloudStatus').textContent = `已同步：PO ${poLines.length} 筆`;
-  } catch(e){ ordLog('✗ 推送失敗：'+e.message,'err'); }
-  finally { ordSetBusy(false); }
+  const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}ordSetBusy(true);ordLog('智慧同步：讀取訂單資料...','i');
+  try{
+    const poHeaders=await dbAll('po_headers'),poLines=await dbAll('po_lines'),weekly=await dbAll('weekly_snapshots'),imports=await dbAll('order_imports'),audit=await dbAll('parse_audit'),setsRaw=localStorage.getItem('orderSetsV3')||'{}';
+    const meta={lsKeys:{orderSetsV3:setsRaw},idbData:{po_headers:poHeaders,weekly_snapshots:weekly,order_imports:imports,parse_audit:audit},summary:{totalPOs:poLines.length,weeklySnapshots:weekly.length}};
+    const res=await VRTSmartSync.push({url:gasUrl,tool:'orders',records:poLines,meta,onStatus:m=>ordLog(m,'i')});
+    if(res&&res.needsPull){ordLog('⚠ 雲端有較新 Weekly / PO 資料，請先拉取','err');return;}
+    ordLog(`✓ 智慧推送完成 · PO ${poLines.length} · 本次傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');document.getElementById('ordCloudStatus').textContent=`已同步：PO ${poLines.length} · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`;
+  }catch(e){ordLog('✗ 推送失敗：'+e.message,'err');}finally{ordSetBusy(false);}
 }
+
 async function ordCloudPull(){
-  const gasUrl = (localStorage.getItem('vrt_portal_gas_url')||'').trim();
-  if (!gasUrl){ ordLog('請先填入 GAS URL','err'); return; }
-  if (!confirm('拉取會覆蓋本機訂單資料，確定嗎？')) return;
-  ordSetBusy(true);
-  ordLog('拉取中...','i');
-  try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=orders`,{redirect:'follow'});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-    if (!d.data || !d.data.data){ ordLog('雲端尚無訂單資料','err'); return; }
-    const payload = d.data.data;
-    // 還原 localStorage
-    if (payload.lsKeys?.orderSetsV3) {
-      localStorage.setItem('orderSetsV3', payload.lsKeys.orderSetsV3);
-      loadSets();
-    }
-    // 還原 FactoryDB
-    if (payload.idbData) {
-      if (!db) { try { await openDB(); } catch(e) {} }
-      if (!db) {
-        ordLog('本機資料庫無法開啟，已略過 IDB 還原（訂單清單已還原）','err');
-      } else {
-        for (const [storeName, records] of Object.entries(payload.idbData)) {
-          if (!records?.length) continue;
-          if (!db.objectStoreNames.contains(storeName)) { ordLog(`略過 ${storeName}（本機無此資料表）`,'err'); continue; }
-          await new Promise((res,rej) => {
-            const tx = db.transaction(storeName,'readwrite');
-            const os = tx.objectStore(storeName);
-            os.clear();
-            records.forEach(r => os.put(r));
-            tx.oncomplete = res; tx.onerror = rej;
-          });
-        }
-        APP.orders = await dbAll('po_lines');
-        APP.weekly = await dbAll('weekly_snapshots');
-        APP.imports = await dbAll('order_imports');
-      }
-    }
-    refreshAll();
-    ordLog(`✓ 拉取完成（${APP.orders.length} 筆 PO）`,'ok');
-    document.getElementById('ordCloudStatus').textContent = `已還原：PO ${APP.orders.length} 筆`;
-    const vv=document.getElementById('ordCloudVisible');
-    if(vv){vv.textContent=`☁ 已下載 PO ${APP.orders.length} / Weekly ${APP.weekly.length}`;vv.style.color='#4ade80'}
-  } catch(e){
-    ordLog('✗ 拉取失敗：'+e.message,'err');
-    const vv=document.getElementById('ordCloudVisible');
-    if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}
-  }
-  finally { ordSetBusy(false); }
+  const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}ordSetBusy(true);ordLog('智慧拉取：只下載有變更的訂單區塊...','i');
+  try{
+    const local=await dbAll('po_lines');
+    const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,onStatus:m=>ordLog(m,'i'),apply:async(recs,meta)=>{
+      if(!db){try{await openDB()}catch(_){}}if(!db)throw new Error('本機 FactoryDB 無法開啟');
+      const write=async(storeName,records)=>{if(!Array.isArray(records)||!db.objectStoreNames.contains(storeName))return;await new Promise((res,rej)=>{const tx=db.transaction(storeName,'readwrite'),os=tx.objectStore(storeName);os.clear();records.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})};
+      await write('po_lines',recs);if(meta&&meta.idbData){for(const [k,v] of Object.entries(meta.idbData))await write(k,v)}if(meta&&meta.lsKeys&&meta.lsKeys.orderSetsV3){localStorage.setItem('orderSetsV3',meta.lsKeys.orderSetsV3);loadSets()}
+      APP.headers=await dbAll('po_headers');APP.orders=await dbAll('po_lines');APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');APP.audit=await dbAll('parse_audit');refreshAll();
+    }});
+    if(!res.ok){ordLog('雲端尚無訂單資料','err');return;}ordLog(`✓ 智慧拉取完成 · PO ${APP.orders.length} / Weekly ${APP.weekly.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');document.getElementById('ordCloudStatus').textContent=`已還原：PO ${APP.orders.length} / Weekly ${APP.weekly.length}`;const vv=document.getElementById('ordCloudVisible');if(vv){vv.textContent=`☁ 已下載 ${res.downloaded||0} · 未變 ${res.unchanged||0} · PO ${APP.orders.length}`;vv.style.color='#4ade80'}
+  }catch(e){ordLog('✗ 拉取失敗：'+e.message,'err');const vv=document.getElementById('ordCloudVisible');if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}}finally{ordSetBusy(false);}
 }
+
 function ordSetBusy(on){
   document.getElementById('ordPushBtn').disabled = on;
   document.getElementById('ordPullBtn').disabled = on;

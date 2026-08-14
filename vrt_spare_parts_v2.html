@@ -167,6 +167,59 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 }
 
 </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
 
@@ -1096,442 +1149,13 @@ function updateCloudDot(){
   else dot.innerHTML='⚪ <span>'+t('cloudOff')+'</span>';
 }
 async function cloudUpload(){
-  if(SET.cloudTarget==='local'||!SET.gasUrl){backupLocal();toast(_lang==='en'?'Saved local backup':'已下載本機備份');return;}
-  try{
-    const res=await fetch(SET.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'push',tool:'spareparts',data:{parts:PARTS,txns:TXNS,versions:VERSIONS}})});
-    await res.text();toast('☁️ Uploaded');
-  }catch(e){console.error(e);toast('Upload failed — check URL/CORS');}
-}
-async function cloudDownload(){
-  if(SET.cloudTarget==='local'||!SET.gasUrl){toast(_lang==='en'?'Use Restore for local':'本機請用還原');return;}
-  try{
-    const res=await fetch(SET.gasUrl+'?action=pull&tool=spareparts',{redirect:'follow'});
-    const d=await res.json();
-    if(d&&d.parts){PARTS=d.parts;TXNS=d.txns||[];VERSIONS=d.versions||[];saveAll(true);goTab('dashboard',null);toast('☁️ Downloaded');}
-    else toast('No cloud data');
-  }catch(e){console.error(e);toast('Download failed');}
-}
-
-/* ===== Telegram ===== */
-function openTelegram(){
-  const chk=(k,l)=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" id="tg_${k}" checked> ${l}</label>`;
-  const grp=(g)=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" id="tgg_${g}" ${SET.tgGroups[g]?'checked':''} ${SET.tgGroups[g]?'':'disabled'}> ${g} ${SET.tgGroups[g]?'':'<span style="color:#dc2626">(no id)</span>'}</label>`;
-  openModal(`<h3>📨 ${t('tgTitle')}</h3>
-    <div class="ct">${t('tgGroups')}</div>${['Maintenance','Warehouse','Management','AdminCenter'].map(grp).join('')}
-    <div class="ct" style="margin-top:10px">${_lang==='en'?'Content':'內容'}</div>
-    ${chk('daily',t('tgDaily'))}${chk('low',t('tgLow'))}${chk('monthly',t('tgMonthly'))}
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-      <button class="btn btn-g" onclick="closeModal()">${t('btnCancel')}</button>
-      <button class="btn btn-y" onclick="sendTelegram()">${t('tgSend')}</button></div>`);
-}
-function buildTgMessage(){
-  const ps=PARTS;const val=ps.reduce((s,p)=>s+(+p.qty||0)*(+p.unitPrice||0),0);
-  const low=ps.filter(p=>partStatus(p)!=='ok');
-  let m=`<b>🔧 ${escapeHtml(SET.company)} — Spare Parts</b>\n${todayStr()}\n`;
-  if($('tg_daily')&&$('tg_daily').checked)m+=`\n📦 Parts: <b>${ps.length}</b>\n💰 Value: <b>${money(val)}</b>\n`;
-  if($('tg_low')&&$('tg_low').checked){m+=`\n🟡 Low/Out (${low.length}):\n`+low.slice(0,15).map(p=>`• ${escapeHtml(p.partNo)} = ${num(p.qty)}`).join('\n');}
-  if($('tg_monthly')&&$('tg_monthly').checked){const mt=monthTxns();const i=mt.filter(x=>x.type==='IN').reduce((s,x)=>s+ +x.qty,0);const o=mt.filter(x=>x.type==='OUT').reduce((s,x)=>s+ +x.qty,0);m+=`\n\n📆 This Month — IN ${i} / OUT ${o}`;}
-  return m;
-}
-async function sendTelegram(){
-  if(!SET.tgToken){toast('Set Bot Token in Settings');return;}
-  const groups=['Maintenance','Warehouse','Management','AdminCenter'].filter(g=>{const el=$('tgg_'+g);return el&&el.checked&&SET.tgGroups[g];});
-  if(!groups.length){toast('Select a group with chat_id');return;}
-  const msg=buildTgMessage();let okN=0;
-  for(const g of groups){try{
-    const r=await fetch(`https://api.telegram.org/bot${SET.tgToken}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:SET.tgGroups[g],text:msg,parse_mode:'HTML',disable_web_page_preview:true})});
-    const d=await r.json();if(d.ok)okN++;}catch(e){console.error(e);}}
-  closeModal();toast(okN?('📨 Sent to '+okN):'Send failed (token/CORS)');
-}
-
-
-/* ═══════════════════════════════════════════════════════════════
-   V3 PROCUREMENT OVERRIDES
-   This factory currently records purchases/prices only.
-   No issue/outbound/stock-on-hand logic is used.
-   ═══════════════════════════════════════════════════════════════ */
-let PUR_PERIOD='month', PUR_ANCHOR='';
-
-function fillFilterSelects(){
-  const opt=(arr,all)=>'<option value="">'+all+'</option>'+arr.map(a=>'<option>'+a+'</option>').join('');
-  const st=$('fStore'), ca=$('fCat'), br=$('fBrand');
-  if(st)st.innerHTML=opt(STORES,_lang==='en'?'All Stores':_lang==='km'?'ឃ្លាំងទាំងអស់':'全部倉庫');
-  if(ca)ca.innerHTML=opt(CATS,_lang==='en'?'All Categories':_lang==='km'?'ប្រភេទទាំងអស់':'全部分類');
-  if(br)br.innerHTML=opt(BRANDS,_lang==='en'?'All Brands':_lang==='km'?'ម៉ាកទាំងអស់':'全部品牌');
-}
-function applyFilters(){
-  const st=$('fStore'), ca=$('fCat'), br=$('fBrand'), q=$('fSearch');
-  FILTER.store=st?st.value:'';
-  FILTER.cat=ca?ca.value:'';
-  FILTER.brand=br?br.value:'';
-  FILTER.q=q?q.value.trim().toLowerCase():'';
-  renderTab(_curTab);
-}
-function purchaseTxns(){
-  return (TXNS||[]).filter(x=>String(x.type||'PURCHASE').toUpperCase()!=='OUT');
-}
-function purchaseAmount(x){
-  const a=Number(x.amount);
-  return Number.isFinite(a)&&a!==0 ? a : (Number(x.qty)||0)*(Number(x.unitPrice)||0);
-}
-function latestPurchaseDate(){
-  return purchaseTxns().map(x=>String(x.date||'').slice(0,10)).filter(Boolean).sort().pop()||todayStr();
-}
-function latestPurchaseMonth(){ return latestPurchaseDate().slice(0,7); }
-function latestPurchaseYear(){ return latestPurchaseDate().slice(0,4); }
-function monthPurchases(m){ return purchaseTxns().filter(x=>ym(x.date)===m); }
-function periodDate(d){ const a=String(d||'').slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(a)?a:''; }
-function dateObj(s){ const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
-function isoLocal(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
-function startOfWeek(d){ const x=new Date(d); const wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); return x; }
-function periodRange(anchor,period){
-  let d=dateObj(anchor)||dateObj(latestPurchaseDate())||new Date(), a,b;
-  if(period==='day'){a=new Date(d);b=new Date(d);}
-  else if(period==='week'){a=startOfWeek(d);b=new Date(a);b.setDate(a.getDate()+6);}
-  else if(period==='year'){a=new Date(d.getFullYear(),0,1);b=new Date(d.getFullYear(),11,31);}
-  else{a=new Date(d.getFullYear(),d.getMonth(),1);b=new Date(d.getFullYear(),d.getMonth()+1,0);}
-  return [isoLocal(a),isoLocal(b)];
-}
-function periodLabel(){
-  const [a,b]=periodRange(PUR_ANCHOR||latestPurchaseDate(),PUR_PERIOD);
-  if(PUR_PERIOD==='day')return a;
-  if(PUR_PERIOD==='month')return a.slice(0,7);
-  if(PUR_PERIOD==='year')return a.slice(0,4);
-  return a+' → '+b;
-}
-function periodRows(){
-  const [a,b]=periodRange(PUR_ANCHOR||latestPurchaseDate(),PUR_PERIOD);
-  return purchaseTxns().filter(x=>{const d=periodDate(x.date);return d&&d>=a&&d<=b;});
-}
-function setPurPeriod(p,btn){
-  PUR_PERIOD=p;
-  document.querySelectorAll('.periodseg button').forEach(x=>x.classList.remove('on'));
-  if(btn)btn.classList.add('on');
-  renderMonthly();
-}
-function navPurPeriod(step){
-  let d=dateObj(PUR_ANCHOR||latestPurchaseDate())||new Date();
-  if(PUR_PERIOD==='day')d.setDate(d.getDate()+step);
-  else if(PUR_PERIOD==='week')d.setDate(d.getDate()+step*7);
-  else if(PUR_PERIOD==='year')d.setFullYear(d.getFullYear()+step);
-  else d.setMonth(d.getMonth()+step);
-  PUR_ANCHOR=isoLocal(d); renderMonthly();
-}
-function purchaseStats(xs){
-  const spend=xs.reduce((s,x)=>s+purchaseAmount(x),0);
-  const qty=xs.reduce((s,x)=>s+(Number(x.qty)||0),0);
-  const parts=new Set(xs.map(x=>x.partNo).filter(Boolean));
-  const inv=new Set(xs.map(x=>x.invoiceNo||x.invoice).filter(Boolean));
-  const needle=xs.filter(x=>String(x.category||'').toLowerCase()==='needle'||String(x.partNo||'').startsWith('ND-'))
-    .reduce((s,x)=>s+purchaseAmount(x),0);
-  return {spend,qty,parts:parts.size,invoices:inv.size,lines:xs.length,needle};
-}
-function partPurchases(partNo){return purchaseTxns().filter(x=>x.partNo===partNo).sort((a,b)=>(b.date||'').localeCompare(a.date||''));}
-function partSummary(p){
-  const xs=partPurchases(p.partNo), st=purchaseStats(xs);
-  const prices=xs.map(x=>Number(x.unitPrice)||0).filter(x=>x>0);
-  return {xs, ...st, latest:prices[0]||Number(p.unitPrice)||0, min:prices.length?Math.min(...prices):0, max:prices.length?Math.max(...prices):0,
-    avg:prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0, lastDate:xs[0]?.date||'', firstDate:xs[xs.length-1]?.date||''};
-}
-
-async function loadAll(){
-  try{
-    PARTS=await idbGetAll('parts'); TXNS=await idbGetAll('txns'); VERSIONS=await idbGetAll('versions');
-    SUPPLIERS=await idbGetAll('suppliers'); INVOICES=await idbGetAll('invoices'); OCRHIST=await idbGetAll('ocrhist');
-    const s=await idbGetMeta('settings'); if(s)SET=Object.assign(SET,s);
-    else{const ls=localStorage.getItem('vrt_sp_set');if(ls)SET=Object.assign(SET,JSON.parse(ls));}
-    // Share the same GAS URL as /prod and /prod2 when available.
-    if(!SET.gasUrl) SET.gasUrl=(localStorage.getItem('vrt_portal_gas_url')||localStorage.getItem('vrt_prod_gas_url')||'').trim();
-    if(SET.gasUrl) SET.cloudTarget='gas';
-  }catch(e){console.error(e);}
-  // Never auto-seed demo inventory in production.
-  PUR_ANCHOR=latestPurchaseDate();
-}
-
-function goTab(name,el){
-  _curTab=name;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
-  if(el)el.classList.add('on');
-  else{
-    const m={dashboard:0,inventory:1,history:2,monthly:3,price:4,reports:5,ocr:6,settings:7};
-    document.querySelectorAll('.tab')[m[name]]?.classList.add('on');
-  }
-  renderTab(name);
-}
-function renderTab(name){
-  const fn={dashboard:renderDashboard,inventory:renderInventory,history:renderHistory,
-    monthly:renderMonthly,price:renderPrice,reports:renderReports,ocr:renderOCR,settings:renderSettings}[name];
-  if(fn)fn();
-}
-function updateHeaderStats(){
-  const yr=latestPurchaseYear(), mo=latestPurchaseMonth();
-  const y=purchaseTxns().filter(x=>String(x.date||'').startsWith(yr));
-  $('hParts').textContent=num(PARTS.length);
-  $('hValue').textContent=money(y.reduce((s,x)=>s+purchaseAmount(x),0)).replace(/\.00$/,'');
-  $('hLow').textContent=money(monthPurchases(mo).reduce((s,x)=>s+purchaseAmount(x),0)).replace(/\.00$/,'');
-}
-function monthTxns(){return monthPurchases(latestPurchaseMonth());}
-function priceHistory(partNo){
-  return partPurchases(partNo).filter(x=>Number(x.unitPrice)>0)
-    .map(x=>({date:x.date,price:+x.unitPrice,qty:+x.qty||0,invoiceNo:x.invoiceNo||''}))
-    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-}
-
-function renderDashboard(){
-  fillFilterSelects();
-  const all=purchaseTxns(), mo=latestPurchaseMonth(), yr=latestPurchaseYear();
-  const mx=monthPurchases(mo), yx=all.filter(x=>String(x.date||'').startsWith(yr));
-  const ms=purchaseStats(mx), ys=purchaseStats(yx);
-  const kpi=(n,l,cls)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}</div><div class="kpi-l">${l}</div></div>`;
-  const byPart={};
-  yx.forEach(x=>{const k=x.partNo||x.name||'--';if(!byPart[k])byPart[k]={key:k,name:x.name||'',qty:0,spend:0};byPart[k].qty+=+x.qty||0;byPart[k].spend+=purchaseAmount(x);});
-  const tops=Object.values(byPart).sort((a,b)=>b.spend-a.spend).slice(0,10);
-  const recent=[...all].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,10);
-  let h=`<div class="sec on"><div class="kpi-strip">
-    ${kpi(money(ys.spend).replace(/\.00$/,''),'💰 '+yr+' 採購未稅','k-green')}
-    ${kpi(money(ms.spend).replace(/\.00$/,''),'📆 '+mo+' 採購未稅','k-blue')}
-    ${kpi(num(ms.lines),'🧾 '+mo+' 採購筆數','k-violet')}
-    ${kpi(num(ms.parts),'🔧 '+mo+' 零件/品項','k-amber')}
-    ${kpi(num(ms.qty),'📦 '+mo+' 採購數量','k-blue')}
-    ${kpi(money(ms.needle).replace(/\.00$/,''),'🪡 '+mo+' 機針費用','k-slate')}
-  </div>
-  <div class="g2"><div class="card"><div class="ct">🏆 ${yr} 採購金額 Top10</div><div class="tw"><table><thead><tr><th>Part No</th><th>Name</th><th class="num">Qty</th><th class="num">Spend</th></tr></thead><tbody>
-  ${tops.map(o=>`<tr class="clickrow" onclick="openPartDetailByNo('${escapeHtml(o.key)}')"><td class="mono partlink">${escapeHtml(o.key)}</td><td>${escapeHtml(o.name)}</td><td class="num">${num(o.qty)}</td><td class="num">${money(o.spend)}</td></tr>`).join('')||emptyRow(4)}
-  </tbody></table></div></div>
-  <div class="card"><div class="ct">🧾 最近採購</div><div class="tw"><table><thead><tr><th>Date</th><th>Part</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead><tbody>
-  ${recent.map(x=>`<tr class="clickrow" onclick="openPartDetailByNo('${escapeHtml(x.partNo||'')}')"><td class="mono">${escapeHtml(x.date||'')}</td><td><b>${escapeHtml(x.partNo||'')}</b><br><span style="font-size:10px;color:var(--sub)">${escapeHtml(x.name||'')}</span></td><td class="num">${num(x.qty)}</td><td class="num">${money(purchaseAmount(x))}</td></tr>`).join('')||emptyRow(4)}
-  </tbody></table></div></div></div></div>`;
-  $('app').innerHTML=h; updateHeaderStats();
-}
-
-function renderInventory(){
-  fillFilterSelects();
-  let ps=filteredParts().filter(p=>{
-    if(FILTER.q){const q=FILTER.q;return (p.partNo+' '+p.name+' '+p.spec+' '+p.category+' '+p.machineType).toLowerCase().includes(q);}
-    return true;
-  });
-  ps.sort((a,b)=>String(a.partNo||'').localeCompare(String(b.partNo||'')));
-  let h=`<div class="sec on">
-    <div class="kpi-strip">
-      <div class="kpi k-blue"><div class="kpi-n">${num(ps.length)}</div><div class="kpi-l">零件主檔</div></div>
-      <div class="kpi k-green"><div class="kpi-n">${num(new Set(purchaseTxns().map(x=>x.partNo).filter(Boolean)).size)}</div><div class="kpi-l">有採購記錄</div></div>
-      <div class="kpi k-amber"><div class="kpi-n">${num(purchaseTxns().length)}</div><div class="kpi-l">採購明細</div></div>
-    </div>
-    <div class="card"><div class="ct" style="justify-content:space-between"><span>🔧 零件清單</span><button class="btn btn-y btn-sm" onclick="editPart()">➕ 新增主檔</button></div>
-    <div style="font-size:11px;color:var(--sub);margin-bottom:8px">點零件編號或名稱 → 顯示規格、機台、歷史採購量、月別費用、單價趨勢與全部採購記錄。</div>
-    <div class="tw"><table class="part-table"><colgroup><col style="width:19%"><col style="width:35%"><col style="width:27%"><col style="width:19%"></colgroup>
-      <thead><tr><th>Part No</th><th>Name / Spec</th><th>Category / Machine</th><th class="num">Latest Price</th></tr></thead><tbody>`;
-  h+=ps.map(p=>{const s=partSummary(p);return `<tr class="clickrow" onclick="openPartDetail('${p.id}')">
-    <td class="mono partlink">${escapeHtml(p.partNo)}</td>
-    <td><div class="compound"><div class="p partlink">${escapeHtml(p.name)}</div><div class="s">${escapeHtml(p.spec||'')}</div></div></td>
-    <td><div class="compound"><div class="p">${escapeHtml(p.category||'')}</div><div class="s">${escapeHtml(p.machineType||'')}</div></div></td>
-    <td class="num">${money(s.latest)}</td></tr>`;}).join('')||emptyRow(4);
-  h+=`</tbody></table></div></div></div>`;$('app').innerHTML=h;
-}
-function openPartDetailByNo(no){const p=PARTS.find(x=>x.partNo===no);if(p)openPartDetail(p.id);}
-function openPartDetail(id){
-  const p=PARTS.find(x=>x.id===id);if(!p)return;
-  const s=partSummary(p), mm={};
-  s.xs.forEach(x=>{const m=ym(x.date)||'Unknown';if(!mm[m])mm[m]={qty:0,spend:0,n:0,prices:[]};mm[m].qty+=+x.qty||0;mm[m].spend+=purchaseAmount(x);mm[m].n++;if(+x.unitPrice)mm[m].prices.push(+x.unitPrice);});
-  const months=Object.entries(mm).sort((a,b)=>b[0].localeCompare(a[0]));
-  openModal(`<h3>🔧 ${escapeHtml(p.partNo)} — ${escapeHtml(p.name)}</h3>
-    <div class="detail-kpis">
-      <div class="detail-kpi"><b>${num(s.qty)}</b><span>Total Purchased Qty</span></div>
-      <div class="detail-kpi"><b>${money(s.spend)}</b><span>Total Spend</span></div>
-      <div class="detail-kpi"><b>${num(s.lines)}</b><span>Purchase Lines</span></div>
-      <div class="detail-kpi"><b>${money(s.latest)}</b><span>Latest Price</span></div>
-      <div class="detail-kpi"><b>${money(s.min)}</b><span>Min Price</span></div>
-      <div class="detail-kpi"><b>${money(s.max)}</b><span>Max Price</span></div>
-    </div>
-    <div class="g2">
-      <div class="card"><div class="ct">主檔資料</div>
-        <div style="font-size:12px;line-height:1.9"><b>Spec:</b> ${escapeHtml(p.spec||'--')}<br><b>Category:</b> ${escapeHtml(p.category||'--')}<br><b>Brand:</b> ${escapeHtml(p.brand||'--')}<br><b>Machine / Use:</b> ${escapeHtml(p.machineType||'--')}<br><b>Unit:</b> ${escapeHtml(p.unit||'--')}<br><b>First / Last:</b> ${escapeHtml(s.firstDate||'--')} → ${escapeHtml(s.lastDate||'--')}</div>
-      </div>
-      <div class="card"><div class="ct">月別採購</div><div class="tw" style="max-height:260px"><table><thead><tr><th>Month</th><th class="num">Qty</th><th class="num">Spend</th><th class="num">Avg Price</th></tr></thead><tbody>
-        ${months.map(([m,v])=>`<tr><td>${m}</td><td class="num">${num(v.qty)}</td><td class="num">${money(v.spend)}</td><td class="num">${v.prices.length?money(v.prices.reduce((a,b)=>a+b,0)/v.prices.length):'-'}</td></tr>`).join('')||emptyRow(4)}
-      </tbody></table></div></div>
-    </div>
-    <div class="card"><div class="ct">歷史採購明細</div><div class="tw" style="max-height:320px"><table><thead><tr><th>Date</th><th>Invoice</th><th>Supplier</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>
-      ${s.xs.map(x=>`<tr><td>${escapeHtml(x.date||'')}</td><td>${escapeHtml(x.invoiceNo||'')}</td><td>${escapeHtml(x.supplier||'')}</td><td class="num">${num(x.qty)}</td><td class="num">${money(x.unitPrice)}</td><td class="num">${money(purchaseAmount(x))}</td></tr>`).join('')||emptyRow(6)}
-    </tbody></table></div></div>
-    <div style="text-align:right"><button class="btn btn-g" onclick="closeModal()">Close</button> <button class="btn btn-y" onclick="closeModal();editPart('${p.id}')">✎ Edit Master</button></div>`);
-}
-
-function renderHistory(){
-  fillFilterSelects();
-  let xs=filteredTxns().filter(x=>String(x.type||'PURCHASE').toUpperCase()!=='OUT')
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0));
-  let h=`<div class="sec on"><div class="card"><div class="ct">🧾 採購記錄 (${xs.length})</div>
-    <div style="font-size:11px;color:var(--sub);margin-bottom:8px">本頁只有採購，不計領料、不推算庫存。點零件可看完整卡片。</div>
-    <div class="tw"><table class="purchase-table"><colgroup><col><col><col><col><col></colgroup><thead><tr>
-    <th>Date</th><th>Invoice / Supplier</th><th>Part / Name</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead><tbody>`;
-  h+=xs.map(x=>`<tr class="clickrow" onclick="openPartDetailByNo('${escapeHtml(x.partNo||'')}')">
-    <td class="mono">${escapeHtml(x.date||'')}</td>
-    <td><div class="compound"><div class="p">${escapeHtml(x.invoiceNo||'--')}</div><div class="s">${escapeHtml(x.supplier||'')}</div></div></td>
-    <td><div class="compound"><div class="p partlink">${escapeHtml(x.partNo||'')}</div><div class="s">${escapeHtml(x.name||PARTS.find(p=>p.partNo===x.partNo)?.name||'')}</div></div></td>
-    <td class="num">${num(x.qty)}</td><td class="num">${money(purchaseAmount(x))}</td></tr>`).join('')||emptyRow(5);
-  h+=`</tbody></table></div></div></div>`;$('app').innerHTML=h;
-}
-
-function renderMonthly(){
-  fillFilterSelects();
-  if(!PUR_ANCHOR)PUR_ANCHOR=latestPurchaseDate();
-  const xs=periodRows(), st=purchaseStats(xs);
-  const year=(dateObj(PUR_ANCHOR)||dateObj(latestPurchaseDate())||new Date()).getFullYear();
-  const yearRows=purchaseTxns().filter(x=>String(x.date||'').startsWith(String(year)));
-  const months=Array.from({length:12},(_,i)=>String(year)+'-'+pad(i+1)).map(m=>({m,x:monthPurchases(m)}));
-  let h=`<div class="sec on">
-    <div class="periodbar"><div class="periodseg">
-      <button class="${PUR_PERIOD==='day'?'on':''}" onclick="setPurPeriod('day',this)">日</button>
-      <button class="${PUR_PERIOD==='week'?'on':''}" onclick="setPurPeriod('week',this)">週</button>
-      <button class="${PUR_PERIOD==='month'?'on':''}" onclick="setPurPeriod('month',this)">月</button>
-      <button class="${PUR_PERIOD==='year'?'on':''}" onclick="setPurPeriod('year',this)">年</button>
-    </div><button class="btn btn-g btn-sm" onclick="navPurPeriod(-1)">◀</button><div class="periodlabel">${periodLabel()}</div><button class="btn btn-g btn-sm" onclick="navPurPeriod(1)">▶</button></div>
-    <div class="kpi-strip">
-      <div class="kpi k-green"><div class="kpi-n">${money(st.spend)}</div><div class="kpi-l">採購未稅金額</div></div>
-      <div class="kpi k-blue"><div class="kpi-n">${num(st.qty)}</div><div class="kpi-l">採購數量</div></div>
-      <div class="kpi k-violet"><div class="kpi-n">${num(st.lines)}</div><div class="kpi-l">採購明細</div></div>
-      <div class="kpi k-amber"><div class="kpi-n">${num(st.parts)}</div><div class="kpi-l">品項數</div></div>
-      <div class="kpi k-slate"><div class="kpi-n">${num(st.invoices)}</div><div class="kpi-l">發票數</div></div>
-      <div class="kpi k-blue"><div class="kpi-n">${money(st.needle)}</div><div class="kpi-l">機針費用</div></div>
-    </div>
-    <div class="card"><div class="ct">📋 ${periodLabel()} 採購列表</div><div class="tw"><table class="purchase-table"><colgroup><col><col><col><col><col></colgroup><thead><tr><th>Date</th><th>Part</th><th>Name / Category</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead><tbody>
-      ${xs.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>`<tr class="clickrow" onclick="openPartDetailByNo('${escapeHtml(x.partNo||'')}')"><td>${escapeHtml(x.date||'')}</td><td class="partlink">${escapeHtml(x.partNo||'')}</td><td><div class="compound"><div class="p">${escapeHtml(x.name||'')}</div><div class="s">${escapeHtml(x.category||'')} · ${escapeHtml(x.machineType||'')}</div></div></td><td class="num">${num(x.qty)}</td><td class="num">${money(purchaseAmount(x))}</td></tr>`).join('')||emptyRow(5)}
-    </tbody></table></div></div>
-    <div class="card"><div class="ct">📊 ${year} 月別比較</div><div class="tw"><table><thead><tr><th>Month</th><th class="num">Spend</th><th class="num">Qty</th><th class="num">Lines</th><th class="num">Parts</th><th class="num">Needle</th></tr></thead><tbody>
-      ${months.map(o=>{const z=purchaseStats(o.x);return `<tr><td>${o.m}</td><td class="num">${money(z.spend)}</td><td class="num">${num(z.qty)}</td><td class="num">${num(z.lines)}</td><td class="num">${num(z.parts)}</td><td class="num">${money(z.needle)}</td></tr>`}).join('')}
-      <tr style="font-weight:700;background:var(--soft)"><td>${year} Total</td><td class="num">${money(purchaseStats(yearRows).spend)}</td><td class="num">${num(purchaseStats(yearRows).qty)}</td><td class="num">${num(yearRows.length)}</td><td class="num">${num(purchaseStats(yearRows).parts)}</td><td class="num">${money(purchaseStats(yearRows).needle)}</td></tr>
-    </tbody></table></div></div></div>`;
-  $('app').innerHTML=h;
-}
-
-/* Benchmark workbook import: reads Transaction Detail, not the HTML Import stock template. */
-function excelDateText(v){
-  if(v==null||v==='')return '';
-  if(v instanceof Date)return isoLocal(v);
-  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*86400*1000));return isoLocal(new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));}
-  const s=String(v).trim();
-  const m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);if(m)return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
-  return s.slice(0,10);
-}
-let _purchaseImport=null;
-function importExcel(file){
-  if(!file)return;const rd=new FileReader();
-  rd.onload=e=>{try{
-    const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false,raw:true});
-    const detName=wb.SheetNames.find(n=>String(n).trim().toLowerCase()==='transaction detail');
-    if(detName){
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[detName],{defval:'',raw:true});
-      const purchases=[], pmap=new Map();
-      rows.forEach(r=>{
-        const partNo=String(r['Part No']||'').trim(), name=String(r['Standard Name']||r['Raw Item Name']||'').trim();
-        const qty=Number(r['Qty'])||0, price=Number(r['Unit Price (USD)'])||0;
-        const amount=Number(r['Calculated Amount'])||Number(r['Source Amount'])||(qty*price);
-        if(!partNo && !name)return;
-        if(!amount && !price && !qty)return;
-        const x={id:uid(),date:excelDateText(r['Date']),statementMonth:String(r['Statement Month']||'').trim(),
-          invoiceNo:String(r['Invoice No']||'').trim(),supplier:String(r['Supplier']||'').trim(),
-          partNo:partNo||('UNMAPPED-'+uid()),name,spec:String(r['Spec']||'').trim(),category:String(r['Category']||'Other').trim(),
-          itemType:String(r['Item Type']||'').trim(),brand:String(r['Brand']||'Other').trim(),
-          machineType:String(r['Machine / Use']||'Other').trim(),qty,unit:String(r['Unit']||'PCS').trim(),
-          unitPrice:price,amount,remark:String(r['Notes']||'').trim(),type:'PURCHASE',ts:Date.now()};
-        purchases.push(x);
-        if(partNo && String(r['Include in Master']||'Yes').toLowerCase()!=='no'){
-          const prev=pmap.get(partNo);
-          if(!prev || String(x.date)>=String(prev._date||'')){
-            pmap.set(partNo,{id:prev?.id||uid(),partNo,name,spec:x.spec,category:x.category,brand:x.brand,machineType:x.machineType,
-              location:'',unit:x.unit,qty:0,unitPrice:price||prev?.unitPrice||0,minStock:'',maxStock:'',remark:x.remark,
-              createdAt:prev?.createdAt||x.date||todayStr(),updatedAt:x.date||todayStr(),_date:x.date});
-          }
-        }
-      });
-      const parts=[...pmap.values()].map(({_date,...p})=>p);
-      _purchaseImport={parts,purchases,file:file.name};
-      const st=purchaseStats(purchases);
-      openModal(`<h3>📥 採購資料預覽</h3>
-        <div class="detail-kpis">
-          <div class="detail-kpi"><b>${num(purchases.length)}</b><span>Purchase Lines</span></div>
-          <div class="detail-kpi"><b>${num(parts.length)}</b><span>Master Parts</span></div>
-          <div class="detail-kpi"><b>${num(st.qty)}</b><span>Qty</span></div>
-          <div class="detail-kpi"><b>${money(st.spend)}</b><span>Spend</span></div>
-        </div>
-        <div class="al al-i">偵測到 Transaction Detail。會匯入「採購歷史＋最新零件主檔」，不會把歷史購買量當成庫存。</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-g" onclick="closeModal()">取消</button><button class="btn btn-g" onclick="commitPurchaseImport('merge')">合併更新</button><button class="btn btn-y" onclick="commitPurchaseImport('replace')">取代採購資料</button></div>`);
-      return;
-    }
-    toast('找不到 Transaction Detail 工作表');
-  }catch(err){console.error(err);toast('Parse error: '+err.message);}};
-  rd.readAsArrayBuffer(file);
-}
-async function commitPurchaseImport(mode){
-  if(!_purchaseImport)return;
-  const x=_purchaseImport;
-  if(mode==='replace'){PARTS=x.parts;TXNS=x.purchases;}
-  else{
-    const keys=new Set(TXNS.map(t=>[t.date,t.invoiceNo,t.partNo,t.qty,t.unitPrice].join('|')));
-    x.purchases.forEach(t=>{const k=[t.date,t.invoiceNo,t.partNo,t.qty,t.unitPrice].join('|');if(!keys.has(k)){TXNS.push(t);keys.add(k);}});
-    x.parts.forEach(p=>{const ex=PARTS.find(z=>z.partNo===p.partNo);if(ex){Object.assign(ex,p,{id:ex.id,createdAt:ex.createdAt||p.createdAt});}else PARTS.push(p);});
-  }
-  PUR_ANCHOR=latestPurchaseDate();
-  await saveAll(true);closeModal();_purchaseImport=null;goTab('monthly',null);toast('✓ Purchase data imported');
-}
-
-/* OCR records purchases only; it does not create stock balance. */
-async function commitOCR(){
-  const H=_ocr.header, lines=_ocr.lines.filter(l=>l.name||l.partNo);if(!lines.length){toast('No lines');return;}
-  if(H.supplier&&!SUPPLIERS.find(s=>s.name===H.supplier))SUPPLIERS.push({id:uid(),name:H.supplier,currency:H.currency||SET.currency,createdAt:todayStr()});
-  let added=0,updated=0;
-  lines.forEach(ln=>{
-    let ex=findExisting(ln);
-    if(ex){if(ln.unitPrice)ex.unitPrice=+ln.unitPrice;ex.updatedAt=H.date||todayStr();updated++;}
-    else{
-      ex={id:uid(),partNo:ln.partNo||genPartNo(ln.name,ln.category),name:ln.name||ln.partNo,spec:ln.spec||'',category:ln.category||'Other',
-        brand:'Other',machineType:'Other',location:'',unit:'PCS',qty:0,unitPrice:+ln.unitPrice||0,minStock:'',maxStock:'',remark:'OCR',
-        createdAt:H.date||todayStr(),updatedAt:H.date||todayStr()};PARTS.push(ex);added++;
-    }
-    TXNS.push({id:uid(),date:H.date||todayStr(),invoiceNo:H.invNo||'',partNo:ex.partNo,name:ex.name,spec:ex.spec,category:ex.category,
-      machineType:ex.machineType,type:'PURCHASE',qty:+ln.qty||0,unitPrice:+ln.unitPrice||0,amount:(+ln.qty||0)*(+ln.unitPrice||0),
-      supplier:H.supplier||'',user:H.buyer||'OCR',remark:'Inv '+(H.invNo||''),ts:Date.now()});
-  });
-  INVOICES.push({id:uid(),invNo:H.invNo,supplier:H.supplier,date:H.date,currency:H.currency,total:H.total,lines:lines.length,ts:Date.now()});
-  await saveAll(true);toast(`✅ +${added} / ↻${updated}`);
-  _ocr={pages:[],cur:0,header:{},lines:[],img:{zoom:1,rot:0,bri:100,con:100},busy:false,prog:0,raw:''};
-  if(SET.cloudTarget==='gas'&&SET.gasUrl)cloudUpload();goTab('history',null);
-}
-
-function clearAll(){if(!confirm('確定清除零件主檔與採購記錄？'))return;PARTS=[];TXNS=[];VERSIONS=[];saveAll();goTab('dashboard',null);}
-
-/* Cloud response unwrapping + persistent local save */
-async function cloudUpload(){
-  if(SET.cloudTarget==='local'||!SET.gasUrl){backupLocal();toast(_lang==='en'?'Saved local backup':'已下載本機備份');return;}
-  try{
-    const payload={action:'push',tool:'spareparts',recordCount:purchaseTxns().length,
-      summary:{latestMonth:latestPurchaseMonth(),latestMonthSpend:purchaseStats(monthPurchases(latestPurchaseMonth())).spend,
-        year:latestPurchaseYear(),yearSpend:purchaseStats(purchaseTxns().filter(x=>String(x.date||'').startsWith(latestPurchaseYear()))).spend,
-        parts:PARTS.length},
-      data:{parts:PARTS,txns:TXNS,versions:VERSIONS,suppliers:SUPPLIERS,invoices:INVOICES}};
-    const res=await fetch(SET.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
-    const j=await res.json();if(j&&j.ok===false)throw new Error(j.error||'GAS error');toast('☁️ Uploaded');
-  }catch(e){console.error(e);toast('Upload failed — '+e.message);}
+  if(SET.cloudTarget==='local'||!SET.gasUrl){backupLocal();toast(_lang==='en'?'Saved local backup':'已下載本機備份');return}
+  const records=TXNS||[],meta={dataMeta:{parts:PARTS,versions:VERSIONS,suppliers:SUPPLIERS,invoices:INVOICES},summary:{latestMonth:latestPurchaseMonth(),latestMonthSpend:purchaseStats(monthPurchases(latestPurchaseMonth())).spend,year:latestPurchaseYear(),yearSpend:purchaseStats(purchaseTxns().filter(x=>String(x.date||'').startsWith(latestPurchaseYear()))).spend,parts:PARTS.length}};
+  try{const res=await VRTSmartSync.push({url:SET.gasUrl,tool:'spareparts',records,meta,onStatus:m=>toast('☁️ '+m)});if(res&&res.needsPull){toast('⚠ 雲端有較新資料，請先拉取');return}toast(`☁️ 智慧上傳完成 · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`)}catch(e){console.error(e);toast('Upload failed — '+e.message)}
 }
 async function cloudDownload(silent){
-  if(!SET.gasUrl){if(!silent)toast('請先設定 GAS URL');return false;}
-  try{
-    const res=await fetch(SET.gasUrl+'?action=pull&tool=spareparts',{redirect:'follow'});
-    const j=await res.json();
-    if(j&&j.ok===false)throw new Error(j.error||'GAS error');
-    let p=(j&&j.ok&&j.data)?j.data:j;
-    if(p&&p.data)p=p.data;       // saved payload
-    let d=(p&&p.data)?p.data:p;  // payload.data = actual spareparts data
-    if(d&&Array.isArray(d.parts)){
-      PARTS=d.parts;TXNS=d.txns||[];VERSIONS=d.versions||[];SUPPLIERS=d.suppliers||SUPPLIERS;INVOICES=d.invoices||INVOICES;
-      PUR_ANCHOR=latestPurchaseDate();await saveAll(false);if(!silent){goTab('dashboard',null);toast('☁️ Downloaded & saved locally');}
-      return true;
-    }
-    if(!silent)toast('No cloud data');return false;
-  }catch(e){console.error(e);if(!silent)toast('Download failed — '+e.message);return false;}
+  if(!SET.gasUrl){if(!silent)toast('請先設定 GAS URL');return false}
+  try{const res=await VRTSmartSync.pull({url:SET.gasUrl,tool:'spareparts',localRecords:TXNS||[],onStatus:m=>{if(!silent)toast('☁️ '+m)},apply:async(txns,meta)=>{const dm=(meta&&meta.dataMeta)||{};if(Array.isArray(dm.parts))PARTS=dm.parts;if(Array.isArray(dm.versions))VERSIONS=dm.versions;if(Array.isArray(dm.suppliers))SUPPLIERS=dm.suppliers;if(Array.isArray(dm.invoices))INVOICES=dm.invoices;TXNS=txns;PUR_ANCHOR=latestPurchaseDate();await saveAll(false);if(!silent)goTab('dashboard',null)}});if(!res.ok)throw new Error('No cloud data');if(!silent)toast(`☁️ 智慧下載 · ${TXNS.length} records · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`);return true}catch(e){console.error(e);if(!silent)toast('Download failed — '+e.message);return false}
 }
 function buildTgMessage(){
   const mo=latestPurchaseMonth(), xs=monthPurchases(mo), st=purchaseStats(xs);

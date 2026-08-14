@@ -31,7 +31,60 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
 @media(max-width:760px){.hstats{display:none}.wrap{padding:12px 8px 70px}.grid2{grid-template-columns:1fr}.card{padding:12px}.tabs{padding:0 6px}.tab{padding:11px 10px}.kpis{grid-template-columns:repeat(2,1fr)}.tbl{overflow-x:auto}.search{min-width:100%}.barrow{grid-template-columns:90px 1fr 74px}th,td{padding:7px 6px}.modal{padding:8px}.modalbox{margin-top:2vh}}
 
 .metricgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.pct{font-weight:700}@media(max-width:700px){.metricgrid{grid-template-columns:repeat(2,1fr)}}
-</style></head><body>
+</style><script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
+</head><body>
 <div class="header"><div class="logo">📊</div><div><div class="htitle">VRT Customer Statistics Control Center</div><div class="hsub">客戶訂單 · 完成 · 未作 · WIP · FG · Fabric · v3.1 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hOrder">0</b><span>總訂單 pcs</span></div><div class="hstat"><b id="hBal">0</b><span>未完成 pcs</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
 <div class="tabs"><div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="trend" onclick="goTab('trend')">📆 月年趨勢</div><div class="tab" data-tab="customer" onclick="goTab('customer')">👤 客戶分析</div><div class="tab" data-tab="product" onclick="goTab('product')">🏷 產品分析</div><div class="tab" data-tab="detail" onclick="goTab('detail')">📋 PO / 款式</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div></div>
 <div class="wrap"><div id="dashboard" class="pane on"></div><div id="trend" class="pane"></div><div id="customer" class="pane"></div><div id="product" class="pane"></div><div id="detail" class="pane"></div><div id="import" class="pane"></div></div>
@@ -69,8 +122,15 @@ function renderProducts(){$('product').innerHTML=`<div class="card"><div class="
 function detailTable(rs){return `<div class="tbl"><table><thead><tr><th>ETD</th><th>PO / Style</th><th>Product</th><th class="num">Order</th><th class="num">Completed</th><th class="num">Balance</th><th class="num">FG</th><th>Fabric</th></tr></thead><tbody>${rs.slice(0,1000).map(r=>`<tr><td>${r.etd||'-'}</td><td><b>${esc(r.po)}</b><div class="subtxt">${esc(r.style)} / ${esc(r.color)} / ${esc(r.size)}</div></td><td>${esc(r.product)}</td><td class="num">${N(r.orderQty)}</td><td class="num">${N(r.completedQty)}</td><td class="num">${N(r.balanceQty)}</td><td class="num">${N(r.fgPcs)}</td><td>${esc(r.fabricItem)}<div class="subtxt">${esc(r.fabricType)}</div></td></tr>`).join('')}</tbody></table></div>`}
 function renderDetails(){let rs=DATA.details.filter(r=>!Q||[r.customer,r.po,r.style,r.color,r.fabricItem,r.fabricType].join(' ').toLowerCase().includes(Q.toLowerCase()));$('detail').innerHTML=`<div class="card"><div class="frow"><input class="search" placeholder="Customer / PO / Style / Fabric" value="${esc(Q)}" oninput="Q=this.value;renderDetails()"><span class="subtxt">${rs.length} rows</span></div>${detailTable(rs)}</div>`}
 function renderImport(){$('import').innerHTML=`<div class="card"><div class="ct">📥 ALL CUSTOMER STATISTICS</div><div class="al">新版會先讀 <b>DASHBOARD 第一頁</b> 的總訂單、完成、未完成、Cutting WIP、FG、Actual Not Sewing、No Fabric Available，再讀 ALL CUSTOMER 做 PO / ETD 月年分析。Dashboard 標題月份不作為日期，採用 Updated 日期。</div><div class="drop" onclick="$('fileInput').click()" ondragover="event.preventDefault()" ondrop="event.preventDefault();if(event.dataTransfer.files[0])importFile(event.dataTransfer.files[0])"><div style="font-size:38px">📊</div><b>拖拉 VRT - ALL CUSTOMER STATISTICS REPORT.xlsx</b></div>${DATA.source?`<div style="margin-top:12px">目前：${esc(DATA.source)} · Snapshot ${DATA.snapshotDate||'-'}</div>`:''}</div>`}
-async function cloudPush(silent=false){let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){if(!silent)toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}cloudState('☁ Uploading…');let o=DATA.overall||{},payload={action:'push',tool:TOOL,recordCount:DATA.details.length,records:DATA.details,summary:{orderQty:o.orderQty||0,completedQty:o.completedQty||0,balanceQty:o.balanceQty||0,cuttingWip:o.cuttingWip||0,fgPcs:o.fgPcs||0,noFabric:o.noFabric||0,snapshotDate:DATA.snapshotDate||''},summaryData:DATA};try{await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});cloudState('☁ Uploaded '+new Date().toLocaleTimeString());if(!silent)toast('Cloud uploaded')}catch(e){cloudState('☁ Upload failed',false);if(!silent)toast('Upload failed')}}
-async function cloudPull(){let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}cloudState('☁ Downloading…');try{let j=await(await fetch(url+'?action=pull&tool='+TOOL)).json(),p=j?.data||j;if(p?.data)p=p.data;if(p?.summaryData)DATA=p.summaryData;else if(p?.data?.overall)DATA=p.data;else{cloudState('☁ Incompatible cloud data',false);toast('Cloud data format not compatible');return}await save();renderAll();cloudState('☁ Downloaded '+new Date().toLocaleTimeString());toast('Cloud downloaded')}catch(e){cloudState('☁ Download failed',false);toast('Download failed')}}
+async function cloudPush(silent=false){
+  let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){if(!silent)toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
+  const rows=DATA.details||[],compact={...DATA,details:[]},o=DATA.overall||{},summary={orderQty:o.orderQty||0,completedQty:o.completedQty||0,balanceQty:o.balanceQty||0,cuttingWip:o.cuttingWip||0,fgPcs:o.fgPcs||0,noFabric:o.noFabric||0,snapshotDate:DATA.snapshotDate||''};
+  try{const res=await VRTSmartSync.push({url,tool:TOOL,records:rows,meta:{summaryData:compact,summary},onStatus:m=>cloudState('☁↑ '+m)});if(res&&res.needsPull){cloudState('☁↑ 先拉取雲端新資料',false);if(!silent)toast('雲端有較新資料，請先拉取');return}cloudState(`☁↑ 已同步 · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`);if(!silent)toast(`智慧上傳完成 · ${rows.length} rows`)}catch(e){cloudState('☁↑ Upload failed',false);if(!silent)toast('Upload failed: '+e.message)}
+}
+async function cloudPull(){
+  let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
+  try{const res=await VRTSmartSync.pull({url,tool:TOOL,localRecords:DATA.details||[],onStatus:m=>cloudState('☁↓ '+m),apply:async(rows,meta)=>{const base=(meta&&meta.summaryData)||{...DATA,details:[]};DATA={...base,details:rows,source:'Cloud',savedAt:new Date().toISOString()};await save();renderAll();}});if(!res.ok){cloudState('☁↓ No cloud data',false);toast('No cloud data');return}cloudState(`☁↓ 已同步 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}`);toast(`智慧下載完成 · ${(DATA.details||[]).length} rows`)}catch(e){cloudState('☁↓ Download failed',false);toast('Download failed: '+e.message)}
+}
 function openModal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.add('on')}function closeModal(){$('modal').classList.remove('on')}
 $('fileInput').addEventListener('change',e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value=''});(async()=>{await load();refresh();renderDashboard()})();
 </script></body></html>

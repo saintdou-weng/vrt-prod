@@ -33,6 +33,59 @@
     .bridge-panel{position:fixed;z-index:75;right:18px;top:68px;width:min(390px,calc(100vw - 20px));max-height:calc(100vh - 86px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 55px rgba(7,28,41,.28);display:none}.bridge-panel.open{display:block}.bridge-head{position:sticky;top:0;background:var(--navy);color:#fff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}.bridge-head strong{font-size:14px}.bridge-close{border:0;background:rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:50%;font-size:18px}.bridge-body{padding:13px}.bridge-section{border:1px solid var(--line);border-radius:12px;padding:11px;margin-bottom:10px}.bridge-section:last-child{margin-bottom:0}.bridge-title{font-size:12px;font-weight:850;color:var(--navy);margin-bottom:8px}.bridge-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}.bridge-row+.bridge-row{margin-top:7px}.bridge-help{font-size:11px;color:var(--muted);line-height:1.55;margin-top:7px}.bridge-status{margin-top:9px;border-radius:9px;background:#edf4f7;color:#35556a;padding:8px 9px;font-size:11px;white-space:pre-wrap;word-break:break-word}.bridge-status.good{background:var(--green-bg);color:var(--green)}.bridge-status.bad{background:var(--red-bg);color:var(--red)}.bridge-status.warn{background:var(--orange-bg);color:var(--orange)}.tool-link{text-decoration:none}
     @media(max-width:760px){.bridge-panel{top:112px;right:10px}.bridge-row{grid-template-columns:1fr}.toolbar{overflow-x:auto;flex-wrap:nowrap}.tool-btn,.lang-btn{flex:0 0 auto}}
   </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
   <input id="fileInput" type="file" class="hidden" accept=".xls,.xlsx,.csv,.json" multiple>
@@ -437,8 +490,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     function gasUrl(){return String((document.getElementById("bridgeGas")||{}).value||localStorage.getItem(GAS_KEY)||"").trim()}
     function saveSettings(){var gas=String((document.getElementById("bridgeGas")||{}).value||"").trim(),chat=String((document.getElementById("bridgeChat")||{}).value||"").trim();if(gas)localStorage.setItem(GAS_KEY,gas);localStorage.setItem(CHAT_KEY,chat)}
     async function postGas(payload){var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();var r=await fetch(gas,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),redirect:"follow"});var text=await r.text(),data=null;try{data=JSON.parse(text)}catch(_){data={ok:r.ok,text:text}}if(!r.ok||data.ok===false)throw new Error(data.error||("HTTP "+r.status));return data}
-    async function cloudPush(){await api().ready;var state=api().getState(),snaps=[];try{snaps=await readSmv()}catch(_){snaps=[]}setStatus("Uploading…","warn");var data=await postGas({tool:"smv",recordCount:snaps.length,idbStore:{db:SMV_DB,ver:1,store:SMV_STORE,records:snaps},ieSmvState:state,summary:{snapshotCount:snaps.length,updates:(state.updates||[]).length,styles:(state.styles||[]).length,pending:(state.updates||[]).filter(function(x){return x.approval!=="approved"}).length}});setStatus("✓ Cloud: "+(state.updates||[]).length+" IE updates / "+snaps.length+" official SMV versions","good");notifyStats();return data}
-    async function cloudPull(){await api().ready;var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();setStatus("Downloading…","warn");async function pullTool(tool){var r=await fetch(gas+"?action=pull&tool="+tool,{redirect:"follow"}),d=await r.json();if(!d.ok)return null;return d.data&&d.data.data?d.data.data:(d.data||d)}var env=await pullTool("smv"),remote=env&&(env.ieSmvState||env.state);if(!remote){env=await pullTool("ie_smv");remote=env&&(env.ieSmvState||env.state)}if(!remote)throw new Error(w("noCloud"));var before=api().getState(),merged=mergeState(before,remote),officialCount=0;await api().setState(merged);if(env&&env.idbStore&&Array.isArray(env.idbStore.records)){var localOfficial=await readSmv(),mergedOfficial=mergeFormalSnapshots(localOfficial,env.idbStore.records);await replaceSmv(mergedOfficial);officialCount=mergedOfficial.length;postParent({type:"VRT_SMV_REFRESH"})}setStatus("✓ Merge: "+(before.updates||[]).length+" local + "+(remote.updates||[]).length+" cloud → "+(merged.updates||[]).length+" updates"+(officialCount?" / "+officialCount+" official SMV versions":""),"good");notifyStats()}
+    async function cloudPush(){await api().ready;var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();var state=api().getState(),snaps=[];try{snaps=await readSmv()}catch(_){snaps=[]}setStatus("Smart upload…","warn");var res=await VRTSmartSync.push({url:gas,tool:"smv",records:snaps,meta:{ieSmvState:state,summary:{snapshotCount:snaps.length,updates:(state.updates||[]).length,styles:(state.styles||[]).length,pending:(state.updates||[]).filter(function(x){return x.approval!=="approved"}).length}},onStatus:function(m){setStatus(m,"warn")}});if(res&&res.needsPull){setStatus("Cloud has newer SMV / IE data. Pull first.","warn");return res}setStatus("✓ Smart cloud: sent "+(res.uploaded||0)+" / unchanged "+(res.unchanged||0)+" · IE "+(state.updates||[]).length,"good");notifyStats();return res}
+    async function cloudPull(){await api().ready;var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();setStatus("Smart download…","warn");var before=api().getState(),localOfficial=await readSmv();var res=await VRTSmartSync.pull({url:gas,tool:"smv",localRecords:localOfficial,onStatus:function(m){setStatus(m,"warn")},apply:async function(snaps,meta){var remote=meta&&(meta.ieSmvState||meta.state),merged=remote?mergeState(before,remote):before;await api().setState(merged);await replaceSmv(mergeFormalSnapshots(localOfficial,snaps));postParent({type:"VRT_SMV_REFRESH"})}});if(!res.ok)throw new Error(w("noCloud"));setStatus("✓ Smart merge: downloaded "+(res.downloaded||0)+" / unchanged "+(res.unchanged||0)+(res.pendingUpload?" / pending upload "+res.pendingUpload:""),"good");notifyStats()}
 
     function openSmvDb(){return new Promise(function(resolve,reject){var req=indexedDB.open(SMV_DB);req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains(SMV_STORE)){var st=db.createObjectStore(SMV_STORE,{keyPath:"id",autoIncrement:true});st.createIndex("by_date","reportDate")}};req.onsuccess=function(){resolve(req.result)};req.onerror=function(){reject(req.error)}})}
     async function readSmv(){var db=await openSmvDb();var rows=await new Promise(function(resolve,reject){var q=db.transaction(SMV_STORE,"readonly").objectStore(SMV_STORE).getAll();q.onsuccess=function(){resolve(q.result||[])};q.onerror=function(){reject(q.error)}});db.close();return rows}

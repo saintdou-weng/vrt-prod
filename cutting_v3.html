@@ -91,6 +91,59 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   .link-flow{flex-direction:column}
 }
 </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
 
@@ -624,62 +677,10 @@ async function loadSew(opts){
   if(!gasUrl){SEW=SEW||[];return SEW.length>0?"cache":false;}
   window._sewLastErr=null;
   try{
-    const metaR=await fetch(`${gasUrl}?action=pull&meta=1&tool=sewing`,{redirect:"follow"});
-    if(!metaR.ok)throw new Error(`HTTP ${metaR.status}`);
-    const metaD=await metaR.json();
-    if(!metaD.ok)throw new Error(metaD.error||"GAS error");
-    const d=metaD.data;
-    let recs=[];
-    if(d.chunked&&d.meta&&d.meta.totalChunks){
-      const total=d.meta.totalChunks;
-      const expect=d.meta.recordCount||0;
-      let failed=[];
-      for(let i=0;i<total;i++){
-        if(!opts.silent){_sewPullStatus(`☁️ 雲端拉取車縫中… ${i+1}/${total} 批（已 ${recs.length.toLocaleString()} 筆）`);}
-        // ★ v3.6：每批最多重試 3 次。原本失敗就 continue，會靜默漏批，
-        //   造成只拉到最近幾個月（例如 71,938 筆只拿到 3,029 筆、1~4月全空）。
-        let got=false;
-        for(let a=0;a<3&&!got;a++){
-          try{
-            const cr=await fetch(`${gasUrl}?action=pull&tool=sewing&chunk=${i}`,{redirect:"follow"});
-            if(!cr.ok)throw new Error(`HTTP ${cr.status}`);
-            const cd=await cr.json();
-            if(cd.ok&&Array.isArray(cd.data.records)){recs=recs.concat(cd.data.records);got=true;}
-            else throw new Error(cd.error||"bad chunk");
-          }catch(ce){
-            if(a<2)await new Promise(r=>setTimeout(r,400*(a+1)));  // 退避後重試
-          }
-        }
-        if(!got)failed.push(i);
-      }
-      if(failed.length){
-        window._sewLastErr=`第 ${failed.join(",")} 批拉取失敗（共 ${failed.length}/${total} 批）`;
-        console.warn("[cutting] 車縫分批拉取不完整：",window._sewLastErr);
-      }else if(expect&&recs.length<expect*0.95){
-        window._sewLastErr=`雲端宣稱 ${expect.toLocaleString()} 筆，實得 ${recs.length.toLocaleString()} 筆`;
-        console.warn("[cutting] 車縫資料筆數不符：",window._sewLastErr);
-      }
-    }else if(!d.chunked&&d.data){
-      const payload=d.data;
-      recs=payload.records||payload.idbStore?.records||[];
-    }
-    if(recs.length){
-      SEW=recs.map(r=>({...r,id:r.id||uid()}));
-      _sewLoadedThisSession=true;
-      // ★ localStorage：資料 <4MB 才寫入，68,616筆≈10MB 會超限靜默失敗
-      try{
-        const json=JSON.stringify(SEW);
-        if(json.length<4*1024*1024){
-          localStorage.setItem("sewing_prod_v1",json);
-        }else{
-          localStorage.removeItem("sewing_prod_v1"); // 清掉舊的過期資料
-        }
-      }catch(le){console.warn("[cutting] localStorage write failed:",le);}
-      // IDB 備份（single-blob 模式，比 per-record 可靠）
-      try{await saveSew();}catch(ie){console.warn("[cutting] saveSew IDB failed:",ie);}
-      return"cloud";
-    }
-    throw new Error("雲端無車縫資料（0筆）");
+    const local=Array.isArray(SEW)?SEW:[];
+    const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,onStatus:m=>{if(!opts.silent)_sewPullStatus('☁️ '+m)},apply:async recs=>{SEW=recs.map(r=>({...r,id:r.id||uid()}));_sewLoadedThisSession=true;try{await saveSew()}catch(ie){console.warn('[cutting] saveSew IDB failed:',ie)}}});
+    if(res.ok&&SEW.length)return 'cloud';
+    throw new Error('雲端無車縫資料（0筆）');
   }catch(e){
     console.warn("[cutting] loadSew cloud pull failed:",e);
     window._sewLastErr=e.message||String(e);
@@ -3040,87 +3041,22 @@ async function scanAllFolders(silent=false){
   }
 
   window.vcPush = async function(){
-    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
-    vcSetBusy(true);
-    try {
-      const allRecs = (typeof CUT !== 'undefined' && CUT.length)
-        ? CUT
-        : await vcIdbGetAll('CuttingProd', 1, 'cutting_records');
-
-      const total  = allRecs.length;
-      const CHUNK  = 2000;
-      const chunks = Math.ceil(total / CHUNK) || 1;
-      vcLog(`開始推送裁剪 ${total} 筆（共 ${chunks} 批）...`, 'i');
-
-      for (let i = 0; i < chunks; i++) {
-        const slice  = allRecs.slice(i * CHUNK, (i + 1) * CHUNK);
-        const isLast = (i === chunks - 1);
-        const payload = {
-          tool        : 'cutting',
-          chunk       : i,
-          totalChunks : chunks,
-          recordCount : total,
-          records     : slice,
-          ...(isLast ? {
-            idbStore: { db:'CuttingProd', ver:1, store:'cutting_records', records:[] }, // placeholder for pull
-            summary : buildCuttingSummary(allRecs),
-          } : {}),
-        };
-        vcLog(`推送第 ${i+1}/${chunks} 批（${slice.length} 筆）...`, 'i');
-        const r = await fetch(gasUrl, {
-          method:'POST', headers:{'Content-Type':'text/plain'},
-          body: JSON.stringify(payload), redirect:'follow',
-        });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error);
-      }
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: total }));
-      vcLog(`✓ 推送完成（共 ${total} 筆）`, 'ok');
-      vcShowStatus();
-    } catch(e) {
-      vcLog('✗ 推送失敗：' + e.message, 'err');
-    } finally { vcSetBusy(false); }
+    if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);
+    try{
+      const allRecs=(typeof CUT!=='undefined'&&CUT.length)?CUT:await vcIdbGetAll('CuttingProd',1,'cutting_records');
+      const res=await VRTSmartSync.push({url:gasUrl,tool:'cutting',records:allRecs,meta:{summary:buildCuttingSummary(allRecs),idbStore:{db:'CuttingProd',ver:1,store:'cutting_records'}},onStatus:m=>vcLog(m,'i')});
+      if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取','err');return;}
+      localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length,smart:true}));vcLog(`✓ 智慧推送完成 · 本機 ${allRecs.length} · 傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');vcShowStatus();
+    }catch(e){vcLog('✗ 推送失敗：'+e.message,'err');}finally{vcSetBusy(false);}
   };
 
   window.vcPull = async function(){
-    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
-    if (!confirm('拉取會覆蓋本機裁剪資料，確定嗎？')) return;
-    vcSetBusy(true);
-    vcLog('拉取中...', 'i');
-    try {
-      // ★ 修正：先用 meta=1 確認格式（分批 or 舊單批）
-      const metaR = await fetch(`${gasUrl}?action=pull&meta=1&tool=cutting`, { redirect:'follow' });
-      const metaD = await metaR.json();
-      if (!metaD.ok) throw new Error(metaD.error || 'GAS error');
-      const d = metaD.data;
-      if (!d || (!d.chunked && !d.data)) { vcLog('雲端尚無裁剪資料', 'err'); return; }
-
-      let recs = [];
-      if (d.chunked && d.meta && d.meta.totalChunks) {
-        const total = d.meta.totalChunks;
-        vcLog(`分批拉取，共 ${total} 批...`, 'i');
-        for (let i = 0; i < total; i++) {
-          vcLog(`拉取第 ${i+1}/${total} 批...`, 'i');
-          const cr = await fetch(`${gasUrl}?action=pull&tool=cutting&chunk=${i}`, { redirect:'follow' });
-          const cd = await cr.json();
-          if (cd.ok && Array.isArray(cd.data.records)) recs = recs.concat(cd.data.records);
-        }
-      } else if (!d.chunked && d.data) {
-        const payload = d.data;
-        recs = payload.idbStore?.records || payload.records || [];
-      }
-      if (!recs.length) { vcLog('雲端裁剪資料為空', 'err'); return; }
-
-      await vcIdbPutAll('CuttingProd', 1, 'cutting_records', recs);
-      if (typeof CUT !== 'undefined') { CUT.length = 0; recs.forEach(r => CUT.push(r)); }
-      localStorage.setItem(LS_META, JSON.stringify({ ts: Date.now(), count: recs.length }));
-      vcLog(`✓ 拉取完成（${recs.length} 筆），重新整理即可看到`, 'ok');
-      vcShowStatus();
-      if (confirm(`已拉取 ${recs.length} 筆裁剪資料
-立即重新整理頁面？`)) location.reload();
-    } catch(e) {
-      vcLog('✗ 拉取失敗：' + e.message, 'err');
-    } finally { vcSetBusy(false); }
+    if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);vcLog('智慧拉取：比對差異...','i');
+    try{
+      const local=(typeof CUT!=='undefined'&&CUT.length)?CUT:await vcIdbGetAll('CuttingProd',1,'cutting_records');
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cutting',localRecords:local,onStatus:m=>vcLog(m,'i'),apply:async recs=>{await vcIdbPutAll('CuttingProd',1,'cutting_records',recs);if(typeof CUT!=='undefined'){CUT.length=0;recs.forEach(r=>CUT.push(r));}}});
+      if(!res.ok){if(res.noCloud)vcLog('雲端尚無裁剪資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取完成 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');vcShowStatus();
+    }catch(e){vcLog('✗ 拉取失敗：'+e.message,'err');}finally{vcSetBusy(false);}
   };
 
   function buildCuttingSummary(recs){

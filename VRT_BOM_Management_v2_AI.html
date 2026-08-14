@@ -289,6 +289,59 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
   .costing-frame{height:calc(100vh - 226px);min-height:640px}
 }
 </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
 
@@ -1977,26 +2030,20 @@ async function testTg(){ const g=i=>document.getElementById(i);
 async function gasPost(url,payload){ const body=new URLSearchParams();
   Object.keys(payload).forEach(k=>body.set(k, typeof payload[k]==='object'?JSON.stringify(payload[k]):payload[k]));
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body.toString()});
-  const txt=await r.text(); try{ return JSON.parse(txt); }catch(e){ return {ok:false,raw:txt}; } }
+  const txt=await r.text(); let d; try{ d=JSON.parse(txt); }catch(e){ throw new Error('GAS 回傳非 JSON：'+String(txt||'').replace(/\s+/g,' ').slice(0,160)); }
+  if(!r.ok||(d&&d.ok===false))throw new Error((d&&d.error)||('HTTP '+r.status)); return d; }
 function dedupKey(s){ return (s.customerCode||'')+'|'+(s.styleNo||''); }
 async function cloudPush(){ const url=DB.settings.cloudProxy; if(!url){ toast('請先設定 Cloud URL','warn'); go('settings'); return; }
-  setCloudTag('dirty'); toast('上傳中…',''); try{
-    const styles=DB.styles; const chunks=[]; for(let i=0;i<styles.length;i+=CHUNK_SIZE)chunks.push(styles.slice(i,i+CHUNK_SIZE));
-    await gasPost(url,{action:'pushMeta',system:'vrt_bom2',rev:DB.meta.rev||0,chunks:chunks.length,customers:DB.customers,savedAt:nowISO()});
-    for(let i=0;i<chunks.length;i++) await gasPost(url,{action:'pushChunk',system:'vrt_bom2',index:i,total:chunks.length,data:chunks[i]});
-    if(!chunks.length) await gasPost(url,{action:'pushChunk',system:'vrt_bom2',index:0,total:0,data:[]});
-    DB.meta.lastSync=nowISO(); markDirty(); persist(); setCloudTag('synced'); toast('已上傳雲端 ('+styles.length+')','good'); if(CURRENT==='settings')render();
-  }catch(e){ setCloudTag('local'); toast('上傳失敗：'+e.message,'bad'); } }
+  setCloudTag('dirty'); toast('智慧上傳：比對變更…',''); try{
+    const res=await VRTSmartSync.push({url,tool:'bom',records:DB.styles,meta:{customers:DB.customers,rev:DB.meta.rev||0,savedAt:nowISO()},onStatus:m=>toast(m,'')});
+    if(res&&res.needsPull){setCloudTag('dirty');toast('雲端有較新 BOM，請先下載合併','warn');return;}
+    DB.meta.lastSync=nowISO();markDirty();persist();setCloudTag('synced');toast(`智慧上傳完成 · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'good');if(CURRENT==='settings')render();
+  }catch(e){setCloudTag('local');toast('上傳失敗：'+e.message,'bad');} }
 async function cloudPull(){ const url=DB.settings.cloudProxy; if(!url){ toast('請先設定 Cloud URL','warn'); go('settings'); return; }
-  toast('下載中…',''); try{
-    const meta=await gasPost(url,{action:'pullMeta',system:'vrt_bom2'}); const total=(meta&&meta.chunks)||0; let styles=[];
-    for(let i=0;i<total;i++){ const c=await gasPost(url,{action:'pullChunk',system:'vrt_bom2',index:i}); if(c&&Array.isArray(c.data))styles=styles.concat(c.data); }
-    snapshot(); const map={}; DB.styles.forEach(s=>map[dedupKey(s)]=s);
-    styles.forEach(s=>{ const k=dedupKey(s); map[k]=Object.assign({},map[k]||{},coerceStyle(Object.assign({},s,{allowEmpty:true}))||s); });
-    DB.styles=Object.values(map);
-    if(meta&&Array.isArray(meta.customers))meta.customers.forEach(c=>{ if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c)); });
-    DB.meta.lastSync=nowISO(); markDirty(); persist(); setCloudTag('synced'); logAct('雲端下載',styles.length+' 款式'); toast('已合併 '+styles.length+' 款式','good'); render();
-  }catch(e){ toast('下載失敗：'+e.message,'bad'); } }
+  toast('智慧下載：只抓有變更的款式區塊…',''); try{
+    const res=await VRTSmartSync.pull({url,tool:'bom',localRecords:DB.styles,onStatus:m=>toast(m,''),apply:async(styles,meta)=>{snapshot();DB.styles=styles.map(s=>coerceStyle(Object.assign({},s,{allowEmpty:true}))||s);if(meta&&Array.isArray(meta.customers))meta.customers.forEach(c=>{if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c))});DB.meta.lastSync=nowISO();markDirty();persist();setCloudTag('synced');render();}});
+    if(!res.ok){toast('雲端尚無 BOM','warn');return;}logAct('雲端智慧下載',`${res.downloaded||0} 筆變更`);toast(`智慧下載完成 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'good');
+  }catch(e){toast('下載失敗：'+e.message,'bad');} }
 
 /* ====================================================================
    BACKUP

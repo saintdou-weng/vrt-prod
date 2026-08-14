@@ -105,6 +105,59 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 
 @media(max-width:520px){.grid{grid-template-columns:1fr}}
 </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
 
@@ -433,227 +486,59 @@ let gasUrl = localStorage.getItem(LS_GAS) || '';
 
 // ─── DATA DEFINITIONS (how to read/write each tool) ────────
 const TOOLS = {
-  sewing: {
-    read: async () => {
-      const raw = localStorage.getItem('sewing_prod_v1') || '[]';
-      const recs = JSON.parse(raw);
-      const effRaw = localStorage.getItem('sewing_eff_v1') || '[]';
-      const eff = JSON.parse(effRaw);
-      return { tool:'sewing', recordCount: recs.length, lsKeys: {
-        sewing_prod_v1: raw,
-        sewing_eff_v1: effRaw,
-      }};
-    },
-    write: (data) => {
-      if (data.lsKeys) {
-        Object.entries(data.lsKeys).forEach(([k,v]) => {
-          if (v != null) localStorage.setItem(k, v);
-        });
-        return JSON.parse(data.lsKeys.sewing_prod_v1 || '[]').length;
-      }
-      return 0;
-    }
+  sewing:{
+    read:async()=>{const recs=await idbGetAll('VRT_SewingProduction',1,'daily_records'),eff=await idbGetAll('VRT_SewingProduction',1,'eff_records');if(!recs.length)return null;return{tool:'sewing',recordCount:recs.length,records:recs,eff,summary:{source:'VRT_SewingProduction'}}},
+    write:async data=>{let recs=Array.isArray(data.records)?data.records:[];if(!recs.length&&data.lsKeys?.sewing_prod_v1)try{recs=JSON.parse(data.lsKeys.sewing_prod_v1)}catch(_){};if(!recs.length)return 0;await idbReplaceAll('VRT_SewingProduction',1,'daily_records',recs);if(Array.isArray(data.eff))await idbReplaceAll('VRT_SewingProduction',1,'eff_records',data.eff);try{localStorage.setItem('vrt_sewing_record_count',String(recs.length));localStorage.setItem('vrt_sewing_max_date',recs.reduce((m,r)=>String(r.date||'')>m?String(r.date||''):m,''))}catch(_){}return recs.length}
   },
-  cutting: {
-    read: async () => {
-      const recs = await idbGetAll('CuttingProd', 1, 'cutting_records');
-      return { tool:'cutting', recordCount: recs.length, idbStore: { db:'CuttingProd', ver:1, store:'cutting_records', records: recs }};
-    },
-    write: async (data) => {
-      if (data.idbStore) {
-        await idbPutAll(data.idbStore.db, data.idbStore.ver, data.idbStore.store, data.idbStore.records);
-        return data.idbStore.records.length;
-      }
-      return 0;
-    }
+  cutting:{
+    read:async()=>{const recs=await idbGetAll('CuttingProd',2,'cutting_records');return recs.length?{tool:'cutting',recordCount:recs.length,records:recs}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:(data.idbStore?.records||[]);if(!recs.length)return 0;return await idbReplaceAll('CuttingProd',2,'cutting_records',recs)}
   },
-  orders: {
-    read: async () => {
-      const raw = localStorage.getItem('orderSetsV3') || '{}';
-      return { tool:'orders', recordCount: Object.keys(JSON.parse(raw)).length || 0, lsKeys: { orderSetsV3: raw }};
-    },
-    write: (data) => {
-      if (data.lsKeys) {
-        Object.entries(data.lsKeys).forEach(([k,v]) => { if (v != null) localStorage.setItem(k, v); });
-      }
-      return Object.keys(JSON.parse(data.lsKeys?.orderSetsV3 || '{}')).length;
-    }
+  orders:{
+    read:async()=>{const po=await idbGetAll('FactoryDB',15,'po_lines');if(!po.length)return null;const hdr=await idbGetAll('FactoryDB',15,'po_headers'),wk=await idbGetAll('FactoryDB',15,'weekly_snapshots'),imp=await idbGetAll('FactoryDB',15,'order_imports'),aud=await idbGetAll('FactoryDB',15,'parse_audit');return{tool:'orders',recordCount:po.length,records:po,lsKeys:{orderSetsV3:localStorage.getItem('orderSetsV3')||'{}'},idbData:{po_headers:hdr,weekly_snapshots:wk,order_imports:imp,parse_audit:aud},summary:{weeklySnapshots:wk.length}}},
+    write:async data=>{const id=Object.assign({},data.idbData||{});if(Array.isArray(data.records))id.po_lines=data.records;for(const [k,v] of Object.entries(id))if(Array.isArray(v))await idbReplaceAll('FactoryDB',15,k,v);if(data.lsKeys?.orderSetsV3)try{localStorage.setItem('orderSetsV3',data.lsKeys.orderSetsV3)}catch(_){}return (id.po_lines||[]).length}
   },
-  shipping: {
-    read: async () => {
-      // Shipping stores to GAS directly from shipping_v2 — portal can only pull (no local store)
-      return null;
-    },
-    write: (data) => {
-      // Shipping has no persistent local store — open shipping_v2 after pulling
-      // We store a flag so shipping_v2 can auto-load on open
-      if (data && data.summary) {
-        localStorage.setItem('vrt_shipping_cloud_cache', JSON.stringify(data));
-        return data.recordCount || 0;
-      }
-      return 0;
-    }
+  shipping:{read:async()=>null,write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_shipping_cloud_cache',JSON.stringify({records:recs,summary:data.summary||{}}))}catch(_){}return recs.length}},
+  smv:{
+    read:async()=>{const recs=await idbGetAll('VRT_SMV_Manager_v52',1,'smv_snapshots');if(!recs.length)return null;let ie=null;try{ie=await idbKvGet('vrt_ie_smv_integrated_v2',1,'state','main')}catch(_){}return{tool:'smv',recordCount:recs.length,records:recs,idbStore:{db:'VRT_SMV_Manager_v52',ver:1,store:'smv_snapshots',records:recs},ieSmvState:ie||undefined,summary:{snapshotCount:recs.length}}},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:(data.idbStore?.records||[]);if(recs.length)await idbReplaceAll('VRT_SMV_Manager_v52',1,'smv_snapshots',recs);return recs.length}
   },
-  smv: {
-    read: async () => {
-      const raw = localStorage.getItem('sewing_prod_v1') || '[]';
-      return { tool:'smv', recordCount: JSON.parse(raw).length, lsKeys: { sewing_prod_v1: raw }};
-    },
-    write: (data) => {
-      // SMV uses sewing_prod_v1 — no separate key
-      return 0;
-    }
+  cuttingplan:{
+    read:async()=>{let recs=await idbGetAll('CuttingCloudPlan',1,'cloud_records');if(!recs.length)try{recs=JSON.parse(localStorage.getItem('cutting_plan_v1')||'[]')}catch(_){};return recs.length?{tool:'cuttingplan',recordCount:recs.length,records:recs}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('CuttingCloudPlan',1,'cloud_records',recs);try{localStorage.setItem('cutting_plan_v1',JSON.stringify(recs.slice(-5000)))}catch(_){}return recs.length}
   },
-  cuttingplan: {
-    read: async () => {
-      const raw  = localStorage.getItem('cutting_plan_v1') || '[]';
-      const recs = JSON.parse(raw);
-      if (!recs.length) return null;
-      return { tool:'cuttingplan', recordCount: recs.length, records: recs };
-    },
-    write: async (data) => {
-      let recs = [];
-      if (Array.isArray(data.records)) recs = data.records;
-      else if (data.lsKeys && data.lsKeys.cutting_plan_v1) recs = JSON.parse(data.lsKeys.cutting_plan_v1);
-      if (!recs.length) return 0;
-      // 完整資料寫入模組自己的 Cloud IDB，localStorage 只留最近 5000 筆（與模組行為一致）
-      try { await idbPutAll('CuttingCloudPlan', 1, 'cloud_records', recs); } catch(e) {}
-      try { localStorage.setItem('cutting_plan_v1', JSON.stringify(recs.slice(-5000))); } catch(e) {}
-      return recs.length;
-    }
+  podelivery:{
+    read:async()=>{let recs=await idbGetAll('vrt_pocc_db',1,'records');if(!recs.length)try{recs=JSON.parse(localStorage.getItem('vrt_pocc_records')||'[]')}catch(_){};return recs.length?{tool:'podelivery',recordCount:recs.length,records:recs}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('vrt_pocc_db',1,'records',recs);try{localStorage.setItem('vrt_pocc_records',JSON.stringify(recs))}catch(_){}return recs.length}
   },
-  podelivery: {
-    read: async () => {
-      let recs = await idbGetAll('vrt_pocc_db', 1, 'records');
-      if (!recs.length) recs = JSON.parse(localStorage.getItem('vrt_pocc_records') || '[]');
-      if (!recs.length) return null;
-      return { tool:'podelivery', recordCount: recs.length, records: recs };
-    },
-    write: async (data) => {
-      const recs = Array.isArray(data.records) ? data.records : [];
-      if (!recs.length) return 0;
-      await idbPutAll('vrt_pocc_db', 1, 'records', recs);
-      try { localStorage.setItem('vrt_pocc_records', JSON.stringify(recs)); } catch(e) {}
-      return recs.length;
-    }
+  bom:{
+    read:async()=>{let raw=await idbKvGet('vrt_bom2_v1',1,'kv','state');if(!raw){const ls=localStorage.getItem('vrt_bom2_state');if(ls&&ls.indexOf('_idbOnly')<0)raw=ls}if(!raw)return null;let cnt=1;try{const st=typeof raw==='string'?JSON.parse(raw):raw;cnt=(st.styles||st.boms||st.items||[]).length||1;raw=typeof raw==='string'?raw:JSON.stringify(raw)}catch(_){}return{tool:'bom',recordCount:cnt,bomState:raw}},
+    write:async data=>{const raw=data.bomState;if(!raw)return 0;await idbKvPut('vrt_bom2_v1',1,'kv','state',raw);try{if(raw.length<4500000)localStorage.setItem('vrt_bom2_state',raw)}catch(_){}return data.recordCount||1}
   },
-  bom: {
-    read: async () => {
-      let raw = await idbKvGet('vrt_bom2_v1', 1, 'kv', 'state');
-      if (!raw) {
-        const ls = localStorage.getItem('vrt_bom2_state');
-        if (ls && ls.indexOf('_idbOnly') < 0) raw = ls;
-      }
-      if (!raw) return null;
-      let cnt = 1;
-      try {
-        const st = JSON.parse(raw);
-        cnt = (st.boms && st.boms.length) || (st.items && st.items.length) || Object.keys(st).length;
-      } catch(e) {}
-      return { tool:'bom', recordCount: cnt, bomState: raw };
-    },
-    write: async (data) => {
-      const raw = data.bomState;
-      if (!raw) return 0;
-      await idbKvPut('vrt_bom2_v1', 1, 'kv', 'state', raw);
-      try {
-        if (raw.length < 4500000) localStorage.setItem('vrt_bom2_state', raw);
-      } catch(e) {}
-      return data.recordCount || 1;
-    }
+  fg:{
+    read:async()=>{const recs=await idbGetAll('VRT_FGInventory',1,'fg_records');return recs.length?{tool:'fg',recordCount:recs.length,records:recs}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;return await idbReplaceAll('VRT_FGInventory',1,'fg_records',recs)}
   },
-  fg: {
-    read: async () => {
-      const recs = await idbGetAll('VRT_FGInventory', 1, 'fg_records');
-      if (!recs.length) return null;
-      return { tool:'fg', recordCount: recs.length, records: recs };
-    },
-    write: async (data) => {
-      const recs = Array.isArray(data.records) ? data.records : [];
-      if (!recs.length) return 0;
-      await idbPutAll('VRT_FGInventory', 1, 'fg_records', recs);
-      try { localStorage.setItem('vrt_fg_record_count', String(recs.length)); } catch(e) {}
-      return recs.length;
-    }
+  spareparts:{
+    read:async()=>{const parts=await idbGetAll('vrt_spareparts',2,'parts'),txns=await idbGetAll('vrt_spareparts',2,'txns'),versions=await idbGetAll('vrt_spareparts',2,'versions');if(!parts.length&&!txns.length)return null;return{tool:'spareparts',recordCount:txns.length||parts.length,data:{parts,txns,versions}}},
+    write:async data=>{const d=data.data||data;if(Array.isArray(d.parts))await idbReplaceAll('vrt_spareparts',2,'parts',d.parts);if(Array.isArray(d.txns))await idbReplaceAll('vrt_spareparts',2,'txns',d.txns);if(Array.isArray(d.versions))await idbReplaceAll('vrt_spareparts',2,'versions',d.versions);return(d.txns||d.parts||[]).length}
   },
-  spareparts: {
-    read: async () => {
-      const parts    = await idbGetAll('vrt_spareparts', 2, 'parts');
-      const txns     = await idbGetAll('vrt_spareparts', 2, 'txns');
-      const versions = await idbGetAll('vrt_spareparts', 2, 'versions');
-      if (!parts.length && !txns.length) return null;
-      // 與 vrt_spare_parts_v2 內建雲端格式一致：data:{parts,txns,versions}
-      return { tool:'spareparts', recordCount: parts.length, data: { parts, txns, versions } };
-    },
-    write: async (data) => {
-      const d = data.data || data;
-      if (Array.isArray(d.parts)    && d.parts.length)    await idbPutAll('vrt_spareparts', 2, 'parts',    d.parts);
-      if (Array.isArray(d.txns)     && d.txns.length)     await idbPutAll('vrt_spareparts', 2, 'txns',     d.txns);
-      if (Array.isArray(d.versions) && d.versions.length) await idbPutAll('vrt_spareparts', 2, 'versions', d.versions);
-      return (d.parts || []).length;
-    }
+  prodplan:{
+    read:async()=>{try{const d=JSON.parse(localStorage.getItem('vrt_prodplan_v3_data')||'null');if(!d?.records?.length)return null;return{tool:'prodplan',recordCount:d.records.length,records:d.records,planVersions:JSON.parse(localStorage.getItem('vrt_prodplan_v3_versions')||'[]'),summary:{source:d.source||''}}}catch(_){return null}},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_prodplan_v3_data',JSON.stringify({records:recs,source:'Cloud',savedAt:new Date().toISOString()}));if(Array.isArray(data.planVersions))localStorage.setItem('vrt_prodplan_v3_versions',JSON.stringify(data.planVersions))}catch(_){}return recs.length}
   },
-  prodplan: {
-    read: async () => {
-      const recs = await idbGetAll('ProdPlanCapacity', 1, 'records');
-      if (!recs.length) return null;
-      return { tool:'prodplan', recordCount: recs.length, records: recs };
-    },
-    write: async (data) => {
-      const recs = Array.isArray(data.records) ? data.records : [];
-      if (!recs.length) return 0;
-      await idbPutAll('ProdPlanCapacity', 1, 'records', recs);
-      return recs.length;
-    }
+  custstats:{
+    read:async()=>{const st=await idbKvGet('vrt_custstats_v31',1,'data','current');if(!st||!Array.isArray(st.details)||!st.details.length)return null;const head=Object.assign({},st,{details:[]});return{tool:'custstats',recordCount:st.details.length,records:st.details,idbData:{custSummary:head},summary:{orderQty:st.overall?.orderQty||0,balanceQty:st.overall?.balanceQty||0}}},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[],head=data.idbData?.custSummary||data.summaryData||{};if(!recs.length&&!head.overall)return 0;const st=Object.assign({},head,{details:recs,source:'Cloud',savedAt:new Date().toISOString()});await idbKvPut('vrt_custstats_v31',1,'data','current',st);return recs.length}
   },
-  custstats: {
-    read: async () => {
-      const recs = await idbGetAll('VRTCustomerStatistics', 1, 'records');
-      if (!recs.length) return null;
-      const evts = await idbGetAll('VRTCustomerStatistics', 1, 'events');
-      return { tool:'custstats', recordCount: recs.length, records: recs, events: evts };
-    },
-    write: async (data) => {
-      const recs = Array.isArray(data.records) ? data.records : [];
-      if (!recs.length) return 0;
-      await idbPutAll('VRTCustomerStatistics', 1, 'records', recs);
-      if (Array.isArray(data.events) && data.events.length)
-        await idbPutAll('VRTCustomerStatistics', 1, 'events', data.events);
-      return recs.length;
-    }
+  fabric:{
+    read:async()=>{let st=await idbKvGet('VRT_FabricStockDB',1,'app','state');if(!st){try{st=JSON.parse(localStorage.getItem('vrt_fabric_stock_v1')||'null')}catch(_){}}if(!st)return null;const recs=[...(st.current||[]).map(r=>Object.assign({},r,{stockType:'current'})),...(st.old||[]).map(r=>Object.assign({},r,{stockType:'old_usage'})),...(st.accessory||[]).map(r=>Object.assign({},r,{stockType:'accessory'}))];return{tool:'fabricstock',recordCount:recs.length,records:recs,idbData:{fabricMeta:{savedAt:st.savedAt||'',sourceFiles:st.sourceFiles||[]}},summary:{current:(st.current||[]).length,old:(st.old||[]).length,accessory:(st.accessory||[]).length}}},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;const meta=data.idbData?.fabricMeta||{},st=Object.assign({},meta,{current:recs.filter(x=>x.stockType==='current'),old:recs.filter(x=>x.stockType==='old_usage'),accessory:recs.filter(x=>x.stockType==='accessory')});await idbKvPut('VRT_FabricStockDB',1,'app','state',st);return recs.length}
   },
-  fabric: {
-    read: async () => {
-      const raw = localStorage.getItem('vrt_fabric_stock_v1') || localStorage.getItem('vrt_fabric_center_v1');
-      if (!raw) return null;
-      let cnt = 1;
-      try { const o = JSON.parse(raw); cnt = ['current','old','accessory'].reduce((s,k)=>s+(Array.isArray(o[k])?o[k].length:0),0) || 1; } catch(e) {}
-      return { tool:'fabric', recordCount: cnt, fabState: raw };
-    },
-    write: async (data) => {
-      if (!data.fabState) return 0;
-      try { JSON.parse(data.fabState); } catch(e) { return 0; }
-      try { localStorage.setItem('vrt_fabric_stock_v1', data.fabState); } catch(e) { return 0; }
-      return data.recordCount || 1;
-    }
-  },
-  monthship: {
-    read: async () => {
-      const st = await idbKvGet('VRTMonthlyShippingControlCenter', 1, 'state', 'main');
-      if (!st) return null;
-      let cnt = 1;
-      try { cnt = ((st.monthly||[]).length + (st.weekly||[]).length) || 1; } catch(e) {}
-      return { tool:'monthship', recordCount: cnt, msState: JSON.stringify(st) };
-    },
-    write: async (data) => {
-      if (!data.msState) return 0;
-      let st = null;
-      try { st = JSON.parse(data.msState); } catch(e) { return 0; }
-      if (!st || !st.monthly) return 0;
-      await idbKvPut('VRTMonthlyShippingControlCenter', 1, 'state', 'main', st);
-      return data.recordCount || 1;
-    }
-  },
+  monthship:{
+    read:async()=>{try{const d=JSON.parse(localStorage.getItem('vrt_monthship_v3_data')||'null');if(!d?.records?.length)return null;return{tool:'monthship',recordCount:d.records.length,records:d.records,versions:JSON.parse(localStorage.getItem('vrt_monthship_v3_versions')||'[]')}}catch(_){return null}},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_monthship_v3_data',JSON.stringify({records:recs,source:'Cloud',savedAt:new Date().toISOString()}));if(Array.isArray(data.versions))localStorage.setItem('vrt_monthship_v3_versions',JSON.stringify(data.versions))}catch(_){}return recs.length}
+  }
 };
 
 // ═══ 生產流程鏈渲染 ═══
@@ -732,7 +617,7 @@ async function fetchStatus() {
     const data = d.data || {};
     renderFlow(data);
     ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts','prodplan','custstats','fabric','monthship'].forEach(t => {
-      const info = data[t];
+      const info = data[t==='fabric'?'fabricstock':t] || data[t];
       const stEl = document.getElementById('st-' + t);
       const bdEl = document.getElementById('bd-' + t);
       if (!stEl) return;
@@ -751,73 +636,57 @@ async function fetchStatus() {
   } catch(e) { /* silent */ }
 }
 
+async function portalBomPost(payload){
+  const r=await fetch(gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({system:'vrt_bom2'},payload)),redirect:'follow'});
+  const txt=await r.text();let d;try{d=JSON.parse(txt)}catch(_){throw new Error('BOM GAS 回傳非 JSON')}
+  if(!r.ok||(d&&d.ok===false))throw new Error((d&&d.error)||('HTTP '+r.status));return d;
+}
+async function portalBomPush(payload){
+  let st={};try{st=JSON.parse(payload.bomState||'{}')}catch(_){throw new Error('BOM 本機資料格式錯誤')}
+  const styles=Array.isArray(st.styles)?st.styles:[],size=200,chunks=[];for(let i=0;i<styles.length;i+=size)chunks.push(styles.slice(i,i+size));
+  const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+  if(chunks.length){for(let i=0;i<chunks.length;i++){await portalBomPost({action:'pushChunk',uploadId,index:i,total:chunks.length,data:chunks[i]});log(`BOM 第 ${i+1}/${chunks.length} 批完成`,'info')}}
+  else await portalBomPost({action:'pushChunk',uploadId,index:0,total:0,data:[]});
+  await portalBomPost({action:'pushMeta',uploadId,rev:(st.meta&&st.meta.rev)||0,chunks:chunks.length,customers:st.customers||[],savedAt:new Date().toISOString()});
+  return styles.length;
+}
+async function portalBomPull(cfg){
+  const meta=await portalBomPost({action:'pullMeta'}),tc=Number(meta&&meta.chunks)||0,uploadId=(meta&&meta.uploadId)||'';let styles=[];
+  for(let i=0;i<tc;i++){const c=await portalBomPost({action:'pullChunk',uploadId,index:i});if(!c||!Array.isArray(c.data))throw new Error(`BOM 第 ${i+1} 批格式不完整`);styles=styles.concat(c.data);log(`BOM 第 ${i+1}/${tc} 批完成`,'info')}
+  let local={};try{const cur=await cfg.read();local=cur&&cur.bomState?JSON.parse(cur.bomState):{}}catch(_){}
+  local=Object.assign({customers:[],styles:[],settings:{},activity:[],meta:{}},local,{customers:Array.isArray(meta.customers)?meta.customers:(local.customers||[]),styles});
+  local.meta=Object.assign({},local.meta||{},{rev:meta.rev||0,lastSync:new Date().toISOString()});
+  return await cfg.write({bomState:JSON.stringify(local),recordCount:styles.length});
+}
+
 // ─── PUSH（支援分批上傳）─────────────────────────────────
+function portalPrimary(payload,tool){
+  if(!payload)return[];if(tool==='bom'){try{const st=JSON.parse(payload.bomState||'{}');return st.styles||[]}catch(_){return[]}}
+  if(Array.isArray(payload.records))return payload.records;if(Array.isArray(payload.idbStore?.records))return payload.idbStore.records;if(Array.isArray(payload.idbData?.po_lines))return payload.idbData.po_lines;if(Array.isArray(payload.data?.txns))return payload.data.txns;if(Array.isArray(payload.data?.parts))return payload.data.parts;return[];
+}
+function portalMeta(payload,tool){
+  if(tool==='bom'){let st={};try{st=JSON.parse(payload.bomState||'{}')}catch(_){}return{customers:st.customers||[],rev:st.meta?.rev||0,savedAt:new Date().toISOString()}}
+  const m={...payload};delete m.records;if(m.idbStore)m.idbStore={...m.idbStore,records:[]};if(m.idbData)m.idbData={...m.idbData};if(m.idbData)delete m.idbData.po_lines;if(m.data&&Array.isArray(m.data.txns))m.data={...m.data,txns:[]};return m;
+}
+function portalRebuild(tool,recs,meta,localPayload){
+  meta=meta||{};if(tool==='bom'){let st={};try{st=JSON.parse(localPayload?.bomState||'{}')}catch(_){}st=Object.assign({customers:[],styles:[],settings:{},activity:[],meta:{}},st,{styles:recs,customers:Array.isArray(meta.customers)?meta.customers:(st.customers||[])});st.meta=Object.assign({},st.meta||{},{rev:meta.rev||st.meta?.rev||0,lastSync:new Date().toISOString()});return{bomState:JSON.stringify(st),recordCount:recs.length}}
+  if(tool==='orders')return{...meta,records:recs,idbData:{...(meta.idbData||{}),po_lines:recs}};
+  if(tool==='smv')return{...meta,records:recs,idbStore:{...(meta.idbStore||{}),records:recs}};
+  if(tool==='spareparts')return{...meta,data:{...(meta.data||{}),txns:recs},records:recs};
+  if(tool==='custstats')return{...meta,records:recs,summaryData:meta.summaryData?{...meta.summaryData,details:recs}:undefined};
+  return{...meta,records:recs};
+}
 async function push(tool) {
-  if (!gasUrl) { alert('請先設定 GAS URL'); return; }
-  const cfg = TOOLS[tool];
-  if (!cfg || !cfg.read) { log(`${tool} 無法從 portal 推送（請在工具內直接同步）`, 'err'); return; }
-
-  setBtns(tool, true);
-  log(`推送 ${tool}...`, 'info');
-  try {
-    const payload = await cfg.read();
-    if (!payload) { log(`${tool} 無本地資料`, 'err'); setBtns(tool, false); return; }
-
-    // 取得要分批的資料陣列
-    const CHUNK   = 5000;
-    const allRecs = payload.records || payload.lsKeys
-      ? (payload.records || JSON.parse(payload.lsKeys?.sewing_prod_v1 || '[]'))
-      : [];
-    const total   = payload.recordCount || allRecs.length;
-    const chunks  = allRecs.length > CHUNK ? Math.ceil(allRecs.length / CHUNK) : 1;
-
-    if (chunks === 1) {
-      // 單批直接推
-      const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload), redirect:'follow' });
-      const d = await r.json();
-      if (!d.ok) throw new Error(d.error);
-      log(`✓ ${tool} 推送完成（${total} 筆）`, 'ok');
-    } else {
-      log(`${tool} 共 ${total} 筆，分 ${chunks} 批推送...`, 'info');
-      for (let i = 0; i < chunks; i++) {
-        const slice  = allRecs.slice(i * CHUNK, (i + 1) * CHUNK);
-        const isLast = i === chunks - 1;
-        const chunk  = { tool, chunk: i, totalChunks: chunks, recordCount: total, records: slice,
-          ...(isLast ? { summary: payload.summary || {} } : {}) };
-        const r = await fetch(gasUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(chunk), redirect:'follow' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error);
-        log(`第 ${i+1}/${chunks} 批完成`, 'info');
-      }
-      log(`✓ ${tool} 全部推送完成（${total} 筆）`, 'ok');
-    }
-    fetchStatus();
-  } catch(e) {
-    log(`✗ ${tool} 推送失敗：` + e.message, 'err');
-  } finally { setBtns(tool, false); }
+  if(!gasUrl){alert('請先設定 GAS URL');return;}const cfg=TOOLS[tool];if(!cfg||!cfg.read){log(`${tool} 無法從 portal 推送（請在工具內直接同步）`,'err');return;}setBtns(tool,true);log(`智慧推送 ${tool}...`,'info');
+  try{const payload=await cfg.read();if(!payload){log(`${tool} 無本地資料`,'err');return;}const cloudTool=payload.tool||tool,recs=portalPrimary(payload,tool);if(!recs.length){log(`${tool} 無可同步主資料`,'err');return;}const res=await VRTSmartSync.push({url:gasUrl,tool:cloudTool,records:recs,meta:portalMeta(payload,tool),onStatus:m=>log(`${tool} · ${m}`,'info')});if(res&&res.needsPull){log(`⚠ ${tool} 雲端有較新資料，請先拉取`,'err');return;}log(`✓ ${tool} 智慧推送 · 本機 ${recs.length} · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');fetchStatus();}
+  catch(e){log(`✗ ${tool} 推送失敗：`+e.message,'err');}finally{setBtns(tool,false);}
 }
 
 // ─── PULL ───────────────────────────────────────────────
 async function pull(tool) {
-  if (!gasUrl) { alert('請先設定 GAS URL'); return; }
-  const cfg = TOOLS[tool];
-  if (!cfg) { log(`未知工具：${tool}`, 'err'); return; }
-
-  const pullBtn = document.getElementById('pl-' + tool);
-  if (pullBtn) { pullBtn.disabled = true; pullBtn.innerHTML = '<span class="spin">⏳</span>'; }
-  log(`拉取 ${tool}...`, 'info');
-  try {
-    const r = await fetch(`${gasUrl}?action=pull&tool=${tool}`, { redirect:'follow' });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-    if (!d.data || !d.data.data) { log(`${tool} 雲端尚無資料`, 'err'); return; }
-    const cnt = await cfg.write(d.data.data);
-    log(`✓ ${tool} 拉取完成（${cnt} 筆）→ 重新整理對應工具即可看到資料`, 'ok');
-  } catch(e) {
-    log(`✗ ${tool} 拉取失敗：` + e.message, 'err');
-  } finally {
-    if (pullBtn) { pullBtn.disabled = false; pullBtn.innerHTML = '⬇ 拉取'; }
-  }
+  if(!gasUrl){alert('請先設定 GAS URL');return;}const cfg=TOOLS[tool];if(!cfg){log(`未知工具：${tool}`,'err');return;}const pullBtn=document.getElementById('pl-'+tool);if(pullBtn){pullBtn.disabled=true;pullBtn.innerHTML='<span class="spin">⏳</span>'}log(`智慧拉取 ${tool}...`,'info');
+  try{const localPayload=cfg.read?await cfg.read():null,cloudTool=(localPayload&&localPayload.tool)||tool,localRecs=portalPrimary(localPayload,tool);const res=await VRTSmartSync.pull({url:gasUrl,tool:cloudTool,localRecords:localRecs,onStatus:m=>log(`${tool} · ${m}`,'info'),apply:async(recs,meta)=>{const data=portalRebuild(tool,recs,meta,localPayload);await cfg.write(data)}});if(!res.ok){log(`${tool} 雲端尚無資料`,'err');return;}log(`✓ ${tool} 智慧拉取 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');fetchStatus();}
+  catch(e){log(`✗ ${tool} 拉取失敗：`+e.message,'err');}finally{if(pullBtn){pullBtn.disabled=false;pullBtn.innerHTML='⬇ 拉取';}}
 }
 
 // ─── IDB HELPERS ────────────────────────────────────────
@@ -828,6 +697,12 @@ async function pull(tool) {
 // 若發現資料庫已存在但缺 store（先前已壞），自動升版補建修復。
 // ═══════════════════════════════════════════════════════════
 const IDB_SCHEMAS = {
+  'VRT_SewingProduction': { ver:1, stores:{ daily_records:{keyPath:'id'}, eff_records:{keyPath:'id'}, system_meta:{keyPath:'key'}, analysis_history:{keyPath:'analysisDate'}, analytics_monthly:{keyPath:'yearMonth'} } },
+  'FactoryDB': { ver:15, stores:{ po_headers:{keyPath:'id',autoIncrement:true}, po_lines:{keyPath:'id',autoIncrement:true}, weekly_snapshots:{keyPath:'id',autoIncrement:true}, order_imports:{keyPath:'id',autoIncrement:true}, parse_audit:{keyPath:'id',autoIncrement:true} } },
+  'VRT_SMV_Manager_v52': { ver:1, stores:{ smv_snapshots:{keyPath:'id',autoIncrement:true} } },
+  'vrt_custstats_v31': { ver:1, stores:{ data:null } },
+  'VRT_FabricStockDB': { ver:1, stores:{ app:null } },
+  'vrt_ie_smv_integrated_v2': { ver:1, stores:{ state:null } },
   'CuttingProd':      { ver: 2, stores: { cutting_records:{keyPath:'id'}, sewing_cache:{keyPath:'id'}, plan_records:{keyPath:'id'}, variance_records:{keyPath:'id'}, history_records:{keyPath:'id'} } },
   'CuttingCloudPlan': { ver: 1, stores: { cloud_records:{keyPath:'id', autoIncrement:true} } },
   'vrt_pocc_db':      { ver: 1, stores: { records:{keyPath:'id'} } },
@@ -896,6 +771,14 @@ function idbPutAll(dbName, ver, store, records) {
     records.forEach(r => os.put(r));
     tx.oncomplete = () => { db.close(); res(records.length); };
     tx.onerror    = e  => { db.close(); rej(e); };
+  }));
+}
+
+function idbReplaceAll(dbName, ver, store, records) {
+  return openHealedDB(dbName).then(db => new Promise((res, rej) => {
+    if (!db.objectStoreNames.contains(store)) { db.close(); res(0); return; }
+    const tx=db.transaction(store,'readwrite'),os=tx.objectStore(store);os.clear();(records||[]).forEach(r=>os.put(r));
+    tx.oncomplete=()=>{db.close();res((records||[]).length)};tx.onerror=e=>{db.close();rej(tx.error||e)};
   }));
 }
 

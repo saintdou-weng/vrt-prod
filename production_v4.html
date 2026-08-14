@@ -142,6 +142,59 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 .sb-dneg{color:#dc2626;font-weight:800}.sb-dpos{color:#15803d;font-weight:800}
 
 </style>
+<script id="vrt-cloud-transport-v13">
+(function(){
+  if(window.__VRT_CLOUD_TRANSPORT__==='1.3')return;
+  window.__VRT_CLOUD_TRANSPORT__='1.3';
+  const _fetch=window.fetch.bind(window), _sessions={}, _pullVersions={}; let _lastPost=0;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function isGas(input){
+    const u=typeof input==='string'?input:(input&&input.url)||'';
+    if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
+    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+  }
+  function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
+  function addUploadId(init){
+    if(!init||typeof init.body!=='string')return init;
+    let p;try{p=JSON.parse(init.body)}catch(_){return init}
+    if(!p||!(Number(p.totalChunks)>1)||p.chunk==null)return init;
+    const tool=String(p.tool||'tool'), key=tool+'|'+String(p.totalChunks);
+    if(!p.uploadId){
+      if(Number(p.chunk)===0||!_sessions[key])_sessions[key]=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+      p.uploadId=_sessions[key];
+      init=Object.assign({},init,{body:JSON.stringify(p)});
+    }
+    return init;
+  }
+  function pinPull(input){
+    if(typeof input!=='string')return input;
+    try{const u=new URL(input,location.href),tool=u.searchParams.get('tool');if(u.searchParams.get('action')==='pull'&&u.searchParams.has('chunk')&&tool&&!u.searchParams.has('uploadId')&&_pullVersions[tool])u.searchParams.set('uploadId',_pullVersions[tool]);return u.href}catch(_){return input}
+  }
+  window.fetch=async function(input,init){
+    if(!isGas(input))return _fetch(input,init);
+    input=pinPull(input);init=addUploadId(init||{}); const method=String(init.method||'GET').toUpperCase();
+    const tries=method==='POST'?4:3; let lastErr=null;
+    for(let a=0;a<tries;a++){
+      try{
+        if(method==='POST'){const wait=260-(Date.now()-_lastPost);if(wait>0)await sleep(wait);_lastPost=Date.now()}
+        const r=await _fetch(input,init), txt=await r.clone().text();
+        let j=null,parseErr=false;try{j=txt?JSON.parse(txt):null}catch(_){parseErr=true}
+        const html=/^\s*</.test(txt||''),backendErr=j&&j.ok===false;
+        const transient=(!r.ok&&(r.status===408||r.status===429||r.status>=500))||html||parseErr||(backendErr&&/internal|server|timeout|temporar|service|drive|quota|rate/i.test(String(j.error||'')));
+        if(r.ok&&!parseErr&&!backendErr){try{if(method==='GET'&&j&&j.data&&j.data.meta&&j.data.meta.uploadId){const u=new URL(typeof input==='string'?input:input.url,location.href),tool=u.searchParams.get('tool');if(tool)_pullVersions[tool]=j.data.meta.uploadId}}catch(_){}return r;}
+        const head=(txt||'').replace(/\s+/g,' ').slice(0,180);
+        const msg=backendErr?String(j.error||'GAS error'):(html?'GAS 回傳 HTML（暫時性伺服器錯誤、部署權限或網址錯誤）':parseErr?'GAS 回傳非 JSON':`HTTP ${r.status}`)+(head?` · ${head}`:'');
+        lastErr=new Error(msg);
+        if(transient&&a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}
+        return synth(r.ok?502:r.status,msg,{httpStatus:r.status});
+      }catch(e){lastErr=e;if(a<tries-1){await sleep(650*Math.pow(2,a)+Math.floor(Math.random()*220));continue}}
+    }
+    return synth(502,lastErr&&lastErr.message?lastErr.message:'Cloud request failed');
+  };
+  window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
+})();
+</script>
+<script src="vrt-smart-sync-v3.js"></script>
 </head>
 <body>
 
@@ -1556,35 +1609,10 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
   };
 
   window.vcPullAll = async function(){
-    if (!gasUrl){ vcProdLog('請先填入 GAS URL', 'err'); return; }
-    const btn = document.getElementById('vcPullAllBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="vcSpin">⏳</span> 拉取中...';
-
-    const tools = [
-      { name:'車縫', key:'sewing', write: writeSewing },
-      { name:'裁剪', key:'cutting', write: writeCutting },
-      { name:'訂單', key:'orders', write: writeOrders },
-    ];
-
-    let anyOk = false;
-    for (const t of tools) {
-      vcProdLog(`拉取 ${t.name}...`, 'i');
-      try {
-        const payload=await pullToolPayload(t.key);
-        if(!payload){vcProdLog(`${t.name}：雲端無資料`,'err');continue;}
-        const cnt=await t.write(payload);
-        vcProdLog(`✓ ${t.name} ${cnt} 筆`,'ok');
-        if(cnt>0)anyOk=true;
-      }catch(e){vcProdLog(`✗ ${t.name}：${e.message}`,'err');}
-    }
-
-    if (anyOk) {
-      vcProdLog('拉取完成，重新整理頁面...', 'i');
-      setTimeout(() => location.reload(), 1200);
-    }
-    btn.disabled = false;
-    btn.innerHTML = '⬇ 拉取全部（車縫＋裁剪＋訂單）';
+    if(!gasUrl){vcProdLog('請先填入 GAS URL','err');return;}const btn=document.getElementById('vcPullAllBtn');btn.disabled=true;btn.innerHTML='<span class="vcSpin">⏳</span> 智慧拉取中...';
+    const tools=[{name:'車縫',key:'sewing',local:()=>SEW,write:async(recs,meta)=>writeSewing({records:recs,eff:meta&&meta.eff||[]})},{name:'裁剪',key:'cutting',local:()=>CUT,write:async(recs,meta)=>writeCutting({records:recs})},{name:'訂單',key:'orders',local:()=>ORDERS,write:async(recs,meta)=>writeOrders({records:recs,idbData:{...(meta&&meta.idbData||{}),po_lines:recs},lsKeys:meta&&meta.lsKeys||{}})}];
+    let anyOk=false;for(const t of tools){vcProdLog(`智慧拉取 ${t.name}...`,'i');try{const res=await VRTSmartSync.pull({url:gasUrl,tool:t.key,localRecords:t.local()||[],onStatus:m=>vcProdLog(`${t.name} · ${m}`,'i'),apply:async(recs,meta)=>{await t.write(recs,meta)}});if(!res.ok){vcProdLog(`${t.name}：雲端無資料`,'err');continue;}vcProdLog(`✓ ${t.name} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');anyOk=true}catch(e){vcProdLog(`✗ ${t.name}：${e.message}`,'err')}}
+    if(anyOk){vcProdLog('智慧拉取完成，重新整理頁面...','i');setTimeout(()=>location.reload(),1200)}btn.disabled=false;btn.innerHTML='⬇ 拉取全部（車縫＋裁剪＋訂單）';
   };
 
   async function openCurrentOrRepair(dbName, stores){
@@ -1602,29 +1630,10 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
   }
 
   async function pullToolPayload(key){
-    // New chunked format first; fallback to legacy single payload.
-    try{
-      const mr=await fetch(`${gasUrl}?action=pull&meta=1&tool=${key}`,{redirect:'follow'});
-      const mj=await mr.json();
-      if(mj.ok&&mj.data){
-        const d=mj.data;
-        if(d.chunked&&d.meta&&d.meta.totalChunks){
-          let records=[];
-          for(let i=0;i<d.meta.totalChunks;i++){
-            const cr=await fetch(`${gasUrl}?action=pull&tool=${key}&chunk=${i}`,{redirect:'follow'});
-            const cj=await cr.json();
-            if(cj.ok&&Array.isArray(cj.data?.records))records=records.concat(cj.data.records);
-          }
-          return {records,meta:d.meta||{}};
-        }
-        if(!d.chunked&&d.data)return d.data;
-      }
-    }catch(e){}
-    const r=await fetch(`${gasUrl}?action=pull&tool=${key}`,{redirect:'follow'});
-    const j=await r.json();
-    if(!j.ok)throw new Error(j.error||'GAS error');
-    if(!j.data)return null;
-    return j.data.data||j.data;
+    const mr=await fetch(`${gasUrl}?action=pull&meta=1&tool=${key}`,{redirect:'follow'}),mj=await mr.json();
+    if(!mj.ok)throw new Error(mj.error||`${key} GAS error`);const d=mj.data;if(!d)return null;
+    if(d.chunked&&d.meta&&d.meta.totalChunks){let records=[];const tc=Number(d.meta.totalChunks)||0;for(let i=0;i<tc;i++){const cr=await fetch(`${gasUrl}?action=pull&tool=${key}&chunk=${i}`,{redirect:'follow'}),cj=await cr.json();if(!cj.ok)throw new Error(cj.error||`${key} 第 ${i+1} 批拉取失敗`);if(!cj.data||!Array.isArray(cj.data.records))throw new Error(`${key} 第 ${i+1} 批格式不完整`);records=records.concat(cj.data.records)}return{records,meta:d.meta||{},eff:d.meta?.eff||[],idbData:d.meta?.idbData||{},lsKeys:d.meta?.lsKeys||{}}}
+    if(!d.chunked&&d.data)return d.data;return null;
   }
 
   // ── 寫入各工具資料 ──────────────────────────
