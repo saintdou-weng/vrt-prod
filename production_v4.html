@@ -105,42 +105,6 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 .mhdr{padding:13px 17px;border-bottom:1px solid var(--bd);background:var(--s2);display:flex;justify-content:space-between;align-items:center}
 .mclose{background:none;border:none;color:var(--muted);cursor:pointer;font-size:21px}.mclose:hover{color:var(--t1)}
 
-/* ══ 智慧排單看板 ══ */
-.sb-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.sb-pill{flex:1;min-width:140px;background:var(--card,#fff);border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:10px 14px}
-.sb-pill .n{font-size:22px;font-weight:800}.sb-pill .l{font-size:11px;color:var(--muted,#64748b);margin-top:2px}
-.sb-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-@media(max-width:1000px){.sb-cols{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.sb-cols{grid-template-columns:1fr}}
-.sb-col{background:var(--bg2,#f8fafc);border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:8px;min-height:120px}
-.sb-ch{font-size:13px;font-weight:800;padding:6px 8px;border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between}
-.sb-risk .sb-ch{background:rgba(248,113,113,.12);color:#dc2626}
-.sb-wait .sb-ch{background:rgba(251,191,36,.14);color:#b45309}
-.sb-act  .sb-ch{background:rgba(74,222,128,.14);color:#15803d}
-.sb-done .sb-ch{background:rgba(96,165,250,.14);color:#1d4ed8}
-.sb-card{background:var(--card,#fff);border:1px solid var(--line,#e2e8f0);border-left-width:4px;border-radius:10px;padding:9px 10px;margin-bottom:8px;font-size:12px;cursor:default}
-.sb-risk .sb-card{border-left-color:#ef4444}.sb-wait .sb-card{border-left-color:#f59e0b}
-.sb-act .sb-card{border-left-color:#22c55e}.sb-done .sb-card{border-left-color:#3b82f6}
-.sb-card .t{font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center}
-.sb-card .c{color:var(--muted,#64748b);font-size:11px;margin:2px 0 5px}
-.sb-bar{height:6px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin:3px 0}
-.sb-bar>i{display:block;height:100%;border-radius:4px}
-.sb-bar .bc{background:#8b5cf6}.sb-bar .bs{background:#22c55e}
-.sb-meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
-.sb-tag{font-size:10px;padding:2px 6px;border-radius:6px;background:#f1f5f9;color:#475569;white-space:nowrap}
-.sb-tag.red{background:rgba(239,68,68,.12);color:#dc2626;font-weight:700}
-.sb-tag.grn{background:rgba(34,197,94,.12);color:#15803d;font-weight:700}
-.sb-tag.yel{background:rgba(245,158,11,.14);color:#b45309;font-weight:700}
-.sb-sug{background:var(--card,#fff);border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:12px 14px;margin-bottom:12px}
-.sb-sug h3{margin:0 0 8px;font-size:14px}
-.sb-sug .row{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #e2e8f0;font-size:12px}
-.sb-sug .row:last-child{border-bottom:none}
-.sb-rank{width:22px;height:22px;border-radius:50%;background:#ef4444;color:#fff;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
-.sb-diff{width:100%;border-collapse:collapse;font-size:12px}
-.sb-diff th{text-align:left;padding:6px 8px;background:#f1f5f9;font-size:11px}
-.sb-diff td{padding:6px 8px;border-top:1px solid #eef2f7}
-.sb-dneg{color:#dc2626;font-weight:800}.sb-dpos{color:#15803d;font-weight:800}
-
 </style>
 <script id="vrt-cloud-transport-v13">
 (function(){
@@ -225,7 +189,6 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 <!-- TABS -->
 <div class="tbr">
   <button class="tb on" onclick="go('progress',this)">📊 進度總表</button>
-  <button class="tb" onclick="go('smart',this)">🧠 智慧排單</button>
   <button class="tb" onclick="go('gantt',this)">📅 甘特排程</button>
   <button class="tb" onclick="go('queue',this)">📋 排隊清單</button>
   <button class="tb" onclick="go('smv',this)">📐 SMV 產能</button>
@@ -281,16 +244,6 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 </div>
 
 <!-- ════ GANTT ════ -->
-<div id="pane-smart" class="pane">
-  <div class="sb-strip" id="sb-strip"></div>
-  <div class="sb-sug" id="sb-sug"></div>
-  <div class="sb-cols" id="sb-cols"></div>
-  <div class="sb-sug" style="margin-top:12px">
-    <h3>📊 計畫 vs 實際 差異比對(排產產能 × 車縫/裁剪實績)</h3>
-    <div style="overflow-x:auto"><table class="sb-diff" id="sb-diff"></table></div>
-  </div>
-</div>
-
 <div id="pane-gantt" class="pane">
   <div class="fbar">
     <select id="g-sec" onchange="renderGantt()">
@@ -426,10 +379,8 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
       = SMV <code style="background:var(--s2);padding:1px 4px;border-radius:3px">style</code>
     </div>
     <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:6px;padding:10px;font-size:12px;color:var(--t2)">
-      <b style="color:var(--green)">📐 排程產能優先順序：</b>
-      ① SMV 理論（人數 × 工作分鐘 ÷ curSMV）
-      → ② 近 90 天歷史實際日均
-      → ③ 工廠整體平均（fallback）
+      <b style="color:var(--green)">📐 產能對照說明：</b>
+      SMV 與歷史實績僅供甘特／產能分析參考；系統不再自動產生排單建議。
     </div>
   </div>
 </div>
@@ -609,7 +560,6 @@ async function loadAll(){
   populateFilters();
   renderKrow();
   renderProgress();
-  renderSmart();
   renderGantt();
   renderQueue();
   renderSmv();
@@ -741,169 +691,6 @@ function dailyCap(sk, workers, workMins){
 }
 
 
-// ══════════════════════════════════════════════════
-//  智慧排單看板 — 排產計畫 × 客戶統計 × 車縫/裁剪實績
-//  邏輯:布料覆蓋 + 交期 + 產能 → 預估完工 → 缺口排序
-// ══════════════════════════════════════════════════
-function sbBuild(){
-  const today = TODAY;
-  const d7ago = addDays(today,-7);
-  const workMins = 600;   // 與甘特預設一致的保守日工時(分)
-
-  // 排產計畫:以款號聚合
-  const pM = {};
-  PLAN.forEach(r=>{
-    const sk = nsk(r.style); if(!sk) return;
-    if(!pM[sk]) pM[sk]={planQty:0,planSew:0,planCut:0,starts:[],ends:[],ships:[],lines:new Set(),daily:0,workers:0};
-    pM[sk].planQty += r.orderQty||0;
-    pM[sk].planSew += r.sewingQty||0;
-    pM[sk].planCut += r.cutQty||0;
-    if(r.startDate) pM[sk].starts.push(r.startDate);
-    if(r.endDate)   pM[sk].ends.push(r.endDate);
-    if(r.shipmentDate) pM[sk].ships.push(r.shipmentDate);
-    if(r.line) pM[sk].lines.add(r.line);
-    pM[sk].daily   += r.dailyOutput||0;
-    pM[sk].workers += r.manpower||0;
-  });
-
-  // 客戶統計:以款號聚合(布料覆蓋 + ETD 交期)
-  const cM = {};
-  CSTAT.forEach(r=>{
-    const sk = nsk(r.styleKey||r.style); if(!sk) return;
-    if(!cM[sk]) cM[sk]={openQty:0,acs:0,fabReq:0,fabStock:0,etds:[]};
-    const n = v => parseFloat(v)||0;
-    cM[sk].openQty += n(r.openQty);
-    cM[sk].acs     += n(r.actualCutStock) || (n(r.actualCutPcs)+n(r.cutStock));
-    cM[sk].fabReq  += n(r.fabricReqPerNotCut);
-    cM[sk].fabStock+= n(r.fabricStockYds);
-    const e = pd(r.etd); if(e) cM[sk].etds.push(e);
-  });
-
-  // 全部款號 = 進度總表款號 ∪ 排產款號
-  const all = new Set([...STYLES.map(s=>s.sk), ...Object.keys(pM)]);
-  const items = [];
-  all.forEach(sk=>{
-    const st = STYLE_IX.get(sk);
-    const pl = pM[sk], cs = cM[sk];
-    const qty    = (st&&st.qty) || (pl&&pl.planQty) || (cs&&cs.openQty) || 0;
-    const sewPcs = st?st.sewPcs:0, cutPcs = st?st.cutPcs:0;
-    if(qty<=0 && sewPcs<=0) return;   // 無量無實績不排
-
-    const sewPct = qty>0?Math.min(100,Math.round(sewPcs/qty*100)):(sewPcs>0?100:0);
-    const cutPct = qty>0?Math.min(100,Math.round(cutPcs/qty*100)):(cutPcs>0?100:0);
-
-    // 交期:訂單船期 → 排產出貨日 → 客統 ETD
-    let ship = (st&&st.shipDate)||'';
-    if(!ship && pl && pl.ships.length) ship = pl.ships.sort()[0];
-    if(!ship && cs && cs.etds.length)  ship = cs.etds.sort()[0];
-
-    // 產能:SMV/歷史 → 排產日產量
-    let cap = 0, capSrc = '';
-    const dc = dailyCap(sk, (pl&&pl.workers)||25, workMins);
-    if(dc.cap>0){ cap=dc.cap; capSrc=dc.src==='smv'?'SMV':(dc.src==='hist'?'歷史':'均值'); }
-    if(pl && pl.daily>0 && (capSrc==='均值'||!cap)){ cap=pl.daily; capSrc='排產'; }
-
-    const remaining = Math.max(qty - sewPcs, 0);
-    const estDays   = cap>0 ? Math.ceil(remaining/cap) : null;
-    const estFinish = estDays!=null ? addDays(today, estDays) : '';
-    const gap = (ship && estFinish) ? Math.round((new Date(ship)-new Date(estFinish))/86400000) : null;
-
-    // 布料覆蓋(未裁部分)
-    const fabShort = cs ? Math.max(cs.fabReq - cs.fabStock, 0) : 0;
-    const needFab  = fabShort > 0 && cutPcs < qty;
-
-    const active = !!(st && st.latestAct && st.latestAct >= d7ago);
-    const daysToShip = ship ? Math.round((new Date(ship)-new Date(today))/86400000) : null;
-
-    // 分欄
-    let bucket;
-    if(sewPct>=90) bucket='done';
-    else if((gap!=null&&gap<0) || (daysToShip!=null&&daysToShip<0&&remaining>0) || needFab) bucket='risk';
-    else if(active&&sewPcs>0) bucket='act';
-    else bucket='wait';
-
-    items.push({sk, customer:(st&&st.customer)||'—', qty, sewPcs, cutPcs, sewPct, cutPct,
-      ship, estFinish, gap, daysToShip, cap, capSrc, remaining, fabShort, needFab, active, bucket,
-      lines: pl?[...pl.lines].join(','):'',
-      planSew: pl?pl.planSew:0, planStart: pl&&pl.starts.length?pl.starts.sort()[0]:'',
-      planEnd: pl&&pl.ends.length?pl.ends.sort().slice(-1)[0]:'', hasPlan: !!pl});
-  });
-
-  // 排序:缺口小(最緊急)在前,無缺口的按交期
-  const pri = it => it.gap!=null ? it.gap : (it.daysToShip!=null ? it.daysToShip+500 : 9999);
-  items.sort((a,b)=>pri(a)-pri(b));
-  return items;
-}
-
-function sbCard(it){
-  const gapTag = it.gap==null ? '' :
-    it.gap<0 ? `<span class="sb-tag red">⏰ 缺 ${Math.abs(it.gap)} 天</span>` :
-    it.gap<=3 ? `<span class="sb-tag yel">剩餘 ${it.gap} 天</span>` :
-    `<span class="sb-tag grn">餘裕 ${it.gap} 天</span>`;
-  const fabTag = it.needFab ? `<span class="sb-tag red">🧶 缺布 ${fmt(Math.round(it.fabShort))} yds</span>` : '';
-  const planTag = it.hasPlan
-    ? (it.planSew>0 ? `<span class="sb-tag">計畫 ${fmt(it.planSew)} / 實績 ${fmt(it.sewPcs)}</span>` : `<span class="sb-tag">已排產</span>`)
-    : `<span class="sb-tag yel">未排產</span>`;
-  return `<div class="sb-card">
-    <div class="t"><span>${esc(it.sk)}</span><span style="font-size:11px;font-weight:600;color:var(--muted,#64748b)">${fmt(it.qty)} pcs</span></div>
-    <div class="c">${esc(it.customer)}${it.lines?' · '+esc(it.lines):''}${it.cap?` · ${it.capSrc} ${fmt(it.cap)}/日`:''}</div>
-    <div class="sb-bar" title="裁剪 ${it.cutPct}%"><i class="bc" style="width:${it.cutPct}%"></i></div>
-    <div class="sb-bar" title="車縫 ${it.sewPct}%"><i class="bs" style="width:${it.sewPct}%"></i></div>
-    <div class="c">✂️ ${fmt(it.cutPcs)} (${it.cutPct}%) · 🧵 ${fmt(it.sewPcs)} (${it.sewPct}%)</div>
-    <div class="sb-meta">
-      ${it.ship?`<span class="sb-tag">🚢 ${it.ship}</span>`:'<span class="sb-tag">無交期</span>'}
-      ${it.estFinish?`<span class="sb-tag">預估 ${it.estFinish}</span>`:''}
-      ${gapTag}${fabTag}${planTag}
-    </div>
-  </div>`;
-}
-
-function renderSmart(){
-  const items = sbBuild();
-  const B = {risk:[],wait:[],act:[],done:[]};
-  items.forEach(it=>B[it.bucket].push(it));
-
-  // 上排統計
-  document.getElementById('sb-strip').innerHTML = `
-    <div class="sb-pill"><div class="n" style="color:#dc2626">${B.risk.length}</div><div class="l">🔴 逾期 / 風險(交期不足或缺布)</div></div>
-    <div class="sb-pill"><div class="n" style="color:#b45309">${B.wait.length}</div><div class="l">🟡 待開始(已排/有單,近7天無車縫)</div></div>
-    <div class="sb-pill"><div class="n" style="color:#15803d">${B.act.length}</div><div class="l">🟢 進行中(近7天有車縫)</div></div>
-    <div class="sb-pill"><div class="n" style="color:#1d4ed8">${B.done.length}</div><div class="l">✅ 近完成(車縫 ≥90%)</div></div>`;
-
-  // 智慧建議:最緊急前 8
-  const urgent = items.filter(it=>it.bucket!=='done' && (it.gap!=null||it.needFab)).slice(0,8);
-  document.getElementById('sb-sug').innerHTML = `<h3>🧠 智慧排單建議(依交期缺口自動排序)</h3>` + (
-    urgent.length ? urgent.map((it,i)=>{
-      let advice;
-      if(it.needFab) advice = `等布中(缺 ${fmt(Math.round(it.fabShort))} yds)——布到優先開裁,並確認到布日`;
-      else if(it.gap!=null&&it.gap<0) advice = `以目前產能(${it.capSrc} ${fmt(it.cap)}/日)將遲 ${Math.abs(it.gap)} 天——建議加線/加班或與客戶談交期`;
-      else if(it.sewPcs===0) advice = `尚未開始,剩 ${it.daysToShip??'?'} 天——建議立即上線`;
-      else advice = `餘裕僅 ${it.gap} 天——維持產出,每日追蹤`;
-      return `<div class="row"><span class="sb-rank">${i+1}</span><b style="min-width:90px">${esc(it.sk)}</b><span style="flex:1">${advice}</span><span class="sb-tag">${it.ship?'🚢 '+it.ship:'無交期'}</span></div>`;
-    }).join('') : `<div class="row">目前無交期緊迫或缺布款號 ✓</div>`);
-
-  // 四欄看板(每欄最多 30 卡)
-  const col = (cls,title,arr)=>`<div class="sb-col ${cls}"><div class="sb-ch"><span>${title}</span><span>${arr.length}</span></div>${arr.slice(0,30).map(sbCard).join('')||'<div style="text-align:center;color:#94a3b8;font-size:12px;padding:14px">無款號</div>'}${arr.length>30?`<div style="text-align:center;color:#94a3b8;font-size:11px">…另 ${arr.length-30} 款</div>`:''}</div>`;
-  document.getElementById('sb-cols').innerHTML =
-    col('sb-risk','🔴 逾期 / 風險',B.risk) + col('sb-wait','🟡 待開始',B.wait) +
-    col('sb-act','🟢 進行中',B.act) + col('sb-done','✅ 近完成',B.done);
-
-  // 計畫 vs 實際比對表
-  const planned = items.filter(it=>it.hasPlan);
-  document.getElementById('sb-diff').innerHTML = planned.length ? (
-    `<tr><th>款號</th><th>客戶</th><th>排產期間</th><th>計畫車縫</th><th>實際車縫</th><th>差異</th><th>交期</th><th>預估完工</th><th>缺口</th></tr>` +
-    planned.slice(0,80).map(it=>{
-      const d = it.sewPcs - it.planSew;
-      const gapCell = it.gap==null?'—':(it.gap<0?`<span class="sb-dneg">缺 ${Math.abs(it.gap)} 天</span>`:`<span class="sb-dpos">+${it.gap} 天</span>`);
-      return `<tr><td><b>${esc(it.sk)}</b></td><td>${esc(it.customer)}</td>
-        <td>${it.planStart||'?'} ~ ${it.planEnd||'?'}</td>
-        <td>${fmt(it.planSew)}</td><td>${fmt(it.sewPcs)}</td>
-        <td class="${d<0?'sb-dneg':'sb-dpos'}">${d>=0?'+':''}${fmt(d)}</td>
-        <td>${it.ship||'—'}</td><td>${it.estFinish||'—'}</td><td>${gapCell}</td></tr>`;
-    }).join('')
-  ) : `<tr><td style="padding:14px;color:#94a3b8">尚無排產資料——先在「排產產能」模組匯入計畫,重新整理即可比對</td></tr>`;
-}
-window.renderSmart = renderSmart;
 
 // ══════════════════════════════════════════════════
 //  SCHEDULE
@@ -1522,7 +1309,6 @@ function go(name,el){
   document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   el.classList.add('on');document.getElementById('pane-'+name).classList.add('on');
-  if(name==='smart') renderSmart();
   if(name==='gantt') renderGantt();
   if(name==='queue') renderQueue();
   if(name==='smv')   renderSmv();
@@ -1609,10 +1395,10 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
   };
 
   window.vcPullAll = async function(){
-    if(!gasUrl){vcProdLog('請先填入 GAS URL','err');return;}const btn=document.getElementById('vcPullAllBtn');btn.disabled=true;btn.innerHTML='<span class="vcSpin">⏳</span> 智慧拉取中...';
+    if(!gasUrl){vcProdLog('請先填入 GAS URL','err');return;}const btn=document.getElementById('vcPullAllBtn');btn.disabled=true;btn.innerHTML='<span class="vcSpin">⏳</span> 增量拉取中...';
     const tools=[{name:'車縫',key:'sewing',local:()=>SEW,write:async(recs,meta)=>writeSewing({records:recs,eff:meta&&meta.eff||[]})},{name:'裁剪',key:'cutting',local:()=>CUT,write:async(recs,meta)=>writeCutting({records:recs})},{name:'訂單',key:'orders',local:()=>ORDERS,write:async(recs,meta)=>writeOrders({records:recs,idbData:{...(meta&&meta.idbData||{}),po_lines:recs},lsKeys:meta&&meta.lsKeys||{}})}];
-    let anyOk=false;for(const t of tools){vcProdLog(`智慧拉取 ${t.name}...`,'i');try{const res=await VRTSmartSync.pull({url:gasUrl,tool:t.key,localRecords:t.local()||[],onStatus:m=>vcProdLog(`${t.name} · ${m}`,'i'),apply:async(recs,meta)=>{await t.write(recs,meta)}});if(!res.ok){vcProdLog(`${t.name}：雲端無資料`,'err');continue;}vcProdLog(`✓ ${t.name} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');anyOk=true}catch(e){vcProdLog(`✗ ${t.name}：${e.message}`,'err')}}
-    if(anyOk){vcProdLog('智慧拉取完成，重新整理頁面...','i');setTimeout(()=>location.reload(),1200)}btn.disabled=false;btn.innerHTML='⬇ 拉取全部（車縫＋裁剪＋訂單）';
+    let anyOk=false;for(const t of tools){vcProdLog(`增量拉取 ${t.name}...`,'i');try{const res=await VRTSmartSync.pull({url:gasUrl,tool:t.key,localRecords:t.local()||[],onStatus:m=>vcProdLog(`${t.name} · ${m}`,'i'),apply:async(recs,meta)=>{await t.write(recs,meta)}});if(!res.ok){vcProdLog(`${t.name}：雲端無資料`,'err');continue;}vcProdLog(`✓ ${t.name} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');anyOk=true}catch(e){vcProdLog(`✗ ${t.name}：${e.message}`,'err')}}
+    if(anyOk){vcProdLog('增量拉取完成，重新整理頁面...','i');setTimeout(()=>location.reload(),1200)}btn.disabled=false;btn.innerHTML='⬇ 拉取全部（車縫＋裁剪＋訂單）';
   };
 
   async function openCurrentOrRepair(dbName, stores){

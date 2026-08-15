@@ -228,7 +228,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.0</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.1</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -450,20 +450,30 @@ function applyLang(){
 function toggleLang(){_lang=_lang==='zh'?'en':_lang==='en'?'km':'zh';localStorage.setItem('vrt_sp_lang',_lang);applyLang();}
 
 /* ===== IndexedDB 儲存層 ===== */
-const IDB_NAME='vrt_spareparts', IDB_VER=2;
+const IDB_NAME='vrt_spareparts';
+const IDB_STORES={
+  parts:{keyPath:'id'},txns:{keyPath:'id'},versions:{keyPath:'id'},meta:{keyPath:'k'},
+  suppliers:{keyPath:'id'},invoices:{keyPath:'id'},ocrhist:{keyPath:'id'},images:{keyPath:'id'}
+};
+function createMissingStores(db){
+  Object.entries(IDB_STORES).forEach(([name,opt])=>{if(!db.objectStoreNames.contains(name))db.createObjectStore(name,opt)});
+}
 function openDB(){return new Promise((res,rej)=>{
-  const req=indexedDB.open(IDB_NAME,IDB_VER);
-  req.onupgradeneeded=e=>{const db=e.target.result;
-    if(!db.objectStoreNames.contains('parts'))db.createObjectStore('parts',{keyPath:'id'});
-    if(!db.objectStoreNames.contains('txns'))db.createObjectStore('txns',{keyPath:'id'});
-    if(!db.objectStoreNames.contains('versions'))db.createObjectStore('versions',{keyPath:'id'});
-    if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta',{keyPath:'k'});
-    if(!db.objectStoreNames.contains('suppliers'))db.createObjectStore('suppliers',{keyPath:'id'});
-    if(!db.objectStoreNames.contains('invoices'))db.createObjectStore('invoices',{keyPath:'id'});
-    if(!db.objectStoreNames.contains('ocrhist'))db.createObjectStore('ocrhist',{keyPath:'id'});
-    if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'id'});
+  // Do not force a fixed version. Some phones already have a newer schema; opening with
+  // an old version causes VersionError and makes both local data and cloud restore fail.
+  const req=indexedDB.open(IDB_NAME);
+  req.onupgradeneeded=e=>createMissingStores(e.target.result);
+  req.onerror=()=>rej(req.error||new Error('IndexedDB open failed'));
+  req.onsuccess=()=>{
+    let db=req.result;
+    const missing=Object.keys(IDB_STORES).filter(n=>!db.objectStoreNames.contains(n));
+    if(!missing.length){res(db);return;}
+    const next=Math.max(1,Number(db.version)||1)+1; db.close();
+    const up=indexedDB.open(IDB_NAME,next);
+    up.onupgradeneeded=e=>createMissingStores(e.target.result);
+    up.onerror=()=>rej(up.error||new Error('IndexedDB schema repair failed'));
+    up.onsuccess=()=>res(up.result);
   };
-  req.onsuccess=e=>res(e.target.result); req.onerror=e=>rej(e);
 });}
 async function idbPutAll(store,arr){const db=await openDB();return new Promise((res,rej)=>{
   const tx=db.transaction(store,'readwrite');const os=tx.objectStore(store);os.clear();
@@ -497,13 +507,20 @@ async function saveAll(showToast){
   }catch(e){console.error(e);toast('Save error');}
 }
 async function loadAll(){
+  let dbOk=true;
   try{
     PARTS=await idbGetAll('parts'); TXNS=await idbGetAll('txns'); VERSIONS=await idbGetAll('versions');
     SUPPLIERS=await idbGetAll('suppliers'); INVOICES=await idbGetAll('invoices'); OCRHIST=await idbGetAll('ocrhist');
     const s=await idbGetMeta('settings'); if(s)SET=Object.assign(SET,s);
     else{const ls=localStorage.getItem('vrt_sp_set');if(ls)SET=Object.assign(SET,JSON.parse(ls));}
-  }catch(e){console.error(e);}
-  if(!PARTS.length) seedDemo();
+  }catch(e){dbOk=false;console.error('SpareParts DB load failed',e);toast('資料庫讀取失敗：'+(e.message||e));}
+  // Use the same GAS URL as the rest of /prod unless this module has its own explicit URL.
+  if(!SET.gasUrl) SET.gasUrl=localStorage.getItem('vrt_portal_gas_url')||'';
+  if(SET.gasUrl) SET.cloudTarget='gas';
+  // Never inject demo purchasing data after a DB error. Demo data is only for a genuinely empty fresh install.
+  if(dbOk&&!PARTS.length&&!TXNS.length&&!localStorage.getItem('vrt_sp_initialized')){
+    seedDemo(); localStorage.setItem('vrt_sp_initialized','1');
+  }
 }
 
 /* ===== 示範資料 ===== */
@@ -1111,7 +1128,7 @@ function saveSettings(){
   SET.company=$('s_company').value.trim();SET.currency=$('s_cur').value;SET.minRule=+$('s_min').value||0;
   SET.highValue=+$('s_high').value||0;SET.theme=$('s_theme').value;
   if($('s_cloud'))SET.cloudTarget=$('s_cloud').value;
-  if($('s_gas'))SET.gasUrl=$('s_gas').value.trim();
+  if($('s_gas'))SET.gasUrl=$('s_gas').value.trim();if(SET.gasUrl){SET.cloudTarget='gas';localStorage.setItem('vrt_portal_gas_url',SET.gasUrl);}
   if($('s_tgtoken'))SET.tgToken=$('s_tgtoken').value.trim();
   ['Maintenance','Warehouse','Management','AdminCenter'].forEach(g=>{const el=$('s_tg_'+g);if(el)SET.tgGroups[g]=el.value.trim();});
   if($('s_ocrmode'))SET.ocrMode=$('s_ocrmode').value;
@@ -1142,20 +1159,36 @@ function restoreLocal(file){if(!file)return;const rd=new FileReader();
 
 /* ===== 雲端（GAS text/plain；其他標記需設定） ===== */
 function updateCloudDot(){
-  const ok=(SET.cloudTarget==='gas'&&SET.gasUrl)||SET.cloudTarget==='local';
-  const dot=$('cloudDot');
-  if(SET.cloudTarget==='gas'&&SET.gasUrl)dot.innerHTML='🟢 <span>'+t('cloudConn')+'</span>';
-  else if(SET.cloudTarget==='local')dot.innerHTML='🔵 <span>Local</span>';
+  const dot=$('cloudDot'); if(!dot)return;
+  if(SET.gasUrl)dot.innerHTML='🟢 <span>'+t('cloudConn')+'</span>';
   else dot.innerHTML='⚪ <span>'+t('cloudOff')+'</span>';
 }
 async function cloudUpload(){
-  if(SET.cloudTarget==='local'||!SET.gasUrl){backupLocal();toast(_lang==='en'?'Saved local backup':'已下載本機備份');return}
+  if(!SET.gasUrl){toast(_lang==='en'?'Set GAS URL first':'請先設定 GAS URL');if(window.VRTSmartSync)VRTSmartSync.status('push','GAS URL 未設定','warn');return}
   const records=TXNS||[],meta={dataMeta:{parts:PARTS,versions:VERSIONS,suppliers:SUPPLIERS,invoices:INVOICES},summary:{latestMonth:latestPurchaseMonth(),latestMonthSpend:purchaseStats(monthPurchases(latestPurchaseMonth())).spend,year:latestPurchaseYear(),yearSpend:purchaseStats(purchaseTxns().filter(x=>String(x.date||'').startsWith(latestPurchaseYear()))).spend,parts:PARTS.length}};
-  try{const res=await VRTSmartSync.push({url:SET.gasUrl,tool:'spareparts',records,meta,onStatus:m=>toast('☁️ '+m)});if(res&&res.needsPull){toast('⚠ 雲端有較新資料，請先拉取');return}toast(`☁️ 智慧上傳完成 · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`)}catch(e){console.error(e);toast('Upload failed — '+e.message)}
+  try{
+    updateCloudDot();
+    const res=await VRTSmartSync.push({url:SET.gasUrl,tool:'spareparts',records,meta,onStatus:m=>toast('☁️ '+m)});
+    if(res&&res.needsPull){toast('⚠ 雲端有較新資料，請先拉取');return}
+    toast(`☁↑ 完成 · 採購 ${records.length} · 上傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`)
+  }catch(e){console.error(e);if(window.VRTSmartSync)VRTSmartSync.status('push','失敗 · '+(e.message||e),'err');toast('Upload failed — '+e.message)}
 }
 async function cloudDownload(silent){
   if(!SET.gasUrl){if(!silent)toast('請先設定 GAS URL');return false}
-  try{const res=await VRTSmartSync.pull({url:SET.gasUrl,tool:'spareparts',localRecords:TXNS||[],onStatus:m=>{if(!silent)toast('☁️ '+m)},apply:async(txns,meta)=>{const dm=(meta&&meta.dataMeta)||{};if(Array.isArray(dm.parts))PARTS=dm.parts;if(Array.isArray(dm.versions))VERSIONS=dm.versions;if(Array.isArray(dm.suppliers))SUPPLIERS=dm.suppliers;if(Array.isArray(dm.invoices))INVOICES=dm.invoices;TXNS=txns;PUR_ANCHOR=latestPurchaseDate();await saveAll(false);if(!silent)goTab('dashboard',null)}});if(!res.ok)throw new Error('No cloud data');if(!silent)toast(`☁️ 智慧下載 · ${TXNS.length} records · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`);return true}catch(e){console.error(e);if(!silent)toast('Download failed — '+e.message);return false}
+  try{
+    updateCloudDot();
+    const res=await VRTSmartSync.pull({url:SET.gasUrl,tool:'spareparts',localRecords:TXNS||[],onStatus:m=>{if(!silent)toast('☁️ '+m)},apply:async(txns,meta)=>{
+      const dm=(meta&&meta.dataMeta)||{};
+      if(Array.isArray(dm.parts))PARTS=dm.parts;
+      if(Array.isArray(dm.versions))VERSIONS=dm.versions;
+      if(Array.isArray(dm.suppliers))SUPPLIERS=dm.suppliers;
+      if(Array.isArray(dm.invoices))INVOICES=dm.invoices;
+      TXNS=Array.isArray(txns)?txns:[];PUR_ANCHOR=latestPurchaseDate();await saveAll(false);if(!silent)goTab('dashboard',null)
+    }});
+    if(!res.ok)throw new Error('No cloud data');
+    if(!silent)toast(`☁↓ 完成 · 採購 ${TXNS.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`);
+    return true
+  }catch(e){console.error(e);if(window.VRTSmartSync)VRTSmartSync.status('pull','失敗 · '+(e.message||e),'err');if(!silent)toast('Download failed — '+e.message);return false}
 }
 function buildTgMessage(){
   const mo=latestPurchaseMonth(), xs=monthPurchases(mo), st=purchaseStats(xs);
@@ -1563,10 +1596,11 @@ async function viewImage(id){
 
 (async function init(){
   await loadAll();
-  // Local-first. Only recover from cloud when this browser has no local purchase data.
-  if(!PARTS.length && !TXNS.length && SET.gasUrl) await cloudDownload(true);
   applyTheme();fillFilterSelects();applyLang();updateCloudDot();updateHeaderStats();
   goTab('dashboard',null);
+  // Do not block mobile startup with a legacy cloud migration. If this device has no data,
+  // keep the page usable and let the user press ☁↓; the fixed status strip shows progress.
+  if(!TXNS.length&&SET.gasUrl&&window.VRTSmartSync)VRTSmartSync.status('pull','本機無採購資料 · 可按拉取','warn');
 })();
 </script>
 </body>
