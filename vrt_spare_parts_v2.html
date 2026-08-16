@@ -14,8 +14,7 @@
   --vrt:#1e3a5f; --vrt2:#2d4d7a; --amber:#f59e0b; --amber2:#d97706;
   --card:#fff; --soft:#f7f8fc;
 }
-html{overflow-x:hidden}
-body{font-family:"Microsoft JhengHei","Noto Sans TC","Khmer OS",sans-serif;background:var(--bg);color:var(--ink);overflow-x:hidden;max-width:100vw}
+body{font-family:"Microsoft JhengHei","Noto Sans TC","Khmer OS",sans-serif;background:var(--bg);color:var(--ink)}
 body.dark{--bg:#0f1422;--ink:#e6eaf5;--sub:#9aa6c4;--line:#28304a;--card:#161d2e;--soft:#1b2335}
 /* Header */
 .header{background:linear-gradient(135deg,var(--vrt),var(--vrt2));padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:relative}
@@ -167,7 +166,10 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 .detail-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-bottom:12px}
 .detail-kpi{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:9px}.detail-kpi b{display:block;font-family:monospace;font-size:16px}.detail-kpi span{font-size:10px;color:var(--sub)}
 @media(max-width:640px){
-  .tw{overflow-x:hidden}
+  /* ★ 移除原本的 .tw{overflow-x:hidden}：那條規則只對有 colgroup 固定寬度的
+     part-table/purchase-table 安全，其餘較寬的表格（TOP10、期間分析、價格分析…）
+     沒有那組寬度設定，被這條規則鎖住後在手機上會整個被裁掉、滑不到旁邊看資料。
+     維持基本規則 .tw{overflow-x:auto}（見上方），寬表格改用左右滑動查看，不再裁切。 */
   .part-table th,.part-table td,.purchase-table th,.purchase-table td{padding:7px 5px;font-size:10px}
   .part-table col:nth-child(1){width:22%}.part-table col:nth-child(2){width:31%}.part-table col:nth-child(3){width:25%}.part-table col:nth-child(4){width:22%}
   .purchase-table col:nth-child(1){width:18%}.purchase-table col:nth-child(2){width:24%}.purchase-table col:nth-child(3){width:28%}.purchase-table col:nth-child(4){width:14%}.purchase-table col:nth-child(5){width:16%}
@@ -238,7 +240,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.4</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.5</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -258,14 +260,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 
 <!-- ══════════ TOOLBAR ══════════ -->
 <div class="toolbar">
-  <div class="tb-group">
-    <span class="tb-lbl" data-zh="日期" data-en="Date" data-km="កាលបរិច្ឆេទ">日期</span>
-    <span class="chip" data-dt="today" onclick="setDate('today',this)" data-zh="今天" data-en="Today" data-km="ថ្ងៃនេះ">今天</span>
-    <span class="chip" data-dt="week" onclick="setDate('week',this)" data-zh="本週" data-en="Week" data-km="សប្ដាហ៍">本週</span>
-    <span class="chip" data-dt="month" onclick="setDate('month',this)" data-zh="本月" data-en="Month" data-km="ខែ">本月</span>
-    <span class="chip" data-dt="year" onclick="setDate('year',this)" data-zh="今年" data-en="Year" data-km="ឆ្នាំ">今年</span>
-    <span class="chip on" data-dt="all" onclick="setDate('all',this)" data-zh="全部" data-en="All" data-km="ទាំងអស់">全部</span>
-  </div>
+  <div class="tb-group" id="globalPeriodBar"></div>
+  <!-- ★ 上面這排取代原本「今天/本週/本月/今年/全部」固定 chips：
+       原本的 chips 意思永遠是「當下」的日/週/月/年，沒有上一頁/下一頁、
+       也不能指定「去年8月」這種特定期間。現改用 renderGlobalPeriodBar() 動態產生，
+       跟「📅 日週月年」分析頁共用同一套邏輯，且套用到全部分頁（儀錶板/零件清單/採購記錄…），
+       不只是分析頁專用。 -->
 
   <!-- ★ 修復：原本 JS 的 fillFilterSelects()/applyFilters() 一直在找 fStore/fCat/fBrand/fSearch，
        但畫面上從未建過這排篩選列，App 一啟動就在這裡拋錯、整個 init() 中斷，
@@ -316,7 +316,7 @@ let SET={company:'Vantage River Textiles',currency:'USD',minRule:5,highValue:50,
   partRules:{Bearing:'BR',Motor:'MT',Needle:'ND',Knife:'KN',Belt:'BL',Sensor:'SN',Electric:'EL',Air:'AR',Consumable:'CN',Other:'PT'},
   ocrDict:{}};
 let _lang=localStorage.getItem('vrt_sp_lang')||'zh';
-let FILTER={date:'all',store:'',cat:'',brand:'',q:''};
+let FILTER={store:'',cat:'',brand:'',q:''};
 let _curTab='dashboard';
 let _sortKey='partNo',_sortDir=1;
 
@@ -585,16 +585,17 @@ function seedDemo(){
 }
 
 /* ===== 篩選 ===== */
-function setDate(d,el){FILTER.date=d;document.querySelectorAll('.chip[data-dt]').forEach(c=>c.classList.remove('on'));
-  if(el)el.classList.add('on');else document.querySelector('.chip[data-dt="'+d+'"]')?.classList.add('on');renderTab(_curTab);}
 function applyFilters(){FILTER.store=$('fStore').value;FILTER.cat=$('fCat').value;FILTER.brand=$('fBrand').value;FILTER.q=$('fSearch').value.trim().toLowerCase();renderTab(_curTab);}
 function inDateRange(dstr){
-  if(FILTER.date==='all'||!dstr)return true;
-  const d=new Date(dstr+'T00:00:00'),now=new Date();
-  if(FILTER.date==='today')return dstr===todayStr();
-  if(FILTER.date==='year')return d.getFullYear()===now.getFullYear();
-  if(FILTER.date==='month')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
-  if(FILTER.date==='week'){const wd=(now.getDay()+6)%7;const mon=new Date(now);mon.setDate(now.getDate()-wd);mon.setHours(0,0,0,0);return d>=mon;}
+  if(!dstr) return true;
+  if(PERIOD_GRAN==='all') return true;
+  if(PERIOD_GRAN==='day') return dstr===PERIOD_ANCHOR;
+  if(PERIOD_GRAN==='year') return dstr.slice(0,4)===PERIOD_ANCHOR.slice(0,4);
+  if(PERIOD_GRAN==='month') return dstr.slice(0,7)===PERIOD_ANCHOR.slice(0,7);
+  if(PERIOD_GRAN==='week'){
+    const mon=pMonday(pDate(PERIOD_ANCHOR)), sun=new Date(mon); sun.setDate(mon.getDate()+6);
+    return dstr>=pYmd(mon)&&dstr<=pYmd(sun);
+  }
   return true;
 }
 function filteredParts(){
@@ -636,6 +637,7 @@ function goTab(name,el){
   renderTab(name);
 }
 function renderTab(name){
+  renderGlobalPeriodBar();
   const fn={dashboard:renderDashboard,inventory:renderInventory,history:renderHistory,
     monthly:renderMonthly,price:renderPrice,stock:renderStock,reports:renderReports,ocr:renderOCR,settings:renderSettings}[name];
   if(fn)fn();
@@ -846,7 +848,7 @@ function balanceAtDate(partNo, dateStr){
 }
 function balanceAtMonthEnd(partNo,yearMonth){ return balanceAtDate(partNo, yearMonth+'-31'); }
 
-let PERIOD_GRAN = 'month';          // 'day' | 'week' | 'month' | 'year'
+let PERIOD_GRAN = 'all';            // 'all' | 'day' | 'week' | 'month' | 'year'
 let PERIOD_ANCHOR = todayStr();     // 目前檢視的錨點日期 yyyy-mm-dd
 
 function pDate(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3]):new Date(); }
@@ -854,18 +856,21 @@ function pYmd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDa
 function pMonday(d){ const t=new Date(d); const dow=(t.getDay()+6)%7; t.setDate(t.getDate()-dow); return t; }
 function pDaysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
 
-function periodSetGran(g){ PERIOD_GRAN=g; PERIOD_ANCHOR=todayStr(); renderMonthly(); }
+/* ★ 這組全域期間狀態＋導覽列，不再只服務「日週月年分析」頁，
+   而是驅動整個 App 的日期篩選（儀錶板/零件清單/採購記錄…全部通用），
+   取代原本只有「今天/本週/本月/今年/全部」、永遠指向「當下」且無法翻頁的固定 chips。 */
+function periodSetGran(g){ PERIOD_GRAN=g; if(g!=='all') PERIOD_ANCHOR=todayStr(); renderTab(_curTab); }
 function periodNav(dir){
   const d=pDate(PERIOD_ANCHOR);
   if(PERIOD_GRAN==='day') d.setMonth(d.getMonth()+dir);
   else if(PERIOD_GRAN==='week') d.setDate(d.getDate()+dir*7);
   else if(PERIOD_GRAN==='month') d.setFullYear(d.getFullYear()+dir);
   else d.setFullYear(d.getFullYear()+dir*10);
-  PERIOD_ANCHOR=pYmd(d); renderMonthly();
+  PERIOD_ANCHOR=pYmd(d); renderTab(_curTab);
 }
-function periodJumpYear(v){ if(!v)return; const d=pDate(PERIOD_ANCHOR); d.setFullYear(+v); PERIOD_ANCHOR=pYmd(d); renderMonthly(); }
-function periodJumpMonth(v){ if(!v)return; const [y,m]=v.split('-'); PERIOD_ANCHOR=`${y}-${m}-01`; renderMonthly(); }
-function periodJumpWeek(v){ if(!v)return; PERIOD_ANCHOR=v; renderMonthly(); }
+function periodJumpYear(v){ if(!v)return; const d=pDate(PERIOD_ANCHOR); d.setFullYear(+v); PERIOD_ANCHOR=pYmd(d); renderTab(_curTab); }
+function periodJumpMonth(v){ if(!v)return; const [y,m]=v.split('-'); PERIOD_ANCHOR=`${y}-${m}-01`; renderTab(_curTab); }
+function periodJumpWeek(v){ if(!v)return; PERIOD_ANCHOR=v; renderTab(_curTab); }
 
 /* 期間統計：進/出量、採購金額、平均單價、期末結存與價值 */
 function periodStats(s,e){
@@ -880,10 +885,23 @@ function periodStats(s,e){
   return {inQ,outQ,spend,avg,bal,val};
 }
 
-function periodBarHTML(centerLabel){
-  const segs=['day','week','month','year'].map(g=>
-    `<button class="${PERIOD_GRAN===g?'on':''}" onclick="periodSetGran('${g}')">${t('per'+g[0].toUpperCase()+g.slice(1))}</button>`
-  ).join('');
+function periodCurrentLabel(){
+  const a=pDate(PERIOD_ANCHOR);
+  if(PERIOD_GRAN==='all') return _lang==='en'?'All records':_lang==='km'?'ទិន្នន័យទាំងអស់':'全部資料';
+  if(PERIOD_GRAN==='year') return String(a.getFullYear());
+  if(PERIOD_GRAN==='month') return `${a.getFullYear()}-${pad(a.getMonth()+1)}`;
+  if(PERIOD_GRAN==='day') return PERIOD_ANCHOR;
+  const mon=pMonday(a), sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  return `${pYmd(mon)} ~ ${pYmd(sun)}`;
+}
+
+/* 全域導覽列（顯示於每一頁的工具列，取代舊 chips）*/
+function renderGlobalPeriodBar(){
+  const el=$('globalPeriodBar'); if(!el) return;
+  const segs=['all','day','week','month','year'].map(g=>{
+    const lbl = g==='all' ? (_lang==='en'?'All':_lang==='km'?'ទាំងអស់':'全部') : t('per'+g[0].toUpperCase()+g.slice(1));
+    return `<button class="${PERIOD_GRAN===g?'on':''}" onclick="periodSetGran('${g}')">${lbl}</button>`;
+  }).join('');
   let jump='';
   if(PERIOD_GRAN==='month'){
     const years=[...new Set(TXNS.map(x=>ym(x.date).slice(0,4)))].filter(Boolean);
@@ -896,14 +914,12 @@ function periodBarHTML(centerLabel){
   } else if(PERIOD_GRAN==='week'){
     jump=`<input type="date" class="f-select" value="${PERIOD_ANCHOR}" onchange="periodJumpWeek(this.value)" style="max-width:140px">`;
   }
-  const nav = PERIOD_GRAN==='year' ? '' :
+  const nav = (PERIOD_GRAN==='year'||PERIOD_GRAN==='all') ? '' :
     `<button onclick="periodNav(-1)">${t('perPrev')}</button><button onclick="periodNav(1)">${t('perNext')}</button>`;
-  return `<div class="periodbar">
+  el.innerHTML=`<span class="tb-lbl" data-zh="期間" data-en="Period" data-km="រយៈពេល">期間</span>
     <div class="periodseg">${segs}</div>
-    ${jump}
-    <div class="periodseg">${nav}</div>
-    <div class="periodlabel">${centerLabel}</div>
-  </div>`;
+    ${jump}${nav?`<div class="periodseg">${nav}</div>`:''}
+    <span class="periodlabel" style="font-size:12px;color:var(--sub);font-weight:600">${periodCurrentLabel()}</span>`;
 }
 
 function renderMonthly(){
@@ -911,7 +927,7 @@ function renderMonthly(){
   const anchor=pDate(PERIOD_ANCHOR);
   let rows=[], centerLabel='', unitLabel=t('monMonth');
 
-  if(PERIOD_GRAN==='year'){
+  if(PERIOD_GRAN==='year'||PERIOD_GRAN==='all'){
     unitLabel=t('perYear');
     const years=[...new Set(TXNS.map(x=>ym(x.date).slice(0,4)))].filter(Boolean).sort();
     if(!years.length) years.push(String(anchor.getFullYear()));
@@ -952,7 +968,7 @@ function renderMonthly(){
   }
 
   let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')}</div>
-    ${periodBarHTML(centerLabel)}
+    <div class="al al-i" style="margin-bottom:10px">${_lang==='en'?'Use the Period bar above to switch Day/Week/Month/Year and navigate.':_lang==='km'?'ប្រើរបារខាងលើដើម្បីប្ដូរ ថ្ងៃ/សប្ដាហ៍/ខែ/ឆ្នាំ។':'切換日／週／月／年、上一頁/下一頁請用上方工具列的「期間」控制列。'}</div>
     <div class="tw"><table><thead><tr>
     <th>${unitLabel}</th><th class="num">${t('monIn')}</th><th class="num">${t('monOut')}</th>
     <th class="num">${t('perSpend')}</th><th class="num">${t('monBal')}</th><th class="num">${t('monAvg')}</th><th class="num">${t('monVal')}</th></tr></thead><tbody>`;
