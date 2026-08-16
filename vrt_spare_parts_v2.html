@@ -228,7 +228,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.1</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.2</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -1156,6 +1156,38 @@ function restoreLocal(file){if(!file)return;const rd=new FileReader();
     if(d.parts)PARTS=d.parts;if(d.txns)TXNS=d.txns;if(d.versions)VERSIONS=d.versions;if(d.settings)SET=Object.assign(SET,d.settings);
     saveAll(true);applyTheme();goTab('dashboard',null);}catch(err){toast('Restore error');}};
   rd.readAsText(file);}
+
+/* ===== 採購彙總小工具（★ 修復：原本被呼叫但從未定義，雲端拉取/Telegram摘要必崩潰）=====
+   TXNS 本身只有 partNo，沒有 category；這裡用 PARTS 反查補上，
+   讓月別/年別彙總、Telegram 摘要、雲端 meta 統計都能正確運作。 */
+function purchaseTxns(){
+  return TXNS.filter(x=>x.type==='IN').map(x=>{
+    const p=PARTS.find(z=>z.partNo===x.partNo);
+    return Object.assign({},x,{category:(p&&p.category)||'Other'});
+  });
+}
+function purchaseAmount(x){return (Number(x.qty)||0)*(Number(x.unitPrice)||0);}
+function monthPurchases(mo){return purchaseTxns().filter(x=>ym(x.date)===mo);}
+function latestPurchaseMonth(){
+  const xs=purchaseTxns();
+  if(!xs.length)return todayStr().slice(0,7);
+  return xs.reduce((mx,x)=>{const m=ym(x.date);return m>mx?m:mx;},'0000-00');
+}
+function latestPurchaseYear(){return latestPurchaseMonth().slice(0,4);}
+function latestPurchaseDate(){
+  const xs=purchaseTxns();
+  if(!xs.length)return todayStr();
+  return xs.reduce((mx,x)=>{const d=x.date||'';return d>mx?d:mx;},'0000-00-00');
+}
+function purchaseStats(xs){
+  xs=xs||[];
+  const spend=xs.reduce((s,x)=>s+purchaseAmount(x),0);
+  const qty=xs.reduce((s,x)=>s+(Number(x.qty)||0),0);
+  const lines=xs.length;
+  const parts=new Set(xs.map(x=>x.partNo)).size;
+  const needle=xs.filter(x=>x.category==='Needle').reduce((s,x)=>s+purchaseAmount(x),0);
+  return {spend,qty,lines,parts,needle};
+}
 
 /* ===== 雲端（GAS text/plain；其他標記需設定） ===== */
 function updateCloudDot(){
