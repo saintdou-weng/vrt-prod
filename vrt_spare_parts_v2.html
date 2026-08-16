@@ -228,7 +228,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.2</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.3</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -255,6 +255,20 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
     <span class="chip" data-dt="month" onclick="setDate('month',this)" data-zh="本月" data-en="Month" data-km="ខែ">本月</span>
     <span class="chip" data-dt="year" onclick="setDate('year',this)" data-zh="今年" data-en="Year" data-km="ឆ្នាំ">今年</span>
     <span class="chip on" data-dt="all" onclick="setDate('all',this)" data-zh="全部" data-en="All" data-km="ទាំងអស់">全部</span>
+  </div>
+
+  <!-- ★ 修復：原本 JS 的 fillFilterSelects()/applyFilters() 一直在找 fStore/fCat/fBrand/fSearch，
+       但畫面上從未建過這排篩選列，App 一啟動就在這裡拋錯、整個 init() 中斷，
+       儀錶板以下全部空白、雲端拉取完成後也會在這裡再炸一次。補上這排即可。 -->
+  <div class="tb-group">
+    <span class="tb-lbl" data-zh="倉庫" data-en="Store" data-km="ឃ្លាំង">倉庫</span>
+    <select id="fStore" onchange="applyFilters()" style="padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:12px"></select>
+    <span class="tb-lbl" data-zh="分類" data-en="Category" data-km="ប្រភេទ">分類</span>
+    <select id="fCat" onchange="applyFilters()" style="padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:12px"></select>
+    <span class="tb-lbl" data-zh="品牌" data-en="Brand" data-km="ម៉ាក">品牌</span>
+    <select id="fBrand" onchange="applyFilters()" style="padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:12px"></select>
+    <input id="fSearch" type="text" oninput="applyFilters()" placeholder="🔍 料號／品名／規格"
+      style="padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:12px;min-width:150px;flex:1">
   </div>
 
 <!-- ══════════ TABS ══════════ -->
