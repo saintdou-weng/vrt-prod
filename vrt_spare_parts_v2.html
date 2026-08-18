@@ -35,7 +35,7 @@ body.dark{--bg:#0f1422;--ink:#e6eaf5;--sub:#9aa6c4;--line:#28304a;--card:#161d2e
 /* Toolbar */
 .toolbar{background:var(--card);border-bottom:1px solid var(--line);padding:9px 20px;display:flex;gap:8px;
   flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:50}
-.tb-group{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.tb-group{display:flex;gap:4px;align-items:center}
 .tb-lbl{font-size:11px;color:var(--sub);font-weight:600;margin-right:2px}
 .chip{padding:5px 11px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--sub);font-family:inherit}
 .chip.on{background:var(--vrt);color:#fff;border-color:var(--vrt)}
@@ -137,19 +137,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 .mode-card b{display:block;font-size:13px;color:var(--vrt)}
 .ocr-progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0}
 .ocr-progress i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#0ea5e9);width:0;transition:width .2s}
-.f-select{padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:12px;max-width:130px}
-.f-search{padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:12px;flex:1;min-width:0}
 @media(max-width:640px){
   .g2,.g3,.g4{grid-template-columns:1fr}
   .h-stats{display:none}
   .sec{padding:12px 12px}
   .frm-grid{grid-template-columns:1fr}
   .ocr-split{grid-template-columns:1fr}
-  .kpi-strip{grid-template-columns:repeat(2,1fr)}
-  .toolbar{padding:9px 12px}
-  .tb-group{width:100%}
-  .f-select{flex:1 1 28%;max-width:none;min-width:80px}
-  .f-search{flex:1 1 100%;order:99}
 }
 
 /* v3 procurement UI */
@@ -166,16 +159,11 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 .detail-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;margin-bottom:12px}
 .detail-kpi{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:9px}.detail-kpi b{display:block;font-family:monospace;font-size:16px}.detail-kpi span{font-size:10px;color:var(--sub)}
 @media(max-width:640px){
-  /* ★ 移除原本的 .tw{overflow-x:hidden}：那條規則只對有 colgroup 固定寬度的
-     part-table/purchase-table 安全，其餘較寬的表格（TOP10、期間分析、價格分析…）
-     沒有那組寬度設定，被這條規則鎖住後在手機上會整個被裁掉、滑不到旁邊看資料。
-     維持基本規則 .tw{overflow-x:auto}（見上方），寬表格改用左右滑動查看，不再裁切。 */
+  .tw{overflow-x:hidden}
   .part-table th,.part-table td,.purchase-table th,.purchase-table td{padding:7px 5px;font-size:10px}
   .part-table col:nth-child(1){width:22%}.part-table col:nth-child(2){width:31%}.part-table col:nth-child(3){width:25%}.part-table col:nth-child(4){width:22%}
   .purchase-table col:nth-child(1){width:18%}.purchase-table col:nth-child(2){width:24%}.purchase-table col:nth-child(3){width:28%}.purchase-table col:nth-child(4){width:14%}.purchase-table col:nth-child(5){width:16%}
-  .periodbar{padding:8px}.periodlabel{order:5;width:100%;text-align:left;font-size:12px}
-  .periodseg button{padding:6px 9px;font-size:11px}
-  .periodbar select,.periodbar input{order:4;max-width:none!important;flex:1 1 100%}
+  .periodbar{padding:8px}.periodlabel{order:3;width:100%;text-align:left}
 }
 
 </style>
@@ -240,7 +228,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.5</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.1</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -260,24 +248,13 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 
 <!-- ══════════ TOOLBAR ══════════ -->
 <div class="toolbar">
-  <div class="tb-group" id="globalPeriodBar"></div>
-  <!-- ★ 上面這排取代原本「今天/本週/本月/今年/全部」固定 chips：
-       原本的 chips 意思永遠是「當下」的日/週/月/年，沒有上一頁/下一頁、
-       也不能指定「去年8月」這種特定期間。現改用 renderGlobalPeriodBar() 動態產生，
-       跟「📅 日週月年」分析頁共用同一套邏輯，且套用到全部分頁（儀錶板/零件清單/採購記錄…），
-       不只是分析頁專用。 -->
-
-  <!-- ★ 修復：原本 JS 的 fillFilterSelects()/applyFilters() 一直在找 fStore/fCat/fBrand/fSearch，
-       但畫面上從未建過這排篩選列，App 一啟動就在這裡拋錯、整個 init() 中斷，
-       儀錶板以下全部空白、雲端拉取完成後也會在這裡再炸一次。補上這排即可。 -->
   <div class="tb-group">
-    <span class="tb-lbl" data-zh="倉庫" data-en="Store" data-km="ឃ្លាំង">倉庫</span>
-    <select id="fStore" class="f-select" onchange="applyFilters()"></select>
-    <span class="tb-lbl" data-zh="分類" data-en="Category" data-km="ប្រភេទ">分類</span>
-    <select id="fCat" class="f-select" onchange="applyFilters()"></select>
-    <span class="tb-lbl" data-zh="品牌" data-en="Brand" data-km="ម៉ាក">品牌</span>
-    <select id="fBrand" class="f-select" onchange="applyFilters()"></select>
-    <input id="fSearch" class="f-search" type="text" oninput="applyFilters()" placeholder="🔍 料號／品名／規格">
+    <span class="tb-lbl" data-zh="日期" data-en="Date" data-km="កាលបរិច្ឆេទ">日期</span>
+    <span class="chip" data-dt="today" onclick="setDate('today',this)" data-zh="今天" data-en="Today" data-km="ថ្ងៃនេះ">今天</span>
+    <span class="chip" data-dt="week" onclick="setDate('week',this)" data-zh="本週" data-en="Week" data-km="សប្ដាហ៍">本週</span>
+    <span class="chip" data-dt="month" onclick="setDate('month',this)" data-zh="本月" data-en="Month" data-km="ខែ">本月</span>
+    <span class="chip" data-dt="year" onclick="setDate('year',this)" data-zh="今年" data-en="Year" data-km="ឆ្នាំ">今年</span>
+    <span class="chip on" data-dt="all" onclick="setDate('all',this)" data-zh="全部" data-en="All" data-km="ទាំងអស់">全部</span>
   </div>
 
 <!-- ══════════ TABS ══════════ -->
@@ -316,7 +293,7 @@ let SET={company:'Vantage River Textiles',currency:'USD',minRule:5,highValue:50,
   partRules:{Bearing:'BR',Motor:'MT',Needle:'ND',Knife:'KN',Belt:'BL',Sensor:'SN',Electric:'EL',Air:'AR',Consumable:'CN',Other:'PT'},
   ocrDict:{}};
 let _lang=localStorage.getItem('vrt_sp_lang')||'zh';
-let FILTER={store:'',cat:'',brand:'',q:''};
+let FILTER={date:'all',store:'',cat:'',brand:'',q:''};
 let _curTab='dashboard';
 let _sortKey='partNo',_sortDir=1;
 
@@ -362,7 +339,6 @@ const I18N={
   invTitle:'零件主檔',histTitle:'採購記錄',monTitle:'日／週／月／年分析',priceTitle:'價格分析',stockTitle:'庫存分析',repTitle:'報表匯出',setTitle:'系統設定',
   inWord:'進貨',outWord:'領料',
   monIn:'進貨數量',monOut:'出貨數量',monBal:'月底庫存',monAvg:'平均單價',monVal:'月底庫存價值',monMonth:'月份',
-  perDay:'日',perWeek:'週',perMonth:'月',perYear:'年',perPrev:'◀ 上一期',perNext:'下一期 ▶',perSpend:'採購金額',perNoYear:'尚無資料',
   prSelect:'選擇零件',prJan:'歷史單價',prAvg:'平均',prMax:'最高',prMin:'最低',prLast:'最近',prTrend:'價格趨勢',prCompare:'同規格品牌比較',
   stTopValue:'庫存金額排行 Top20',stLow:'低庫存',stZero:'零庫存',stOver:'超量庫存',stIdle6:'半年未異動',stIdle12:'一年未異動',stTurn:'庫存週轉率',
   repExcel:'匯出 Excel',repCsv:'匯出 CSV',repPdf:'列印 / PDF',repImport:'匯入資料',repImportImg:'智慧 AI OCR',
@@ -399,7 +375,6 @@ const I18N={
   invTitle:'Parts Master',histTitle:'Purchase History',monTitle:'Day / Week / Month / Year',priceTitle:'Price Analysis',stockTitle:'Stock Analysis',repTitle:'Reports',setTitle:'Settings',
   inWord:'IN',outWord:'OUT',
   monIn:'In Qty',monOut:'Out Qty',monBal:'Month-End Bal',monAvg:'Avg Price',monVal:'Month-End Value',monMonth:'Month',
-  perDay:'Day',perWeek:'Week',perMonth:'Month',perYear:'Year',perPrev:'◀ Prev',perNext:'Next ▶',perSpend:'Purchase Amount',perNoYear:'No data',
   prSelect:'Select Part',prJan:'Price History',prAvg:'Avg',prMax:'Max',prMin:'Min',prLast:'Latest',prTrend:'Price Trend',prCompare:'Brand Comparison (same spec)',
   stTopValue:'Top20 by Value',stLow:'Low Stock',stZero:'Out of Stock',stOver:'Over Stock',stIdle6:'Idle 6 Months',stIdle12:'Idle 12 Months',stTurn:'Inventory Turnover',
   repExcel:'Export Excel',repCsv:'Export CSV',repPdf:'Print / PDF',repImport:'Import Data',repImportImg:'Smart AI OCR',
@@ -436,7 +411,6 @@ const I18N={
   invTitle:'ស្តុកបច្ចុប្បន្ន',histTitle:'កំណត់ត្រាចូល/ចេញ',monTitle:'សង្ខេបប្រចាំខែ',priceTitle:'វិភាគតម្លៃ',stockTitle:'វិភាគស្តុក',repTitle:'របាយការណ៍',setTitle:'ការកំណត់',
   inWord:'ចូល',outWord:'ចេញ',
   monIn:'បរិមាណចូល',monOut:'បរិមាណចេញ',monBal:'នៅសល់ចុងខែ',monAvg:'តម្លៃមធ្យម',monVal:'តម្លៃចុងខែ',monMonth:'ខែ',
-  perDay:'ថ្ងៃ',perWeek:'សប្ដាហ៍',perMonth:'ខែ',perYear:'ឆ្នាំ',perPrev:'◀ មុន',perNext:'បន្ទាប់ ▶',perSpend:'ចំណាយទិញ',perNoYear:'គ្មានទិន្នន័យ',
   prSelect:'ជ្រើសគ្រឿង',prJan:'ប្រវត្តិតម្លៃ',prAvg:'មធ្យម',prMax:'អតិបរមា',prMin:'អប្បបរមា',prLast:'ចុងក្រោយ',prTrend:'និន្នាការតម្លៃ',prCompare:'ប្រៀបធៀបម៉ាក',
   stTopValue:'តម្លៃខ្ពស់ Top20',stLow:'ស្តុកទាប',stZero:'អស់ស្តុក',stOver:'លើសស្តុក',stIdle6:'គ្មានចលនា៦ខែ',stIdle12:'គ្មានចលនា១ឆ្នាំ',stTurn:'អត្រាបង្វិលស្តុក',
   repExcel:'នាំចេញ Excel',repCsv:'នាំចេញ CSV',repPdf:'បោះពុម្ព / PDF',repImport:'នាំចូល',repImportImg:'Smart AI OCR',
@@ -585,17 +559,16 @@ function seedDemo(){
 }
 
 /* ===== 篩選 ===== */
+function setDate(d,el){FILTER.date=d;document.querySelectorAll('.chip[data-dt]').forEach(c=>c.classList.remove('on'));
+  if(el)el.classList.add('on');else document.querySelector('.chip[data-dt="'+d+'"]')?.classList.add('on');renderTab(_curTab);}
 function applyFilters(){FILTER.store=$('fStore').value;FILTER.cat=$('fCat').value;FILTER.brand=$('fBrand').value;FILTER.q=$('fSearch').value.trim().toLowerCase();renderTab(_curTab);}
 function inDateRange(dstr){
-  if(!dstr) return true;
-  if(PERIOD_GRAN==='all') return true;
-  if(PERIOD_GRAN==='day') return dstr===PERIOD_ANCHOR;
-  if(PERIOD_GRAN==='year') return dstr.slice(0,4)===PERIOD_ANCHOR.slice(0,4);
-  if(PERIOD_GRAN==='month') return dstr.slice(0,7)===PERIOD_ANCHOR.slice(0,7);
-  if(PERIOD_GRAN==='week'){
-    const mon=pMonday(pDate(PERIOD_ANCHOR)), sun=new Date(mon); sun.setDate(mon.getDate()+6);
-    return dstr>=pYmd(mon)&&dstr<=pYmd(sun);
-  }
+  if(FILTER.date==='all'||!dstr)return true;
+  const d=new Date(dstr+'T00:00:00'),now=new Date();
+  if(FILTER.date==='today')return dstr===todayStr();
+  if(FILTER.date==='year')return d.getFullYear()===now.getFullYear();
+  if(FILTER.date==='month')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  if(FILTER.date==='week'){const wd=(now.getDay()+6)%7;const mon=new Date(now);mon.setDate(now.getDate()-wd);mon.setHours(0,0,0,0);return d>=mon;}
   return true;
 }
 function filteredParts(){
@@ -637,7 +610,6 @@ function goTab(name,el){
   renderTab(name);
 }
 function renderTab(name){
-  renderGlobalPeriodBar();
   const fn={dashboard:renderDashboard,inventory:renderInventory,history:renderHistory,
     monthly:renderMonthly,price:renderPrice,stock:renderStock,reports:renderReports,ocr:renderOCR,settings:renderSettings}[name];
   if(fn)fn();
@@ -838,153 +810,40 @@ function renderHistory(){
 function delTxn(id){if(!confirm(t('confirmDel')))return;TXNS=TXNS.filter(x=>x.id!==id);saveAll();renderHistory();}
 
 /* ========== MONTHLY SUMMARY ========== */
-/* ═══════════════════════════════════════════════════════════════
-   ★ 日／週／月／年分析：原本只有「本年12個月」寫死表格，
-     沒有切換粒度、沒有上一頁/下一頁、沒有年份下拉。這裡補齊。
-   ═══════════════════════════════════════════════════════════════ */
-function balanceAtDate(partNo, dateStr){
-  return TXNS.filter(x=>x.partNo===partNo && x.date && x.date<=dateStr)
-    .reduce((s,x)=>s+(x.type==='IN'?+x.qty:-+x.qty),0);
+function balanceAtMonthEnd(partNo,yearMonth){
+  // 月底 = 該 yyyy-mm 之最後一天；以該零件目前 qty 反推當時結存：用 txn 累積到月底
+  const end=yearMonth+'-31';
+  const ins=TXNS.filter(x=>x.partNo===partNo&&x.date&&x.date<=end);
+  // 用 IN-OUT 累積（假設期初0；若有目前 qty 與 txn 不符，以 txn 為準近似）
+  return ins.reduce((s,x)=>s+(x.type==='IN'?+x.qty:-+x.qty),0);
 }
-function balanceAtMonthEnd(partNo,yearMonth){ return balanceAtDate(partNo, yearMonth+'-31'); }
-
-let PERIOD_GRAN = 'all';            // 'all' | 'day' | 'week' | 'month' | 'year'
-let PERIOD_ANCHOR = todayStr();     // 目前檢視的錨點日期 yyyy-mm-dd
-
-function pDate(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3]):new Date(); }
-function pYmd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
-function pMonday(d){ const t=new Date(d); const dow=(t.getDay()+6)%7; t.setDate(t.getDate()-dow); return t; }
-function pDaysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
-
-/* ★ 這組全域期間狀態＋導覽列，不再只服務「日週月年分析」頁，
-   而是驅動整個 App 的日期篩選（儀錶板/零件清單/採購記錄…全部通用），
-   取代原本只有「今天/本週/本月/今年/全部」、永遠指向「當下」且無法翻頁的固定 chips。 */
-function periodSetGran(g){ PERIOD_GRAN=g; if(g!=='all') PERIOD_ANCHOR=todayStr(); renderTab(_curTab); }
-function periodNav(dir){
-  const d=pDate(PERIOD_ANCHOR);
-  if(PERIOD_GRAN==='day') d.setMonth(d.getMonth()+dir);
-  else if(PERIOD_GRAN==='week') d.setDate(d.getDate()+dir*7);
-  else if(PERIOD_GRAN==='month') d.setFullYear(d.getFullYear()+dir);
-  else d.setFullYear(d.getFullYear()+dir*10);
-  PERIOD_ANCHOR=pYmd(d); renderTab(_curTab);
-}
-function periodJumpYear(v){ if(!v)return; const d=pDate(PERIOD_ANCHOR); d.setFullYear(+v); PERIOD_ANCHOR=pYmd(d); renderTab(_curTab); }
-function periodJumpMonth(v){ if(!v)return; const [y,m]=v.split('-'); PERIOD_ANCHOR=`${y}-${m}-01`; renderTab(_curTab); }
-function periodJumpWeek(v){ if(!v)return; PERIOD_ANCHOR=v; renderTab(_curTab); }
-
-/* 期間統計：進/出量、採購金額、平均單價、期末結存與價值 */
-function periodStats(s,e){
-  const tx=TXNS.filter(x=>x.date>=s && x.date<=e);
-  const inQ=tx.filter(x=>x.type==='IN').reduce((a,x)=>a+(+x.qty||0),0);
-  const outQ=tx.filter(x=>x.type==='OUT').reduce((a,x)=>a+(+x.qty||0),0);
-  const spend=tx.filter(x=>x.type==='IN').reduce((a,x)=>a+purchaseAmount(x),0);
-  const prices=tx.filter(x=>x.type==='IN'&&x.unitPrice).map(x=>+x.unitPrice);
-  const avg=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
-  let bal=0,val=0;
-  PARTS.forEach(p=>{ const b=balanceAtDate(p.partNo,e); if(b>0){ bal+=b; val+=b*(+p.unitPrice||0); } });
-  return {inQ,outQ,spend,avg,bal,val};
-}
-
-function periodCurrentLabel(){
-  const a=pDate(PERIOD_ANCHOR);
-  if(PERIOD_GRAN==='all') return _lang==='en'?'All records':_lang==='km'?'ទិន្នន័យទាំងអស់':'全部資料';
-  if(PERIOD_GRAN==='year') return String(a.getFullYear());
-  if(PERIOD_GRAN==='month') return `${a.getFullYear()}-${pad(a.getMonth()+1)}`;
-  if(PERIOD_GRAN==='day') return PERIOD_ANCHOR;
-  const mon=pMonday(a), sun=new Date(mon); sun.setDate(mon.getDate()+6);
-  return `${pYmd(mon)} ~ ${pYmd(sun)}`;
-}
-
-/* 全域導覽列（顯示於每一頁的工具列，取代舊 chips）*/
-function renderGlobalPeriodBar(){
-  const el=$('globalPeriodBar'); if(!el) return;
-  const segs=['all','day','week','month','year'].map(g=>{
-    const lbl = g==='all' ? (_lang==='en'?'All':_lang==='km'?'ទាំងអស់':'全部') : t('per'+g[0].toUpperCase()+g.slice(1));
-    return `<button class="${PERIOD_GRAN===g?'on':''}" onclick="periodSetGran('${g}')">${lbl}</button>`;
-  }).join('');
-  let jump='';
-  if(PERIOD_GRAN==='month'){
-    const years=[...new Set(TXNS.map(x=>ym(x.date).slice(0,4)))].filter(Boolean);
-    const cy=String(pDate(PERIOD_ANCHOR).getFullYear());
-    if(!years.includes(cy)) years.push(cy);
-    years.sort().reverse();
-    jump=`<select class="f-select" onchange="periodJumpYear(this.value)">${years.map(y=>`<option value="${y}"${y===cy?' selected':''}>${y}</option>`).join('')}</select>`;
-  } else if(PERIOD_GRAN==='day'){
-    jump=`<input type="month" class="f-select" value="${PERIOD_ANCHOR.slice(0,7)}" onchange="periodJumpMonth(this.value)" style="max-width:140px">`;
-  } else if(PERIOD_GRAN==='week'){
-    jump=`<input type="date" class="f-select" value="${PERIOD_ANCHOR}" onchange="periodJumpWeek(this.value)" style="max-width:140px">`;
-  }
-  const nav = (PERIOD_GRAN==='year'||PERIOD_GRAN==='all') ? '' :
-    `<button onclick="periodNav(-1)">${t('perPrev')}</button><button onclick="periodNav(1)">${t('perNext')}</button>`;
-  el.innerHTML=`<span class="tb-lbl" data-zh="期間" data-en="Period" data-km="រយៈពេល">期間</span>
-    <div class="periodseg">${segs}</div>
-    ${jump}${nav?`<div class="periodseg">${nav}</div>`:''}
-    <span class="periodlabel" style="font-size:12px;color:var(--sub);font-weight:600">${periodCurrentLabel()}</span>`;
-}
-
 function renderMonthly(){
   fillFilterSelects();
-  const anchor=pDate(PERIOD_ANCHOR);
-  let rows=[], centerLabel='', unitLabel=t('monMonth');
-
-  if(PERIOD_GRAN==='year'||PERIOD_GRAN==='all'){
-    unitLabel=t('perYear');
-    const years=[...new Set(TXNS.map(x=>ym(x.date).slice(0,4)))].filter(Boolean).sort();
-    if(!years.length) years.push(String(anchor.getFullYear()));
-    centerLabel=`${years[0]} – ${years[years.length-1]}`;
-    rows=years.map(y=>({key:y,...periodStats(y+'-01-01',y+'-12-31')}));
-
-  } else if(PERIOD_GRAN==='month'){
-    unitLabel=t('monMonth');
-    const y=anchor.getFullYear();
-    centerLabel=String(y);
-    const mlbl=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    rows=Array.from({length:12},(_,i)=>{
-      const mm=y+'-'+pad(i+1);
-      return {key:mlbl[i], ...periodStats(mm+'-01', mm+'-31')};
-    });
-
-  } else if(PERIOD_GRAN==='week'){
-    unitLabel=t('perWeek');
-    const mon0=pMonday(anchor);
-    centerLabel=`${pYmd(mon0)} ~ ${pYmd(new Date(mon0.getFullYear(),mon0.getMonth(),mon0.getDate()+ (12*7-1) ))}`;
-    // 顯示以錨點週為結尾往前 12 週
-    for(let i=11;i>=0;i--){
-      const s=new Date(mon0); s.setDate(mon0.getDate()-i*7);
-      const e=new Date(s); e.setDate(s.getDate()+6);
-      const key=`${pYmd(s).slice(5)} ~ ${pYmd(e).slice(5)}`;
-      rows.push({key, ...periodStats(pYmd(s), pYmd(e))});
-    }
-
-  } else { // day
-    unitLabel=t('perDay');
-    const y=anchor.getFullYear(), m=anchor.getMonth();
-    centerLabel=`${y}-${pad(m+1)}`;
-    const nd=pDaysInMonth(y,m);
-    rows=Array.from({length:nd},(_,i)=>{
-      const d=`${y}-${pad(m+1)}-${pad(i+1)}`;
-      return {key:String(i+1), ...periodStats(d,d)};
-    });
-  }
-
-  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')}</div>
-    <div class="al al-i" style="margin-bottom:10px">${_lang==='en'?'Use the Period bar above to switch Day/Week/Month/Year and navigate.':_lang==='km'?'ប្រើរបារខាងលើដើម្បីប្ដូរ ថ្ងៃ/សប្ដាហ៍/ខែ/ឆ្នាំ។':'切換日／週／月／年、上一頁/下一頁請用上方工具列的「期間」控制列。'}</div>
-    <div class="tw"><table><thead><tr>
-    <th>${unitLabel}</th><th class="num">${t('monIn')}</th><th class="num">${t('monOut')}</th>
-    <th class="num">${t('perSpend')}</th><th class="num">${t('monBal')}</th><th class="num">${t('monAvg')}</th><th class="num">${t('monVal')}</th></tr></thead><tbody>`;
-  let tIn=0,tOut=0,tSpend=0,tVal=0,any=false;
-  h+=rows.map(r=>{
-    tIn+=r.inQ; tOut+=r.outQ; tSpend+=r.spend; tVal+=r.val;
-    if(r.inQ||r.outQ) any=true;
-    return `<tr><td>${r.key}</td><td class="num">${num(r.inQ)}</td><td class="num">${num(r.outQ)}</td>
-      <td class="num">${r.spend?money(r.spend):'-'}</td>
-      <td class="num">${num(r.bal)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.val)}</td></tr>`;
-  }).join('');
+  const year=(new Date()).getFullYear();
+  const months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
+  let rows=months.map(m=>{
+    const mtx=TXNS.filter(x=>ym(x.date)===m);
+    const inQ=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0),0);
+    const outQ=mtx.filter(x=>x.type==='OUT').reduce((s,x)=>s+(+x.qty||0),0);
+    // 月底各零件結存與價值
+    let bal=0,val=0,priceSum=0,priceN=0;
+    PARTS.forEach(p=>{const b=balanceAtMonthEnd(p.partNo,m);if(b>0){bal+=b;val+=b*(+p.unitPrice||0);}});
+    const prices=mtx.filter(x=>x.type==='IN'&&x.unitPrice).map(x=>+x.unitPrice);
+    const avg=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
+    return {m,inQ,outQ,bal,avg,val};
+  });
+  const mlbl=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')} — ${year}</div><div class="tw"><table><thead><tr>
+    <th>${t('monMonth')}</th><th class="num">${t('monIn')}</th><th class="num">${t('monOut')}</th>
+    <th class="num">${t('monBal')}</th><th class="num">${t('monAvg')}</th><th class="num">${t('monVal')}</th></tr></thead><tbody>`;
+  let tIn=0,tOut=0,tVal=0;
+  h+=rows.map((r,i)=>{tIn+=r.inQ;tOut+=r.outQ;tVal+=r.val;
+    return `<tr><td>${mlbl[i]}</td><td class="num">${num(r.inQ)}</td><td class="num">${num(r.outQ)}</td>
+      <td class="num">${num(r.bal)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.val)}</td></tr>`;}).join('');
   h+=`<tr style="font-weight:700;background:var(--soft)"><td>Grand Total</td><td class="num">${num(tIn)}</td><td class="num">${num(tOut)}</td>
-    <td class="num">${money(tSpend)}</td><td class="num">-</td><td class="num">-</td><td class="num">${money(tVal)}</td></tr>`;
-  h+=`</tbody></table></div>`;
-  if(!any) h+=`<div class="al al-w" style="margin-top:12px">${t('perNoYear')}</div>`;
-  h+=`<div class="al al-i" style="margin-top:12px">${_lang==='en'?'Balance is accumulated from In/Out records up to period end (opening assumed 0).':_lang==='km'?'នៅសល់គណនាពីកំណត់ត្រាចូល/ចេញរហូតដល់ចុងកំឡុងពេល។':'期末結存由進出紀錄累積計算至該期間結束（期初假設為 0）。'}</div>
+    <td class="num">-</td><td class="num">-</td><td class="num">${money(tVal)}</td></tr>`;
+  h+=`</tbody></table></div>
+   <div class="al al-i" style="margin-top:12px">${_lang==='en'?'Month-end balance is accumulated from In/Out records (opening assumed 0).':_lang==='km'?'នៅសល់ចុងខែគណនាពីកំណត់ត្រាចូល/ចេញ។':'月底庫存由進出紀錄累積計算（期初假設為 0）。'}</div>
    </div></div>`;
   $('app').innerHTML=h;
 }
@@ -1297,38 +1156,6 @@ function restoreLocal(file){if(!file)return;const rd=new FileReader();
     if(d.parts)PARTS=d.parts;if(d.txns)TXNS=d.txns;if(d.versions)VERSIONS=d.versions;if(d.settings)SET=Object.assign(SET,d.settings);
     saveAll(true);applyTheme();goTab('dashboard',null);}catch(err){toast('Restore error');}};
   rd.readAsText(file);}
-
-/* ===== 採購彙總小工具（★ 修復：原本被呼叫但從未定義，雲端拉取/Telegram摘要必崩潰）=====
-   TXNS 本身只有 partNo，沒有 category；這裡用 PARTS 反查補上，
-   讓月別/年別彙總、Telegram 摘要、雲端 meta 統計都能正確運作。 */
-function purchaseTxns(){
-  return TXNS.filter(x=>x.type==='IN').map(x=>{
-    const p=PARTS.find(z=>z.partNo===x.partNo);
-    return Object.assign({},x,{category:(p&&p.category)||'Other'});
-  });
-}
-function purchaseAmount(x){return (Number(x.qty)||0)*(Number(x.unitPrice)||0);}
-function monthPurchases(mo){return purchaseTxns().filter(x=>ym(x.date)===mo);}
-function latestPurchaseMonth(){
-  const xs=purchaseTxns();
-  if(!xs.length)return todayStr().slice(0,7);
-  return xs.reduce((mx,x)=>{const m=ym(x.date);return m>mx?m:mx;},'0000-00');
-}
-function latestPurchaseYear(){return latestPurchaseMonth().slice(0,4);}
-function latestPurchaseDate(){
-  const xs=purchaseTxns();
-  if(!xs.length)return todayStr();
-  return xs.reduce((mx,x)=>{const d=x.date||'';return d>mx?d:mx;},'0000-00-00');
-}
-function purchaseStats(xs){
-  xs=xs||[];
-  const spend=xs.reduce((s,x)=>s+purchaseAmount(x),0);
-  const qty=xs.reduce((s,x)=>s+(Number(x.qty)||0),0);
-  const lines=xs.length;
-  const parts=new Set(xs.map(x=>x.partNo)).size;
-  const needle=xs.filter(x=>x.category==='Needle').reduce((s,x)=>s+purchaseAmount(x),0);
-  return {spend,qty,lines,parts,needle};
-}
 
 /* ===== 雲端（GAS text/plain；其他標記需設定） ===== */
 function updateCloudDot(){

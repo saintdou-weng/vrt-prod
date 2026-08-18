@@ -92,7 +92,7 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
 </script>
 <script src="vrt-smart-sync-v3.js"></script>
 </head><body>
-<div class="header"><div class="logo">🏭</div><div><div class="htitle">VRT Production Plan & Capacity</div><div class="hsub">生產排產與產能控制中心 · v3.1 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hRec">0</b><span>記錄</span></div><div class="hstat"><b id="hPcs">0</b><span>車縫 pcs</span></div><div class="hstat"><b id="hLines">0</b><span>線別</span></div></div><button class="hbtn" id="langBtn" onclick="toggleLang()">中</button><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="goTab('import')">⬇ 匯入</button></div>
+<div class="header"><div class="logo">🏭</div><div><div class="htitle">VRT Production Plan & Capacity</div><div class="hsub">生產排產與產能控制中心 · v3.2 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hRec">0</b><span>記錄</span></div><div class="hstat"><b id="hPcs">0</b><span>車縫 pcs</span></div><div class="hstat"><b id="hLines">0</b><span>線別</span></div></div><button class="hbtn" id="langBtn" onclick="toggleLang()">中</button><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="goTab('import')">⬇ 匯入</button></div>
 <div class="tabs">
  <div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div>
  <div class="tab" data-tab="daily" onclick="goTab('daily')">🗓 日報</div><div class="tab" data-tab="weekly" onclick="goTab('weekly')">📅 週報</div>
@@ -122,7 +122,25 @@ function parseWorkbook(wb,file){let smv={};if(wb.Sheets['Sheet1']){const rr=XLSX
  let out=[];for(const name of wb.SheetNames.filter(n=>/PRODUCTION\s*PLAN/i.test(String(n).replace(/_/g,' ')))){const ym=monthFromSheet(name),rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});let hi=rows.findIndex(r=>(r||[]).some(x=>/^Products Tyle$/i.test(String(x||'').trim()))&&(r||[]).some(x=>/^Customer$/i.test(String(x||'').trim())));if(hi<0)continue;const h=(rows[hi]||[]).map(x=>String(x??'').replace(/\s+/g,' ').trim().toUpperCase());const inds=fn=>h.map((x,i)=>fn(x)?i:-1).filter(i=>i>=0),first=(fn,fb=-1)=>{let a=inds(fn);return a.length?a[0]:fb},last=(fn,fb=-1)=>{let a=inds(fn);return a.length?a[a.length-1]:fb};
  const actual=first(x=>x.includes('ACTUAL CUT'));if(actual<0)continue;const lines=inds(x=>x.includes('LINE#')),cLine=lines.length>1?lines[lines.length-1]:lines[0];const pieces=inds((x,i)=>x==='PIECES'&&i<actual);const cOrder=pieces.length?pieces[0]:first(x=>x.includes('ORIGINAL ORDER'),8);const cSew=pieces.length?pieces[pieces.length-1]:first(x=>x.includes('SEWING QTY'),actual-1);
  const cProd=first(x=>x.includes('PRODUCT'),0),cCust=first(x=>x==='CUSTOMER',2),cShip=first(x=>x.includes('SHIPMENT DATE'),3),cPo=first(x=>x.includes('ORDER#'),4),cStyle=first(x=>x.includes('STYLE/ARTICLE'),5),cColor=first(x=>x==='COLOR',6),cSize=first(x=>x==='SIZE',7),cDaily=first(x=>x.includes('DAILY OUTPUT'),actual+1),cSmv=first(x=>x==='SMV',actual+2),cMan=first(x=>x.includes('MANPOWER'),actual+3),cWh=first(x=>x.includes('WORKING HOURS'),actual+4),cStart=first(x=>x.includes('START DATE')),cEnd=first(x=>x.includes('FINISHED CUT PCS')),cFinish=first(x=>x.includes('FINISH DATE')),cRemark=first(x=>x.includes('REMARK'));
- let lastLine='';for(let i=hi+1;i<rows.length;i++){let r=rows[i]||[];if(r.every(v=>v==null||v===''))continue;let qty=num(r[cSew]),rawLine=normLine(r[cLine]);if(rawLine)lastLine=rawLine;let line=rawLine||lastLine;if(!qty||!line)continue;let style=String(r[cStyle]??'').trim(),sv=num(r[cSmv])||smv[style.toUpperCase()]||0;out.push({id:`${ym}|${i}|${line}|${r[cPo]??''}|${style}`,month:ym,product:String(r[cProd]??'').trim().toUpperCase(),line,customer:String(r[cCust]??'').trim().toUpperCase(),shipmentDate:excelDate(r[cShip]),po:String(r[cPo]??'').trim(),style,color:String(r[cColor]??'').trim(),size:String(r[cSize]??'').trim(),orderQty:num(r[cOrder]),sewingQty:qty,cutQty:num(r[actual]),dailyOutput:num(r[cDaily]),smv:sv,manpower:num(r[cMan]),workingHours:num(r[cWh]),startDate:excelDate(r[cStart]),endDate:excelDate(r[cEnd]),finishDate:excelDate(r[cFinish]),remark:String(r[cRemark]??'').trim(),sourceSheet:name})}}return out}
+ let lastLine='',ignoredLegacy=0,ignoredTotals=0;for(let i=hi+1;i<rows.length;i++){let r=rows[i]||[];
+  if(r.every(v=>v==null||v==='')){lastLine='';continue}
+  const product=String(r[cProd]??'').trim().toUpperCase(),customer=String(r[cCust]??'').trim().toUpperCase(),po=String(r[cPo]??'').trim(),style=String(r[cStyle]??'').trim();
+  let qty=num(r[cSew]),rawLine=normLine(r[cLine]);
+  const hasIdentity=!!(product||customer||po||style);
+  // Footer / SUM rows may have a quantity formula but no product/customer/PO/style.
+  // They must never inherit the previous Line number.
+  if(!hasIdentity&&!rawLine){ignoredTotals++;lastLine='';continue}
+  if(rawLine)lastLine=rawLine;
+  let line=rawLine||lastLine;
+  if(!qty||!line||!hasIdentity)continue;
+  const lineNo=parseInt((String(line).match(/\d+/)||['0'])[0],10);
+  // VRT operating rule: Line 12 was dismantled from Aug-2026. Keep July history only.
+  if(ym>='2026-08'&&lineNo===12){ignoredLegacy++;continue}
+  let sv=num(r[cSmv])||smv[style.toUpperCase()]||0;
+  out.push({id:`${ym}|${i}|${line}|${r[cPo]??''}|${style}`,month:ym,product,line,customer,shipmentDate:excelDate(r[cShip]),po,style,color:String(r[cColor]??'').trim(),size:String(r[cSize]??'').trim(),orderQty:num(r[cOrder]),sewingQty:qty,cutQty:num(r[actual]),dailyOutput:num(r[cDaily]),smv:sv,manpower:num(r[cMan]),workingHours:num(r[cWh]),startDate:excelDate(r[cStart]),endDate:excelDate(r[cEnd]),finishDate:excelDate(r[cFinish]),remark:String(r[cRemark]??'').trim(),sourceSheet:name})
+ }
+ if(ignoredLegacy||ignoredTotals)console.log('[PLAN]',name,'ignored legacy L12=',ignoredLegacy,'footer/total=',ignoredTotals);
+ }return out}
 async function importFile(file){if(!window.XLSX){toast('Excel 元件尚未載入');return}let ab=await file.arrayBuffer(),wb=XLSX.read(ab,{type:'array',cellDates:false,raw:true}),recs=parseWorkbook(wb,file.name);if(!recs.length){toast('找不到有效 Production Plan');return}if(DATA.records.length&&sig(DATA.records)!==sig(recs))VERS.unshift(snapshot(DATA.records,DATA.source));DATA={records:recs,source:file.name,savedAt:new Date().toISOString()};save();SEL_MONTH=months().slice(-1)[0]||SEL_MONTH;PERIOD_KEY='';renderAll();goTab('changes');cloudState('☁ Local updated');toast(`✓ ${recs.length} records · ${months().join(', ')}`)}
 function months(){return [...new Set(DATA.records.map(r=>r.month).filter(Boolean))].sort()}
 function activeMonthRows(){let m=SEL_MONTH||months().slice(-1)[0];return DATA.records.filter(r=>r.month===m)}

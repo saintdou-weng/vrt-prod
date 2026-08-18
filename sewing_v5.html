@@ -169,7 +169,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.14</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.15</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -1050,6 +1050,7 @@ function dedupAndNorm(all){
     else{
       const ex=dedupMap.get(k);
       dedupMap.set(k,{...ex,workers:Math.max(ex.workers||0,r.workers||0),efficiency:Math.max(ex.efficiency||0,r.efficiency||0),
+        producedMinutes:Math.max(ex.producedMinutes||0,r.producedMinutes||0),attendedMinutes:Math.max(ex.attendedMinutes||0,r.attendedMinutes||0),
         target:(ex.target||r.target||0),achievement:(ex.achievement||r.achievement||0),
         issue:(ex.issue||r.issue||undefined),remark:(ex.remark||r.remark||"")});
     }
@@ -1346,91 +1347,88 @@ function goTab(name, el){
 function parseWeeklyReport(wb, fname){
   const ws = wb.Sheets[wb.SheetNames.find(n=>/weekly output report/i.test(n))];
   if(!ws) return null;
-  const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
 
-  // Detect section from filename or first 4 rows
-  let section = "Sewing";
-  for(let i=0;i<Math.min(4,rows.length);i++){
-    const txt = (rows[i]||[]).map(c=>String(c||"").toLowerCase()).join(" ");
-    if(txt.includes("apron")) section="Apron";
-    else if(txt.includes("garment")) section="Garment";
+  // Filename is the safest section source because Garment / Apron weekly files share the same sheet layout.
+  const fn=String(fname||"").toLowerCase();
+  let section=fn.includes("apron")?"Apron":fn.includes("garment")?"Garment":"Sewing";
+  if(section==="Sewing"){
+    for(let i=0;i<Math.min(8,rows.length);i++){
+      const txt=(rows[i]||[]).map(c=>String(c||"").toLowerCase()).join(" ");
+      if(txt.includes("apron")){section="Apron";break}
+      if(txt.includes("garment")){section="Garment";break}
+    }
   }
 
-  // Row idx 3: header with dates in cols 3-9
-  const header = rows[3]||[];
-  const dateCols = {};
-  for(let ci=3;ci<12;ci++){
-    const v = header[ci];
-    let dateStr = null;
-    if(v instanceof Date || (v && typeof v==="object" && v.getTime)){
-      const d=v; dateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    } else if(typeof v==="string" && v.match(/\d{4}-\d{2}-\d{2}/)){
-      dateStr=v.slice(0,10);
-    }
-    if(dateStr){
-      const dow = new Date(dateStr+"T00:00:00").getDay();
-      // Skip Sunday and Cambodia public holidays
-      if(dow !== 0 && !isKHHoliday(dateStr)){
-        dateCols[ci]=dateStr;
+  // Weekly sheets have used more than one header row; discover the row instead of hard-coding row 4.
+  let headerIdx=-1,dateCols={};
+  for(let ri=0;ri<Math.min(8,rows.length);ri++){
+    const h=rows[ri]||[],tmp={};
+    for(let ci=3;ci<Math.min(12,h.length);ci++){
+      const v=h[ci]; let dateStr=null;
+      if(v instanceof Date || (v&&typeof v==="object"&&v.getTime)){
+        const d=v; dateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      }else if(typeof v==="string"){
+        const m=v.match(/(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/);
+        if(m)dateStr=`${m[1]}-${String(+m[2]).padStart(2,"0")}-${String(+m[3]).padStart(2,"0")}`;
+      }
+      if(dateStr){
+        const dow=new Date(dateStr+"T00:00:00").getDay();
+        if(dow!==0&&!isKHHoliday(dateStr))tmp[ci]=dateStr;
       }
     }
+    if(Object.keys(tmp).length>=3){headerIdx=ri;dateCols=tmp;break}
   }
-  if(!Object.keys(dateCols).length) return null;
+  if(headerIdx<0||!Object.keys(dateCols).length)return null;
 
-  // Scan line blocks
-  const LRE2 = /^(LINE|Line)\s+[A-Z]?\d+$/;
-  const lineData = {}; // lineNo → date → {pcs, workers, eff}
-  let cur = null;
+  const LRE2=/^(LINE|Line)\s+[A-Z]?\d+$/;
+  const lineData={}; let cur=null;
+  const init=()=>({pcs:0,workers:0,eff:0,producedMinutes:0,attendedMinutes:0});
 
-  for(let i=0;i<rows.length;i++){
+  for(let i=headerIdx+1;i<rows.length;i++){
     const r=rows[i]||[];
     const c0=String(r[0]||"").trim();
-    const c1=String(r[1]||"").trim().toLowerCase();
+    const c1=String(r[1]||"").trim().toLowerCase().replace(/\s+/g," ");
 
     if(LRE2.test(c0)){
-      cur=c0;
-      if(!lineData[cur]) lineData[cur]={};
-      Object.values(dateCols).forEach(d=>{ if(!lineData[cur][d]) lineData[cur][d]={pcs:0,workers:0,eff:0}; });
+      cur=normLineNo(c0);
+      if(!lineData[cur])lineData[cur]={};
+      Object.values(dateCols).forEach(d=>{if(!lineData[cur][d])lineData[cur][d]=init()});
     }
-    if(!cur) continue;
+    if(!cur)continue;
+    const each=fn=>Object.entries(dateCols).forEach(([ci,date])=>fn(lineData[cur][date],parseFloat(r[ci])));
 
     if(c1==="total output"){
-      Object.entries(dateCols).forEach(([ci,date])=>{
-        const v=parseFloat(r[ci]); if(v>0) lineData[cur][date].pcs=Math.round(v);
-      });
-    }
-    if(c1==="man power"){
-      Object.entries(dateCols).forEach(([ci,date])=>{
-        const v=parseFloat(r[ci]); if(v>0) lineData[cur][date].workers=Math.round(v*2)/2;
-      });
-    }
-    if(c1.includes("daily eff%")&&c1.includes("current")){
-      Object.entries(dateCols).forEach(([ci,date])=>{
-        const v=parseFloat(r[ci]);
-        if(v>0) lineData[cur][date].eff=v<=1?Math.round(v*100):Math.round(v);
-      });
+      each((d,v)=>{if(Number.isFinite(v)&&v>=0)d.pcs=Math.round(v)});
+    }else if(c1==="man power"||c1==="manpower"){
+      each((d,v)=>{if(Number.isFinite(v)&&v>0)d.workers=Math.round(v*100)/100});
+    }else if(c1.includes("daily mins.produced")&&c1.includes("current")){
+      each((d,v)=>{if(Number.isFinite(v)&&v>=0)d.producedMinutes=v});
+    }else if(c1.includes("daily mins.attended")&&c1.includes("current")){
+      each((d,v)=>{if(Number.isFinite(v)&&v>=0)d.attendedMinutes=v});
+    }else if(c1.includes("daily eff%")&&c1.includes("current")){
+      each((d,v)=>{if(Number.isFinite(v)&&v>0)d.eff=v<=1?Math.round(v*1000)/10:Math.round(v*10)/10});
     }
   }
 
-  // Build records
   const recs=[];
   Object.entries(lineData).forEach(([lineNo,dates])=>{
     Object.entries(dates).forEach(([date,d])=>{
-      if(d.pcs>0){
-        recs.push({id:uid(),date,section,lineNo:normLineNo(lineNo),styleNo:"",
-          pieces:d.pcs, workers:d.workers, efficiency:d.eff, cartons:0});
-      }
+      // Keep staffed zero-output lines: they are part of attended minutes and must stay in the efficiency denominator.
+      if(!(d.pcs>0||d.workers>0||d.attendedMinutes>0||d.producedMinutes>0))return;
+      const eff=d.attendedMinutes>0?(d.producedMinutes/d.attendedMinutes*100):d.eff;
+      recs.push({id:uid(),date,section,lineNo,styleNo:"",
+        pieces:d.pcs||0,workers:d.workers||0,efficiency:Math.round((eff||0)*100)/100,cartons:0,
+        producedMinutes:d.producedMinutes||0,attendedMinutes:d.attendedMinutes||0,tSrc:"weekly"});
     });
   });
-  if(!recs.length) return null;
+  if(!recs.length)return null;
 
   const lineDates=[...new Set(recs.map(r=>r.date))].sort();
   const lineNames=[...new Set(recs.map(r=>r.lineNo))];
-  return {recs, summary:{
+  return {recs,summary:{
     date:`${lineDates[0]}～${lineDates[lineDates.length-1]}`,
-    section, lines:lineNames.length,
-    totalPcs:recs.reduce((s,r)=>s+r.pieces,0),
-    lineNames
+    section,lines:lineNames.length,totalPcs:recs.reduce((s,r)=>s+(r.pieces||0),0),lineNames
   }};
 }
 
@@ -3123,8 +3121,8 @@ function renderDashboard(){
   const dates=[...new Set(DB.map(r=>r.date))].sort();
   const years=[...new Set(dates.map(d=>d.slice(0,4)))].sort();
   const totalPcs=DB.reduce((s,r)=>s+(r.pieces||0),0);
-  const effRecs=DB.filter(r=>r.efficiency>0);
-  const avgEff=effRecs.length?Math.round(effRecs.reduce((s,r)=>s+(r.efficiency||0),0)/effRecs.length):0;
+  const effM=calcFactoryEff(DB);
+  const avgEff=Math.round(effM.eff*10)/10;
 
   // Use cached analytics; if not available, compute synchronously for dashboard
   let coCount='-',lostMins='-',lostPcs='-',lostOrders='-',capUtil='-',worstLine='-',bestLine='-';
@@ -3273,38 +3271,83 @@ function populateDailySel(){
   if(prevS) ssel.value=prevS;
 }
 
+// Factory efficiency = Produced Standard Minutes / Attended Minutes.
+// Exact Weekly report minute fields take priority. Fallback uses reported line efficiency × manpower × 480.
+// Staffed zero-output lines remain in the denominator; otherwise factory efficiency is overstated.
+function calcFactoryEff(recs){
+  const groups={};
+  (recs||[]).forEach(r=>{
+    const d=normalizeDate(r.date),ln=normLineNo(r.lineNo||"");
+    if(!d||!ln)return;
+    const k=d+"|"+ln,g=groups[k]||(groups[k]={exact:[],fallback:[],workers:0});
+    const att=Number(r.attendedMinutes)||0,prod=Number(r.producedMinutes)||0;
+    if(att>0)g.exact.push({att,prod});
+    const w=Number(r.workers)||0,e=Number(r.efficiency)||0;
+    if(w>0&&e>0)g.fallback.push({w,e});
+    if(w>g.workers)g.workers=w;
+  });
+  let std=0,att=0,personDays=0,lineDays=0;
+  Object.values(groups).forEach(g=>{
+    lineDays++; personDays+=g.workers||0;
+    if(g.exact.length){
+      // Daily + Weekly may coexist. One line/day may only contribute once.
+      const x=g.exact.slice().sort((a,b)=>b.att-a.att)[0];
+      std+=x.prod; att+=x.att;
+    }else if(g.fallback.length){
+      const den=g.fallback.reduce((s,x)=>s+x.w,0);
+      const eff=den?g.fallback.reduce((s,x)=>s+x.e*x.w,0)/den:0;
+      const mins=(g.workers||den)*480;
+      std+=(eff/100)*mins; att+=mins;
+    }else if(g.workers>0){
+      att+=g.workers*480; // staffed but no production = 0% contribution
+    }
+  });
+  return {eff:att>0?std/att*100:0,stdMinutes:std,attendedMinutes:att,personDays,lineDays};
+}
+
 function buildLineMap(recs){
   const lm={};
-  const pcsByLD={}; // ★ v5.1: line|date → {norm, tgt}，同一天同線若同時有日報明細與目標報表，只計日報件數，避免重複
+  // line|date → actual detail / weekly summary / target.
+  // Daily style detail has highest priority, then Weekly summary, then Target/DPO.
+  const pcsByLD={};
   recs.forEach(r=>{
     const k=r.lineNo||"(未知)";
     if(!lm[k]) lm[k]={lineNo:k,section:r.section,workers:0,efficiency:0,totalPcs:0,cartons:0,styles:[],otWorkers:0,otPcs:0,
-      target:0,tgtActual:0,achievement:0,hasTgt:false,tgtRecs:0,
+      producedMinutes:0,attendedMinutes:0,target:0,tgtActual:0,achievement:0,hasTgt:false,tgtRecs:0,
       issues:{changeover:0,material:0,machine:0,manpower:0,quality:0,others:0},remarks:[]};
     const ld=k+"|"+(r.date||"");
-    if(!pcsByLD[ld]) pcsByLD[ld]={norm:0,tgt:0,line:k};
-    if(isTgtSrc(r)) pcsByLD[ld].tgt+=(r.pieces||0);
-    else pcsByLD[ld].norm+=(r.pieces||0);
+    if(!pcsByLD[ld])pcsByLD[ld]={detail:0,summary:0,tgt:0,line:k};
+    const hasDetail=!!(r.styleNo||r.po||r.selfKey||r.color||r.size||(r.cartons||0)>0);
+    if(isTgtSrc(r))pcsByLD[ld].tgt+=(r.pieces||0);
+    else if(r.tSrc==="weekly"||!hasDetail)pcsByLD[ld].summary=Math.max(pcsByLD[ld].summary,r.pieces||0);
+    else pcsByLD[ld].detail+=(r.pieces||0);
+
     lm[k].cartons+=(r.cartons||0);
     lm[k].otPcs+=(r.otPcs||0);
-    if(r.styleNo) lm[k].styles.push({styleNo:r.styleNo,pcs:r.pieces});
-    if(r.workers>lm[k].workers) lm[k].workers=r.workers;
-    if((r.workersOT||0)>lm[k].otWorkers) lm[k].otWorkers=r.workersOT||0;
-    if(r.efficiency>lm[k].efficiency) lm[k].efficiency=r.efficiency;
-    // ★ v5.1: Daily Production Target 欄位聚合
+    if(r.styleNo)lm[k].styles.push({styleNo:r.styleNo,pcs:r.pieces});
+    if(r.workers>lm[k].workers)lm[k].workers=r.workers;
+    if((r.workersOT||0)>lm[k].otWorkers)lm[k].otWorkers=r.workersOT||0;
+    if(r.efficiency>lm[k].efficiency)lm[k].efficiency=r.efficiency;
+    // Exact minute fields normally appear once per line/day in Weekly Output Report.
+    lm[k].producedMinutes+=(r.producedMinutes||0);
+    lm[k].attendedMinutes+=(r.attendedMinutes||0);
+
     if(isTgtSrc(r)||(r.target||0)>0){
       lm[k].hasTgt=true; lm[k].tgtRecs++;
       lm[k].target+=(r.target||0);
       lm[k].tgtActual+=(r.pieces||0);
-      if(lm[k].tgtRecs===1) lm[k].achievement=(r.achievement||0);
-      if(r.issue){ Object.keys(lm[k].issues).forEach(key=>{ if(r.issue[key]) lm[k].issues[key]++; }); }
-      if(r.remark) lm[k].remarks.push(r.remark);
+      if(lm[k].tgtRecs===1)lm[k].achievement=(r.achievement||0);
+      if(r.issue){Object.keys(lm[k].issues).forEach(key=>{if(r.issue[key])lm[k].issues[key]++})}
+      if(r.remark)lm[k].remarks.push(r.remark);
     }
   });
-  Object.values(pcsByLD).forEach(v=>{ if(lm[v.line]) lm[v.line].totalPcs += (v.norm>0 ? v.norm : v.tgt); });
-  // 多筆 target 記錄（週/月彙總）時重算達成率；單日直接沿用 Excel 值
+  Object.values(pcsByLD).forEach(v=>{
+    if(!lm[v.line])return;
+    lm[v.line].totalPcs += v.detail>0?v.detail:(v.summary>0?v.summary:v.tgt);
+  });
   Object.values(lm).forEach(l=>{
-    if(l.hasTgt && (l.tgtRecs>1 || !l.achievement) && l.target>0)
+    if(l.attendedMinutes>0)l.efficiency=Math.round((l.producedMinutes/l.attendedMinutes*100)*10)/10;
+    if(l.hasTgt&&(l.tgtRecs>1||!l.achievement)&&l.target>0)
       l.achievement=Math.round(l.tgtActual/l.target*1000)/10;
   });
   return Object.values(lm).sort((a,b)=>a.lineNo.localeCompare(b.lineNo,undefined,{numeric:true}));
@@ -3443,16 +3486,13 @@ function renderDaily(){
     }
   }
   const lines=buildLineMap(day);
-  const active=lines.filter(l=>l.totalPcs>0);
+  const active=lines.filter(l=>l.totalPcs>0||l.workers>0||l.attendedMinutes>0);
 
   const totW=lines.reduce((s,l)=>s+l.workers,0);
   const totP=lines.reduce((s,l)=>s+l.totalPcs,0);
   const totC=lines.reduce((s,l)=>s+l.cartons,0);
-  const effLines=active.filter(l=>l.efficiency>0&&l.workers>0);
-  const totWkrEff=effLines.reduce((s,l)=>s+l.workers,0);
-  // Weighted average: sum(eff*workers)/sum(workers) — matches Excel's ProMins/AttMins method
-  const avgEff=totWkrEff>0?Math.round(effLines.reduce((s,l)=>s+l.efficiency*l.workers,0)/totWkrEff):
-               active.filter(l=>l.efficiency>0).length?Math.round(active.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/active.filter(l=>l.efficiency>0).length):0;
+  const effM=calcFactoryEff(day);
+  const avgEff=Math.round(effM.eff*10)/10;
 
   const selDate=document.getElementById("dsel").value;
   const isSunday=selDate&&new Date(selDate+"T00:00:00").getDay()===0;
@@ -3619,16 +3659,13 @@ function renderWeekly(){
   const wDates=getWeekDates(wk);
   const wRecs=DB.filter(r=>getWeekKey(r.date)===wk);
   const lines=buildLineMap(wRecs);
-  const active=lines.filter(l=>l.totalPcs>0);
+  const active=lines.filter(l=>l.totalPcs>0||l.workers>0||l.attendedMinutes>0);
 
-  const totW=active.reduce((s,l)=>s+l.workers,0);
   const totP=active.reduce((s,l)=>s+l.totalPcs,0);
   const totC=active.reduce((s,l)=>s+l.cartons,0);
-  const effLines=active.filter(l=>l.efficiency>0&&l.workers>0);
-  const totWkrEff=effLines.reduce((s,l)=>s+l.workers,0);
-  // Weighted average: sum(eff*workers)/sum(workers) — matches Excel's ProMins/AttMins method
-  const avgEff=totWkrEff>0?Math.round(effLines.reduce((s,l)=>s+l.efficiency*l.workers,0)/totWkrEff):
-               active.filter(l=>l.efficiency>0).length?Math.round(active.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/active.filter(l=>l.efficiency>0).length):0;
+  const effM=calcFactoryEff(wRecs);
+  const totW=Math.round(effM.personDays*100)/100;
+  const avgEff=Math.round(effM.eff*10)/10;
 
   const wWorkDays=wDates.filter(d=>new Date(d+"T00:00:00").getDay()!==0);
   const wSunDays=wDates.filter(d=>new Date(d+"T00:00:00").getDay()===0);
@@ -3681,13 +3718,11 @@ function renderWeekly(){
       const dow=new Date(d+"T00:00:00").getDay(); // 0=Sun
       const isSun=dow===0;
       const dr=DB.filter(r=>r.date===d);
-      const dl=buildLineMap(dr).filter(l=>l.totalPcs>0);
-      const dW=dl.reduce((s,l)=>s+l.workers,0), dP=dl.reduce((s,l)=>s+l.totalPcs,0);
+      const dl=buildLineMap(dr).filter(l=>l.totalPcs>0||l.workers>0||l.attendedMinutes>0);
+      const dm=calcFactoryEff(dr);
+      const dW=Math.round(dm.personDays*100)/100, dP=dl.reduce((s,l)=>s+l.totalPcs,0);
       const dC=dl.reduce((s,l)=>s+l.cartons,0);
-      const dEffL=dl.filter(l=>l.efficiency>0&&l.workers>0);
-      const dWE=dEffL.reduce((s,l)=>s+l.workers,0);
-      const dAvgE=dWE>0?Math.round(dEffL.reduce((s,l)=>s+l.efficiency*l.workers,0)/dWE):
-                  dl.filter(l=>l.efficiency>0).length?Math.round(dl.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/dl.filter(l=>l.efficiency>0).length):0;
+      const dAvgE=Math.round(dm.eff*10)/10;
       return `<tr style="${isSun?"background:#fef3c7;":""}">
         <td class="mono" style="font-weight:600">${d} <span style="font-size:10px;color:${isSun?"#dc2626":"#6b7a9e"};font-weight:${isSun?"700":"400"}">(${isSun?"⚠️週日":"週"+DOW[dow]})</span></td>
         <td class="mono">${dl.length}</td>
@@ -3742,8 +3777,10 @@ function renderPeriod(){
   const pBody=document.getElementById("pBody"); pBody.innerHTML="";
   pBody.innerHTML=periods.map(p=>{
     const d=map[p];
-    const avgE=d.effs.length?Math.round(d.effs.reduce((s,v)=>s+v,0)/d.effs.length):0;
-    const pp=d.workers>0?(d.pieces/d.workers).toFixed(1):"-";
+    const pr=DB.filter(r=>getPKey(r.date)===p),pm=calcFactoryEff(pr);
+    const avgE=Math.round(pm.eff*10)/10;
+    const persons=Math.round(pm.personDays*100)/100;
+    const pp=persons>0?(d.pieces/persons).toFixed(1):"-";
     const gP=Math.round(d.gPcs), aP=Math.round(d.aPcs);
     const gR=d.pieces>0?Math.round(gP/d.pieces*1000)/10:0;
     const aR=d.pieces>0?Math.round(aP/d.pieces*1000)/10:0;
@@ -3751,7 +3788,7 @@ function renderPeriod(){
       <td class="mono" style="color:#f59e0b;font-weight:700">${p}</td>
       <td class="mono">${d.dates.size}</td>
       <td class="mono">${d.lines.size}</td>
-      <td class="mono">${d.workers.toLocaleString()}</td>
+      <td class="mono">${persons.toLocaleString()}</td>
       <td class="mono" style="color:#1d4ed8;font-weight:600">${d.pieces.toLocaleString()}</td>
       <td class="mono" style="color:#059669;font-weight:600">${gP>0?gP.toLocaleString():"--"}</td>
       <td>${gP>0?`<span class="b" style="background:#ecfdf5;color:#059669;font-weight:700">${gR}%</span>`:"--"}</td>
@@ -3810,13 +3847,11 @@ function exportExcel(mode){
     const dayHeader=["日期","線別數","合計人數","合計件數","平均效率%","人均件數","箱數"];
     const dayData=[dayHeader,...wDates.map(d=>{
       const dr=DB.filter(r=>r.date===d);
-      const dl=buildLineMap(dr).filter(l=>l.totalPcs>0);
-      const dW=dl.reduce((s,l)=>s+l.workers,0),dP=dl.reduce((s,l)=>s+l.totalPcs,0);
+      const dl=buildLineMap(dr).filter(l=>l.totalPcs>0||l.workers>0||l.attendedMinutes>0);
+      const dm=calcFactoryEff(dr);
+      const dW=Math.round(dm.personDays*100)/100,dP=dl.reduce((s,l)=>s+l.totalPcs,0);
       const dC=dl.reduce((s,l)=>s+l.cartons,0);
-      const dEffL=dl.filter(l=>l.efficiency>0&&l.workers>0);
-      const dWE=dEffL.reduce((s,l)=>s+l.workers,0);
-      const dAvgE=dWE>0?Math.round(dEffL.reduce((s,l)=>s+l.efficiency*l.workers,0)/dWE):
-                  dl.filter(l=>l.efficiency>0).length?Math.round(dl.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/dl.filter(l=>l.efficiency>0).length):0;
+      const dAvgE=Math.round(dm.eff*10)/10;
       return [d,dl.length,dW,dP,dAvgE||"",dW>0?Math.round(dP/dW*10)/10:"",Math.round(dC*10)/10||""];
     })];
     const wb2=XLSX.utils.book_new();
@@ -6146,17 +6181,15 @@ function tgtPeriodStats(dates){
     dates, lines,
     activeLines:lines.filter(l=>l.totalPcs>0).length,
     pieces:lines.reduce((s,l)=>s+l.totalPcs,0),
-    workers:lines.reduce((s,l)=>s+l.workers,0),
+    workers:Math.round(calcFactoryEff(recs).personDays*100)/100,
     target:tgtL.reduce((s,l)=>s+l.target,0),
     actual:tgtL.reduce((s,l)=>s+l.tgtActual,0),
     issues:{changeover:0,material:0,machine:0,manpower:0,quality:0,others:0},
     remarks:[]
   };
   tot.achievement = tot.target>0 ? Math.round(tot.actual/tot.target*1000)/10 : 0;
-  const effL=lines.filter(l=>l.efficiency>0&&l.workers>0);
-  const wSum=effL.reduce((s,l)=>s+l.workers,0);
-  tot.avgEff = wSum>0 ? Math.round(effL.reduce((s,l)=>s+l.efficiency*l.workers,0)/wSum*10)/10
-             : (lines.filter(l=>l.efficiency>0).length ? Math.round(lines.filter(l=>l.efficiency>0).reduce((s,l)=>s+l.efficiency,0)/lines.filter(l=>l.efficiency>0).length*10)/10 : 0);
+  const effM=calcFactoryEff(recs);
+  tot.avgEff=Math.round(effM.eff*10)/10;
   lines.forEach(l=>{
     ISSUE_KEYS.forEach(k=>tot.issues[k]+=(l.issues?l.issues[k]:0)||0);
     (l.remarks||[]).forEach(r=>tot.remarks.push({line:l.lineNo,text:r}));
@@ -39715,41 +39748,57 @@ function wPlanFor(dates) {
 
 /* ---------- 建檔 build ---------- */
 function wBuild() {
-  const src = (typeof DB !== 'undefined' && DB && DB.length) ? DB : [];
-  const by = {}; let skipped = 0, noLabel = 0, dupRaw = 0;
-  const seen = {};
-  src.forEach(r => {
-    const d = wDate(r.date), L = wLine(r.lineNo);
-    if (!d || !L) { skipped++; return; }
-    if (!String(r.lineNo || '').trim()) noLabel++;
-    const k = wYmd(d) + '|' + L;
-    if (seen[k]) dupRaw++; seen[k] = 1;
-    const o = by[k] || (by[k] = { date: wYmd(d), line: L, pieces: 0, workers: 0, cartons: 0, target: 0,
-      stdMin: 0, avail: 0, products: {}, remark: '', styles: 0, srcRows: 0 });
+  const src=(typeof DB!=='undefined'&&DB&&DB.length)?DB:[];
+  const by={}; let skipped=0,noLabel=0,dupRaw=0;
+  const seen={};
+  src.forEach(r=>{
+    const d=wDate(r.date),L=wLine(r.lineNo);
+    if(!d||!L){skipped++;return}
+    if(!String(r.lineNo||'').trim())noLabel++;
+    const k=wYmd(d)+'|'+L;
+    if(seen[k])dupRaw++; seen[k]=1;
+    const o=by[k]||(by[k]={date:wYmd(d),line:L,detailPcs:0,summaryPcs:0,tgtPcs:0,pieces:0,workers:0,cartons:0,target:0,
+      exactAtt:0,exactProd:0,effW:0,effNum:0,smvStd:0,stdMin:0,avail:0,products:{},remark:'',styleSet:new Set(),styles:0,srcRows:0});
     o.srcRows++;
-    o.pieces += wnum(r.pieces);
-    o.workers = Math.max(o.workers, wnum(r.workers));
-    o.cartons += wnum(r.cartons);
-    o.target += wnum(r.target);
-    o.styles = Math.max(o.styles, wnum(r.styleCount));
-    if (wnum(r.smv) > 0 && wnum(r.pieces) > 0) o.stdMin += wnum(r.smv) * wnum(r.pieces);
-    else if (wnum(r.efficiency) > 0 && wnum(r.workers) > 0) {
-      const e = wnum(r.efficiency) > 1 ? wnum(r.efficiency) / 100 : wnum(r.efficiency);
-      o.stdMin += e * wnum(r.workers) * WCFG.minutesPerDay;
-    }
-    if (wnum(r.gPcs)) o.products['成衣 Garment'] = (o.products['成衣 Garment'] || 0) + wnum(r.gPcs);
-    if (wnum(r.aPcs)) o.products['圍裙 Apron'] = (o.products['圍裙 Apron'] || 0) + wnum(r.aPcs);
-    const rm = [r.remark, r.issue].filter(x => x && String(x).trim()).join('；');
-    if (rm && !o.remark) o.remark = String(rm).replace(/\s+/g, ' ').trim();
+    const pcs=wnum(r.pieces),hasDetail=!!(r.styleNo||r.po||r.selfKey||r.color||r.size||wnum(r.cartons)>0);
+    if(typeof isTgtSrc==='function'&&isTgtSrc(r))o.tgtPcs+=pcs;
+    else if(r.tSrc==='weekly'||!hasDetail)o.summaryPcs=Math.max(o.summaryPcs,pcs);
+    else o.detailPcs+=pcs;
+
+    o.workers=Math.max(o.workers,wnum(r.workers));
+    if(hasDetail)o.cartons+=wnum(r.cartons);
+    o.target=Math.max(o.target,wnum(r.target));
+    if(r.styleNo)o.styleSet.add(String(r.styleNo));
+
+    const att=wnum(r.attendedMinutes),prod=wnum(r.producedMinutes);
+    if(att>o.exactAtt){o.exactAtt=att;o.exactProd=prod}
+    const er=wnum(r.efficiency),wr=wnum(r.workers);
+    if(er>0&&wr>0){const ep=er>1?er:er*100;o.effNum+=ep*wr;o.effW+=wr}
+    if(wnum(r.smv)>0&&pcs>0&&hasDetail)o.smvStd+=wnum(r.smv)*pcs;
+
+    if(wnum(r.gPcs))o.products['成衣 Garment']=(o.products['成衣 Garment']||0)+wnum(r.gPcs);
+    if(wnum(r.aPcs))o.products['圍裙 Apron']=(o.products['圍裙 Apron']||0)+wnum(r.aPcs);
+    const issue=(r.issue&&typeof issueText==='function')?issueText(r.issue):'';
+    const rm=[r.remark,issue].filter(x=>x&&String(x).trim()).join('；');
+    if(rm&&!o.remark)o.remark=String(rm).replace(/\s+/g,' ').trim();
   });
-  WS.skipped = skipped; WS.noLabel = noLabel;
-  WS.recs = Object.values(by).map(o => { if (!o.avail) o.avail = o.workers * WCFG.minutesPerDay; return o; })
-    .filter(o => o.workers > 0 || o.pieces > 0)
-    .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.line.localeCompare(b.line));
-  const wk = {}, mo = {};
-  WS.recs.forEach(r => { const d = wDate(r.date); (wk[wWeekKey(d)] = wk[wWeekKey(d)] || []).push(r); (mo[r.date.slice(0, 7)] = mo[r.date.slice(0, 7)] || []).push(r); });
-  WS.weeks = Object.keys(wk).sort().map(k => ({ key: k, label: wWeekLabel(k), recs: wk[k] }));
-  WS.months = Object.keys(mo).sort().map(k => ({ key: k, recs: mo[k] }));
+
+  WS.skipped=skipped;WS.noLabel=noLabel;
+  WS.recs=Object.values(by).map(o=>{
+    o.pieces=o.detailPcs>0?o.detailPcs:(o.summaryPcs>0?o.summaryPcs:o.tgtPcs);
+    o.styles=o.styleSet.size;
+    o.avail=o.exactAtt>0?o.exactAtt:o.workers*WCFG.minutesPerDay;
+    if(o.exactAtt>0)o.stdMin=o.exactProd;
+    else if(o.effW>0&&o.avail>0)o.stdMin=((o.effNum/o.effW)/100)*o.avail;
+    else if(o.smvStd>0)o.stdMin=o.smvStd;
+    return o;
+  }).filter(o=>o.workers>0||o.pieces>0)
+    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.line.localeCompare(b.line));
+
+  const wk={},mo={};
+  WS.recs.forEach(r=>{const d=wDate(r.date);(wk[wWeekKey(d)]=wk[wWeekKey(d)]||[]).push(r);(mo[r.date.slice(0,7)]=mo[r.date.slice(0,7)]||[]).push(r)});
+  WS.weeks=Object.keys(wk).sort().map(k=>({key:k,label:wWeekLabel(k),recs:wk[k]}));
+  WS.months=Object.keys(mo).sort().map(k=>({key:k,recs:mo[k]}));
 }
 
 /* ---------- 彙總 aggregate ---------- */
