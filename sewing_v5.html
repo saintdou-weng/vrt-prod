@@ -169,7 +169,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.15</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.16</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -193,6 +193,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   <div class="tab" onclick="goTab('monthly',this)" data-zh="📆 月年趨勢" data-en="📆 Monthly">📆 月年趨勢</div>
   <div class="tab" onclick="goTab('target',this)" data-zh="🎯 目標&根因" data-en="🎯 Target & RCA">🎯 目標&根因</div>
   <div class="tab" onclick="goTab('eff',this)" data-zh="📈 效率報表" data-en="📈 Efficiency">📈 效率報表</div>
+  <div class="tab" onclick="goTab('smvcompare',this)" data-zh="📐 SMV情境比較" data-en="📐 SMV Scenarios">📐 SMV情境比較</div>
   <div class="tab" onclick="goTab('validate',this)" data-zh="🔍 數據比對" data-en="🔍 Validation">🔍 數據比對</div>
   <div class="tab" onclick="goTab('styles',this)" data-zh="🎯 款式追蹤" data-en="🎯 Styles">🎯 款式追蹤</div>
   <div class="tab" onclick="goTab('records',this)" data-zh="📋 所有記錄" data-en="📋 Records">📋 所有記錄</div>
@@ -335,10 +336,10 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
         <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px">VRT Daily Output（自動識別）</div>
         <div style="font-size:12px;color:#6b7a9e;line-height:1.9">
           • 工作表名含 "Daily Output"<br>
-          • Col C：Line 1、LINE 09 等線別名<br>
-          • Col F：款號 · Col P：件數<br>
-          • Summary 區自動抓人數和效率<br>
-          • Apron + Garment 同時丟，自動合併
+          • 舊版與新版欄位都自動識別，不再固定寫死欄號<br>
+          • 新版可識別重複 Line 欄、SELFKEY / PO / STYLE 位移<br>
+          • 可讀 Current / Last / Recheck / -10% / -15% / -20% SMV 比較欄<br>
+          • Summary 區自動抓人數和效率；Apron + Garment 可同時匯入
         </div>
       </div>
       <div style="background:#f7f8fc;border-radius:8px;padding:12px;border:1px solid #e2e6f0">
@@ -539,6 +540,32 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
       <button class="btn btn-g" onclick="backupData()">⬇ 備份所有資料（JSON）</button>
       <label class="btn btn-g" style="cursor:pointer">⬆ 還原資料<input type="file" accept=".json" style="display:none" onchange="restoreData(event)"></label>
     </div>
+  </div>
+</div>
+
+
+<!-- ══ SMV SCENARIO COMPARE (independent; never changes actual production) ══ -->
+<div class="sec" id="sec-smvcompare">
+  <div class="card">
+    <div class="ct">📐 SMV 情境數量比較｜SMV Scenario Quantity Comparison</div>
+    <div class="al al-i" style="line-height:1.8">
+      <b>獨立分析，不混入目前正式數據。</b> 此分頁只做 SMV 情境模擬，不會改寫每日 Actual、Efficiency、Target、週報或月報。<br>
+      新版 Daily Output 若有 <b>Current / Last / Recheck / -10% / -15% / -20%</b> 欄位，優先採報表值；缺值時 -15% / -20% 以 Current SMV 模擬並標示「模擬」。<br>
+      <span style="color:#7c3aed">等效數量公式：Actual PCS × Current SMV ÷ Scenario SMV</span>，代表相同標準分鐘下的理論件數，不代表實際已生產數量。
+    </div>
+  </div>
+  <div class="frow">
+    <label style="font-size:12px;color:#6b7a9e">日期</label>
+    <select id="scDate" onchange="renderSmvCompare()"></select>
+    <label style="font-size:12px;color:#6b7a9e">Section</label>
+    <select id="scSec" onchange="renderSmvCompare()"><option value="">全部</option></select>
+    <input id="scSearch" placeholder="款式 / Line..." oninput="renderSmvCompare()" style="min-width:180px">
+    <span id="scMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+  </div>
+  <div id="scKpi" class="kpi-strip"></div>
+  <div class="card">
+    <div class="ct">SMV 情境明細（與正式效率報表分開）</div>
+    <div id="scTable" class="tw"></div>
   </div>
 </div>
 
@@ -1332,6 +1359,7 @@ function goTab(name, el){
   if(name==="monthly"){ renderPeriod(); }
   if(name==="target"){ if(typeof initTargetTab==="function") initTargetTab(); }
   if(name==="eff")    { renderEffTable(); }
+  if(name==="smvcompare"){ initSmvCompare(); renderSmvCompare(); }
   if(name==="validate"){ renderValidate(); }
   if(name==="styles"){  renderStylesWithCut(); }
   if(name==="records"){ renderRecs(); }
@@ -1339,6 +1367,56 @@ function goTab(name, el){
   if(name==="changeover"){ initChangeover(); }
   if(name==="wreport"){ initWReport(); }
   if(name==="attcmp"){ loadAttIDBData().then(()=>{initAttCmp();renderAttCmp();}); }
+}
+
+
+// ═══════════════════════ SMV SCENARIO QUANTITY COMPARE v5.16 ════════════════
+// Separate analysis only. These values NEVER enter Daily / Weekly / Efficiency calculations.
+function _scNum(v){const n=parseFloat(v);return Number.isFinite(n)?n:0;}
+function _scNormalRows(){return (DB||[]).filter(r=>(r.tSrc||"norm")==="norm" && _scNum(r.pieces)>0 && (_scNum(r.smvCompareCurrent)>0||_scNum(r.smv)>0));}
+function initSmvCompare(){
+  const rows=_scNormalRows(), dates=[...new Set(rows.map(r=>normalizeDate(r.date)).filter(Boolean))].sort();
+  const ds=document.getElementById('scDate'), ss=document.getElementById('scSec'); if(!ds||!ss)return;
+  const old=ds.value; ds.innerHTML=dates.slice().reverse().map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(old&&dates.includes(old))ds.value=old; else if(dates.length)ds.value=dates[dates.length-1];
+  const secs=[...new Set(rows.filter(r=>!ds.value||normalizeDate(r.date)===ds.value).map(r=>r.section).filter(Boolean))].sort();
+  const oldS=ss.value; ss.innerHTML='<option value="">全部</option>'+secs.map(x=>`<option>${x}</option>`).join('');
+  if(oldS&&secs.includes(oldS))ss.value=oldS;
+}
+function _scWeighted(arr,field){let num=0,den=0;arr.forEach(r=>{const v=_scNum(r[field]),p=_scNum(r.pieces);if(v>0&&p>0){num+=v*p;den+=p;}});return den?num/den:0;}
+function _scScenarioSmv(r,pct){
+  const fld=pct===10?'smvMinus10':pct===15?'smvMinus15':'smvMinus20';
+  const reported=_scNum(r[fld]); if(reported>0)return {v:reported,src:'報表'};
+  const cur=_scNum(r.smvCompareCurrent)||_scNum(r.smv); return cur>0?{v:cur*(1-pct/100),src:'模擬'}:{v:0,src:'—'};
+}
+function renderSmvCompare(){
+  const ds=document.getElementById('scDate'),ss=document.getElementById('scSec'),q=(document.getElementById('scSearch')?.value||'').trim().toLowerCase();
+  if(!ds||!ss)return; const date=ds.value,sec=ss.value;
+  let rows=_scNormalRows().filter(r=>(!date||normalizeDate(r.date)===date)&&(!sec||r.section===sec));
+  if(q)rows=rows.filter(r=>String(r.styleNo||'').toLowerCase().includes(q)||String(r.lineNo||'').toLowerCase().includes(q)||String(r.po||'').toLowerCase().includes(q));
+  const groups=new Map();
+  rows.forEach(r=>{
+    const k=[r.lineNo||'',r.styleNo||'',r.po||''].join('|');
+    if(!groups.has(k))groups.set(k,{line:r.lineNo||'',style:r.styleNo||'',po:r.po||'',pcs:0,rows:[],eq15:0,eq20:0,rep15:0,rep20:0});
+    const g=groups.get(k),p=_scNum(r.pieces),cur=_scNum(r.smvCompareCurrent)||_scNum(r.smv),s15=_scScenarioSmv(r,15),s20=_scScenarioSmv(r,20);
+    g.pcs+=p;g.rows.push(r); if(cur>0&&s15.v>0)g.eq15+=p*cur/s15.v; if(cur>0&&s20.v>0)g.eq20+=p*cur/s20.v;
+    if(s15.src==='報表')g.rep15++; if(s20.src==='報表')g.rep20++;
+  });
+  const gs=[...groups.values()].sort((a,b)=>String(a.line).localeCompare(String(b.line),undefined,{numeric:true})||String(a.style).localeCompare(String(b.style)));
+  const total=gs.reduce((s,g)=>s+g.pcs,0),eq15=gs.reduce((s,g)=>s+g.eq15,0),eq20=gs.reduce((s,g)=>s+g.eq20,0);
+  const fmt=n=>Math.round(n).toLocaleString(); const smv=n=>n>0?n.toFixed(3):'—';
+  document.getElementById('scMeta').textContent=`${date||'—'} · ${rows.length} records · ${gs.length} style/PO groups`;
+  document.getElementById('scKpi').innerHTML=[
+    ['Actual',fmt(total),'件','#1d4ed8'],['Weighted Current SMV',smv(_scWeighted(rows,'smvCompareCurrent')||_scWeighted(rows,'smv')),'min','#7c3aed'],
+    ['-15% 等效量',fmt(eq15),'件','#d97706'],['-15% 差異',`${eq15-total>=0?'+':''}${fmt(eq15-total)}`,'件','#d97706'],
+    ['-20% 等效量',fmt(eq20),'件','#dc2626'],['-20% 差異',`${eq20-total>=0?'+':''}${fmt(eq20-total)}`,'件','#dc2626']
+  ].map(x=>`<div class="kpi"><div class="kpi-n" style="color:${x[3]}">${x[1]}<span class="kpi-u">${x[2]}</span></div><div class="kpi-l">${x[0]}</div></div>`).join('');
+  document.getElementById('scTable').innerHTML=gs.length?`<table><thead><tr><th>Line</th><th>Style</th><th>PO</th><th class="num">Actual PCS</th><th class="num">Current SMV</th><th class="num">Last SMV</th><th class="num">Recheck</th><th class="num">-15% SMV</th><th class="num">-15% Eq.Qty</th><th class="num">Δ PCS</th><th class="num">-20% SMV</th><th class="num">-20% Eq.Qty</th><th class="num">Δ PCS</th><th>來源</th></tr></thead><tbody>${gs.map(g=>{
+    const cur=_scWeighted(g.rows,'smvCompareCurrent')||_scWeighted(g.rows,'smv'),last=_scWeighted(g.rows,'smvLast'),re=_scWeighted(g.rows,'smvRecheck');
+    let m15=0,m20=0,n15=0,n20=0;g.rows.forEach(r=>{const p=_scNum(r.pieces),a=_scScenarioSmv(r,15),b=_scScenarioSmv(r,20);if(a.v>0){m15+=a.v*p;n15+=p}if(b.v>0){m20+=b.v*p;n20+=p}});m15=n15?m15/n15:0;m20=n20?m20/n20:0;
+    const src=(g.rep15||g.rep20)?((g.rep15===g.rows.length&&g.rep20===g.rows.length)?'報表值':'報表＋模擬'):'Current SMV 模擬';
+    return `<tr><td><b>${g.line}</b></td><td>${g.style||'—'}</td><td>${g.po||'—'}</td><td class="num" style="color:#1d4ed8;font-weight:700">${fmt(g.pcs)}</td><td class="num">${smv(cur)}</td><td class="num">${smv(last)}</td><td class="num">${smv(re)}</td><td class="num">${smv(m15)}</td><td class="num" style="color:#d97706;font-weight:700">${fmt(g.eq15)}</td><td class="num">+${fmt(Math.max(0,g.eq15-g.pcs))}</td><td class="num">${smv(m20)}</td><td class="num" style="color:#dc2626;font-weight:700">${fmt(g.eq20)}</td><td class="num">+${fmt(Math.max(0,g.eq20-g.pcs))}</td><td>${src}</td></tr>`;
+  }).join('')}</tbody></table>`:`<div class="empty">此日期沒有可比較的 SMV 資料。舊格式仍可正常更新；新版含 SMV Compare 欄位時會自動出現在此。</div>`;
 }
 
 
@@ -1506,61 +1584,123 @@ function parseVRT(wb, fname){
     });
   }
 
-  // ── BODY SCAN: col[2]=LineName, col[5]=Style, col[6]=SMV, col[10-13]=Normal, col[14]=OT, col[15]=TotalPcs, col[16]=TotalCtn ──
-  const lm = {}; // lineNo → {pcs, ctn, normalPcs, otPcs, smvLoad, styles:{}}
+  // ── BODY SCAN v5.16: header-driven; supports both legacy and Aug-2026 SMV-Compare layout ──
+  // Legacy: C Line / D SelfKey / E PO / F Style / G SMV / ... / P Total / Q Ctn
+  // New:    C+D Line / E SelfKey / F PO / G Style / H SMV / ... / Q Total / R Ctn
+  // Never hard-code the shifted columns again.
+  const hdrRows=Math.min(10,rows.length);
+  let mainHdr=-1;
+  for(let i=0;i<hdrRows;i++){
+    const rr=rows[i]||[];
+    const txt=rr.map(x=>String(x==null?"":x).trim().toLowerCase()).join('|');
+    if(/current\s*smv/.test(txt) && /style/.test(txt) && /(line#|lines|line\b)/.test(txt)){mainHdr=i;break;}
+  }
+  if(mainHdr<0) mainHdr=3; // backward-compatible fallback
+  const h0=(rows[mainHdr]||[]).map(x=>String(x==null?"":x).trim());
+  const h1=(rows[mainHdr+1]||[]).map(x=>String(x==null?"":x).trim());
+  const lower=a=>String(a||'').trim().toLowerCase();
+  const commentCol=h0.findIndex(x=>/comment|remark|備註/i.test(String(x||'')));
+  const mainLimit=commentCol>0?commentCol:Math.min(22,Math.max(h0.length,h1.length));
+  const findMain=(re,fb)=>{for(let ci=0;ci<mainLimit;ci++){if(re.test(lower(h0[ci])))return ci;}return fb;};
+  const dc={
+    line:findMain(/^(line#?|lines?)$/,2),
+    selfKey:findMain(/self\s*key|selfkey|erp\s*self/,3),
+    po:findMain(/^po#?$|customer\s*p\.o/,4),
+    style:findMain(/^style#?$|^style$/,5),
+    smv:findMain(/^current\s*smv$/,6),
+    color:findMain(/^color$/,7),
+    size:findMain(/^size$/,8),
+    ot:-1, pcs:-1, ctn:-1, slots:[]
+  };
+  // Row under "Times" contains the 4 normal slots, OT, Total by Style, Total Ctn.
+  for(let ci=0;ci<mainLimit;ci++){
+    const a=lower(h1[ci]), b=lower(h0[ci]);
+    if(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/.test(a)) dc.slots.push(ci);
+    if(/overtime/.test(a)||/^ot$/.test(a)) dc.ot=ci;
+    if(/total\s*by\s*style|total\s*pcs|total\s*output/.test(a)) dc.pcs=ci;
+    if(/total\s*ctn|total\s*carton/.test(a)) dc.ctn=ci;
+  }
+  if(dc.slots.length<4) dc.slots=[10,11,12,13];
+  if(dc.ot<0) dc.ot=14;
+  if(dc.pcs<0) dc.pcs=15;
+  if(dc.ctn<0) dc.ctn=16;
+
+  // Detect the independent SMV comparison block. Location differs between Garment and Apron.
+  let cmpStyle=-1;
+  for(let ci=0;ci<Math.max(h0.length,h1.length);ci++){
+    const z=(lower(h0[ci])+' '+lower(h1[ci])).replace(/\s+/g,' ');
+    if(/style\s*\/\s*(acticle|article)/.test(z)){cmpStyle=ci;break;}
+  }
+  const cmp={present:false,cur:-1,last:-1,recheck:-1,m10:-1,m15:-1,m20:-1};
+  if(cmpStyle>=0){
+    const stop=Math.min(Math.max(h0.length,h1.length),cmpStyle+12);
+    for(let ci=cmpStyle+1;ci<stop;ci++){
+      const z=(lower(h0[ci])+' '+lower(h1[ci])).replace(/\s+/g,' ');
+      if(cmp.cur<0 && (/current\s*smv/.test(z)||/smv\s*\(cut\s*35%\)/.test(z))) cmp.cur=ci;
+      if(cmp.last<0 && /last\s*smv/.test(z)) cmp.last=ci;
+      if(cmp.recheck<0 && /recheck/.test(z)) cmp.recheck=ci;
+      if(cmp.m10<0 && /-\s*10%|\(-10%\)/.test(z)) cmp.m10=ci;
+      if(cmp.m15<0 && /-\s*15%|\(-15%\)/.test(z)) cmp.m15=ci;
+      if(cmp.m20<0 && /-\s*20%|\(-20%\)/.test(z)) cmp.m20=ci;
+    }
+    cmp.present=cmp.cur>=0||cmp.last>=0||cmp.recheck>=0||cmp.m15>=0||cmp.m20>=0;
+  }
+  const nv=(r,i)=>{if(i<0)return 0;const n=parseFloat(r[i]);return Number.isFinite(n)?n:0;};
+
+  const lm = {}; // lineNo → {pcs, ctn, normalPcs, otPcs, smvLoad, styles:{}, details:{}}
   let cur = null;
   let summaryStartRow = rows.length;
-  for(let i=4; i<rows.length; i++){
+  for(let i=mainHdr+2; i<rows.length; i++){
     const r = rows[i]||[];
-    const r10 = r.slice(0,12).map(c=>String(c||"").toLowerCase()).join(" ");
+    const r10 = r.slice(0,Math.min(20,r.length)).map(c=>String(c||"").toLowerCase()).join(" ");
     if(r10.includes("summary shift")||r10.includes("total:")){
       summaryStartRow = i;
       break;
     }
 
-    const c2 = String(r[2]||"").trim();
-    if(c2 && LRE.test(c2)){
-      cur = c2;
+    const lineCell=String(r[dc.line]||"").trim();
+    if(lineCell && LRE.test(lineCell)){
+      cur = normLineNo(lineCell);
       if(!lm[cur]) lm[cur]={pcs:0,ctn:0,normalPcs:0,otPcs:0,smvLoad:0,styles:{},details:{}};
     }
     if(!cur) continue;
-    const selfKey = String(r[3]||"").trim();
-    const po      = String(r[4]||"").trim();
-    const st      = String(r[5]||"").trim();
-    const rowSmv  = parseFloat(r[6])||0; // Current SMV per row
-    const color   = String(r[7]||"").trim();
-    const size    = String(r[8]||"").trim();
-    // Time slots: cols 10-13 = normal shift, col 14 = overtime
-    const slot1   = parseFloat(r[10])||0;
-    const slot2   = parseFloat(r[11])||0;
-    const slot3   = parseFloat(r[12])||0;
-    const slot4   = parseFloat(r[13])||0;
-    const otSlot  = parseFloat(r[14])||0;
-    const normalRow = slot1+slot2+slot3+slot4;
-    const pcs     = parseFloat(r[15]);
-    const ctn     = parseFloat(r[16]);
-    if(st && !isNaN(pcs) && pcs>0){
+    const selfKey = String(r[dc.selfKey]??"").trim();
+    const po      = String(r[dc.po]??"").trim();
+    const st      = String(r[dc.style]??"").trim();
+    const rowSmv  = nv(r,dc.smv);
+    const color   = String(r[dc.color]??"").trim();
+    const size    = String(r[dc.size]??"").trim();
+    const normalRow = dc.slots.slice(0,4).reduce((z,ci)=>z+nv(r,ci),0);
+    const otSlot  = nv(r,dc.ot);
+    const pcs     = nv(r,dc.pcs);
+    const ctn     = nv(r,dc.ctn);
+    if(st && pcs>0){
       lm[cur].pcs+=pcs;
       lm[cur].normalPcs+=normalRow;
       lm[cur].otPcs+=otSlot;
       if(rowSmv>0) lm[cur].smvLoad+=(pcs*rowSmv);
       const detailKey=`${st}|${color}|${size}`;
-      if(!lm[cur].details[detailKey]) lm[cur].details[detailKey]={styleNo:st,selfKey,po,color,size,pcs:0,ctn:0,smv:rowSmv,normalPcs:0,otPcs:0};
-      lm[cur].details[detailKey].pcs+=pcs;
-      lm[cur].details[detailKey].normalPcs+=normalRow;
-      lm[cur].details[detailKey].otPcs+=otSlot;
-      if(rowSmv>0 && !lm[cur].details[detailKey].smv) lm[cur].details[detailKey].smv=rowSmv;
+      if(!lm[cur].details[detailKey]) lm[cur].details[detailKey]={styleNo:st,selfKey,po,color,size,pcs:0,ctn:0,smv:rowSmv,normalPcs:0,otPcs:0,
+        smvCompareCurrent:0,smvLast:0,smvRecheck:0,smvMinus10:0,smvMinus15:0,smvMinus20:0,smvCompareSource:""};
+      const dd=lm[cur].details[detailKey];
+      dd.pcs+=pcs; dd.normalPcs+=normalRow; dd.otPcs+=otSlot;
+      if(rowSmv>0&&!dd.smv) dd.smv=rowSmv;
+      if(cmp.present){
+        const cc=nv(r,cmp.cur),cl=nv(r,cmp.last),cr=nv(r,cmp.recheck),c10=nv(r,cmp.m10),c15=nv(r,cmp.m15),c20=nv(r,cmp.m20);
+        if(cc>0)dd.smvCompareCurrent=cc;
+        if(cl>0)dd.smvLast=cl;
+        if(cr>0)dd.smvRecheck=cr;
+        if(c10>0)dd.smvMinus10=c10;
+        if(c15>0)dd.smvMinus15=c15;
+        if(c20>0)dd.smvMinus20=c20;
+        dd.smvCompareSource="report";
+      }
     }
-    if(!isNaN(ctn)&&ctn>0){
+    if(ctn>0){
       if(st){
         const dkc=`${st}|${color}|${size}`;
-        if(lm[cur].details[dkc]&&lm[cur].details[dkc].ctn===0){
-          lm[cur].details[dkc].ctn+=ctn;
-          lm[cur].ctn+=ctn;
-        }
-      } else if(Number.isInteger(ctn)){
-        lm[cur].ctn+=ctn;
-      }
+        if(lm[cur].details[dkc]&&lm[cur].details[dkc].ctn===0){lm[cur].details[dkc].ctn+=ctn;lm[cur].ctn+=ctn;}
+      }else if(Number.isInteger(ctn)) lm[cur].ctn+=ctn;
     }
   }
   Object.keys(lm).forEach(k=>{ if(lm[k].pcs===0) delete lm[k]; });
@@ -1807,7 +1947,11 @@ function parseVRT(wb, fname){
           pieces:Math.round(d.pcs),
           workers:idx===0?w:0, efficiency:e,
           cartons:Math.round(dCtn*10)/10,
-          smv:d.smv||0, normalPcs:Math.round(d.normalPcs), otPcs:Math.round(d.otPcs),
+          smv:d.smv||0,
+          smvCompareCurrent:d.smvCompareCurrent||0, smvLast:d.smvLast||0, smvRecheck:d.smvRecheck||0,
+          smvMinus10:d.smvMinus10||0, smvMinus15:d.smvMinus15||0, smvMinus20:d.smvMinus20||0,
+          smvCompareSource:d.smvCompareSource||"",
+          normalPcs:Math.round(d.normalPcs), otPcs:Math.round(d.otPcs),
           workersOT:idx===0?wot:0, hoursOT:idx===0?hot:0});
       });
     } else {
@@ -1819,6 +1963,7 @@ function parseVRT(wb, fname){
     }
   });
   return {recs, summary:{date,section,lines:Object.keys(lm).length,totalPcs:Math.round(Object.values(lm).reduce((s,d)=>s+d.pcs,0)),lineNames:Object.keys(lm),
+    smvCompareRows:recs.filter(r=>r.smvCompareSource==="report").length, smvSchema:cmp.present?"SMV Compare":"Legacy",
     debug:{sheet:sheetName, summaryRow:summaryStartRow, totalRows:rows.length,
            workersMap: Object.fromEntries(Object.entries(workers).map(([k,v])=>[k,v])),
            workersFound:Object.keys(workers).length, effFound:Object.keys(eff).length}}};
@@ -2154,7 +2299,7 @@ async function doImport(){
           <span style="font-size:13px;font-weight:600;color:#1e2640">📄 ${p.fname}</span>
           <span style="font-size:12px;color:#059669">✓ ${p.lines}條線，${p.totalPcs.toLocaleString()}件</span>
         </div>
-        <div style="font-size:12px;color:#6b7a9e;margin-top:4px">日期：<b>${p.date}</b>　Section：<b>${p.section}</b></div>
+        <div style="font-size:12px;color:#6b7a9e;margin-top:4px">日期：<b>${p.date}</b>　Section：<b>${p.section}</b>${p.smvCompareRows?`　<span style="color:#7c3aed;font-weight:700">📐 SMV比較 ${p.smvCompareRows}筆</span>`:""}</div>
         ${p.debug?'<div style="font-size:10px;color:#9ca3af;margin-top:3px;font-family:monospace">📋 Sheet:"'+p.debug.sheet+'" Summary行:'+p.debug.summaryRow+'/'+p.debug.totalRows+' 人數:'+p.debug.workersFound+'條['+Object.entries(p.debug.workersMap||{}).map(([k,v])=>k+':'+v).join(',')+'] 效率:'+p.debug.effFound+'條</div>':""}
         <div class="preview-lines">${p.lineNames.map(ln=>`<span class="preview-line">${ln}</span>`).join("")}</div>
       </div>`;
@@ -2174,12 +2319,10 @@ async function confirmImport(){
   // Remove ALL old records for any date covered by this import, then add new
   // ★ v5.1: target 記錄（tSrc='target'）與一般日報記錄分開覆蓋，匯入目標報表不會刪除既有日報，反之亦然
   // ★ 三種來源各自獨立覆蓋：一般日報(norm)／VRT 目標報表(target)／Daily Output 報表(dpo)
-  const importDates=new Set(pendingRecs.map(r=>r.date));
-  const importBuckets=new Set(pendingRecs.map(r=>r.tSrc||"norm"));
-  DB=DB.filter(r=>{
-    if(!importDates.has(r.date)) return true;
-    return !importBuckets.has(r.tSrc||"norm");
-  });
+  // v5.16: replace only the same Date + Section + Source bucket.
+  // Importing Garment alone must NOT delete Apron of the same day (and vice versa).
+  const importScopes=new Set(pendingRecs.map(r=>[normalizeDate(r.date),r.section||"",r.tSrc||"norm"].join("|")));
+  DB=DB.filter(r=>!importScopes.has([normalizeDate(r.date),r.section||"",r.tSrc||"norm"].join("|")));
   // Dedup within the new batch itself (date|lineNo|styleNo)
   const map=new Map();
   pendingRecs.forEach(r=>map.set([normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||"",r.tSrc||""].join("|"),r));
