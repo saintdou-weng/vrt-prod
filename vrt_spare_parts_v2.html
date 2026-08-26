@@ -230,7 +230,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.2 Auto Sync</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.2.1 Auto Sync</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -506,6 +506,7 @@ async function saveAll(showToast){
     localStorage.setItem('vrt_sp_set',JSON.stringify(SET));
     if(showToast)toast(t('saved'));
     updateHeaderStats();
+    if(showToast!==false&&window.VRTProdAutoSync){try{VRTProdAutoSync.markDirty('spareparts','local-save',{},900)}catch(_){}}
   }catch(e){console.error(e);toast('Save error');}
 }
 async function loadAll(){
@@ -1160,6 +1161,35 @@ function restoreLocal(file){if(!file)return;const rd=new FileReader();
     saveAll(true);applyTheme();goTab('dashboard',null);}catch(err){toast('Restore error');}};
   rd.readAsText(file);}
 
+/* ===== 採購資料共用函式 v3.2.1 HOTFIX =====
+   只把採購/進貨視為 Purchase；OUT/領料不參與雲端採購摘要。
+   Auto Sync 整合時這組函式曾遺漏，會造成 latestPurchaseMonth is not defined。 */
+function purchaseTxns(){
+  return (TXNS||[]).filter(x=>{
+    const t=String(x&&x.type||'PURCHASE').trim().toUpperCase();
+    return t!=='OUT'&&t!=='ISSUE'&&t!=='CONSUME';
+  });
+}
+function purchaseAmount(x){
+  const a=Number(x&&x.amount);
+  return Number.isFinite(a)&&a!==0?a:(Number(x&&x.qty)||0)*(Number(x&&x.unitPrice)||0);
+}
+function latestPurchaseDate(){
+  return purchaseTxns().map(x=>String(x&&x.date||'').slice(0,10)).filter(d=>/^20\d{2}-\d{2}-\d{2}$/.test(d)).sort().pop()||todayStr();
+}
+function latestPurchaseMonth(){return latestPurchaseDate().slice(0,7);}
+function latestPurchaseYear(){return latestPurchaseDate().slice(0,4);}
+function monthPurchases(m){return purchaseTxns().filter(x=>ym(x.date)===m);}
+function purchaseStats(xs){
+  xs=Array.isArray(xs)?xs:[];
+  const spend=xs.reduce((sum,x)=>sum+purchaseAmount(x),0);
+  const qty=xs.reduce((sum,x)=>sum+(Number(x&&x.qty)||0),0);
+  const parts=new Set(xs.map(x=>x&&x.partNo).filter(Boolean));
+  const inv=new Set(xs.map(x=>x&&(x.invoiceNo||x.invoice)).filter(Boolean));
+  const needle=xs.filter(x=>String(x&&x.category||'').toLowerCase()==='needle'||String(x&&x.partNo||'').toUpperCase().startsWith('ND-')).reduce((sum,x)=>sum+purchaseAmount(x),0);
+  return {spend,qty,parts:parts.size,invoices:inv.size,lines:xs.length,needle};
+}
+
 /* ===== 雲端（GAS text/plain；其他標記需設定） ===== */
 function updateCloudDot(){
   const dot=$('cloudDot'); if(!dot)return;
@@ -1179,7 +1209,8 @@ async function cloudUpload(silent){
   }catch(e){console.error(e);if(window.VRTSmartSync)VRTSmartSync.status('push','失敗 · '+(e.message||e),'err');if(!silent)toast('Upload failed — '+e.message);return false}
 }
 async function cloudDownload(silent){
-  if(!SET.gasUrl){if(!silent)toast('請先設定 GAS URL');return false}
+  if(!SET.gasUrl)SET.gasUrl=(localStorage.getItem('vrt_portal_gas_url')||localStorage.getItem('vrt_prod_gas_url')||'').trim();
+  if(!SET.gasUrl){if(!silent)toast('請先設定 GAS URL');if(window.VRTSmartSync)VRTSmartSync.status('pull','GAS URL 未設定','warn');return false}
   try{
     updateCloudDot();
     const res=await VRTSmartSync.pull({url:SET.gasUrl,tool:'spareparts',localRecords:TXNS||[],meta:spareCloudMeta(),onStatus:m=>{if(!silent)toast('☁️ '+m)},apply:async(txns,meta)=>{
