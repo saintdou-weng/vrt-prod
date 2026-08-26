@@ -192,7 +192,8 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body>
 
@@ -1732,7 +1733,7 @@ function restoreData(e){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);vcLog('智慧拉取：比對差異...','i');
     try{
       const local=(typeof DB!=='undefined'&&DB.length)?DB:JSON.parse(localStorage.getItem('cutting_plan_v1')||'[]');
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cuttingplan',localRecords:local,onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{if(typeof FAB_RECV!=='undefined'&&meta&&meta.fabRecv)FAB_RECV=meta.fabRecv;if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs);else try{localStorage.setItem('cutting_plan_v1',JSON.stringify(recs))}catch(_){}}});
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cuttingplan',localRecords:local,meta:{fabRecv:(typeof FAB_RECV!=='undefined'?FAB_RECV:{})},onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{if(typeof FAB_RECV!=='undefined'&&meta&&meta.fabRecv)FAB_RECV=meta.fabRecv;if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs);else try{localStorage.setItem('cutting_plan_v1',JSON.stringify(recs))}catch(_){}}});
       if(!res.ok){vcLog('雲端尚無裁剪計劃資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');vcShowStatus();
     }catch(e){vcLog('✗ 拉取失敗：'+e.message,'err');}finally{vcSetBusy(false);}
   };
@@ -1764,8 +1765,8 @@ loadDB().then(()=>{
   if(typeof vcInit==='function') try{ vcInit(); }catch(e){}
   vcLoadFromCloudIDB().then(()=>{ updateHeader(); renderDBCard(); renderGlobalKpi();
     const cur=document.querySelector('.sec.on'); if(cur) refreshSec(cur.id.replace('sec-','')); });
-  vcAutoSync().then(()=>{ updateHeader(); renderDBCard(); renderGlobalKpi();
-    const cur=document.querySelector('.sec.on'); if(cur) refreshSec(cur.id.replace('sec-','')); });
+  // v3.4: shared HRA-style auto reconcile handles cloud startup; legacy vcAutoSync is intentionally not called.
+  const cur2=document.querySelector('.sec.on'); if(cur2) refreshSec(cur2.id.replace('sec-',''));
 }).catch(e=>{ console.error('[VRT Cut] init failed',e); });
 </script>
 
@@ -2082,6 +2083,12 @@ function pvaExport(){
   }catch(e){alert('匯出失敗：'+e.message);}}
 window.pvaExport=pvaExport;
 
+</script>
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'cuttingplan',lockKey:'cuttingplan',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto cuttingplan]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

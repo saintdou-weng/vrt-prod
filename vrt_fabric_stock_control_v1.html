@@ -96,7 +96,8 @@ table.old-list col:nth-child(1){width:17%}table.old-list col:nth-child(2){width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head><body>
 <div class="header">
   <div class="logo">🧶</div><div><div class="h-title" data-i="title">布料／輔料庫存管理</div><div class="h-sub">FABRIC + ACCESSORY STOCK · OLD STOCK USAGE + CURRENT INVENTORY · v1.5</div></div>
@@ -380,4 +381,10 @@ async function cloudPull(silent){let url=gasUrl.value.trim();if(!url){if(!silent
 function accessoryCategories(rows){let m={};rows.forEach(r=>{let c=norm(r.category)||accessoryCategory(r),u=norm(r.unit)||'PCS';if(!m[c])m[c]={rows:0,units:new Set(),byUnit:{},outboundByUnit:{},balance:0};m[c].rows++;m[c].units.add(u);m[c].byUnit[u]=(m[c].byUnit[u]||0)+num(r.balance);m[c].outboundByUnit[u]=(m[c].outboundByUnit[u]||0)+num(r.outbound);m[c].balance=Math.max(...Object.values(m[c].byUnit).map(v=>Math.abs(v)))});return m}
 function accCategoryCard(c,x){let balances=Object.entries(x.byUnit).sort((a,b)=>b[1]-a[1]).map(([u,v])=>`${N(v)} ${u}`),outs=Object.entries(x.outboundByUnit).filter(([,v])=>Math.abs(v)>1e-9).map(([u,v])=>`Out ${N(v)} ${u}`);return `<div class="stockcard" onclick="accCategoryJump(${JSON.stringify(c)})"><div class="sc-head"><div><div class="sc-title">${esc(c)}</div><div class="sc-sub">${N(x.rows)} rows · ${[...x.units].join(', ')}</div></div><div class="sc-qty" style="font-size:13px;white-space:normal;text-align:right">${esc(balances.join(' · ')||'--')}</div></div><div class="tags">${outs.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div></div>`}
 window.addEventListener('load',async()=>{await load();setLang(LANG);renderDash();const st=await fabricStorageInfo();const m=document.getElementById('msg');if(m&&!m.textContent)m.textContent='✓ '+st+' · large stock data no longer uses localStorage';});
-</script></body></html>
+</script>
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricstock',lockKey:'fabricstock',pull:async function(){return await (window.cloudPull&&window.cloudPull(true));},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!(localStorage.getItem('vrt_prod_gas_url')||localStorage.getItem('vrt_portal_gas_url'));},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricstock]',e)}},0)},{once:true});
+</script>
+</body></html>

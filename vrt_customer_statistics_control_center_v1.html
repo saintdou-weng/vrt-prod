@@ -83,7 +83,8 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head><body>
 <div class="header"><div class="logo">📊</div><div><div class="htitle">VRT Customer Statistics Control Center</div><div class="hsub">客戶訂單 · 完成 · 未作 · WIP · FG · Fabric · v3.1 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hOrder">0</b><span>總訂單 pcs</span></div><div class="hstat"><b id="hBal">0</b><span>未完成 pcs</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
 <div class="tabs"><div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="trend" onclick="goTab('trend')">📆 月年趨勢</div><div class="tab" data-tab="customer" onclick="goTab('customer')">👤 客戶分析</div><div class="tab" data-tab="product" onclick="goTab('product')">🏷 產品分析</div><div class="tab" data-tab="detail" onclick="goTab('detail')">📋 PO / 款式</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div></div>
@@ -129,8 +130,14 @@ async function cloudPush(silent=false){
 }
 async function cloudPull(){
   let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
-  try{const res=await VRTSmartSync.pull({url,tool:TOOL,localRecords:DATA.details||[],onStatus:m=>cloudState('☁↓ '+m),apply:async(rows,meta)=>{const base=(meta&&meta.summaryData)||{...DATA,details:[]};DATA={...base,details:rows,source:'Cloud',savedAt:new Date().toISOString()};await save();renderAll();}});if(!res.ok){cloudState('☁↓ No cloud data',false);toast('No cloud data');return}cloudState(`☁↓ 已同步 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}`);toast(`智慧下載完成 · ${(DATA.details||[]).length} rows`)}catch(e){cloudState('☁↓ Download failed',false);toast('Download failed: '+e.message)}
+  try{const o=DATA.overall||{},compact={...DATA,details:[]},localMeta={summaryData:compact,summary:{orderQty:o.orderQty||0,completedQty:o.completedQty||0,balanceQty:o.balanceQty||0,cuttingWip:o.cuttingWip||0,fgPcs:o.fgPcs||0,noFabric:o.noFabric||0,snapshotDate:DATA.snapshotDate||''}};const res=await VRTSmartSync.pull({url,tool:TOOL,localRecords:DATA.details||[],meta:localMeta,onStatus:m=>cloudState('☁↓ '+m),apply:async(rows,meta)=>{const base=(meta&&meta.summaryData)||{...DATA,details:[]};DATA={...base,details:rows,source:'Cloud',savedAt:new Date().toISOString()};await save();renderAll();}});if(!res.ok){cloudState('☁↓ No cloud data',false);toast('No cloud data');return}cloudState(`☁↓ 已同步 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}`);toast(`智慧下載完成 · ${(DATA.details||[]).length} rows`)}catch(e){cloudState('☁↓ Download failed',false);toast('Download failed: '+e.message)}
 }
 function openModal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.add('on')}function closeModal(){$('modal').classList.remove('on')}
 $('fileInput').addEventListener('change',e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value=''});(async()=>{await load();refresh();renderDashboard()})();
-</script></body></html>
+</script>
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'custstats',lockKey:'custstats',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush(true));},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto custstats]',e)}},0)},{once:true});
+</script>
+</body></html>

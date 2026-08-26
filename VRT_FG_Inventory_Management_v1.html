@@ -238,7 +238,8 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body>
 
@@ -2563,6 +2564,12 @@ window.tgSendDaily=async function(){
   if(window._vcInit) window._vcInit();
   console.log(`[VRT FG] init | FG:${FG.length} | CUT:${CUT.length} | SEW:${SEW.length} | TODAY:${TODAY}`);
 })();
+</script>
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fg',lockKey:'fg',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto fg]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

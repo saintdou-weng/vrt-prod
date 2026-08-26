@@ -341,7 +341,8 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body>
 
@@ -2041,7 +2042,7 @@ async function cloudPush(){ const url=DB.settings.cloudProxy; if(!url){ toast('�
   }catch(e){setCloudTag('local');toast('上傳失敗：'+e.message,'bad');} }
 async function cloudPull(){ const url=DB.settings.cloudProxy; if(!url){ toast('請先設定 Cloud URL','warn'); go('settings'); return; }
   toast('智慧下載：只抓有變更的款式區塊…',''); try{
-    const res=await VRTSmartSync.pull({url,tool:'bom',localRecords:DB.styles,onStatus:m=>toast(m,''),apply:async(styles,meta)=>{snapshot();DB.styles=styles.map(s=>coerceStyle(Object.assign({},s,{allowEmpty:true}))||s);if(meta&&Array.isArray(meta.customers))meta.customers.forEach(c=>{if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c))});DB.meta.lastSync=nowISO();markDirty();persist();setCloudTag('synced');render();}});
+    const res=await VRTSmartSync.pull({url,tool:'bom',localRecords:DB.styles,meta:{customers:DB.customers,rev:DB.meta.rev||0},onStatus:m=>toast(m,''),apply:async(styles,meta)=>{snapshot();DB.styles=styles.map(s=>coerceStyle(Object.assign({},s,{allowEmpty:true}))||s);if(meta&&Array.isArray(meta.customers))meta.customers.forEach(c=>{if(!custByCode(c.code))DB.customers.push(Object.assign({id:uid('cu')},c))});DB.meta.lastSync=nowISO();markDirty();persist();setCloudTag('synced');render();}});
     if(!res.ok){toast('雲端尚無 BOM','warn');return;}logAct('雲端智慧下載',`${res.downloaded||0} 筆變更`);toast(`智慧下載完成 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'good');
   }catch(e){toast('下載失敗：'+e.message,'bad');} }
 
@@ -2244,5 +2245,11 @@ document.addEventListener('DOMContentLoaded',init);
 if(document.readyState!=='loading')init();
 </script>
 
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'bom',lockKey:'bom',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!((window.DB&&DB.settings&&DB.settings.cloudProxy)||localStorage.getItem('vrt_portal_gas_url'));},startDelay:1200});}catch(e){console.warn('[VRT Auto bom]',e)}},0)},{once:true});
+</script>
 </body>
 </html>

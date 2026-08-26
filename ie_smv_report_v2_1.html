@@ -85,7 +85,8 @@
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body>
   <input id="fileInput" type="file" class="hidden" accept=".xls,.xlsx,.csv,.json" multiple>
@@ -538,7 +539,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     function saveSettings(){var gas=String((document.getElementById("bridgeGas")||{}).value||"").trim(),chat=String((document.getElementById("bridgeChat")||{}).value||"").trim();if(gas)localStorage.setItem(GAS_KEY,gas);localStorage.setItem(CHAT_KEY,chat)}
     async function postGas(payload){var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();var r=await fetch(gas,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),redirect:"follow"});var text=await r.text(),data=null;try{data=JSON.parse(text)}catch(_){data={ok:r.ok,text:text}}if(!r.ok||data.ok===false)throw new Error(data.error||("HTTP "+r.status));return data}
     async function cloudPush(){await api().ready;var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();var state=api().getState(),snaps=[];try{snaps=await readSmv()}catch(_){snaps=[]}setStatus("Smart upload…","warn");var res=await VRTSmartSync.push({url:gas,tool:"smv",records:snaps,meta:{ieSmvState:state,summary:{snapshotCount:snaps.length,updates:(state.updates||[]).length,styles:(state.styles||[]).length,pending:(state.updates||[]).filter(function(x){return x.approval!=="approved"}).length}},onStatus:function(m){setStatus(m,"warn")}});if(res&&res.needsPull){setStatus("Cloud has newer SMV / IE data. Pull first.","warn");return res}setStatus("✓ Smart cloud: sent "+(res.uploaded||0)+" / unchanged "+(res.unchanged||0)+" · IE "+(state.updates||[]).length,"good");notifyStats();return res}
-    async function cloudPull(){await api().ready;var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();setStatus("Smart download…","warn");var before=api().getState(),localOfficial=await readSmv();var res=await VRTSmartSync.pull({url:gas,tool:"smv",localRecords:localOfficial,onStatus:function(m){setStatus(m,"warn")},apply:async function(snaps,meta){var remote=meta&&(meta.ieSmvState||meta.state),merged=remote?mergeState(before,remote):before;await api().setState(merged);await replaceSmv(mergeFormalSnapshots(localOfficial,snaps));postParent({type:"VRT_SMV_REFRESH"})}});if(!res.ok)throw new Error(w("noCloud"));setStatus("✓ Smart merge: downloaded "+(res.downloaded||0)+" / unchanged "+(res.unchanged||0)+(res.pendingUpload?" / pending upload "+res.pendingUpload:""),"good");notifyStats()}
+    async function cloudPull(){await api().ready;var gas=gasUrl();if(!gas)throw new Error(w("needGas"));saveSettings();setStatus("Smart download…","warn");var before=api().getState(),localOfficial=await readSmv();var res=await VRTSmartSync.pull({url:gas,tool:"smv",localRecords:localOfficial,meta:{ieSmvState:before,summary:{snapshotCount:localOfficial.length,updates:(before.updates||[]).length,styles:(before.styles||[]).length}},onStatus:function(m){setStatus(m,"warn")},apply:async function(snaps,meta){var remote=meta&&(meta.ieSmvState||meta.state),merged=remote?mergeState(before,remote):before;await api().setState(merged);await replaceSmv(mergeFormalSnapshots(localOfficial,snaps));postParent({type:"VRT_SMV_REFRESH"})}});if(!res.ok)throw new Error(w("noCloud"));setStatus("✓ Smart merge: downloaded "+(res.downloaded||0)+" / unchanged "+(res.unchanged||0)+(res.pendingUpload?" / pending upload "+res.pendingUpload:""),"good");notifyStats()}
 
     function openSmvDb(){return new Promise(function(resolve,reject){var req=indexedDB.open(SMV_DB);req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains(SMV_STORE)){var st=db.createObjectStore(SMV_STORE,{keyPath:"id",autoIncrement:true});st.createIndex("by_date","reportDate")}};req.onsuccess=function(){resolve(req.result)};req.onerror=function(){reject(req.error)}})}
     async function readSmv(){var db=await openSmvDb();var rows=await new Promise(function(resolve,reject){var q=db.transaction(SMV_STORE,"readonly").objectStore(SMV_STORE).getAll();q.onsuccess=function(){resolve(q.result||[])};q.onerror=function(){reject(q.error)}});db.close();return rows}
@@ -577,5 +578,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     start().catch(function(e){setStatus("✗ "+e.message,"bad")});
   })();
   </script>
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'ie_smv',lockKey:'smv',pull:async function(){return await (window.VRT_IE_SMV_BRIDGE&&window.VRT_IE_SMV_BRIDGE.cloudPull&&window.VRT_IE_SMV_BRIDGE.cloudPull());},push:async function(){return await (window.VRT_IE_SMV_BRIDGE&&window.VRT_IE_SMV_BRIDGE.cloudPush&&window.VRT_IE_SMV_BRIDGE.cloudPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto ie_smv]',e)}},0)},{once:true});
+</script>
 </body>
 </html>

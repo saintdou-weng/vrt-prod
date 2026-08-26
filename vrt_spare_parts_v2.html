@@ -219,7 +219,8 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -229,7 +230,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.1</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.2 Auto Sync</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -991,7 +992,8 @@ function printReport(){
     <h2>${escapeHtml(SET.company)} — Machine Spare Parts Inventory</h2><p>${todayStr()}</p>
     <table><thead><tr>${Object.keys(rows[0]||{}).map(k=>`<th>${k}</th>`).join('')}</tr></thead>
     <tbody>${rows.map(r=>`<tr>${Object.values(r).map(v=>`<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>
-    </body></html>`);
+    
+</body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
 }
 function restoreVersion(id){const v=VERSIONS.find(x=>x.id===id);if(!v)return;if(!confirm('Restore '+v.label+'?'))return;
@@ -1164,27 +1166,29 @@ function updateCloudDot(){
   if(SET.gasUrl)dot.innerHTML='🟢 <span>'+t('cloudConn')+'</span>';
   else dot.innerHTML='⚪ <span>'+t('cloudOff')+'</span>';
 }
-async function cloudUpload(){
-  if(!SET.gasUrl){toast(_lang==='en'?'Set GAS URL first':'請先設定 GAS URL');if(window.VRTSmartSync)VRTSmartSync.status('push','GAS URL 未設定','warn');return}
-  const records=TXNS||[],meta={dataMeta:{parts:PARTS,versions:VERSIONS,suppliers:SUPPLIERS,invoices:INVOICES},summary:{latestMonth:latestPurchaseMonth(),latestMonthSpend:purchaseStats(monthPurchases(latestPurchaseMonth())).spend,year:latestPurchaseYear(),yearSpend:purchaseStats(purchaseTxns().filter(x=>String(x.date||'').startsWith(latestPurchaseYear()))).spend,parts:PARTS.length}};
+function spareCloudMeta(){return {dataMeta:{parts:PARTS,versions:VERSIONS,suppliers:SUPPLIERS,invoices:INVOICES,ocrhist:OCRHIST},summary:{latestMonth:latestPurchaseMonth(),latestMonthSpend:purchaseStats(monthPurchases(latestPurchaseMonth())).spend,year:latestPurchaseYear(),yearSpend:purchaseStats(purchaseTxns().filter(x=>String(x.date||'').startsWith(latestPurchaseYear()))).spend,parts:PARTS.length,txns:TXNS.length}}}
+async function cloudUpload(silent){
+  if(!SET.gasUrl)SET.gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!SET.gasUrl){if(!silent)toast(_lang==='en'?'Set GAS URL first':'請先設定 GAS URL');if(window.VRTSmartSync)VRTSmartSync.status('push','GAS URL 未設定','warn');return false}
+  const records=TXNS||[],meta=spareCloudMeta();
   try{
     updateCloudDot();
     const res=await VRTSmartSync.push({url:SET.gasUrl,tool:'spareparts',records,meta,onStatus:m=>toast('☁️ '+m)});
-    if(res&&res.needsPull){toast('⚠ 雲端有較新資料，請先拉取');return}
-    toast(`☁↑ 完成 · 採購 ${records.length} · 上傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`)
-  }catch(e){console.error(e);if(window.VRTSmartSync)VRTSmartSync.status('push','失敗 · '+(e.message||e),'err');toast('Upload failed — '+e.message)}
+    if(res&&res.needsPull){if(!silent)toast('⚠ 雲端有較新資料，請先拉取');return false}
+    if(!silent)toast(`☁↑ 完成 · 採購 ${records.length} · 上傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`);return res
+  }catch(e){console.error(e);if(window.VRTSmartSync)VRTSmartSync.status('push','失敗 · '+(e.message||e),'err');if(!silent)toast('Upload failed — '+e.message);return false}
 }
 async function cloudDownload(silent){
   if(!SET.gasUrl){if(!silent)toast('請先設定 GAS URL');return false}
   try{
     updateCloudDot();
-    const res=await VRTSmartSync.pull({url:SET.gasUrl,tool:'spareparts',localRecords:TXNS||[],onStatus:m=>{if(!silent)toast('☁️ '+m)},apply:async(txns,meta)=>{
+    const res=await VRTSmartSync.pull({url:SET.gasUrl,tool:'spareparts',localRecords:TXNS||[],meta:spareCloudMeta(),onStatus:m=>{if(!silent)toast('☁️ '+m)},apply:async(txns,meta)=>{
       const dm=(meta&&meta.dataMeta)||{};
       if(Array.isArray(dm.parts))PARTS=dm.parts;
       if(Array.isArray(dm.versions))VERSIONS=dm.versions;
       if(Array.isArray(dm.suppliers))SUPPLIERS=dm.suppliers;
-      if(Array.isArray(dm.invoices))INVOICES=dm.invoices;
-      TXNS=Array.isArray(txns)?txns:[];PUR_ANCHOR=latestPurchaseDate();await saveAll(false);if(!silent)goTab('dashboard',null)
+      if(Array.isArray(dm.invoices))INVOICES=dm.invoices;if(Array.isArray(dm.ocrhist))OCRHIST=dm.ocrhist;
+      TXNS=Array.isArray(txns)?txns:[];PUR_ANCHOR=latestPurchaseDate();await saveAll(false);goTab(_curTab||'dashboard',null)
     }});
     if(!res.ok)throw new Error('No cloud data');
     if(!silent)toast(`☁↓ 完成 · 採購 ${TXNS.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`);
@@ -1603,6 +1607,11 @@ async function viewImage(id){
   // keep the page usable and let the user press ☁↓; the fixed status strip shows progress.
   if(!TXNS.length&&SET.gasUrl&&window.VRTSmartSync)VRTSmartSync.status('pull','本機無採購資料 · 可按拉取','warn');
 })();
+</script>
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'spareparts',lockKey:'spareparts',pull:async function(){return await (window.cloudDownload&&window.cloudDownload(true));},push:async function(){return await (window.cloudUpload&&window.cloudUpload(true));},canSync:function(){return !!((window.SET&&SET.gasUrl)||localStorage.getItem('vrt_portal_gas_url'));},startDelay:1200});}catch(e){console.warn('[VRT Auto spareparts]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

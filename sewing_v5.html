@@ -163,14 +163,15 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.16</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.17 · AUTO SYNC</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -1164,8 +1165,8 @@ loadDB().then(async ()=>{
   _lang = localStorage.getItem("vrt_lang")||"zh"; applyLang();
   renderDashboard(); // initial render with raw DB data
   await vcLoadFromCloudIDB();
-  await vcAutoSync();
-  renderDashboard(); // refresh after cloud sync
+  // v3.4: shared HRA-style auto reconcile handles cloud startup; no legacy full pull.
+  renderDashboard(); // local-first refresh
   // ★ Run analytics on startup so Dashboard changeover KPIs are populated
   // without requiring a new import. Uses full DB already in memory.
   if(DB.length > 0 && !window._dbIncomplete){
@@ -5578,7 +5579,7 @@ async function scanAllFolders(silent=false){
     vcSetBusy(true);vcLog('智慧拉取：只下載雲端有變更的月份/區塊...','i');
     try{
       const local=(typeof DB!=='undefined'&&DB.length)?DB:JSON.parse(localStorage.getItem('sewing_prod_v1')||'[]');
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,meta:{eff:(typeof EFF_DB!=='undefined'?EFF_DB:[])},onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
         const eff=meta&&Array.isArray(meta.eff)?meta.eff:((typeof EFF_DB!=='undefined')?EFF_DB:[]);
         if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs,eff);else try{localStorage.setItem('sewing_prod_v1',JSON.stringify(recs))}catch(_){ }
       }});
@@ -40450,5 +40451,11 @@ window.wExport = wExport;
 })();
 </script>
 
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'sewing',lockKey:'sewing',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto sewing]',e)}},0)},{once:true});
+</script>
 </body>
 </html>

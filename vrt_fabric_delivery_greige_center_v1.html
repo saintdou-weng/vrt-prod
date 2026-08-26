@@ -152,7 +152,8 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body>
 
@@ -1245,16 +1246,18 @@ function fdApplyRecords(rows,meta){
   if(meta&&meta.aliases)S.aliases=meta.aliases;
   if(meta&&Array.isArray(meta.versionHistory))S.versions=meta.versionHistory;
 }
-async function gasUpload(){
-  if(!S.cfg.gasEndpoint){toast(t('needCfg'));showTab('settings');return}
-  try{calcAll();const rows=fdCloudRecords(),meta={aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}};const res=await VRTSmartSync.push({url:S.cfg.gasEndpoint,tool:'fabricdelivery',records:rows,meta,onStatus:m=>toast('☁↑ '+m)});if(res&&res.needsPull){toast('⚠ 雲端有新資料，請先拉取差異');return}toast(res.noChange?'☁↑ 已是最新':'☁↑ 智慧上傳完成 · '+(res.uploaded||0)+' 筆')}
-  catch(e){toast(t('gasFail')+'：'+e.message)}
+async function gasUpload(silent){
+  if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
+  try{calcAll();const rows=fdCloudRecords(),meta={aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}};const res=await VRTSmartSync.push({url:S.cfg.gasEndpoint,tool:'fabricdelivery',records:rows,meta,onStatus:m=>toast('☁↑ '+m)});if(res&&res.needsPull){if(!silent)toast('⚠ 雲端有新資料，請先拉取差異');return false}if(!silent)toast(res.noChange?'☁↑ 已是最新':'☁↑ 智慧上傳完成 · '+(res.uploaded||0)+' 筆');return res}
+  catch(e){if(!silent)toast(t('gasFail')+'：'+e.message);return false}
 }
 window.gasUpload=gasUpload;
-async function gasDownload(){
-  if(!S.cfg.gasEndpoint){toast(t('needCfg'));showTab('settings');return}
-  try{const rows=fdCloudRecords();const res=await VRTSmartSync.pull({url:S.cfg.gasEndpoint,tool:'fabricdelivery',localRecords:rows,onStatus:m=>toast('☁↓ '+m),apply:async(recs,meta)=>{fdApplyRecords(recs,meta);saveLocal();calcAll();renderTab()}});if(!res.ok){toast(t('gasFail'));return}toast(res.noChange?'☁↓ 已是最新':'☁↓ 智慧下載完成 · '+(res.downloaded||0)+' 筆')}
-  catch(e){toast(t('gasFail')+'：'+e.message)}
+async function gasDownload(silent){
+  if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
+  try{const rows=fdCloudRecords();const res=await VRTSmartSync.pull({url:S.cfg.gasEndpoint,tool:'fabricdelivery',localRecords:rows,meta:{aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}},onStatus:m=>toast('☁↓ '+m),apply:async(recs,meta)=>{fdApplyRecords(recs,meta);saveLocal();calcAll();renderTab()}});if(!res.ok){if(!silent)toast(t('gasFail'));return false}if(!silent)toast(res.noChange?'☁↓ 已是最新':'☁↓ 智慧下載完成 · '+(res.downloaded||0)+' 筆');return res}
+  catch(e){if(!silent)toast(t('gasFail')+'：'+e.message);return false}
 }
 window.gasDownload=gasDownload;
 
@@ -1284,6 +1287,7 @@ window.cycleLang=cycleLang;
   try{
     const saved=localStorage.getItem(LS_KEY);
     if(saved){const p=JSON.parse(saved);S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};}
+    if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
   }catch(e){}
   if(!S.orders.length){loadSeed();snapshot("內建範例資料 seed 20260706");}
   document.addEventListener("DOMContentLoaded",()=>{
@@ -1319,37 +1323,24 @@ window.cycleLang=cycleLang;
     const show=p.style.display!=='block';p.style.display=show?'block':'none';
     if(show)document.getElementById('vcUrl').value=getUrl();};
   document.getElementById('vcSave').onclick=()=>{
-    try{localStorage.setItem(URL_KEY,document.getElementById('vcUrl').value.trim());}catch(e){}
+    try{const u=document.getElementById('vcUrl').value.trim();localStorage.setItem(URL_KEY,u);S.cfg.gasEndpoint=u;saveLocal();}catch(e){}
     vcLog('✓ GAS URL 已儲存','ok');};
   function fabRaw(){try{return localStorage.getItem(LS_KEY)||JSON.stringify(S,(k,v)=>k.startsWith('_')?undefined:v);}catch(e){return JSON.stringify(S,(k,v)=>k.startsWith('_')?undefined:v);}}
   function fabCount(raw){try{const o=JSON.parse(raw);let n=0;Object.keys(o||{}).forEach(k=>{if(Array.isArray(o[k]))n+=o[k].length;});return n||1;}catch(e){return 1;}}
   document.getElementById('vcPushBtn2').onclick=async function(){
-    const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}
-    try{
-      const raw=fabRaw();
-      const payload={tool:'fabric',recordCount:fabCount(raw),fabState:raw};
-      vcLog('推送中...','i');
-      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});
-      const d=await r.json();if(!d.ok)throw new Error(d.error||'GAS error');
-      vcLog('✓ 推送完成','ok');
-    }catch(e){vcLog('✗ 推送失敗：'+(e.message||e),'err');}
+    const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}S.cfg.gasEndpoint=url;saveLocal();vcLog('智慧推送：比對差異...','i');
+    try{const r=await gasUpload(true);if(r===false){vcLog('✗ 推送未完成，請看下方 ☁↑ 狀態','err');return;}vcLog(`✓ 智慧推送 · 傳 ${r.uploaded||0} · 未變 ${r.unchanged||0}`,'ok')}catch(e){vcLog('✗ 推送失敗：'+(e.message||e),'err')}
   };
   document.getElementById('vcPullBtn2').onclick=async function(){
-    const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}
-    if(!confirm('拉取會覆蓋本機布料進倉資料，確定嗎？'))return;
-    try{
-      vcLog('拉取中...','i');
-      const r=await fetch(url+'?action=pull&tool=fabric',{redirect:'follow'});
-      const j=await r.json();if(!j.ok)throw new Error(j.error||'GAS error');
-      let p=j.data&&j.data.data?j.data.data:null;
-      if(!p||!p.fabState){vcLog('雲端尚無資料','err');return;}
-      JSON.parse(p.fabState);   // 先驗格式
-      localStorage.setItem(LS_KEY,p.fabState);
-      vcLog('✓ 拉取完成，即將重新載入...','ok');
-      setTimeout(()=>location.reload(),800);
-    }catch(e){vcLog('✗ 拉取失敗：'+(e.message||e),'err');}
+    const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}S.cfg.gasEndpoint=url;saveLocal();vcLog('智慧拉取：只下載缺少/變更資料...','i');
+    try{const r=await gasDownload(true);if(r===false){vcLog('✗ 拉取未完成，請看下方 ☁↓ 狀態','err');return;}vcLog(`✓ 智慧拉取 · 下載 ${r.downloaded||0} · 未變 ${r.unchanged||0}${r.pendingUpload?' · 待上傳 '+r.pendingUpload:''}`,'ok')}catch(e){vcLog('✗ 拉取失敗：'+(e.message||e),'err')}
   };
 })();
+</script>
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricdelivery',lockKey:'fabricdelivery',pull:async function(){return await (window.gasDownload&&window.gasDownload(true));},push:async function(){return await (window.gasUpload&&window.gasUpload(true));},canSync:function(){return !!((window.S&&S.cfg&&S.cfg.gasEndpoint)||localStorage.getItem('vrt_portal_gas_url'));},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricdelivery]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

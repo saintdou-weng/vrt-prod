@@ -182,7 +182,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -2805,8 +2806,7 @@ async function init(){
     log('VRT 訂單管理系統 v3.1 就緒','info');
     log('Weekly 與客戶 PDF 已分頁：Weekly 不再混入 PDF 數量','info');
     log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
-    // 開啟時自動從雲端同步訂單
-    ordersAutoSync();
+    // v3.4: shared HRA-style auto reconcile handles startup; avoid duplicate full/parallel pulls.
   }catch(e){
     document.getElementById('db-st').textContent='● DB錯誤';
     document.getElementById('db-st').style.color='var(--red)';
@@ -2816,7 +2816,7 @@ async function init(){
 
 async function ordersAutoSync(){
   const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl)return;const vv=document.getElementById('ordCloudVisible');if(vv)vv.textContent='☁ 自動比對中…';
-  try{const local=await dbAll('po_lines');const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,onStatus:m=>{if(vv)vv.textContent='☁ '+m},apply:async(recs,meta)=>{const write=async(storeName,records)=>{if(!Array.isArray(records)||!db.objectStoreNames.contains(storeName))return;await new Promise((res,rej)=>{const tx=db.transaction(storeName,'readwrite'),os=tx.objectStore(storeName);os.clear();records.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})};await write('po_lines',recs);if(meta&&meta.idbData)for(const [k,v] of Object.entries(meta.idbData))await write(k,v);if(meta&&meta.lsKeys&&meta.lsKeys.orderSetsV3){localStorage.setItem('orderSetsV3',meta.lsKeys.orderSetsV3);loadSets()}APP.headers=await dbAll('po_headers');APP.orders=await dbAll('po_lines');APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');APP.audit=await dbAll('parse_audit');refreshAll();}});if(!res.ok){log('☁ 雲端無訂單資料（使用本機）','warn');return;}log(`☁ 智慧同步完成 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');if(vv){vv.textContent=`☁ 已同步 · ↓${res.downloaded||0} · =${res.unchanged||0}${res.pendingUpload?' · ↑待 '+res.pendingUpload:''}`;vv.style.color='#4ade80'}}catch(e){log('☁ 自動拉取失敗：'+e.message,'warn');if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}}
+  try{const local=await dbAll('po_lines'),metaLocal=await ordBuildCloudMeta();const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,meta:metaLocal,onStatus:m=>{if(vv)vv.textContent='☁ '+m},apply:async(recs,meta)=>{const write=async(storeName,records)=>{if(!Array.isArray(records)||!db.objectStoreNames.contains(storeName))return;await new Promise((res,rej)=>{const tx=db.transaction(storeName,'readwrite'),os=tx.objectStore(storeName);os.clear();records.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})};await write('po_lines',recs);if(meta&&meta.idbData)for(const [k,v] of Object.entries(meta.idbData))await write(k,v);if(meta&&meta.lsKeys&&meta.lsKeys.orderSetsV3){localStorage.setItem('orderSetsV3',meta.lsKeys.orderSetsV3);loadSets()}APP.headers=await dbAll('po_headers');APP.orders=await dbAll('po_lines');APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');APP.audit=await dbAll('parse_audit');refreshAll();}});if(!res.ok){log('☁ 雲端無訂單資料（使用本機）','warn');return;}log(`☁ 智慧同步完成 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');if(vv){vv.textContent=`☁ 已同步 · ↓${res.downloaded||0} · =${res.unchanged||0}${res.pendingUpload?' · ↑待 '+res.pendingUpload:''}`;vv.style.color='#4ade80'}}catch(e){log('☁ 自動拉取失敗：'+e.message,'warn');if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}}
 }
 
 // ── 訂單雲端同步面板 ──────────────────────────
@@ -2839,11 +2839,11 @@ function ordSaveGas(){
   localStorage.setItem('vrt_portal_gas_url', url);
   ordLog('GAS URL 已儲存','i');
 }
+async function ordBuildCloudMeta(){const poHeaders=await dbAll('po_headers'),weekly=await dbAll('weekly_snapshots'),imports=await dbAll('order_imports'),audit=await dbAll('parse_audit'),setsRaw=localStorage.getItem('orderSetsV3')||'{}';return {lsKeys:{orderSetsV3:setsRaw},idbData:{po_headers:poHeaders,weekly_snapshots:weekly,order_imports:imports,parse_audit:audit},summary:{weeklySnapshots:weekly.length,headers:poHeaders.length,imports:imports.length}}}
 async function ordCloudPush(){
   const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}ordSetBusy(true);ordLog('智慧同步：讀取訂單資料...','i');
   try{
-    const poHeaders=await dbAll('po_headers'),poLines=await dbAll('po_lines'),weekly=await dbAll('weekly_snapshots'),imports=await dbAll('order_imports'),audit=await dbAll('parse_audit'),setsRaw=localStorage.getItem('orderSetsV3')||'{}';
-    const meta={lsKeys:{orderSetsV3:setsRaw},idbData:{po_headers:poHeaders,weekly_snapshots:weekly,order_imports:imports,parse_audit:audit},summary:{totalPOs:poLines.length,weeklySnapshots:weekly.length}};
+    const poLines=await dbAll('po_lines'),meta=await ordBuildCloudMeta();meta.summary.totalPOs=poLines.length;
     const res=await VRTSmartSync.push({url:gasUrl,tool:'orders',records:poLines,meta,onStatus:m=>ordLog(m,'i')});
     if(res&&res.needsPull){ordLog('⚠ 雲端有較新 Weekly / PO 資料，請先拉取','err');return;}
     ordLog(`✓ 智慧推送完成 · PO ${poLines.length} · 本次傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');document.getElementById('ordCloudStatus').textContent=`已同步：PO ${poLines.length} · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`;
@@ -2853,8 +2853,8 @@ async function ordCloudPush(){
 async function ordCloudPull(){
   const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}ordSetBusy(true);ordLog('智慧拉取：只下載有變更的訂單區塊...','i');
   try{
-    const local=await dbAll('po_lines');
-    const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,onStatus:m=>ordLog(m,'i'),apply:async(recs,meta)=>{
+    const local=await dbAll('po_lines'),metaLocal=await ordBuildCloudMeta();
+    const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,meta:metaLocal,onStatus:m=>ordLog(m,'i'),apply:async(recs,meta)=>{
       if(!db){try{await openDB()}catch(_){}}if(!db)throw new Error('本機 FactoryDB 無法開啟');
       const write=async(storeName,records)=>{if(!Array.isArray(records)||!db.objectStoreNames.contains(storeName))return;await new Promise((res,rej)=>{const tx=db.transaction(storeName,'readwrite'),os=tx.objectStore(storeName);os.clear();records.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})};
       await write('po_lines',recs);if(meta&&meta.idbData){for(const [k,v] of Object.entries(meta.idbData))await write(k,v)}if(meta&&meta.lsKeys&&meta.lsKeys.orderSetsV3){localStorage.setItem('orderSetsV3',meta.lsKeys.orderSetsV3);loadSets()}
@@ -2885,6 +2885,12 @@ document.addEventListener('click',e=>{
   }
 });
 init();
+</script>
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'orders',lockKey:'orders',pull:async function(){return await (window.ordCloudPull&&window.ordCloudPull());},push:async function(){return await (window.ordCloudPush&&window.ordCloudPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto orders]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

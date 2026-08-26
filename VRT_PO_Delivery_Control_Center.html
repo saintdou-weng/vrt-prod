@@ -213,7 +213,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body data-theme="light">
 
@@ -997,6 +998,12 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
     }catch(e){vcLog('✗ 拉取失敗：'+(e.message||e),'err');}finally{vcBusy(false);}
   };
 })();
+</script>
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'podelivery',lockKey:'podelivery',pull:async function(){return await (document.getElementById('vcPullBtn2')&&document.getElementById('vcPullBtn2').onclick&&document.getElementById('vcPullBtn2').onclick());},push:async function(){return await (document.getElementById('vcPushBtn2')&&document.getElementById('vcPushBtn2').onclick&&document.getElementById('vcPushBtn2').onclick());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto podelivery]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

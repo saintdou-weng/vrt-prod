@@ -162,7 +162,8 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -544,8 +545,8 @@ const TOOLS = {
     write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;return await idbReplaceAll('VRT_FGInventory',1,'fg_records',recs)}
   },
   spareparts:{
-    read:async()=>{const parts=await idbGetAll('vrt_spareparts',2,'parts'),txns=await idbGetAll('vrt_spareparts',2,'txns'),versions=await idbGetAll('vrt_spareparts',2,'versions');if(!parts.length&&!txns.length)return null;return{tool:'spareparts',recordCount:txns.length||parts.length,data:{parts,txns,versions}}},
-    write:async data=>{const d=data.data||data;if(Array.isArray(d.parts))await idbReplaceAll('vrt_spareparts',2,'parts',d.parts);if(Array.isArray(d.txns))await idbReplaceAll('vrt_spareparts',2,'txns',d.txns);if(Array.isArray(d.versions))await idbReplaceAll('vrt_spareparts',2,'versions',d.versions);return(d.txns||d.parts||[]).length}
+    read:async()=>{const parts=await idbGetAll('vrt_spareparts',2,'parts'),txns=await idbGetAll('vrt_spareparts',2,'txns'),versions=await idbGetAll('vrt_spareparts',2,'versions'),suppliers=await idbGetAll('vrt_spareparts',2,'suppliers'),invoices=await idbGetAll('vrt_spareparts',2,'invoices'),ocrhist=await idbGetAll('vrt_spareparts',2,'ocrhist');if(!parts.length&&!txns.length&&!versions.length)return null;return{tool:'spareparts',recordCount:txns.length,records:txns,dataMeta:{parts,versions,suppliers,invoices,ocrhist},summary:{parts:parts.length,txns:txns.length}}},
+    write:async data=>{const dm=data.dataMeta||data.data||data,txns=Array.isArray(data.records)?data.records:(Array.isArray(dm.txns)?dm.txns:[]);if(Array.isArray(dm.parts))await idbReplaceAll('vrt_spareparts',2,'parts',dm.parts);if(Array.isArray(txns))await idbReplaceAll('vrt_spareparts',2,'txns',txns);if(Array.isArray(dm.versions))await idbReplaceAll('vrt_spareparts',2,'versions',dm.versions);if(Array.isArray(dm.suppliers))await idbReplaceAll('vrt_spareparts',2,'suppliers',dm.suppliers);if(Array.isArray(dm.invoices))await idbReplaceAll('vrt_spareparts',2,'invoices',dm.invoices);if(Array.isArray(dm.ocrhist))await idbReplaceAll('vrt_spareparts',2,'ocrhist',dm.ocrhist);return txns.length||((dm.parts||[]).length)}
   },
   prodplan:{
     read:async()=>{try{const d=JSON.parse(localStorage.getItem('vrt_prodplan_v3_data')||'null');if(!d?.records?.length)return null;return{tool:'prodplan',recordCount:d.records.length,records:d.records,planVersions:JSON.parse(localStorage.getItem('vrt_prodplan_v3_versions')||'[]'),summary:{source:d.source||''}}}catch(_){return null}},
@@ -704,7 +705,7 @@ function portalRebuild(tool,recs,meta,localPayload){
   meta=meta||{};if(tool==='bom'){let st={};try{st=JSON.parse(localPayload?.bomState||'{}')}catch(_){}st=Object.assign({customers:[],styles:[],settings:{},activity:[],meta:{}},st,{styles:recs,customers:Array.isArray(meta.customers)?meta.customers:(st.customers||[])});st.meta=Object.assign({},st.meta||{},{rev:meta.rev||st.meta?.rev||0,lastSync:new Date().toISOString()});return{bomState:JSON.stringify(st),recordCount:recs.length}}
   if(tool==='orders')return{...meta,records:recs,idbData:{...(meta.idbData||{}),po_lines:recs}};
   if(tool==='smv')return{...meta,records:recs,idbStore:{...(meta.idbStore||{}),records:recs}};
-  if(tool==='spareparts')return{...meta,data:{...(meta.data||{}),txns:recs},records:recs};
+  if(tool==='spareparts')return{...meta,records:recs,dataMeta:{...(meta.dataMeta||meta.data||{})}};
   if(tool==='custstats')return{...meta,records:recs,summaryData:meta.summaryData?{...meta.summaryData,details:recs}:undefined};
   return{...meta,records:recs};
 }
@@ -876,6 +877,12 @@ function fmtISO(iso) {
 function pad(n) { return String(n).padStart(2,'0'); }
 
 init();
+</script>
+
+
+<script>
+/* PROD v3.4 portal policy: do not auto-run every module in parallel. Owner modules reconcile when opened; manual Push All / Pull All remains. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTSmartSync){VRTSmartSync.status('push','Portal 待機 · 各模組自動同步','ok');VRTSmartSync.status('pull','Portal 待機 · 開啟模組自動檢查','ok')}}catch(e){}},500)});
 </script>
 </body>
 </html>

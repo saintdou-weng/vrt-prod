@@ -170,7 +170,8 @@ tr:hover td{background:#eff6ff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 </head>
 <body>
 <div class="hdr">
@@ -1569,7 +1570,7 @@ async function scanAllFolders(silent=false){
 
   window.vsPull = async function(){
     if(!gasUrl){vsLog('請先填入 GAS URL','err');return;}vsBusy(true);vsLog('智慧拉取 SMV：只下載有變更的區塊...','i');
-    try{if(!db||!db.objectStoreNames.contains(SMV_STORE))await openDB();const local=await dbAll();const res=await VRTSmartSync.pull({url:gasUrl,tool:'smv',localRecords:local,onStatus:m=>vsLog(m,'i'),apply:async(snaps,meta)=>{if(meta&&meta.ieSmvState){const localIe=await vsReadIeState();await vsWriteIeState(vsMergeIe(localIe,meta.ieSmvState));}await dbReplaceAll(snaps);allSnaps=await dbAll();allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));updateHeader();}});if(!res.ok){vsLog('雲端尚無 SMV 資料','err');return;}vsLog(`✓ 智慧拉取完成 · ${res.records.length} 快照 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');}
+    try{if(!db||!db.objectStoreNames.contains(SMV_STORE))await openDB();const local=await dbAll(),ieSmvState=await vsReadIeState(),localMeta={ieSmvState:ieSmvState||undefined,summary:{snapshotCount:local.length,ieUpdates:ieSmvState&&ieSmvState.updates?ieSmvState.updates.length:0}};const res=await VRTSmartSync.pull({url:gasUrl,tool:'smv',localRecords:local,meta:localMeta,onStatus:m=>vsLog(m,'i'),apply:async(snaps,meta)=>{if(meta&&meta.ieSmvState){const localIe=await vsReadIeState();await vsWriteIeState(vsMergeIe(localIe,meta.ieSmvState));}await dbReplaceAll(snaps);allSnaps=await dbAll();allSnaps.sort((a,b)=>new Date(b.reportDate)-new Date(a.reportDate));updateHeader();}});if(!res.ok){vsLog('雲端尚無 SMV 資料','err');return;}vsLog(`✓ 智慧拉取完成 · ${res.records.length} 快照 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');}
     catch(e){vsLog('✗ '+e.message,'err');}finally{vsBusy(false);}
   };
 
@@ -1612,6 +1613,12 @@ async function scanAllFolders(silent=false){
   });
   vsInit();
 })();
+</script>
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'smv',lockKey:'smv',pull:async function(){return await (window.vsPull&&window.vsPull());},push:async function(){return await (window.vsPush&&window.vsPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto smv]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

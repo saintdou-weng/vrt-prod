@@ -158,7 +158,8 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -1402,6 +1403,21 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
     if(anyOk){vcProdLog('增量拉取完成，重新整理頁面...','i');setTimeout(()=>location.reload(),1200)}btn.disabled=false;btn.innerHTML='⬇ 拉取全部（車縫＋裁剪＋訂單）';
   };
 
+
+  // Background owner-dashboard reconcile. Unlike the manual button, this never reloads the page.
+  // It only downloads changed/missing buckets, writes them to the owner DBs, then refreshes this dashboard in place.
+  window.vcAutoPullOverview = async function(){
+    gasUrl=gasUrl||localStorage.getItem(LS_GAS)||'';if(!gasUrl)return false;
+    const tools=[
+      {name:'車縫',key:'sewing',local:()=>SEW,meta:()=>({}),write:async(recs,meta)=>writeSewing({records:recs,eff:meta&&meta.eff||[]})},
+      {name:'裁剪',key:'cutting',local:()=>CUT,meta:()=>({}),write:async(recs,meta)=>writeCutting({records:recs})},
+      {name:'訂單',key:'orders',local:()=>ORDERS,meta:()=>({}),write:async(recs,meta)=>writeOrders({records:recs,idbData:{...(meta&&meta.idbData||{}),po_lines:recs},lsKeys:meta&&meta.lsKeys||{}})}
+    ];
+    let ok=false;
+    for(const x of tools){try{const res=await VRTSmartSync.pull({url:gasUrl,tool:x.key,localRecords:x.local()||[],onStatus:m=>VRTSmartSync.status('pull',x.name+' · '+m,'busy'),apply:async(recs,meta)=>{await x.write(recs,meta)}});if(res&&res.ok)ok=true}catch(e){console.warn('[Overview auto '+x.key+']',e)}}
+    if(ok)await refresh();return ok;
+  };
+
   async function openCurrentOrRepair(dbName, stores){
     const build=d=>Object.entries(stores).forEach(([name,opt])=>{if(!d.objectStoreNames.contains(name))d.createObjectStore(name,opt)});
     const open=ver=>new Promise((res,rej)=>{
@@ -1503,5 +1519,11 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 })();
 </script>
 
+
+
+<script>
+/* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'production_overview',lockKey:'production_overview',pull:async function(){return await (window.vcAutoPullOverview&&window.vcAutoPullOverview());},push:async function(){return await (Promise.resolve(true));},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto production_overview]',e)}},0)},{once:true});
+</script>
 </body>
 </html>
