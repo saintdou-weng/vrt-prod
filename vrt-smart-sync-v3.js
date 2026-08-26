@@ -1,4 +1,4 @@
-/* VRT Smart Sync v3.2 — persistent incremental sync + universal cloud status
+/* VRT Smart Sync v3.3 — persistent incremental sync + universal cloud status
    Core rules:
    - Only changed buckets are uploaded/downloaded.
    - Successful sync baseline persists across page reloads (IndexedDB + tiny localStorage fallback).
@@ -8,8 +8,8 @@
 */
 (function(g){
   'use strict';
-  if(g.VRTSmartSync && /^3\.2/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='3.2.0';
+  if(g.VRTSmartSync && /^3\.3/.test(String(g.VRTSmartSync.version||''))) return;
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='3.3.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const UI_KEY='vrt_smart_sync_v32_ui_'+location.pathname;
   const _nativeFetch=g.fetch.bind(g);
@@ -36,6 +36,28 @@
     return'';
   }
   const DATE_FIELDS=['date','recordDate','reportDate','testDate','effectiveDate','shipmentDate','receiveDate','useDate','snapshotDate','poDate','orderDate','etd','custShip','startDate','endDate','finishDate','as_of_date','updatedAt','createdAt','savedAt','sourceDate'];
+  // Business dates used by the server reminder/audit. Technical timestamps are excluded so
+  // editing a June-2026 historical record in August does NOT turn it into an August reminder.
+  const AUDIT_DATE_FIELDS=['date','recordDate','reportDate','testDate','effectiveDate','shipmentDate','receiveDate','useDate','snapshotDate','poDate','orderDate','etd','custShip','startDate','endDate','finishDate','as_of_date','sourceDate'];
+  function auditPeriodsForRecords(rows){
+    const out=new Set();
+    for(const r of rows||[]){
+      for(const k of AUDIT_DATE_FIELDS){const d=normDate(r&&r[k]);if(d)out.add(d.slice(0,7));}
+    }
+    return [...out].filter(x=>/^20\d{2}-\d{2}$/.test(x)).sort();
+  }
+  function auditApprovalForRecords(rows){
+    const tracked=new Set(),pending=new Set();
+    const statusKeys=['approval','approvalStatus','approval_status'];
+    for(const r of rows||[]){
+      if(!r||typeof r!=='object')continue;
+      const key=statusKeys.find(k=>Object.prototype.hasOwnProperty.call(r,k));if(!key)continue;
+      const periods=auditPeriodsForRecords([r]);if(!periods.length)continue;
+      const v=String(r[key]??'').trim().toLowerCase(),approved=/^(approved|approve|ok|done|effective|signed|pass|passed|已核可|已簽核|核可|通過)$/.test(v)||!!(r.approvedAt||r.approvalDate||r.approvedDate);
+      periods.forEach(p=>{tracked.add(p);if(!approved)pending.add(p)});
+    }
+    return{tracked:[...tracked].sort(),pending:[...pending].sort()};
+  }
   const KEY_FIELDS=['id','uuid','recordId','key','detailId','lineNo','line','section','customer','cust','po','orderNo','styleNo','style','item','itemCode','erpCode','partNo','code','color','size','lotNumber','invoiceNo','invoice','carton','sku','location','supplier','type','stockType','syncType'];
   function recordDate(r){for(const k of DATE_FIELDS){const d=normDate(r&&r[k]);if(d)return d}return''}
   function semanticKey(r){
@@ -94,7 +116,24 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{ensureUI();paint()});else setTimeout(()=>{ensureUI();paint()},0);
 
   async function jsonFetch(url,opt){const r=await _nativeFetch(url,opt||{});const text=await r.text();let j;try{j=JSON.parse(text)}catch(e){throw new Error('Cloud returned non-JSON: '+text.replace(/\s+/g,' ').slice(0,100))}if(!r.ok||(j&&j.ok===false))throw new Error((j&&j.error)||('HTTP '+r.status));return j}
-  async function manifest(url,tool){const j=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartManifest&tool='+enc(tool),{redirect:'follow'});return j.data||j}
+  async function manifest(url,tool){
+    const q=url+(url.includes('?')?'&':'?')+'action=smartManifest&tool='+enc(tool);
+    try{const j=await jsonFetch(q,{redirect:'follow'});return j.data||j}
+    catch(getErr){
+      // HRA-style compatibility: some Apps Script deployments reject GET after a redeploy/cache edge.
+      try{const j=await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartManifest',tool}),redirect:'follow'});return j.data||j}
+      catch(postErr){throw new Error('Manifest check failed: '+postErr.message+' / '+getErr.message)}
+    }
+  }
+  async function auditSent(opts){
+    const url=String(opts&&opts.url||'').trim(),tool=String(opts&&opts.tool||'').trim();
+    if(!url||!tool)return{ok:false,skipped:true};
+    const p={action:'auditSent',tool,auditType:(opts&&opts.type)||'summary'};
+    if(opts&&opts.period)p.period=opts.period;
+    if(opts&&Array.isArray(opts.periods))p.periods=opts.periods;
+    try{return await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p),redirect:'follow'})}
+    catch(e){console.warn('VRT auditSent:',e);return{ok:false,error:e.message}}
+  }
   async function legacyPull(url,tool,onStatus){
     const mj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=pull&meta=1&tool='+enc(tool),{redirect:'follow'}),env=mj.data;if(!env)return{records:[],meta:{}};
     let records=[],meta={};
@@ -146,7 +185,9 @@
 
     const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);let sent=0;
     for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,count:b.count,records:b.records}),redirect:'follow'});sent+=b.count}
-    await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,hashes:localH,counts:localC,deleted,recordCount:records.length,meta:opts.meta||{},summary:(opts.meta&&opts.meta.summary)||opts.summary||{}}),redirect:'follow'});
+    const auditRows=[];for(const k of changed)if(local[k]&&Array.isArray(local[k].records))auditRows.push(...local[k].records);
+    const auditPeriods=auditPeriodsForRecords(auditRows),approvalAudit=auditApprovalForRecords(auditRows);for(const k of deleted){const m=String(k).match(/^m:(20\d{2}-\d{2})$/);if(m&&!auditPeriods.includes(m[1]))auditPeriods.push(m[1])}auditPeriods.sort();
+    await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,hashes:localH,counts:localC,deleted,changedBuckets:changed,auditPeriods,auditApprovalTrackedPeriods:approvalAudit.tracked,auditApprovalPendingPeriods:approvalAudit.pending,recordCount:records.length,meta:opts.meta||{},summary:(opts.meta&&opts.meta.summary)||opts.summary||{}}),redirect:'follow'});
     await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,lastPushAt:now(),updatedAt:now()});
     const delCount=deleted.reduce((s,k)=>s+(Number(remoteC[k])||0),0),unchanged=Math.max(0,records.length-sent);
     const msg=`完成｜本機 ${records.length.toLocaleString()}｜上傳 ${sent.toLocaleString()}｜刪除 ${delCount.toLocaleString()}｜未變 ${unchanged.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:sent,deleted:delCount,unchanged,changedBuckets:changed.length};
@@ -211,5 +252,5 @@
     return _nativeFetch(input,init);
   };
 
-  g.VRTSmartSync={version:VERSION,status,push,pull,buildBuckets,semanticKey,bucketKey,mergeRecords,stable,stateGet,statePut};
+  g.VRTSmartSync={version:VERSION,status,push,pull,auditSent,buildBuckets,semanticKey,bucketKey,mergeRecords,stable,stateGet,statePut,auditPeriodsForRecords,auditApprovalForRecords};
 })(window);

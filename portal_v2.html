@@ -49,6 +49,11 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 /* ── 生產流程鏈 ── */
 .flow-wrap{max-width:1100px;margin:14px auto 0;padding:0 18px}
 .flow-title{font-size:12px;letter-spacing:2px;color:#64748b;margin-bottom:8px;font-weight:700}
+.hra-sync{margin:10px 18px 0;background:#fff;border:1px solid #dbe5f1;border-radius:14px;padding:12px;box-shadow:0 2px 10px #0f172a0a}
+.hra-kpis{display:grid;grid-template-columns:repeat(4,minmax(100px,1fr));gap:8px;margin-bottom:9px}.hra-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px}.hra-kpi b{display:block;font-size:19px;color:#0f172a}.hra-kpi span{font-size:10px;color:#64748b}
+.hra-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hra-actions button{border:0;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}.hra-up{background:#fff7ed;color:#b45309;border:1px solid #fdba74!important}.hra-down{background:#eff6ff;color:#1d4ed8;border:1px solid #93c5fd!important}.hra-rem{background:#fff1f2;color:#be123c;border:1px solid #fda4af!important}.hra-note{font-size:10px;color:#64748b;flex:1;min-width:220px}.hra-progress{font-size:11px;color:#334155;margin-top:8px;min-height:14px}
+@media(max-width:650px){.hra-sync{margin:8px 8px 0}.hra-kpis{grid-template-columns:repeat(2,1fr)}.hra-actions button{flex:1}.hra-note{width:100%;flex-basis:100%}}
+
 .flow{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
 .fnode{flex:1;min-width:96px;background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:10px 8px;text-align:center;cursor:pointer;position:relative;transition:.15s}
 .fnode:hover{border-color:#334155;transform:translateY(-2px)}
@@ -157,7 +162,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.2.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -178,6 +183,21 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   <span class="gas-lbl" id="gasLbl">未設定</span>
 </div>
 
+<div class="hra-sync">
+  <div class="hra-kpis">
+    <div class="hra-kpi"><b id="hraMod">0</b><span>模組 Modules</span></div>
+    <div class="hra-kpi"><b id="hraSynced">0</b><span>已同步 Synced</span></div>
+    <div class="hra-kpi"><b id="hraRecords">0</b><span>雲端 Records</span></div>
+    <div class="hra-kpi"><b id="hraLast">—</b><span>最後同步 Last Sync</span></div>
+  </div>
+  <div class="hra-actions">
+    <button class="hra-up" onclick="pushAllSmart()">☁↑ 智慧上傳全部</button>
+    <button class="hra-down" onclick="pullAllSmart()">☁↓ 智慧拉取全部</button>
+    <button class="hra-rem" onclick="showPendingAudit()">📣 待發摘要／核可</button>
+    <div class="hra-note">與 HRA Portal 同邏輯：先比 Manifest；相同資料不上傳、不下載；只補新增／變更／缺少區塊，較少的手機資料不會直接覆蓋較完整雲端。</div>
+  </div>
+  <div class="hra-progress" id="hraProgress">☁ 待機</div>
+</div>
 
 <!-- ═══ 生產流程鏈:PO → 排產 → 布料 → 裁剪 → 車縫 → 成品 → 出貨 ═══ -->
 <div class="flow-wrap">
@@ -300,12 +320,15 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
         </div>
         <span class="mc-badge badge-none" id="bd-fabric">--</span>
       </div>
-      <div class="mc-sync" id="st-fabric">雲端：未查詢</div>
+      <div class="mc-sync" id="st-fabric">庫存雲端：未查詢</div>
+      <div class="mc-sync" id="st-fabricdelivery">進倉雲端：未查詢</div>
       <div class="mc-actions">
         <button class="btn-open" onclick="location.href='vrt_fabric_stock_control_v1.html'">📂 開啟庫存</button>
+        <button class="btn-push" id="pp-fabric" onclick="push('fabric')">☁↑ 庫存</button>
+        <button class="btn-pull" id="pl-fabric" onclick="pull('fabric')">☁↓ 庫存</button>
         <button class="btn-open" onclick="location.href='vrt_fabric_delivery_greige_center_v1.html'">🚚 布料進倉</button>
-        <button class="btn-push" id="pp-fabric" onclick="push('fabric')">☁ 推送</button>
-        <button class="btn-pull" id="pl-fabric" onclick="pull('fabric')">⬇ 拉取</button>
+        <button class="btn-push" id="pp-fabricdelivery" onclick="push('fabricdelivery')">☁↑ 進倉</button>
+        <button class="btn-pull" id="pl-fabricdelivery" onclick="pull('fabricdelivery')">☁↓ 進倉</button>
       </div>
     </div>
     <div class="mcard mc-bom" id="card-bom">
@@ -499,7 +522,7 @@ const TOOLS = {
     read:async()=>{const po=await idbGetAll('FactoryDB',15,'po_lines');if(!po.length)return null;const hdr=await idbGetAll('FactoryDB',15,'po_headers'),wk=await idbGetAll('FactoryDB',15,'weekly_snapshots'),imp=await idbGetAll('FactoryDB',15,'order_imports'),aud=await idbGetAll('FactoryDB',15,'parse_audit');return{tool:'orders',recordCount:po.length,records:po,lsKeys:{orderSetsV3:localStorage.getItem('orderSetsV3')||'{}'},idbData:{po_headers:hdr,weekly_snapshots:wk,order_imports:imp,parse_audit:aud},summary:{weeklySnapshots:wk.length}}},
     write:async data=>{const id=Object.assign({},data.idbData||{});if(Array.isArray(data.records))id.po_lines=data.records;for(const [k,v] of Object.entries(id))if(Array.isArray(v))await idbReplaceAll('FactoryDB',15,k,v);if(data.lsKeys?.orderSetsV3)try{localStorage.setItem('orderSetsV3',data.lsKeys.orderSetsV3)}catch(_){}return (id.po_lines||[]).length}
   },
-  shipping:{read:async()=>null,write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_shipping_cloud_cache',JSON.stringify({records:recs,summary:data.summary||{}}))}catch(_){}return recs.length}},
+  shipping:{read:async()=>{try{const recs=JSON.parse(localStorage.getItem('vrt_shipping_data_v1')||'[]'),meta=JSON.parse(localStorage.getItem('vrt_shipping_meta_v1')||'{}');return recs.length?{tool:'shipping',recordCount:recs.length,records:recs,summary:{filename:meta.filename||'',savedAt:meta.savedAt||''}}:null}catch(_){return null}},write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_shipping_data_v1',JSON.stringify(recs));localStorage.setItem('vrt_shipping_meta_v1',JSON.stringify({filename:'Cloud',savedAt:new Date().toISOString(),count:recs.length}))}catch(_){}return recs.length}},
   smv:{
     read:async()=>{const recs=await idbGetAll('VRT_SMV_Manager_v52',1,'smv_snapshots');if(!recs.length)return null;let ie=null;try{ie=await idbKvGet('vrt_ie_smv_integrated_v2',1,'state','main')}catch(_){}return{tool:'smv',recordCount:recs.length,records:recs,idbStore:{db:'VRT_SMV_Manager_v52',ver:1,store:'smv_snapshots',records:recs},ieSmvState:ie||undefined,summary:{snapshotCount:recs.length}}},
     write:async data=>{const recs=Array.isArray(data.records)?data.records:(data.idbStore?.records||[]);if(recs.length)await idbReplaceAll('VRT_SMV_Manager_v52',1,'smv_snapshots',recs);return recs.length}
@@ -536,6 +559,10 @@ const TOOLS = {
     read:async()=>{let st=await idbKvGet('VRT_FabricStockDB',1,'app','state');if(!st){try{st=JSON.parse(localStorage.getItem('vrt_fabric_stock_v1')||'null')}catch(_){}}if(!st)return null;const recs=[...(st.current||[]).map(r=>Object.assign({},r,{stockType:'current'})),...(st.old||[]).map(r=>Object.assign({},r,{stockType:'old_usage'})),...(st.accessory||[]).map(r=>Object.assign({},r,{stockType:'accessory'}))];return{tool:'fabricstock',recordCount:recs.length,records:recs,idbData:{fabricMeta:{savedAt:st.savedAt||'',sourceFiles:st.sourceFiles||[]}},summary:{current:(st.current||[]).length,old:(st.old||[]).length,accessory:(st.accessory||[]).length}}},
     write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;const meta=data.idbData?.fabricMeta||{},st=Object.assign({},meta,{current:recs.filter(x=>x.stockType==='current'),old:recs.filter(x=>x.stockType==='old_usage'),accessory:recs.filter(x=>x.stockType==='accessory')});await idbKvPut('VRT_FabricStockDB',1,'app','state',st);return recs.length}
   },
+  fabricdelivery:{
+    read:async()=>{try{const st=JSON.parse(localStorage.getItem('vrt_fabric_center_v1')||'null');if(!st)return null;const recs=[];(st.orders||[]).forEach(x=>recs.push({...x,syncType:'order'}));(st.greige||[]).forEach(x=>recs.push({...x,syncType:'greige'}));(st.tachiang||[]).forEach(x=>recs.push({...x,syncType:'tachiang'}));(st.outsource||[]).forEach(x=>recs.push({...x,syncType:'outsource'}));return recs.length?{tool:'fabricdelivery',recordCount:recs.length,records:recs,aliases:st.aliases||{},versionHistory:st.versions||[],summary:{orders:(st.orders||[]).length,greige:(st.greige||[]).length,tachiang:(st.tachiang||[]).length,outsource:(st.outsource||[]).length}}:null}catch(_){return null}},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;let st={};try{st=JSON.parse(localStorage.getItem('vrt_fabric_center_v1')||'{}')}catch(_){};st.orders=recs.filter(x=>x.syncType==='order').map(({syncType,...x})=>x);st.greige=recs.filter(x=>x.syncType==='greige').map(({syncType,...x})=>x);st.tachiang=recs.filter(x=>x.syncType==='tachiang').map(({syncType,...x})=>x);st.outsource=recs.filter(x=>x.syncType==='outsource').map(({syncType,...x})=>x);if(data.aliases)st.aliases=data.aliases;if(Array.isArray(data.versionHistory))st.versions=data.versionHistory;try{localStorage.setItem('vrt_fabric_center_v1',JSON.stringify(st))}catch(_){}return recs.length}
+  },
   monthship:{
     read:async()=>{try{const d=JSON.parse(localStorage.getItem('vrt_monthship_v3_data')||'null');if(!d?.records?.length)return null;return{tool:'monthship',recordCount:d.records.length,records:d.records,versions:JSON.parse(localStorage.getItem('vrt_monthship_v3_versions')||'[]')}}catch(_){return null}},
     write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_monthship_v3_data',JSON.stringify({records:recs,source:'Cloud',savedAt:new Date().toISOString()}));if(Array.isArray(data.versions))localStorage.setItem('vrt_monthship_v3_versions',JSON.stringify(data.versions))}catch(_){}return recs.length}
@@ -551,7 +578,7 @@ function renderFlow(data){
   const map = [
     { id:'fn-po',      tools:['custstats','orders'] },
     { id:'fn-plan',    tools:['prodplan','cuttingplan'] },
-    { id:'fn-fabric',  tools:['fabric'] },
+    { id:'fn-fabric',  tools:['fabricstock','fabricdelivery','fabric'] },
     { id:'fn-cutting', tools:['cutting','cuttingplan'] },
     { id:'fn-sewing',  tools:['sewing'] },
     { id:'fn-fg',      tools:['fg'] },
@@ -617,7 +644,11 @@ async function fetchStatus() {
     if (!d.ok) return;
     const data = d.data || {};
     renderFlow(data);
-    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts','prodplan','custstats','fabric','monthship'].forEach(t => {
+    const cloudKeys=['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts','prodplan','custstats','fabricstock','fabricdelivery','monthship'];
+    const synced=cloudKeys.filter(k=>data[k]&&data[k].timestamp),records=cloudKeys.reduce((a,k)=>a+Number(data[k]&&data[k].recordCount||0),0);
+    const last=cloudKeys.map(k=>data[k]&&data[k].timestamp).filter(Boolean).sort().pop()||'';
+    const q=id=>document.getElementById(id);if(q('hraMod'))q('hraMod').textContent=cloudKeys.length;if(q('hraSynced'))q('hraSynced').textContent=synced.length;if(q('hraRecords'))q('hraRecords').textContent=records.toLocaleString();if(q('hraLast'))q('hraLast').textContent=last?fmtISO(last):'—';
+    ['sewing','cutting','cuttingplan','orders','podelivery','shipping','smv','bom','fg','spareparts','prodplan','custstats','fabric','fabricdelivery','monthship'].forEach(t => {
       const info = data[t==='fabric'?'fabricstock':t] || data[t];
       const stEl = document.getElementById('st-' + t);
       const bdEl = document.getElementById('bd-' + t);
@@ -678,17 +709,24 @@ function portalRebuild(tool,recs,meta,localPayload){
   return{...meta,records:recs};
 }
 async function push(tool) {
-  if(!gasUrl){alert('請先設定 GAS URL');return;}const cfg=TOOLS[tool];if(!cfg||!cfg.read){log(`${tool} 無法從 portal 推送（請在工具內直接同步）`,'err');return;}setBtns(tool,true);log(`智慧推送 ${tool}...`,'info');
-  try{const payload=await cfg.read();if(!payload){log(`${tool} 無本地資料`,'err');return;}const cloudTool=payload.tool||tool,recs=portalPrimary(payload,tool);if(!recs.length){log(`${tool} 無可同步主資料`,'err');return;}const res=await VRTSmartSync.push({url:gasUrl,tool:cloudTool,records:recs,meta:portalMeta(payload,tool),onStatus:m=>log(`${tool} · ${m}`,'info')});if(res&&res.needsPull){log(`⚠ ${tool} 雲端有較新資料，請先拉取`,'err');return;}log(`✓ ${tool} 智慧推送 · 本機 ${recs.length} · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');fetchStatus();}
+  if(!gasUrl){alert('請先設定 GAS URL');return null;}const cfg=TOOLS[tool];if(!cfg||!cfg.read){log(`${tool} 無法從 portal 推送（請在工具內直接同步）`,'err');return;}setBtns(tool,true);log(`智慧推送 ${tool}...`,'info');
+  try{const payload=await cfg.read();if(!payload){log(`${tool} 無本地資料`,'err');return;}const cloudTool=payload.tool||tool,recs=portalPrimary(payload,tool);if(!recs.length){log(`${tool} 無可同步主資料`,'err');return;}const res=await VRTSmartSync.push({url:gasUrl,tool:cloudTool,records:recs,meta:portalMeta(payload,tool),onStatus:m=>log(`${tool} · ${m}`,'info')});if(res&&res.needsPull){log(`⚠ ${tool} 雲端有較新資料，請先拉取`,'err');return;}log(`✓ ${tool} 智慧推送 · 本機 ${recs.length} · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');fetchStatus();return res;}
   catch(e){log(`✗ ${tool} 推送失敗：`+e.message,'err');}finally{setBtns(tool,false);}
 }
 
 // ─── PULL ───────────────────────────────────────────────
 async function pull(tool) {
-  if(!gasUrl){alert('請先設定 GAS URL');return;}const cfg=TOOLS[tool];if(!cfg){log(`未知工具：${tool}`,'err');return;}const pullBtn=document.getElementById('pl-'+tool);if(pullBtn){pullBtn.disabled=true;pullBtn.innerHTML='<span class="spin">⏳</span>'}log(`智慧拉取 ${tool}...`,'info');
-  try{const localPayload=cfg.read?await cfg.read():null,cloudTool=(localPayload&&localPayload.tool)||tool,localRecs=portalPrimary(localPayload,tool);const res=await VRTSmartSync.pull({url:gasUrl,tool:cloudTool,localRecords:localRecs,onStatus:m=>log(`${tool} · ${m}`,'info'),apply:async(recs,meta)=>{const data=portalRebuild(tool,recs,meta,localPayload);await cfg.write(data)}});if(!res.ok){log(`${tool} 雲端尚無資料`,'err');return;}log(`✓ ${tool} 智慧拉取 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');fetchStatus();}
+  if(!gasUrl){alert('請先設定 GAS URL');return null;}const cfg=TOOLS[tool];if(!cfg){log(`未知工具：${tool}`,'err');return;}const pullBtn=document.getElementById('pl-'+tool);if(pullBtn){pullBtn.disabled=true;pullBtn.innerHTML='<span class="spin">⏳</span>'}log(`智慧拉取 ${tool}...`,'info');
+  try{const localPayload=cfg.read?await cfg.read():null,cloudTool=(localPayload&&localPayload.tool)||tool,localRecs=portalPrimary(localPayload,tool);const res=await VRTSmartSync.pull({url:gasUrl,tool:cloudTool,localRecords:localRecs,onStatus:m=>log(`${tool} · ${m}`,'info'),apply:async(recs,meta)=>{const data=portalRebuild(tool,recs,meta,localPayload);await cfg.write(data)}});if(!res.ok){log(`${tool} 雲端尚無資料`,'err');return;}log(`✓ ${tool} 智慧拉取 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');fetchStatus();return res;}
   catch(e){log(`✗ ${tool} 拉取失敗：`+e.message,'err');}finally{if(pullBtn){pullBtn.disabled=false;pullBtn.innerHTML='⬇ 拉取';}}
 }
+
+
+const HRA_SYNC_TOOLS=['custstats','orders','podelivery','prodplan','cuttingplan','fabric','fabricdelivery','bom','cutting','sewing','smv','fg','shipping','monthship','spareparts'];
+async function pushAllSmart(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');let changed=0,skip=0,fail=0;for(let i=0;i<HRA_SYNC_TOOLS.length;i++){const t=HRA_SYNC_TOOLS[i];if(el)el.textContent=`☁↑ ${i+1}/${HRA_SYNC_TOOLS.length} ${t}`;try{const r=await push(t);if(r&&r.ok){if(r.noChange||!(r.uploaded||0))skip++;else changed+=Number(r.uploaded)||0}else if(r&&r.needsPull)fail++}catch(_){fail++}}if(el)el.textContent=`☁↑ 完成｜變更上傳 ${changed.toLocaleString()}｜未變模組 ${skip}｜需處理 ${fail}`;await fetchStatus()}
+async function pullAllSmart(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');let down=0,skip=0,pending=0,fail=0;for(let i=0;i<HRA_SYNC_TOOLS.length;i++){const t=HRA_SYNC_TOOLS[i];if(el)el.textContent=`☁↓ ${i+1}/${HRA_SYNC_TOOLS.length} ${t}`;try{const r=await pull(t);if(r&&r.ok){down+=Number(r.downloaded)||0;pending+=Number(r.pendingUpload)||0;if(r.noChange||!(r.downloaded||0))skip++}else fail++}catch(_){fail++}}if(el)el.textContent=`☁↓ 完成｜新增/變更下載 ${down.toLocaleString()}｜未變模組 ${skip}｜待上傳 ${pending.toLocaleString()}｜失敗 ${fail}`;await fetchStatus()}
+async function showPendingAudit(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');try{const r=await fetch(gasUrl+(gasUrl.includes('?')?'&':'?')+'action=auditStatus',{redirect:'follow'}),j=await r.json(),d=j.data||j;if(!j.ok&&j.ok!==undefined)throw new Error(j.error||'auditStatus');const rows=d.pending||[];if(!rows.length){if(el)el.textContent='📣 目前沒有待發摘要／核可';alert('目前沒有待發摘要／核可');return}const txt=rows.map(x=>`${x.label||x.tool} ${x.period}：${x.pendingSummary?'摘要未發':''}${x.pendingSummary&&x.pendingApproval?'、':''}${x.pendingApproval?'待核可':''}`).join('\n');if(el)el.textContent=`📣 待處理 ${rows.length} 項`;alert('待發摘要／核可\n\n'+txt)}catch(e){if(el)el.textContent='📣 讀取待辦失敗：'+e.message}}
+window.pushAllSmart=pushAllSmart;window.pullAllSmart=pullAllSmart;window.showPendingAudit=showPendingAudit;
 
 // ─── IDB HELPERS ────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════

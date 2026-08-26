@@ -213,7 +213,7 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.2.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
 </head>
 <body data-theme="light">
 
@@ -905,7 +905,7 @@ function buildSummary(){ const rows=DATA; const pos=new Set(rows.map(r=>r.po)).s
   let s=`<b>${escapeHtml(t('tg_summary'))}</b>\n${escapeHtml(SET.factory)}\nPO: ${pos} · Qty: ${qty.toLocaleString()} · ${t('k_uncommit')}: ${un}\n`;
   Object.entries(codes).forEach(([c,n])=>s+=`• ${escapeHtml(t(CODE_LABEL(c)))}: ${n}\n`); return s; }
 async function sendTelegram(){ if(!SET.gas){ toast(t('msg_tgcfg'),'warn'); goTab('settings'); return; }
-  try{ await fetch(SET.gas,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'telegram',parse_mode:'HTML',chat_id:SET.tgchat,text:buildSummary()})}); toast(t('msg_tgsent'),'ok'); }catch(e){ toast('Telegram: '+e.message,'err'); } }
+  try{ await fetch(SET.gas,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'telegram',parse_mode:'HTML',chat_id:SET.tgchat,text:buildSummary(),auditTool:'podelivery',auditType:'summary'})}); toast(t('msg_tgsent'),'ok'); }catch(e){ toast('Telegram: '+e.message,'err'); } }
 
 /* ===================== modal / lang / theme ===================== */
 function modal(html){ document.getElementById('modalBox').innerHTML=`<button class="close" onclick="closeModal()">✕</button>`+html; document.getElementById('modalBg').classList.add('show'); }

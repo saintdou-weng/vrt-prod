@@ -96,7 +96,7 @@ table.old-list col:nth-child(1){width:17%}table.old-list col:nth-child(2){width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.2.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
 </head><body>
 <div class="header">
   <div class="logo">🧶</div><div><div class="h-title" data-i="title">布料／輔料庫存管理</div><div class="h-sub">FABRIC + ACCESSORY STOCK · OLD STOCK USAGE + CURRENT INVENTORY · v1.5</div></div>

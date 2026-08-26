@@ -238,7 +238,7 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.2.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.3.0"></script>
 </head>
 <body>
 
@@ -2465,6 +2465,7 @@ window.tgSendDaily=async function(){
     const d=await r.json();
     if(!d.ok) throw new Error(d.description||'發送失敗');
     el.textContent='✓ 已發送'; toast('📨 Telegram 摘要已發送','ok');
+    if(window.VRTSmartSync)await VRTSmartSync.auditSent({url:localStorage.getItem('vrt_portal_gas_url')||'',tool:'fg',type:'summary',period:String(TODAY||'').slice(0,7)});
   }catch(e){ el.textContent='✗ '+e.message; toast('Telegram 發送失敗：'+e.message,'err'); }
 };
 
