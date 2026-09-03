@@ -219,8 +219,8 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -230,7 +230,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Spare Parts Purchase Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.2.1 Auto Sync</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.3 Purchase Auto Sync</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -520,10 +520,9 @@ async function loadAll(){
   // Use the same GAS URL as the rest of /prod unless this module has its own explicit URL.
   if(!SET.gasUrl) SET.gasUrl=localStorage.getItem('vrt_portal_gas_url')||'';
   if(SET.gasUrl) SET.cloudTarget='gas';
-  // Never inject demo purchasing data after a DB error. Demo data is only for a genuinely empty fresh install.
-  if(dbOk&&!PARTS.length&&!TXNS.length&&!localStorage.getItem('vrt_sp_initialized')){
-    seedDemo(); localStorage.setItem('vrt_sp_initialized','1');
-  }
+  // Production data only: never inject demo rows. Rebuild missing part master from purchases.
+  if(dbOk&&TXNS.length){const changed=ensurePurchasePartMaster();if(changed)await idbPutAll('parts',PARTS);}
+
 }
 
 /* ===== 示範資料 ===== */
@@ -618,60 +617,31 @@ function renderTab(name){
   if(fn)fn();
 }
 function updateHeaderStats(){
-  $('hParts').textContent=num(PARTS.length);
-  const val=PARTS.reduce((s,p)=>s+(Number(p.qty)||0)*(Number(p.unitPrice)||0),0);
-  $('hValue').textContent=money(val).replace(/\.\d+$/,'');
-  $('hLow').textContent=num(PARTS.filter(p=>partStatus(p)!=='ok').length);
+  ensurePurchasePartMaster();const all=purchaseTxns(),y=latestPurchaseYear(),m=latestPurchaseMonth();
+  $('hParts').textContent=num(new Set(all.map(x=>x.partNo||x.name).filter(Boolean)).size||PARTS.length);
+  $('hValue').textContent=money(purchaseStats(all.filter(x=>String(x.date||'').startsWith(y))).spend).replace(/\.\d+$/,'');
+  $('hLow').textContent=money(purchaseStats(monthPurchases(m)).spend).replace(/\.\d+$/,'');
 }
+
+
+/* Purchase-only master recovery. Old cloud copies may have TXNS but no PARTS metadata.
+   Rebuild names/specs/prices only; qty remains 0 because purchases are NOT on-hand inventory. */
+function ensurePurchasePartMaster(){
+  const tx=purchaseTxns(),by=new Map((PARTS||[]).filter(p=>p&&p.partNo).map(p=>[String(p.partNo).trim(),p]));let changed=false,latest={};
+  tx.forEach(x=>{const key=String(x.partNo||x.name||'').trim();if(!key)return;if(!latest[key]||String(x.date||'')>=String(latest[key].date||''))latest[key]=x;let p=by.get(key);if(!p){p={id:uid(),partNo:key,name:x.name||key,spec:x.spec||'',category:x.category||'Other',brand:x.brand||'',machineType:x.machineType||'',location:'',unit:x.unit||'PCS',qty:0,unitPrice:Number(x.unitPrice)||0,minStock:'',maxStock:'',remark:'Purchase master (derived)',purchaseOnly:true,createdAt:x.date||todayStr(),updatedAt:x.date||todayStr()};PARTS.push(p);by.set(key,p);changed=true}else{['name','spec','category','machineType','unit'].forEach(k=>{if(!p[k]&&x[k]){p[k]=x[k];changed=true}})}});
+  Object.entries(latest).forEach(([key,x])=>{const p=by.get(key);if(p&&Number(x.unitPrice)>0&&Number(p.unitPrice)!==Number(x.unitPrice)){p.unitPrice=Number(x.unitPrice);p.updatedAt=x.date||todayStr();changed=true}});return changed;
+}
+function spL(zh,en,km){return _lang==='en'?en:_lang==='km'?(km||en):zh}
 
 /* ========== DASHBOARD ========== */
 function monthTxns(){const m=todayStr().slice(0,7);return TXNS.filter(x=>ym(x.date)===m);}
 function renderDashboard(){
-  fillFilterSelects();
-  const ps=filteredParts();
-  const invVal=ps.reduce((s,p)=>s+(Number(p.qty)||0)*(Number(p.unitPrice)||0),0);
-  const mtx=monthTxns();
-  const inQ=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0),0);
-  const outQ=mtx.filter(x=>x.type==='OUT').reduce((s,x)=>s+(+x.qty||0),0);
-  const low=ps.filter(p=>partStatus(p)==='low').length;
-  const zero=ps.filter(p=>partStatus(p)==='out').length;
-  const newM=ps.filter(p=>ym(p.createdAt)===todayStr().slice(0,7)).length;
-  const abn=priceAbnormalCount();
+  fillFilterSelects();ensurePurchasePartMaster();const all=filteredTxns().filter(x=>purchaseTxns().includes(x)),latestM=latestPurchaseMonth(),latestY=latestPurchaseYear(),mx=all.filter(x=>ym(x.date)===latestM),yx=all.filter(x=>String(x.date||'').startsWith(latestY)),ms=purchaseStats(mx),ys=purchaseStats(yx),allst=purchaseStats(all);
   const kpi=(n,u,l,cls)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
-  let h=`<div class="sec on"><div class="kpi-strip">
-    ${kpi(num(ps.length),'','📦 '+t('kTotalParts'),'k-blue')}
-    ${kpi(money(invVal).replace(/\.\d+$/,''),'','💰 '+t('kInvValue'),'k-green')}
-    ${kpi(num(inQ),'','⬆ '+t('kInQty'),'k-blue')}
-    ${kpi(num(outQ),'','⬇ '+t('kOutQty'),'k-amber')}
-    ${kpi(num(low),'','🟡 '+t('kLow'),'k-amber')}
-    ${kpi(num(zero),'','🔴 '+t('kZero'),'k-red')}
-    ${kpi(num(newM),'','✨ '+t('kNew'),'k-violet')}
-    ${kpi(num(abn),'','⚠ '+t('kAbn'),'k-slate')}
-  </div>`;
-  // Top10 高價值
-  const topV=[...ps].map(p=>({p,v:(+p.qty||0)*(+p.unitPrice||0)})).sort((a,b)=>b.v-a.v).slice(0,10);
-  h+=`<div class="g2"><div class="card"><div class="ct">🏆 ${t('topValue')}</div><div class="tw"><table><thead><tr>
-      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th class="num">${t('colValue')}</th></tr></thead><tbody>`;
-  h+=topV.map(o=>`<tr><td class="mono">${escapeHtml(o.p.partNo)}</td><td>${escapeHtml(o.p.name)}</td><td class="num">${num(o.p.qty)}</td><td class="num">${money(o.v)}</td></tr>`).join('')||emptyRow(4);
-  h+=`</tbody></table></div></div>`;
-  // 低庫存
-  const lowList=ps.filter(p=>partStatus(p)!=='ok').sort((a,b)=>(a.qty-a.minStock)-(b.qty-b.minStock)).slice(0,10);
-  h+=`<div class="card"><div class="ct">🟡 ${t('topLow')}</div><div class="tw"><table><thead><tr>
-      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th>${t('colStatus')}</th></tr></thead><tbody>`;
-  h+=lowList.map(p=>`<tr><td class="mono">${escapeHtml(p.partNo)}</td><td>${escapeHtml(p.name)}</td><td class="num">${num(p.qty)}</td><td>${statusBadge(p)}</td></tr>`).join('')||emptyRow(4);
-  h+=`</tbody></table></div></div></div>`;
-  // 最近異動 + 最近新增
-  const recent=[...TXNS].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
-  h+=`<div class="g2"><div class="card"><div class="ct">🔁 ${t('recentTxn')}</div><div class="tw"><table><thead><tr>
-      <th>${t('colDate')}</th><th>${t('colPartNo')}</th><th>${t('colType')}</th><th class="num">${t('colQty')}</th></tr></thead><tbody>`;
-  h+=recent.map(x=>`<tr><td class="mono">${x.date}</td><td class="mono">${escapeHtml(x.partNo)}</td><td>${x.type==='IN'?'<span class="b bok">'+t('inWord')+'</span>':'<span class="b bwn">'+t('outWord')+'</span>'}</td><td class="num">${num(x.qty)}</td></tr>`).join('')||emptyRow(4);
-  h+=`</tbody></table></div></div>`;
-  const newest=[...PARTS].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
-  h+=`<div class="card"><div class="ct">✨ ${t('recentNew')}</div><div class="tw"><table><thead><tr>
-      <th>${t('colPartNo')}</th><th>${t('colName')}</th><th>${t('colBrand')}</th><th class="num">${t('colPrice')}</th></tr></thead><tbody>`;
-  h+=newest.map(p=>`<tr><td class="mono">${escapeHtml(p.partNo)}</td><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.brand)}</td><td class="num">${money(p.unitPrice)}</td></tr>`).join('')||emptyRow(4);
-  h+=`</tbody></table></div></div></div></div>`;
-  $('app').innerHTML=h; updateHeaderStats();
+  let h=`<div class="sec on"><div class="al al-i" style="margin-bottom:10px">${spL('本模組只管理採購與價格；採購數量不當成現有庫存。零件主檔缺少時會由採購記錄重建。','Purchase & price only. Purchase quantity is not treated as on-hand stock.')}</div><div class="kpi-strip">${kpi(num(allst.parts),'',spL('🔧 採購零件數','🔧 Purchased Parts'),'k-blue')}${kpi(money(ys.spend).replace(/\.\d+$/,''),'',`💰 ${latestY} ${spL('年度採購','Year Spend')}`,'k-green')}${kpi(money(ms.spend).replace(/\.\d+$/,''),'',`💵 ${latestM} ${spL('月採購','Month Spend')}`,'k-blue')}${kpi(num(ms.lines),'',spL('🧾 最新月採購筆數','🧾 Latest Month Lines'),'k-amber')}${kpi(num(ms.qty),'',spL('📦 最新月採購數量','📦 Latest Month Qty'),'k-violet')}${kpi(num(ms.invoices),'',spL('📄 最新月發票數','📄 Latest Month Invoices'),'k-slate')}</div>`;
+  const byPart={};yx.forEach(x=>{const k=x.partNo||x.name||'--',o=byPart[k]||(byPart[k]={key:k,name:x.name||'',qty:0,spend:0});o.qty+=Number(x.qty)||0;o.spend+=purchaseAmount(x)});const tops=Object.values(byPart).sort((a,b)=>b.spend-a.spend).slice(0,12);
+  h+=`<div class="g2"><div class="card"><div class="ct">🏆 ${spL('年度採購金額前 12 項','Top 12 Year Purchase Spend')}</div><div class="tw"><table><thead><tr><th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${spL('採購量','Qty')}</th><th class="num">${spL('採購金額','Spend')}</th></tr></thead><tbody>`+tops.map(o=>`<tr><td class="mono">${escapeHtml(o.key)}</td><td>${escapeHtml(o.name)}</td><td class="num">${num(o.qty)}</td><td class="num">${money(o.spend)}</td></tr>`).join('')+`</tbody></table></div></div>`;
+  const recent=[...all].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).slice(0,12);h+=`<div class="card"><div class="ct">🧾 ${spL('最近採購','Recent Purchases')}</div><div class="tw"><table><thead><tr><th>${t('colDate')}</th><th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th class="num">${t('colPrice')}</th></tr></thead><tbody>`+recent.map(x=>`<tr><td class="mono">${escapeHtml(x.date||'')}</td><td class="mono">${escapeHtml(x.partNo||'')}</td><td>${escapeHtml(x.name||PARTS.find(p=>p.partNo===x.partNo)?.name||'')}</td><td class="num">${num(x.qty)}</td><td class="num">${money(x.unitPrice||0)}</td></tr>`).join('')+`</tbody></table></div></div></div></div>`;$('app').innerHTML=h;updateHeaderStats();
 }
 function emptyRow(c){return `<tr><td colspan="${c}" class="empty">${t('noData')}</td></tr>`;}
 
@@ -682,7 +652,7 @@ function priceAbnormalCount(){
   return c;
 }
 function priceHistory(partNo){
-  return TXNS.filter(x=>x.partNo===partNo&&x.type==='IN'&&x.unitPrice).map(x=>({date:x.date,price:+x.unitPrice}))
+  return purchaseTxns().filter(x=>x.partNo===partNo&&x.unitPrice).map(x=>({date:x.date,price:+x.unitPrice}))
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 }
 
@@ -821,34 +791,10 @@ function balanceAtMonthEnd(partNo,yearMonth){
   return ins.reduce((s,x)=>s+(x.type==='IN'?+x.qty:-+x.qty),0);
 }
 function renderMonthly(){
-  fillFilterSelects();
-  const year=(new Date()).getFullYear();
-  const months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
-  let rows=months.map(m=>{
-    const mtx=TXNS.filter(x=>ym(x.date)===m);
-    const inQ=mtx.filter(x=>x.type==='IN').reduce((s,x)=>s+(+x.qty||0),0);
-    const outQ=mtx.filter(x=>x.type==='OUT').reduce((s,x)=>s+(+x.qty||0),0);
-    // 月底各零件結存與價值
-    let bal=0,val=0,priceSum=0,priceN=0;
-    PARTS.forEach(p=>{const b=balanceAtMonthEnd(p.partNo,m);if(b>0){bal+=b;val+=b*(+p.unitPrice||0);}});
-    const prices=mtx.filter(x=>x.type==='IN'&&x.unitPrice).map(x=>+x.unitPrice);
-    const avg=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
-    return {m,inQ,outQ,bal,avg,val};
-  });
-  const mlbl=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${t('monTitle')} — ${year}</div><div class="tw"><table><thead><tr>
-    <th>${t('monMonth')}</th><th class="num">${t('monIn')}</th><th class="num">${t('monOut')}</th>
-    <th class="num">${t('monBal')}</th><th class="num">${t('monAvg')}</th><th class="num">${t('monVal')}</th></tr></thead><tbody>`;
-  let tIn=0,tOut=0,tVal=0;
-  h+=rows.map((r,i)=>{tIn+=r.inQ;tOut+=r.outQ;tVal+=r.val;
-    return `<tr><td>${mlbl[i]}</td><td class="num">${num(r.inQ)}</td><td class="num">${num(r.outQ)}</td>
-      <td class="num">${num(r.bal)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.val)}</td></tr>`;}).join('');
-  h+=`<tr style="font-weight:700;background:var(--soft)"><td>Grand Total</td><td class="num">${num(tIn)}</td><td class="num">${num(tOut)}</td>
-    <td class="num">-</td><td class="num">-</td><td class="num">${money(tVal)}</td></tr>`;
-  h+=`</tbody></table></div>
-   <div class="al al-i" style="margin-top:12px">${_lang==='en'?'Month-end balance is accumulated from In/Out records (opening assumed 0).':_lang==='km'?'នៅសល់ចុងខែគណនាពីកំណត់ត្រាចូល/ចេញ។':'月底庫存由進出紀錄累積計算（期初假設為 0）。'}</div>
-   </div></div>`;
-  $('app').innerHTML=h;
+  fillFilterSelects();ensurePurchasePartMaster();const year=Number(latestPurchaseYear())||new Date().getFullYear(),months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
+  const rows=months.map(m=>{const xs=monthPurchases(m),st=purchaseStats(xs),prices=xs.filter(x=>Number(x.unitPrice)>0).map(x=>Number(x.unitPrice));return{m,...st,avg:prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0}});let totals={lines:0,qty:0,spend:0};
+  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${year} ${spL('採購月報','Purchase Monthly')}</div><div class="tw"><table><thead><tr><th>${spL('月份','Month')}</th><th class="num">${spL('採購筆數','Lines')}</th><th class="num">${spL('零件數','Parts')}</th><th class="num">${spL('採購數量','Qty')}</th><th class="num">${spL('發票數','Invoices')}</th><th class="num">${spL('平均單價','Avg Price')}</th><th class="num">${spL('採購金額','Spend')}</th></tr></thead><tbody>`;
+  h+=rows.map(r=>{totals.lines+=r.lines;totals.qty+=r.qty;totals.spend+=r.spend;return `<tr><td>${r.m}</td><td class="num">${num(r.lines)}</td><td class="num">${num(r.parts)}</td><td class="num">${num(r.qty)}</td><td class="num">${num(r.invoices)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.spend)}</td></tr>`}).join('');h+=`<tr style="font-weight:700;background:var(--soft)"><td>${spL('全年','Year Total')}</td><td class="num">${num(totals.lines)}</td><td class="num">-</td><td class="num">${num(totals.qty)}</td><td class="num">-</td><td class="num">-</td><td class="num">${money(totals.spend)}</td></tr></tbody></table></div><div class="al al-i" style="margin-top:12px">${spL('這裡只比較採購，不計算發出與庫存。','Purchase comparison only; no issue/on-hand inventory calculation.')}</div></div></div>`;$('app').innerHTML=h;
 }
 
 /* ========== PRICE ANALYSIS ========== */
@@ -1148,7 +1094,7 @@ function saveSettings(){
   else renderSettings();
 }
 function applyTheme(){document.body.classList.toggle('dark',SET.theme==='dark');}
-function clearAll(){if(!confirm(t('confirmDel')))return;PARTS=[];TXNS=[];VERSIONS=[];saveAll();seedDemo();saveAll();goTab('dashboard',null);}
+function clearAll(){if(!confirm(t('confirmDel')))return;PARTS=[];TXNS=[];VERSIONS=[];SUPPLIERS=[];INVOICES=[];OCRHIST=[];saveAll(true);goTab('dashboard',null);}
 
 /* ===== 本機備份 / 還原 ===== */
 function backupLocal(){
@@ -1219,7 +1165,7 @@ async function cloudDownload(silent){
       if(Array.isArray(dm.versions))VERSIONS=dm.versions;
       if(Array.isArray(dm.suppliers))SUPPLIERS=dm.suppliers;
       if(Array.isArray(dm.invoices))INVOICES=dm.invoices;if(Array.isArray(dm.ocrhist))OCRHIST=dm.ocrhist;
-      TXNS=Array.isArray(txns)?txns:[];PUR_ANCHOR=latestPurchaseDate();await saveAll(false);goTab(_curTab||'dashboard',null)
+      TXNS=Array.isArray(txns)?txns:[];ensurePurchasePartMaster();PUR_ANCHOR=latestPurchaseDate();await saveAll(false);goTab(_curTab||'dashboard',null)
     }});
     if(!res.ok)throw new Error('No cloud data');
     if(!silent)toast(`☁↓ 完成 · 採購 ${TXNS.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`);

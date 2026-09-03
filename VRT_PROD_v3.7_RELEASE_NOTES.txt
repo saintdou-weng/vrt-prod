@@ -1,0 +1,25 @@
+VRT PROD v3.7 — FULL PROD AUDIT RELEASE
+Date: 2026-09-02
+
+STATUS
+- 19/19 HTML audited.
+- 15/15 automated regression checks PASS.
+- Shipping attachment regression PASS: SEP-2026 = 4 shipments, 3 unique customers.
+
+HIGHLIGHTS
+- Smart Sync / Auto Sync unified at v3.7 for all 18 cloud modules.
+- Incremental bucket transfer, manifest-only unchanged Pull, stable status UI.
+- Business date added to semantic identity; duplicate AMERICAN DAWN weeks no longer collapse.
+- Less-over-more upload protection added.
+- Large operational datasets moved to or kept in IndexedDB.
+- Monthly Shipping, Shipping, Production Plan, Orders, Cutting and Sewing CRUD/storage paths completed.
+- Production Overview remains read-only and schedules only from Production Plan.
+- Automatic PROD summary/approval reminder remains disabled.
+- Automatic IE/SMV and BOM demo operational data removed.
+- Cutting query Excel export and Production Overview mobile layout fixed.
+
+FILES
+- PROD_RELEASE_AUDIT_v3.7.md
+- PROD_MODULE_TEST_MATRIX_v3.7.csv
+- qa/PROD_QA_RESULTS_v3.7.json
+- qa/run_prod_audit.js

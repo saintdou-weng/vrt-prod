@@ -162,8 +162,8 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -194,7 +194,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   <div class="hra-actions">
     <button class="hra-up" onclick="pushAllSmart()">☁↑ 智慧上傳全部</button>
     <button class="hra-down" onclick="pullAllSmart()">☁↓ 智慧拉取全部</button>
-    <button class="hra-rem" onclick="showPendingAudit()">📣 待發摘要／核可</button>
+    
     <div class="hra-note">與 HRA Portal 同邏輯：先比 Manifest；相同資料不上傳、不下載；只補新增／變更／缺少區塊，較少的手機資料不會直接覆蓋較完整雲端。</div>
   </div>
   <div class="hra-progress" id="hraProgress">☁ 待機</div>
@@ -523,22 +523,22 @@ const TOOLS = {
     read:async()=>{const po=await idbGetAll('FactoryDB',15,'po_lines');if(!po.length)return null;const hdr=await idbGetAll('FactoryDB',15,'po_headers'),wk=await idbGetAll('FactoryDB',15,'weekly_snapshots'),imp=await idbGetAll('FactoryDB',15,'order_imports'),aud=await idbGetAll('FactoryDB',15,'parse_audit');return{tool:'orders',recordCount:po.length,records:po,lsKeys:{orderSetsV3:localStorage.getItem('orderSetsV3')||'{}'},idbData:{po_headers:hdr,weekly_snapshots:wk,order_imports:imp,parse_audit:aud},summary:{weeklySnapshots:wk.length}}},
     write:async data=>{const id=Object.assign({},data.idbData||{});if(Array.isArray(data.records))id.po_lines=data.records;for(const [k,v] of Object.entries(id))if(Array.isArray(v))await idbReplaceAll('FactoryDB',15,k,v);if(data.lsKeys?.orderSetsV3)try{localStorage.setItem('orderSetsV3',data.lsKeys.orderSetsV3)}catch(_){}return (id.po_lines||[]).length}
   },
-  shipping:{read:async()=>{try{const recs=JSON.parse(localStorage.getItem('vrt_shipping_data_v1')||'[]'),meta=JSON.parse(localStorage.getItem('vrt_shipping_meta_v1')||'{}');return recs.length?{tool:'shipping',recordCount:recs.length,records:recs,summary:{filename:meta.filename||'',savedAt:meta.savedAt||''}}:null}catch(_){return null}},write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_shipping_data_v1',JSON.stringify(recs));localStorage.setItem('vrt_shipping_meta_v1',JSON.stringify({filename:'Cloud',savedAt:new Date().toISOString(),count:recs.length}))}catch(_){}return recs.length}},
+  shipping:{read:async()=>{const recs=await idbGetAll('VRT_Shipping',1,'shipping_records'),meta=await idbKvGet('VRT_Shipping',1,'shipping_meta','state');return recs.length?{tool:'shipping',recordCount:recs.length,records:recs,summary:{filename:meta?.filename||'',savedAt:meta?.savedAt||''}}:null},write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('VRT_Shipping',1,'shipping_records',recs);await idbKvPut('VRT_Shipping',1,'shipping_meta','state',{filename:'Cloud',savedAt:new Date().toISOString(),count:recs.length});return recs.length}},
   smv:{
     read:async()=>{const recs=await idbGetAll('VRT_SMV_Manager_v52',1,'smv_snapshots');if(!recs.length)return null;let ie=null;try{ie=await idbKvGet('vrt_ie_smv_integrated_v2',1,'state','main')}catch(_){}return{tool:'smv',recordCount:recs.length,records:recs,idbStore:{db:'VRT_SMV_Manager_v52',ver:1,store:'smv_snapshots',records:recs},ieSmvState:ie||undefined,summary:{snapshotCount:recs.length}}},
     write:async data=>{const recs=Array.isArray(data.records)?data.records:(data.idbStore?.records||[]);if(recs.length)await idbReplaceAll('VRT_SMV_Manager_v52',1,'smv_snapshots',recs);return recs.length}
   },
   cuttingplan:{
-    read:async()=>{let recs=await idbGetAll('CuttingCloudPlan',1,'cloud_records');if(!recs.length)try{recs=JSON.parse(localStorage.getItem('cutting_plan_v1')||'[]')}catch(_){};return recs.length?{tool:'cuttingplan',recordCount:recs.length,records:recs}:null},
-    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('CuttingCloudPlan',1,'cloud_records',recs);try{localStorage.setItem('cutting_plan_v1',JSON.stringify(recs.slice(-5000)))}catch(_){}return recs.length}
+    read:async()=>{const recs=await idbGetAll('CuttingProd',2,'plan_records');return recs.length?{tool:'cuttingplan',recordCount:recs.length,records:recs}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;return await idbReplaceAll('CuttingProd',2,'plan_records',recs)}
   },
   podelivery:{
     read:async()=>{let recs=await idbGetAll('vrt_pocc_db',1,'records');if(!recs.length)try{recs=JSON.parse(localStorage.getItem('vrt_pocc_records')||'[]')}catch(_){};return recs.length?{tool:'podelivery',recordCount:recs.length,records:recs}:null},
-    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('vrt_pocc_db',1,'records',recs);try{localStorage.setItem('vrt_pocc_records',JSON.stringify(recs))}catch(_){}return recs.length}
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('vrt_pocc_db',1,'records',recs);return recs.length}
   },
   bom:{
     read:async()=>{let raw=await idbKvGet('vrt_bom2_v1',1,'kv','state');if(!raw){const ls=localStorage.getItem('vrt_bom2_state');if(ls&&ls.indexOf('_idbOnly')<0)raw=ls}if(!raw)return null;let cnt=1;try{const st=typeof raw==='string'?JSON.parse(raw):raw;cnt=(st.styles||st.boms||st.items||[]).length||1;raw=typeof raw==='string'?raw:JSON.stringify(raw)}catch(_){}return{tool:'bom',recordCount:cnt,bomState:raw}},
-    write:async data=>{const raw=data.bomState;if(!raw)return 0;await idbKvPut('vrt_bom2_v1',1,'kv','state',raw);try{if(raw.length<4500000)localStorage.setItem('vrt_bom2_state',raw)}catch(_){}return data.recordCount||1}
+    write:async data=>{const raw=data.bomState;if(!raw)return 0;await idbKvPut('vrt_bom2_v1',1,'kv','state',raw);try{localStorage.setItem('vrt_bom2_state',JSON.stringify({_idbOnly:true,count:data.recordCount||1}))}catch(_){}return data.recordCount||1}
   },
   fg:{
     read:async()=>{const recs=await idbGetAll('VRT_FGInventory',1,'fg_records');return recs.length?{tool:'fg',recordCount:recs.length,records:recs}:null},
@@ -549,8 +549,8 @@ const TOOLS = {
     write:async data=>{const dm=data.dataMeta||data.data||data,txns=Array.isArray(data.records)?data.records:(Array.isArray(dm.txns)?dm.txns:[]);if(Array.isArray(dm.parts))await idbReplaceAll('vrt_spareparts',2,'parts',dm.parts);if(Array.isArray(txns))await idbReplaceAll('vrt_spareparts',2,'txns',txns);if(Array.isArray(dm.versions))await idbReplaceAll('vrt_spareparts',2,'versions',dm.versions);if(Array.isArray(dm.suppliers))await idbReplaceAll('vrt_spareparts',2,'suppliers',dm.suppliers);if(Array.isArray(dm.invoices))await idbReplaceAll('vrt_spareparts',2,'invoices',dm.invoices);if(Array.isArray(dm.ocrhist))await idbReplaceAll('vrt_spareparts',2,'ocrhist',dm.ocrhist);return txns.length||((dm.parts||[]).length)}
   },
   prodplan:{
-    read:async()=>{try{const d=JSON.parse(localStorage.getItem('vrt_prodplan_v3_data')||'null');if(!d?.records?.length)return null;return{tool:'prodplan',recordCount:d.records.length,records:d.records,planVersions:JSON.parse(localStorage.getItem('vrt_prodplan_v3_versions')||'[]'),summary:{source:d.source||''}}}catch(_){return null}},
-    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_prodplan_v3_data',JSON.stringify({records:recs,source:'Cloud',savedAt:new Date().toISOString()}));if(Array.isArray(data.planVersions))localStorage.setItem('vrt_prodplan_v3_versions',JSON.stringify(data.planVersions))}catch(_){}return recs.length}
+    read:async()=>{const recs=await idbGetAll('VRT_ProductionPlan',1,'plan_records'),m=await idbKvGet('VRT_ProductionPlan',1,'plan_meta','state');return recs.length?{tool:'prodplan',recordCount:recs.length,records:recs,planVersions:m?.versions||[],summary:{source:m?.source||''}}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('VRT_ProductionPlan',1,'plan_records',recs);await idbKvPut('VRT_ProductionPlan',1,'plan_meta','state',{source:'Cloud',savedAt:new Date().toISOString(),versions:Array.isArray(data.planVersions)?data.planVersions:[]});return recs.length}
   },
   custstats:{
     read:async()=>{const st=await idbKvGet('vrt_custstats_v31',1,'data','current');if(!st||!Array.isArray(st.details)||!st.details.length)return null;const head=Object.assign({},st,{details:[]});return{tool:'custstats',recordCount:st.details.length,records:st.details,idbData:{custSummary:head},summary:{orderQty:st.overall?.orderQty||0,balanceQty:st.overall?.balanceQty||0}}},
@@ -561,12 +561,12 @@ const TOOLS = {
     write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;const meta=data.idbData?.fabricMeta||{},st=Object.assign({},meta,{current:recs.filter(x=>x.stockType==='current'),old:recs.filter(x=>x.stockType==='old_usage'),accessory:recs.filter(x=>x.stockType==='accessory')});await idbKvPut('VRT_FabricStockDB',1,'app','state',st);return recs.length}
   },
   fabricdelivery:{
-    read:async()=>{try{const st=JSON.parse(localStorage.getItem('vrt_fabric_center_v1')||'null');if(!st)return null;const recs=[];(st.orders||[]).forEach(x=>recs.push({...x,syncType:'order'}));(st.greige||[]).forEach(x=>recs.push({...x,syncType:'greige'}));(st.tachiang||[]).forEach(x=>recs.push({...x,syncType:'tachiang'}));(st.outsource||[]).forEach(x=>recs.push({...x,syncType:'outsource'}));return recs.length?{tool:'fabricdelivery',recordCount:recs.length,records:recs,aliases:st.aliases||{},versionHistory:st.versions||[],summary:{orders:(st.orders||[]).length,greige:(st.greige||[]).length,tachiang:(st.tachiang||[]).length,outsource:(st.outsource||[]).length}}:null}catch(_){return null}},
-    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;let st={};try{st=JSON.parse(localStorage.getItem('vrt_fabric_center_v1')||'{}')}catch(_){};st.orders=recs.filter(x=>x.syncType==='order').map(({syncType,...x})=>x);st.greige=recs.filter(x=>x.syncType==='greige').map(({syncType,...x})=>x);st.tachiang=recs.filter(x=>x.syncType==='tachiang').map(({syncType,...x})=>x);st.outsource=recs.filter(x=>x.syncType==='outsource').map(({syncType,...x})=>x);if(data.aliases)st.aliases=data.aliases;if(Array.isArray(data.versionHistory))st.versions=data.versionHistory;try{localStorage.setItem('vrt_fabric_center_v1',JSON.stringify(st))}catch(_){}return recs.length}
+    read:async()=>{const st=await idbKvGet('VRT_FabricDelivery',1,'app_state','state');if(!st)return null;const recs=[];(st.orders||[]).forEach(x=>recs.push({...x,syncType:'order'}));(st.greige||[]).forEach(x=>recs.push({...x,syncType:'greige'}));(st.tachiang||[]).forEach(x=>recs.push({...x,syncType:'tachiang'}));(st.outsource||[]).forEach(x=>recs.push({...x,syncType:'outsource'}));return recs.length?{tool:'fabricdelivery',recordCount:recs.length,records:recs,aliases:st.aliases||{},versionHistory:st.versions||[],summary:{orders:(st.orders||[]).length,greige:(st.greige||[]).length,tachiang:(st.tachiang||[]).length,outsource:(st.outsource||[]).length}}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;let st=await idbKvGet('VRT_FabricDelivery',1,'app_state','state')||{};st.orders=recs.filter(x=>x.syncType==='order').map(({syncType,...x})=>x);st.greige=recs.filter(x=>x.syncType==='greige').map(({syncType,...x})=>x);st.tachiang=recs.filter(x=>x.syncType==='tachiang').map(({syncType,...x})=>x);st.outsource=recs.filter(x=>x.syncType==='outsource').map(({syncType,...x})=>x);if(data.aliases)st.aliases=data.aliases;if(Array.isArray(data.versionHistory))st.versions=data.versionHistory;await idbKvPut('VRT_FabricDelivery',1,'app_state','state',st);return recs.length}
   },
   monthship:{
-    read:async()=>{try{const d=JSON.parse(localStorage.getItem('vrt_monthship_v3_data')||'null');if(!d?.records?.length)return null;return{tool:'monthship',recordCount:d.records.length,records:d.records,versions:JSON.parse(localStorage.getItem('vrt_monthship_v3_versions')||'[]')}}catch(_){return null}},
-    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;try{localStorage.setItem('vrt_monthship_v3_data',JSON.stringify({records:recs,source:'Cloud',savedAt:new Date().toISOString()}));if(Array.isArray(data.versions))localStorage.setItem('vrt_monthship_v3_versions',JSON.stringify(data.versions))}catch(_){}return recs.length}
+    read:async()=>{const recs=await idbGetAll('VRT_MonthlyShipping',1,'shipping_records'),m=await idbKvGet('VRT_MonthlyShipping',1,'shipping_meta','state');return recs.length?{tool:'monthship',recordCount:recs.length,records:recs,versions:m?.versions||[],qa:m?.qa||[]}:null},
+    write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('VRT_MonthlyShipping',1,'shipping_records',recs);await idbKvPut('VRT_MonthlyShipping',1,'shipping_meta','state',{source:'Cloud',savedAt:new Date().toISOString(),versions:Array.isArray(data.versions)?data.versions:[],qa:data.qa||[]});return recs.length}
   }
 };
 
@@ -726,32 +726,20 @@ async function pull(tool) {
 const HRA_SYNC_TOOLS=['custstats','orders','podelivery','prodplan','cuttingplan','fabric','fabricdelivery','bom','cutting','sewing','smv','fg','shipping','monthship','spareparts'];
 async function pushAllSmart(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');let changed=0,skip=0,fail=0;for(let i=0;i<HRA_SYNC_TOOLS.length;i++){const t=HRA_SYNC_TOOLS[i];if(el)el.textContent=`☁↑ ${i+1}/${HRA_SYNC_TOOLS.length} ${t}`;try{const r=await push(t);if(r&&r.ok){if(r.noChange||!(r.uploaded||0))skip++;else changed+=Number(r.uploaded)||0}else if(r&&r.needsPull)fail++}catch(_){fail++}}if(el)el.textContent=`☁↑ 完成｜變更上傳 ${changed.toLocaleString()}｜未變模組 ${skip}｜需處理 ${fail}`;await fetchStatus()}
 async function pullAllSmart(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');let down=0,skip=0,pending=0,fail=0;for(let i=0;i<HRA_SYNC_TOOLS.length;i++){const t=HRA_SYNC_TOOLS[i];if(el)el.textContent=`☁↓ ${i+1}/${HRA_SYNC_TOOLS.length} ${t}`;try{const r=await pull(t);if(r&&r.ok){down+=Number(r.downloaded)||0;pending+=Number(r.pendingUpload)||0;if(r.noChange||!(r.downloaded||0))skip++}else fail++}catch(_){fail++}}if(el)el.textContent=`☁↓ 完成｜新增/變更下載 ${down.toLocaleString()}｜未變模組 ${skip}｜待上傳 ${pending.toLocaleString()}｜失敗 ${fail}`;await fetchStatus()}
-async function showPendingAudit(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');try{const r=await fetch(gasUrl+(gasUrl.includes('?')?'&':'?')+'action=auditStatus',{redirect:'follow'}),j=await r.json(),d=j.data||j;if(!j.ok&&j.ok!==undefined)throw new Error(j.error||'auditStatus');const rows=d.pending||[];if(!rows.length){if(el)el.textContent='📣 目前沒有待發摘要／核可';alert('目前沒有待發摘要／核可');return}const txt=rows.map(x=>`${x.label||x.tool} ${x.period}：${x.pendingSummary?'摘要未發':''}${x.pendingSummary&&x.pendingApproval?'、':''}${x.pendingApproval?'待核可':''}`).join('\n');if(el)el.textContent=`📣 待處理 ${rows.length} 項`;alert('待發摘要／核可\n\n'+txt)}catch(e){if(el)el.textContent='📣 讀取待辦失敗：'+e.message}}
-window.pushAllSmart=pushAllSmart;window.pullAllSmart=pullAllSmart;window.showPendingAudit=showPendingAudit;
+async function showPendingAudit(){return false};
 
-// ─── IDB HELPERS ────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════
-// IndexedDB helpers — 帶完整 schema + 自我修復
-// 重要：開啟時一律建齊該資料庫應有的全部 store（與各模組一致），
-// 避免 Portal 先開而建出「空資料庫」害模組打不開自己的資料表；
-// 若發現資料庫已存在但缺 store（先前已壞），自動升版補建修復。
-// ═══════════════════════════════════════════════════════════
-const IDB_SCHEMAS = {
-  'VRT_SewingProduction': { ver:1, stores:{ daily_records:{keyPath:'id'}, eff_records:{keyPath:'id'}, system_meta:{keyPath:'key'}, analysis_history:{keyPath:'analysisDate'}, analytics_monthly:{keyPath:'yearMonth'} } },
-  'FactoryDB': { ver:15, stores:{ po_headers:{keyPath:'id',autoIncrement:true}, po_lines:{keyPath:'id',autoIncrement:true}, weekly_snapshots:{keyPath:'id',autoIncrement:true}, order_imports:{keyPath:'id',autoIncrement:true}, parse_audit:{keyPath:'id',autoIncrement:true} } },
-  'VRT_SMV_Manager_v52': { ver:1, stores:{ smv_snapshots:{keyPath:'id',autoIncrement:true} } },
-  'vrt_custstats_v31': { ver:1, stores:{ data:null } },
-  'VRT_FabricStockDB': { ver:1, stores:{ app:null } },
-  'vrt_ie_smv_integrated_v2': { ver:1, stores:{ state:null } },
-  'CuttingProd':      { ver: 2, stores: { cutting_records:{keyPath:'id'}, sewing_cache:{keyPath:'id'}, plan_records:{keyPath:'id'}, variance_records:{keyPath:'id'}, history_records:{keyPath:'id'} } },
-  'CuttingCloudPlan': { ver: 1, stores: { cloud_records:{keyPath:'id', autoIncrement:true} } },
-  'vrt_pocc_db':      { ver: 1, stores: { records:{keyPath:'id'} } },
-  'VRT_FGInventory':  { ver: 1, stores: { fg_records:{keyPath:'id'}, system_meta:{keyPath:'key'} } },
-  'vrt_bom2_v1':      { ver: 1, stores: { kv:null } },
-  'vrt_spareparts':   { ver: 2, stores: { parts:{keyPath:'id'}, txns:{keyPath:'id'}, versions:{keyPath:'id'}, meta:{keyPath:'k'}, suppliers:{keyPath:'id'}, invoices:{keyPath:'id'}, ocrhist:{keyPath:'id'}, images:{keyPath:'id'} } },
-  'ProdPlanCapacity': { ver: 1, stores: { records:{keyPath:'id'}, meta:{keyPath:'k'} } },
-  'VRTCustomerStatistics': { ver: 1, stores: { records:{keyPath:'id'}, events:{keyPath:'id'}, summaries:{keyPath:'k'}, settings:{keyPath:'k'}, importHistory:{keyPath:'id'} } },
-  'VRTMonthlyShippingControlCenter': { ver: 1, stores: { state:null } },
+// Known stores used by the portal.  Existing databases are opened at their
+// current version; missing stores are added without replacing existing data.
+const IDB_SCHEMAS={
+  VRT_SewingProduction:{ver:2,stores:{daily_records:{keyPath:'id'},eff_records:{keyPath:'id'},system_meta:{keyPath:'key'},analysis_history:{keyPath:'analysisDate'},analytics_monthly:{keyPath:'yearMonth'}}},
+  CuttingProd:{ver:2,stores:{cutting_records:{keyPath:'id'},sewing_cache:{keyPath:'id'},plan_records:{keyPath:'id'},variance_records:{keyPath:'id'},history_records:{keyPath:'id'},style_records:{keyPath:'id'},plan_meta:null}},
+  FactoryDB:{ver:15,stores:{po_lines:{keyPath:'id',autoIncrement:true},po_headers:{keyPath:'id',autoIncrement:true},weekly_snapshots:{keyPath:'id',autoIncrement:true},order_imports:{keyPath:'id',autoIncrement:true},parse_audit:{keyPath:'id',autoIncrement:true}}},
+  VRT_SMV_Manager_v52:{ver:1,stores:{smv_snapshots:{keyPath:'id'}}},vrt_ie_smv_integrated_v2:{ver:1,stores:{state:null}},
+  vrt_pocc_db:{ver:1,stores:{records:{keyPath:'id'}}},vrt_bom2_v1:{ver:1,stores:{kv:null}},VRT_FGInventory:{ver:1,stores:{fg_records:{keyPath:'id'}}},
+  vrt_spareparts:{ver:2,stores:{parts:{keyPath:'id'},txns:{keyPath:'id'},versions:{keyPath:'id'},suppliers:{keyPath:'id'},invoices:{keyPath:'id'},ocrhist:{keyPath:'id'}}},
+  vrt_custstats_v31:{ver:1,stores:{data:null}},VRT_FabricStockDB:{ver:1,stores:{app:null}},
+  VRT_Shipping:{ver:1,stores:{shipping_records:{keyPath:'id'},shipping_meta:null}},VRT_ProductionPlan:{ver:1,stores:{plan_records:{keyPath:'id'},plan_meta:null}},
+  VRT_FabricDelivery:{ver:1,stores:{app_state:null}},VRT_MonthlyShipping:{ver:1,stores:{shipping_records:{keyPath:'id'},shipping_meta:null}}
 };
 
 function _buildStores(db, schema) {

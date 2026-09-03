@@ -1,4 +1,4 @@
-/* VRT PROD Auto Sync v3.4 — HRA PAY v3.9.5 control pattern + PROD Smart Sync
+/* VRT PROD Auto Sync v3.7 — local-first incremental PROD Smart Sync
  * Principles:
  * - local-first UI; cloud never blocks page startup
  * - background Pull -> Push reconcile
@@ -9,7 +9,7 @@
  */
 (function(g){
   'use strict';if(g.VRTProdAutoSync)return;
-  const VERSION='3.4.0',PFX='vrt:prod:auto34:',LOCK='vrt:prod:auto34:lock:',C={};
+  const VERSION='3.7.0',PFX='vrt:prod:auto37:',LOCK='vrt:prod:auto37:lock:',C={};
   const TAB=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
   const online=()=>{try{return !('onLine' in navigator)||navigator.onLine}catch(_){return true}};
   const read=k=>{try{return JSON.parse(localStorage.getItem(PFX+k)||'null')}catch(_){return null}};
@@ -49,11 +49,11 @@
     document.addEventListener('visibilitychange',()=>{if(!document.hidden&&online()){const p=read(key)||{};setTimeout(()=>run(p.reason||'resume',p.extra||{}),250)}});
     addEventListener('pageshow',e=>{if(e&&e.persisted&&online()){const p=read(key)||{};setTimeout(()=>run(p.reason||'pageshow',p.extra||{}),250)}});
     if(opts.watch!==false){
-      const mut=/儲存|保存|確認|新增|修改|刪除|移除|核可|簽核|approve|save|delete|remove|commit|restore|還原|匯入|import|ocr|telegram|摘要|發送|send|publish|發布/i;
+      const mut=/儲存|保存|確認|新增|修改|刪除|移除|清除|核可|簽核|approve|save|delete|remove|\bdel\w*|clear|commit|restore|還原|匯入|import|ocr|telegram|摘要|發送|send|publish|發布/i;
       const cloud=/雲端|cloud|推送|拉取|上傳|下載|push|pull|sync/i;
       document.addEventListener('change',e=>{const t=e.target;if(!t)return;if(t.matches&&t.matches('input[type=file]')){schedule('file-change',{},1500);setTimeout(()=>run('post-import-check',{}),9000)}else if(t.matches&&t.matches('input,select,textarea'))schedule('change',{},1800)},true);
       document.addEventListener('drop',e=>{if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){schedule('file-change',{},1500);setTimeout(()=>run('post-import-check',{}),9000)}},true);
-      document.addEventListener('click',e=>{const b=e.target&&e.target.closest?e.target.closest('button,[role=button],a'):null;if(!b)return;const tx=((b.textContent||'')+' '+(b.id||'')+' '+(b.title||'')+' '+(b.getAttribute('onclick')||''));if(cloud.test(tx))return;if(mut.test(tx)){const rs=/匯入|import|ocr/i.test(tx)?'import':(/核可|簽核|approve|publish|發布/i.test(tx)?'approval':'change');schedule(rs,{},rs==='change'?1300:900);setTimeout(()=>run('post-action-check',{}),6500)}},true);
+      document.addEventListener('click',e=>{const b=e.target&&e.target.closest?e.target.closest('button,[role=button],a'):null;if(!b)return;const tx=((b.textContent||'')+' '+(b.id||'')+' '+(b.title||'')+' '+(b.getAttribute('onclick')||''));if(cloud.test(tx))return;if(mut.test(tx)){const deleting=/刪除|移除|清除|delete|remove|\bdel\w*|clear|🗑/i.test(tx);if(deleting)try{g.VRTSmartSync&&VRTSmartSync.authorizeShrink(key,'explicit-ui-delete')}catch(_){}const rs=/匯入|import|ocr/i.test(tx)?'import':(/核可|簽核|approve|publish|發布/i.test(tx)?'approval':'change');schedule(rs,{},rs==='change'?1300:900);setTimeout(()=>run('post-action-check',{}),6500)}},true);
     }
     return st;
   }

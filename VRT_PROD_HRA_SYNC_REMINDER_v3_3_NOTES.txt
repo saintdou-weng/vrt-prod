@@ -1,0 +1,29 @@
+VRT PROD v3.3 — HRA-style Smart Sync + Summary/Approval Reminder
+
+CLOUD SYNC
+- Manifest first, then only new/changed/missing buckets.
+- Unchanged data: Upload 0 / Download 0.
+- Sync baseline keys remain v3.2-compatible so phones do not unnecessarily re-download after this update.
+- Manifest supports GET then POST fallback, matching HRA Portal compatibility behavior.
+- Portal adds HRA-style Modules / Synced / Records / Last Sync KPIs and Smart Upload All / Smart Pull All.
+- Shipping and Fabric Delivery are included in Portal all-sync.
+- All HTML pages use vrt-smart-sync-v3.js?v=3.3.0 for cache busting.
+
+REMINDER RULE
+- Dynamic threshold = first day of previous month.
+- Current date Aug-2026 => Jul-2026 and later can trigger reminder.
+- Jun-2026 and earlier never trigger reminder, even if imported/edited now.
+- Future business dates are included.
+- Technical updatedAt/savedAt are NOT used to promote old historical records into the reminder window.
+- 45-minute grace after cloud update, then bot checks pending summary/approval.
+- Reminder is de-duplicated daily; a materially changed pending set can remind again the same day.
+- Unresolved items can remind again on a later day.
+- /pending shows outstanding items. /sum includes a Pending Summary/Approval button.
+- SMV/IE tracks approval; any other module that carries an explicit approval / approvalStatus field is also tracked automatically. Modules without an approval field track summary only.
+
+DEPLOYMENT
+1. Replace the vrt-prod files with the full ZIP or patch.
+2. Replace GAS with VRT_Production_v3.1_HRA_Sync_Reminder.gs and deploy a NEW VERSION to the EXISTING Web App deployment.
+3. Keep the existing /exec URL.
+4. Do NOT rerun webhook/setup triggers. The reminder sweep piggybacks the existing pollTelegram trigger.
+5. setupBotCommands() is optional only if you want /pending to appear in Telegram's slash-command list; /pending works even without rerunning it.

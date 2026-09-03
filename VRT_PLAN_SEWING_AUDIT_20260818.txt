@@ -1,0 +1,91 @@
+VRT Production Plan / Sewing Efficiency Audit
+Checked: 2026-08-18
+Basis: user-uploaded Production Plan Excel and Sewing Daily/Weekly .msg attachments.
+
+1) PRODUCTION PLAN
+Observed UI:
+- Line 1–11 total = 279,361 pcs.
+- UI Line 12 = 284,203 pcs.
+
+Finding:
+- 284,203 = 279,361 + 4,842.
+- 4,842 pcs is the legacy August Line 12 quantity in the source Production Plan.
+- The old parser carried the previous line number forward into formula/footer rows. A grand-total/footer quantity was therefore attributed to Line 12.
+- VRT rule applied: Line 12 is excluded from Aug-2026 onward; July history remains.
+
+Latest attached Production Plan (6), August source:
+Line 1  11,464
+Line 2  11,340
+Line 3  12,204
+Line 4   7,986
+Line 5  14,144
+Line 6  10,470
+Line 7  12,204
+Line 8  10,293
+Line 9  13,542
+Line 10 57,722
+Line 11 106,476
+Line 12 legacy 4,842
+Total source incl. legacy Line 12 = 272,687 pcs
+Valid Aug Line 1–11 = 267,845 pcs
+
+2) SEWING W31: 2026-07-27 to 2026-08-01
+Factory source totals:
+Jul 27–31 Garment:
+- Output 20,958 pcs
+- Produced standard minutes 157,180.2063
+- Attended minutes 557,520
+
+Jul 27–31 Apron:
+- Output 56,907 pcs
+- Produced standard minutes 32,465.0693
+- Attended minutes 146,400
+
+Aug 01 Garment:
+- Output 4,194 pcs
+- Produced standard minutes 33,576.1251
+- Attended minutes 106,080
+
+Aug 01 Apron:
+- Output 16,408 pcs
+- Produced standard minutes 8,008
+- Attended minutes 30,240
+
+W31 output = 98,467 pcs (the UI quantity was correct).
+W31 exact efficiency =
+(157180.2063 + 32465.0693 + 33576.1251 + 8008)
+/
+(557520 + 146400 + 106080 + 30240)
+= 27.52%.
+
+Therefore the UI value 39% is wrong.
+
+3) DAILY EXACT COMBINED EFFICIENCY
+Formula: Produced Standard Minutes / Attended Minutes.
+
+2026-07-27 = 21.53%   (old UI 26% — overstated)
+2026-07-28 = 27.25%
+2026-07-29 = 28.66%
+2026-07-30 = 26.39%
+2026-07-31 = 30.80%
+2026-08-01 = 30.51%   (~31%)
+
+Important:
+- The uploaded Aug-01 standalone Daily report supports ~30.5%, so the Daily UI displaying 31% for Aug-01 is consistent with the source.
+- The ~29% figure belongs to the uploaded Aug-01–08 Weekly report:
+  combined weekly efficiency ≈ 29.06%.
+
+4) ROOT CAUSES FIXED
+- Weekly KPI used the MAX manpower and MAX efficiency of each line across the week, then averaged those maxima.
+- Daily/weekly calculations excluded staffed zero-output lines, shrinking the denominator and overstating efficiency.
+- Weekly parser rounded efficiency and discarded zero-output staffed lines.
+- Weekly parser did not retain Produced Minutes / Attended Minutes.
+- Production Plan parser allowed footer/grand-total rows to inherit the preceding line number.
+
+5) NEW RULES
+- Efficiency first choice: exact Produced Standard Minutes / Attended Minutes.
+- If exact minute fields are unavailable: reported efficiency weighted by manpower × 480.
+- Staffed zero-output lines remain in denominator.
+- Daily detail quantity > Weekly summary quantity > Target/DPO quantity, preventing duplicate actual pieces.
+- Production Plan formula/footer rows never inherit a line.
+- August 2026 onward Line 12 is excluded.

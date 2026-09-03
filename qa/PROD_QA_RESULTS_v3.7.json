@@ -1,0 +1,126 @@
+{
+  "release": "VRT PROD v3.7",
+  "generatedAt": "2026-09-02T00:32:25.831Z",
+  "summary": {
+    "total": 15,
+    "pass": 15,
+    "fail": 0
+  },
+  "tests": [
+    {
+      "name": "PROD HTML inventory",
+      "status": "PASS",
+      "detail": "19 HTML files"
+    },
+    {
+      "name": "JavaScript syntax",
+      "status": "PASS",
+      "detail": "3 JS files + 81 inline scripts"
+    },
+    {
+      "name": "Local file references",
+      "status": "PASS",
+      "detail": "no missing local src/href"
+    },
+    {
+      "name": "Cloud modules use Smart Sync v3.7",
+      "status": "PASS",
+      "detail": "18 cloud HTML modules"
+    },
+    {
+      "name": "Cloud modules load Auto Sync v3.7",
+      "status": "PASS",
+      "detail": "18 cloud HTML modules"
+    },
+    {
+      "name": "Mobile/desktop responsive contract",
+      "status": "PASS",
+      "detail": "19 HTML modules have viewport + responsive CSS"
+    },
+    {
+      "name": "Weekly report baseline uses IndexedDB",
+      "status": "PASS",
+      "detail": "VRT_WeeklyReport/baselines; localStorage is migration-read only"
+    },
+    {
+      "name": "No automatic demo operational data",
+      "status": "PASS",
+      "detail": "IE/SMV and BOM start empty when no saved dataset exists"
+    },
+    {
+      "name": "Production schedule is Production Plan only",
+      "status": "PASS",
+      "detail": "planAggEvents/buildSchedule do not create schedule rows from Orders"
+    },
+    {
+      "name": "Cutting query Excel export",
+      "status": "PASS",
+      "detail": "current search/month/section and style/fabric/month views are exported"
+    },
+    {
+      "name": "PROD automatic reminder disabled",
+      "status": "PASS",
+      "detail": "no automatic summary/approval reminder"
+    },
+    {
+      "name": "Shipping dates remain distinct in Smart Sync",
+      "status": "PASS",
+      "detail": "same customer/size/mode on 2026-09-05 and 2026-09-19 stay as 2 records"
+    },
+    {
+      "name": "Less-over-more protection",
+      "status": "PASS",
+      "detail": "cloud 4 > local 3 is blocked before upload"
+    },
+    {
+      "name": "Unchanged Smart Pull downloads zero buckets",
+      "status": "PASS",
+      "detail": "downloaded=0; manifest-only check"
+    },
+    {
+      "name": "Attached Shipping workbook regression",
+      "status": "PASS",
+      "detail": {
+        "workbook": "1-VRT MONTHLY SHIPPING SCHEDULE (6).xlsx",
+        "allRecords": 17,
+        "septemberShipments": 4,
+        "septemberUniqueCustomers": 3,
+        "septemberCartons": 3370,
+        "records": [
+          {
+            "date": "2026-09-05",
+            "customer": "LECHNER",
+            "size": "20",
+            "mode": "SEA",
+            "cartons": 510,
+            "id": "ship_1l5u59f"
+          },
+          {
+            "date": "2026-09-05",
+            "customer": "AMERICAN DAWN",
+            "size": "40",
+            "mode": "SEA",
+            "cartons": 1170,
+            "id": "ship_jvx3a6"
+          },
+          {
+            "date": "2026-09-19",
+            "customer": "AMERICAN DAWN",
+            "size": "40",
+            "mode": "SEA",
+            "cartons": 1170,
+            "id": "ship_hdi8tx"
+          },
+          {
+            "date": "2026-09-26",
+            "customer": "NORTHERN",
+            "size": "20",
+            "mode": "SEA",
+            "cartons": 520,
+            "id": "ship_lj716f"
+          }
+        ]
+      }
+    }
+  ]
+}

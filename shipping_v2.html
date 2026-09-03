@@ -225,8 +225,9 @@ tbody tr:hover td{background:#f8fafc}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 </head>
 <body>
 
@@ -307,7 +308,9 @@ tbody tr:hover td{background:#f8fafc}
       <div class="filter-sep"></div>
       <input class="filter-input" id="fSearch" placeholder="搜尋 PO / 顏色 / 尺寸 / 備註…" oninput="applyFilters()">
       <button class="btn btn-ghost" onclick="resetFilters()">✕ 重置</button>
+      <button class="btn btn-primary" onclick="openShipEditor()">＋ 新增</button>
       <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn btn-ghost" onclick="exportExcel()">⬇ Excel</button>
     </div>
 
     <!-- KPI CARDS -->
@@ -374,45 +377,29 @@ let ALL=[], FILTERED=[], TAB='shipped', PAGE=1, PER=50;
 const MONTHS=['','1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const SHIP_LS = 'vrt_shipping_data_v1';
 const SHIP_META_LS = 'vrt_shipping_meta_v1';
+const SHIP_IDB='VRT_Shipping',SHIP_REC='shipping_records',SHIP_META='shipping_meta';
 
-// ── 儲存資料到 localStorage ──
-function shipSave(filename) {
-  try {
-    const meta = { filename, savedAt: new Date().toISOString(), count: ALL.length };
-    // 嘗試存全量
-    try {
-      localStorage.setItem(SHIP_LS, JSON.stringify(ALL));
-      localStorage.setItem(SHIP_META_LS, JSON.stringify(meta));
-      console.log(`Shipping saved: ${ALL.length} records`);
-    } catch(e) {
-      // 超出容量：只存最近 12 個月
-      const cutDate = new Date();
-      cutDate.setMonth(cutDate.getMonth() - 12);
-      const recent = ALL.filter(r => {
-        if (!r.etdYear || !r.etdMonth) return true;
-        const d = new Date(r.etdYear, r.etdMonth - 1, 1);
-        return d >= cutDate;
-      });
-      localStorage.setItem(SHIP_LS, JSON.stringify(recent));
-      meta.count = recent.length;
-      meta.trimmed = true;
-      localStorage.setItem(SHIP_META_LS, JSON.stringify(meta));
-    }
-  } catch(e) { console.warn('Shipping save failed:', e); }
+function shipHash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(36)}
+function shipKey(r){return [r.etd,r.cust,r.po,r.style,r.color,r.size,r.item,r.erp].map(v=>String(v||'').trim().toUpperCase()).join('|')}
+function normalizeShipRows(rows){const m=new Map;for(const raw of rows||[]){if(!raw)continue;const r={...raw};r.id='shipping_'+shipHash(shipKey(r));r.orig=pn(r.orig);r.shipped=pn(r.shipped);r.open=pn(r.open);r.status=classify(r.orig,r.shipped,r.open,r.remark);m.set(r.id,r)}return[...m.values()]}
+
+// ── 全量資料只存 IndexedDB ──
+async function shipSave(filename) {
+  try {ALL=normalizeShipRows(ALL);const meta={filename:filename||'Manual',savedAt:new Date().toISOString(),count:ALL.length};await VRTProdStorage.replaceAll(SHIP_IDB,SHIP_REC,ALL,{keyPath:'id'});await VRTProdStorage.put(SHIP_IDB,SHIP_META,meta,'state',{});try{localStorage.removeItem(SHIP_LS);localStorage.removeItem(SHIP_META_LS)}catch(_){}return true}
+  catch(e){console.warn('Shipping save failed:',e);return false}
 }
 
-// ── 從 localStorage 還原資料 ──
-function shipRestore() {
+// ── 從 IndexedDB 還原；舊 localStorage 僅做一次遷移 ──
+async function shipRestore() {
   try {
-    const raw  = localStorage.getItem(SHIP_LS);
-    const meta = JSON.parse(localStorage.getItem(SHIP_META_LS) || 'null');
-    if (!raw || !meta) return false;
-    ALL = JSON.parse(raw);
+    let rows=await VRTProdStorage.all(SHIP_IDB,SHIP_REC,{keyPath:'id'}),meta=await VRTProdStorage.get(SHIP_IDB,SHIP_META,'state');
+    if(!rows.length&&!meta){let old=await VRTProdStorage.migrateJSON(SHIP_LS,[]),om=await VRTProdStorage.migrateJSON(SHIP_META_LS,null);if(Array.isArray(old)&&old.length){ALL=normalizeShipRows(old);await shipSave(om&&om.filename||'Legacy migration');rows=ALL;meta=om||{filename:'Legacy migration',savedAt:new Date().toISOString()}}}
+    if(!rows.length)return false;ALL=normalizeShipRows(rows);meta=meta||{filename:'IndexedDB',savedAt:new Date().toISOString()};
     if (!ALL.length) return false;
     const savedAt = new Date(meta.savedAt);
     const age = Math.round((Date.now() - savedAt) / 86400000);
     document.getElementById('fileInfo').textContent =
-      `${meta.filename}${meta.trimmed?' (近12月)':''}  ·  ${ALL.length.toLocaleString()} 筆  ·  ${age}天前匯入`;
+      `${meta.filename||'IndexedDB'}  ·  ${ALL.length.toLocaleString()} 筆  ·  ${age}天前匯入`;
     setStatus('已還原',true);
     buildFilters();
     applyFilters();
@@ -498,6 +485,7 @@ async function loadFile(file){
 
       ALL.push({
         item:r[ci.item]?+r[ci.item]:0,
+        erp:ci.erp!==undefined?nvs(r[ci.erp]):'',
         cust,po,
         style:ci.style!==undefined?nvs(r[ci.style]):'',
         desc:ci.desc!==undefined?nvs(r[ci.desc]):'',
@@ -512,7 +500,7 @@ async function loadFile(file){
       });
     }
 
-    document.getElementById('fileInfo').textContent=`${file.name}  ·  ${ALL.length.toLocaleString()} 筆記錄`;
+    ALL=normalizeShipRows(ALL);document.getElementById('fileInfo').textContent=`${file.name}  ·  ${ALL.length.toLocaleString()} 筆記錄`;
     setStatus('就緒',true);
     buildFilters();
     applyFilters();
@@ -520,8 +508,7 @@ async function loadFile(file){
     document.getElementById('dashboard').style.display='block';
     document.getElementById('btnCloudSync').style.display='';
     document.getElementById('loadStatus').textContent='';
-    // 儲存到 localStorage（下次開啟自動還原）
-    shipSave(file.name);
+    await shipSave(file.name);
   }catch(e){
     setStatus('錯誤','');
     document.getElementById('loadStatus').textContent='❌ '+e.message;
@@ -707,9 +694,9 @@ function renderTab(){
 
   // HEAD
   const headMap={
-    shipped:`<th>客戶</th><th>PO #</th><th>款式</th><th>描述</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th>出貨率</th><th>ETD</th><th>布種</th><th>狀態/備註</th>`,
-    outstanding:`<th>客戶</th><th>PO #</th><th>款式</th><th>描述</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th class="num">未出</th><th>ETD</th><th>布種</th><th>備註</th>`,
-    abnormal:`<th>異常類型</th><th>客戶</th><th>PO #</th><th>款式</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th class="num">差異</th><th>ETD</th><th>備註</th>`,
+    shipped:`<th>客戶</th><th>PO #</th><th>款式</th><th>描述</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th>出貨率</th><th>ETD</th><th>布種</th><th>狀態/備註</th><th>操作</th>`,
+    outstanding:`<th>客戶</th><th>PO #</th><th>款式</th><th>描述</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th class="num">未出</th><th>ETD</th><th>布種</th><th>備註</th><th>操作</th>`,
+    abnormal:`<th>異常類型</th><th>客戶</th><th>PO #</th><th>款式</th><th>顏色</th><th>尺寸</th><th class="num">PO量</th><th class="num">已出</th><th class="num">差異</th><th>ETD</th><th>備註</th><th>操作</th>`,
   };
   document.getElementById('tblHead').innerHTML=`<tr>${headMap[TAB]}</tr>`;
 
@@ -748,6 +735,7 @@ function renderRow(r){
       <td style="font-size:11px;color:var(--tx3)">${etdStr}</td>
       <td>${fabStr}</td>
       <td>${statusBadge}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openShipEditor('${r.id}')">修改</button> <button class="btn btn-ghost btn-sm" onclick="deleteShip('${r.id}')">刪除</button></td>
     </tr>`;
   }
 
@@ -766,6 +754,7 @@ function renderRow(r){
       <td style="font-size:11px;color:var(--tx3)">${etdStr}</td>
       <td>${fabStr}</td>
       <td style="font-size:11px;color:var(--tx2)">${esc(r.remark)||'—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openShipEditor('${r.id}')">修改</button> <button class="btn btn-ghost btn-sm" onclick="deleteShip('${r.id}')">刪除</button></td>
     </tr>`;
   }
 
@@ -788,8 +777,13 @@ function renderRow(r){
     <td class="td-num" style="color:${diff>0?'var(--red)':'var(--ylw)'};font-weight:700">${diff>0?'+':''}${fmt(diff)}</td>
     <td style="font-size:11px;color:var(--tx3)">${etdStr}</td>
     <td style="font-size:11px;color:var(--tx2)">${esc(r.remark)||'—'}</td>
+    <td><button class="btn btn-ghost btn-sm" onclick="openShipEditor('${r.id}')">修改</button> <button class="btn btn-ghost btn-sm" onclick="deleteShip('${r.id}')">刪除</button></td>
   </tr>`;
 }
+
+function openShipEditor(id=''){const r=ALL.find(x=>x.id===id)||{};document.getElementById('modalTitle').textContent=id?'修改出貨資料':'新增出貨資料';document.getElementById('modalSub').textContent='儲存後寫入 IndexedDB，並列入 Smart Sync';document.getElementById('modalBody').innerHTML=`<div class="dist-grid"><label>客戶<input id="seCust" class="filter-input" value="${esc(r.cust||'')}"></label><label>PO #<input id="sePo" class="filter-input" value="${esc(r.po||'')}"></label><label>款式<input id="seStyle" class="filter-input" value="${esc(r.style||'')}"></label><label>顏色<input id="seColor" class="filter-input" value="${esc(r.color||'')}"></label><label>尺寸<input id="seSize" class="filter-input" value="${esc(r.size||'')}"></label><label>ETD<input id="seEtd" type="date" class="filter-input" value="${esc(r.etd||'')}"></label><label>PO量<input id="seOrig" type="number" class="filter-input" value="${pn(r.orig)}"></label><label>已出<input id="seShipped" type="number" class="filter-input" value="${pn(r.shipped)}"></label><label>未出<input id="seOpen" type="number" class="filter-input" value="${pn(r.open)}"></label><label>布種<input id="seFab" class="filter-input" value="${esc(r.fabType||'')}"></label></div><label style="display:block;margin-top:10px">備註<input id="seRemark" class="filter-input" style="width:100%" value="${esc(r.remark||'')}"></label><div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-primary" onclick="saveShipEditor('${id}')">儲存</button><button class="btn btn-ghost" onclick="closeModal()">取消</button></div>`;document.getElementById('modal').classList.add('show')}
+async function saveShipEditor(oldId){let r={cust:document.getElementById('seCust').value.trim(),po:document.getElementById('sePo').value.trim(),style:document.getElementById('seStyle').value.trim(),color:document.getElementById('seColor').value.trim(),size:document.getElementById('seSize').value.trim(),etd:document.getElementById('seEtd').value,orig:pn(document.getElementById('seOrig').value),shipped:pn(document.getElementById('seShipped').value),open:pn(document.getElementById('seOpen').value),fabType:document.getElementById('seFab').value.trim(),remark:document.getElementById('seRemark').value.trim(),desc:'',fabItem:'',item:0,erp:''};if(!r.cust||!r.po){alert('客戶與 PO 必填');return}r.etdYear=r.etd?r.etd.slice(0,4):'';r.etdMonth=r.etd?parseInt(r.etd.slice(5,7)):0;r.fabGroup=parseFabGroup(r.fabType);r.status=classify(r.orig,r.shipped,r.open,r.remark);r.id='shipping_'+shipHash(shipKey(r));if(ALL.some(x=>x.id===r.id&&x.id!==oldId)){alert('相同 ETD／客戶／PO／款式／顏色／尺寸已存在');return}if(oldId)ALL=ALL.filter(x=>x.id!==oldId);ALL.push(r);await shipSave('Manual');closeModal();buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block'}
+async function deleteShip(id){if(!confirm('確定刪除這筆出貨資料？'))return;ALL=ALL.filter(x=>x.id!==id);await shipSave('Manual');buildFilters();applyFilters()}
 
 // ══════════════════════════════════════════════
 // PAGINATION
@@ -954,6 +948,7 @@ function exportCSV(){
   a.download=`vrt_${TAB}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
+function exportExcel(){if(!FILTERED.length){alert('無資料可匯出');return}const rows=FILTERED.map(r=>({Customer:r.cust,'PO #':r.po,Style:r.style,Description:r.desc,Color:r.color,Size:r.size,'PO Qty':r.orig,Shipped:r.shipped,Open:r.open,ETD:r.etd,'Fabric Type':r.fabType,Remark:r.remark,Status:r.status})),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SHIPPING');XLSX.writeFile(wb,'VRT_SHIPPING.xlsx')}
 
 // ══════════════════════════════════════════════
 // CLOUD SYNC
@@ -975,7 +970,7 @@ async function pullFromGas(){
   const gasUrl=(localStorage.getItem('vrt_portal_gas_url')||'').trim();if(!gasUrl){alert('請先設定 GAS URL');return;}
   const btn=document.getElementById('btnCloudSync'),orig=btn.textContent;btn.disabled=true;btn.textContent='⬇ 智慧拉取...';
   try{
-    const res=await VRTSmartSync.pull({url:gasUrl,tool:'shipping',localRecords:ALL,onStatus:m=>{btn.textContent='⬇ '+m.slice(0,24)},apply:async recs=>{ALL=recs;buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block';document.getElementById('btnCloudSync').style.display='';}});
+    const res=await VRTSmartSync.pull({url:gasUrl,tool:'shipping',localRecords:ALL,onStatus:m=>{btn.textContent='⬇ '+m.slice(0,24)},apply:async recs=>{ALL=normalizeShipRows(recs);await shipSave('Cloud');buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block';document.getElementById('btnCloudSync').style.display='';}});
     if(!res.ok){btn.textContent='雲端無資料';return;}document.getElementById('fileInfo').textContent=`雲端智慧同步 · ${ALL.length.toLocaleString()} 筆`;setStatus('已還原',true);btn.textContent=`✓ 下載 ${res.downloaded||0} / 未變 ${res.unchanged||0}`;btn.style.background='#059669';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},3500);
   }catch(e){btn.textContent='✗ '+e.message.slice(0,18);btn.style.background='#dc2626';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},4000)}
 }

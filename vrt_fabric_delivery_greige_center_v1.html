@@ -152,8 +152,9 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 </head>
 <body>
 
@@ -443,6 +444,7 @@ const SEED_ALIASES=[
 
 /* ================= 狀態 ================= */
 const LS_KEY="vrt_fabric_center_v1";
+const FAB_IDB="VRT_FabricDelivery",FAB_STORE="app_state";
 let S={orders:[],tachiang:[],outsource:[],greige:[],aliases:[],versions:[],cfg:{gasEndpoint:"",gasToken:"",tgToken:"",tgChat:"",year:2026,lang:"zh"}};
 let FAB=[],SHIP=[],curTab="dash",charts={},sortState={},previewData=null,editCtx=null;
 
@@ -1256,15 +1258,15 @@ window.gasUpload=gasUpload;
 async function gasDownload(silent){
   if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
   if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
-  try{const rows=fdCloudRecords();const res=await VRTSmartSync.pull({url:S.cfg.gasEndpoint,tool:'fabricdelivery',localRecords:rows,meta:{aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}},onStatus:m=>toast('☁↓ '+m),apply:async(recs,meta)=>{fdApplyRecords(recs,meta);saveLocal();calcAll();renderTab()}});if(!res.ok){if(!silent)toast(t('gasFail'));return false}if(!silent)toast(res.noChange?'☁↓ 已是最新':'☁↓ 智慧下載完成 · '+(res.downloaded||0)+' 筆');return res}
+  try{const rows=fdCloudRecords();const res=await VRTSmartSync.pull({url:S.cfg.gasEndpoint,tool:'fabricdelivery',localRecords:rows,meta:{aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}},onStatus:m=>toast('☁↓ '+m),apply:async(recs,meta)=>{fdApplyRecords(recs,meta);await saveLocal();calcAll();renderTab()}});if(!res.ok){if(!silent)toast(t('gasFail'));return false}if(!silent)toast(res.noChange?'☁↓ 已是最新':'☁↓ 智慧下載完成 · '+(res.downloaded||0)+' 筆');return res}
   catch(e){if(!silent)toast(t('gasFail')+'：'+e.message);return false}
 }
 window.gasDownload=gasDownload;
 
 /* ================= 儲存 / 載入 ================= */
-function saveLocal(show){
-  try{localStorage.setItem(LS_KEY,JSON.stringify(S,(k,v)=>k.startsWith("_")?undefined:v));if(show)toast(t("saved"))}
-  catch(e){if(show)toast("儲存失敗："+e.message)}
+async function saveLocal(show){
+  try{const clean=JSON.parse(JSON.stringify(S,(k,v)=>k.startsWith("_")?undefined:v));await VRTProdStorage.put(FAB_IDB,FAB_STORE,clean,'state',{});try{localStorage.removeItem(LS_KEY)}catch(_){}if(show)toast(t("saved"));return true}
+  catch(e){if(show)toast("儲存失敗："+e.message);return false}
 }
 window.saveLocal=saveLocal;
 function loadSeed(){
@@ -1283,24 +1285,21 @@ function cycleLang(){
 }
 window.cycleLang=cycleLang;
 /* ================= init ================= */
-(function init(){
+(async function init(){
   try{
-    const saved=localStorage.getItem(LS_KEY);
-    if(saved){const p=JSON.parse(saved);S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};}
+    let p=await VRTProdStorage.get(FAB_IDB,FAB_STORE,'state');
+    if(!p){const saved=localStorage.getItem(LS_KEY);if(saved){p=JSON.parse(saved);S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};await saveLocal()} }
+    else S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};
     if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
-  }catch(e){}
-  if(!S.orders.length){loadSeed();snapshot("內建範例資料 seed 20260706");}
-  document.addEventListener("DOMContentLoaded",()=>{
+  }catch(e){console.warn('Fabric delivery restore failed',e)}
+  const boot=()=>{
     $("impFile").addEventListener("change",onImpFile);
     $("langBtn").textContent=({zh:"中",en:"EN",km:"ខ្មែរ"})[S.cfg.lang]||"中";
     document.querySelectorAll("#tabbar button").forEach(b=>{const k=b.getAttribute("data-i18n");if(k)b.textContent=t(k)});
     document.querySelectorAll(".hstat-l[data-i18n]").forEach(el=>el.textContent=t(el.getAttribute("data-i18n")));
     renderTab();
-  });
-  if(document.readyState!=="loading"){
-    $("impFile").addEventListener("change",onImpFile);
-    renderTab();
-  }
+  };
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();
 </script>
 

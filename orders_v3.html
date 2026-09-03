@@ -182,14 +182,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.2.1 · Weekly 日期/期末快照修正</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.3 · Weekly 最新日期／箱數分析／DB 修正</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
@@ -221,14 +221,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 <div class="tabbar">
   <span class="tab-sep">訂單</span>
   <button class="tb on" onclick="go('import',this)">📥 匯入</button>
-  <button class="tb" onclick="go('master',this)">📊 週報總覽</button>
+  <button class="tb" onclick="go('crud',this)">✏️ 資料維護</button>
+  <button class="tb" onclick="go('master',this)">📊 Weekly 最新</button>
   <button class="tb" onclick="go('pdforders',this)">📄 客戶 PDF 訂單</button>
   <button class="tb" onclick="go('reconcile',this)">🔎 PDF / 週報核對</button>
   <button class="tb" onclick="go('pivot',this)">🎨 尺碼色表</button>
   <span class="tab-sep">週報</span>
-  <button class="tb" onclick="go('weekly',this)">📊 週報分析</button>
+  <button class="tb" onclick="go('weekly',this)">📈 週/月/年趨勢</button>
   <button class="tb" onclick="go('smv',this)">⏱ SMV分析</button>
-  <button class="tb" onclick="go('carton',this)">📦 裝箱比對</button>
+  <button class="tb" onclick="go('carton',this)">📦 箱數/日期分析</button>
   <span class="tab-sep">品質</span>
   <button class="tb" onclick="go('qc',this)">🧪 解析品質</button>
   <span class="tab-sep">連動</span>
@@ -279,6 +280,13 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   </div>
 </div>
 
+<!-- ══════════════════════ ORDER DATA CRUD ══════════════════════ -->
+<div id="pnl-crud" class="pnl">
+  <div class="info-box" style="margin-bottom:12px"><strong>✏️ 訂單明細主資料</strong>：直接維護 FactoryDB / po_lines；分析頁只讀這份主資料，不另建第二套訂單。</div>
+  <div class="fb"><input id="crud-q" placeholder="客戶 / PO / 款式 / 顏色 / 尺寸" oninput="renderCrud()" style="min-width:260px"><button class="btn bd2" onclick="addOrderLine()">＋ 新增</button><button class="btn bg2" onclick="exportOrderLinesCsv()">⬇ CSV</button><span id="crud-count" style="font-size:10px;color:var(--mu);margin-left:auto"></span></div>
+  <div class="sec"><div class="tw"><table class="dt"><thead><tr><th>客戶 / PO</th><th>款式 / SKU</th><th>顏色</th><th>尺寸</th><th class="num">數量</th><th>出貨日</th><th class="num">單價</th><th>操作</th></tr></thead><tbody id="crud-body"></tbody></table></div></div>
+</div>
+
 <!-- ══════════════════════ MASTER TABLE ══════════════════════ -->
 <div id="pnl-master" class="pnl">
   <div class="info-box" style="margin-bottom:12px">
@@ -302,7 +310,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
     </select>
     <div class="period-nav">
       <div class="period-seg" id="master-gran-seg">
-        <button data-g="day" onclick="setMasterGran('day')">日</button><button data-g="week" class="on" onclick="setMasterGran('week')">週</button><button data-g="month" onclick="setMasterGran('month')">月</button><button data-g="year" onclick="setMasterGran('year')">年</button>
+        <button data-g="day" onclick="setMasterGran('day')">單份</button><button data-g="week" class="on" onclick="setMasterGran('week')">週別</button><button data-g="month" onclick="setMasterGran('month')">月期末</button><button data-g="year" onclick="setMasterGran('year')">年期末</button>
       </div>
       <select id="f-gran" onchange="onGranChange()" style="display:none"><option value="day">日</option><option value="week" selected>週</option><option value="month">月</option><option value="year">年</option></select>
       <div class="pt" onclick="periodNav(-1)" title="上一期" style="padding:5px 9px;font-weight:700">◀</div>
@@ -388,6 +396,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 
 <!-- ══════════════════════ WEEKLY ANALYSIS ══════════════════════ -->
 <div id="pnl-weekly" class="pnl">
+  <div class="info-box" style="margin-bottom:10px">
+    <b>怎麼看：</b>「主要週報」＝你要看的 Weekly 快照；「對比週報」＝上一份快照。
+    下方依序是 <b>本週總數 → 客戶箱數 → 週次趨勢 → 月/年期末比較 → 單一客戶</b>。
+    Weekly 是未完成訂單快照，月/年只取期末最新一份，不能把每週相加。
+  </div>
   <!-- Controls -->
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--bor);border-radius:7px;padding:10px 14px">
     <span style="font-size:11px;font-weight:600;color:var(--tx2)">主要週報：</span>
@@ -553,11 +566,35 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
 
 <!-- ══════════════════════ CARTON COMPARE ══════════════════════ -->
 <div id="pnl-carton" class="pnl">
+  <div class="frow" style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:10px;background:#fff;border:1px solid var(--bor);border-radius:8px;padding:9px">
+    <div class="seg" id="ctn-mode-seg">
+      <button class="on" data-m="week" onclick="setCartonMode('week')">單週</button>
+      <button data-m="month" onclick="setCartonMode('month')">月期末</button>
+      <button data-m="year" onclick="setCartonMode('year')">年期末</button>
+    </div>
+    <button class="btn bg2" onclick="cartonNav(-1)">◀</button>
+    <select id="ctn-period" onchange="APP.cartonPeriod=this.value;renderCarton()" style="min-width:130px"></select>
+    <button class="btn bg2" onclick="cartonNav(1)">▶</button>
+    <button class="btn bg2" onclick="cartonLatest()">最新</button>
+    <select id="ctn-type" onchange="renderCarton()">
+      <option value="">全部產品</option><option value="garment">成衣</option><option value="apron">圍裙</option><option value="topNapkin">上衣/餐巾</option>
+    </select>
+    <select id="ctn-customer" onchange="renderCarton()"><option value="">全部客戶</option></select>
+    <select id="ctn-metric" onchange="renderCarton()">
+      <option value="producedCtns">已生產箱</option><option value="unproducedCtns">未生產箱</option>
+      <option value="totalOpenCtns">開放箱</option><option value="openPcs">Open PCS</option>
+    </select>
+    <span id="ctn-date-note" style="font-size:10px;color:var(--mu);margin-left:auto"></span>
+  </div>
   <div class="info-box" style="margin-bottom:12px">
     <strong>📦 裝箱比對</strong>：週報的「已生產箱數（TOTAL CTNS PRODUCED-SCANNED）」對比車縫系統的實際掃描箱數。
     兩者來源不同，若有差異表示可能有箱未掃描或週報資料尚未更新。
   </div>
   <div class="krow" id="ctn-kpis"></div>
+  <div class="sec" style="margin-bottom:12px">
+    <div class="sh"><span class="st">📅 日期趨勢</span><span style="font-size:9px;color:var(--mu)">依上方「週／月／年、產品、客戶、指標」切換</span></div>
+    <div id="ctn-trend"></div>
+  </div>
   <div class="g2">
     <div class="sec">
       <div class="sh"><span class="st">週報裝箱狀況（各客戶）</span></div>
@@ -794,8 +831,8 @@ let APP={
   orders:[],headers:[],weekly:[],imports:[],audit:[],
   sewing:[],cutting:[], // from linked systems
   sortCol:'customer',sortDir:1,
-  period:'all',smvPeriod:'week',linkPeriod:'week',pdfGran:'month',pdfBasis:'ship',pdfPeriod:'',
-  sets:{apiKey:'',useAi:false,swStore:'sewing_records',ctStore:'cutting_records'}
+  period:'all',smvPeriod:'week',linkPeriod:'week',pdfGran:'month',pdfBasis:'ship',pdfPeriod:'',cartonMode:'week',cartonPeriod:'',
+  sets:{apiKey:'',useAi:false,swStore:'sewing_records',ctStore:'cutting_records'}, weeklyLatestSeen:''
 };
 
 // ══ DB ══
@@ -839,9 +876,10 @@ const dbClear=s=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).cl
 const dbDel=(s,id)=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).delete(id).onsuccess=()=>r()});
 
 // Try to read linked system stores (sewing/cutting) - may not exist
-// ── Read sewing from localStorage (sewing_v5 stores there) ──
+// ── Read canonical Sewing IndexedDB; legacy stores are migration fallbacks ──
 async function readSewingFromLocalStorage(){
-  // 優先讀 SewingCloudProd IDB（車縫雲端同步後存這裡，無大小限制）
+  try{const rows=await new Promise(res=>{const req=indexedDB.open('VRT_SewingProduction');req.onupgradeneeded=e=>{try{e.target.transaction.abort()}catch(_){}};req.onsuccess=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('daily_records')){d.close();res([]);return}const q=d.transaction('daily_records','readonly').objectStore('daily_records').getAll();q.onsuccess=()=>{const a=q.result||[];d.close();res(a)};q.onerror=()=>{d.close();res([])}};req.onerror=()=>res([])});if(rows.length)return rows}catch(e){}
+  // Legacy cloud cache, read only.
   try {
     const idbRecs = await new Promise(res => {
       const req = indexedDB.open('SewingCloudProd');   // 不帶版本：讀既有版本
@@ -908,7 +946,7 @@ async function repairWeeklyHistory(){
   let fixed=0;
   for(const imp of imports){const nd=weeklyImportSourceDate(imp);if(nd&&nd!==imp.as_of){imp.as_of=nd;try{await dbPut('order_imports',imp);fixed++}catch(e){}}}
   const byHash={};for(const imp of imports)if(imp.file_hash)byHash[imp.file_hash]=weeklyImportSourceDate(imp);
-  for(const w of wk){const nd=(w.source_hash&&byHash[w.source_hash])||normalizeWeeklyDate(w.as_of_date,w.source_file||'');if(nd&&nd!==w.as_of_date){w.as_of_date=nd;try{await dbPut('weekly_snapshots',w);fixed++}catch(e){}}}
+  for(const w of (APP.weekly||[])){const nd=(w.source_hash&&byHash[w.source_hash])||normalizeWeeklyDate(w.as_of_date,w.source_file||'');if(nd&&nd!==w.as_of_date){w.as_of_date=nd;try{await dbPut('weekly_snapshots',w);fixed++}catch(e){}}}
   // 舊資料沒有 source_file/source_hash 時，只在數量完全對得上 import rows 才按匯入順序重建，避免亂猜。
   const old=(APP.weekly||[]).filter(w=>!w.source_hash&&!w.source_file).sort((a,b)=>(Number(a.id)||0)-(Number(b.id)||0));
   const oldImports=imports.filter(i=>Number(i.rows)>0),expected=oldImports.reduce((s,i)=>s+(Number(i.rows)||0),0);
@@ -1773,7 +1811,13 @@ function normalizeWeeklyDate(raw,fileName=''){
     if(m){const mo=+m[1],d=+m[2],y=yy(m[3]);if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${pad(mo)}-${pad(d)}`}
     return null;
   };
-  return parseOne(String(fileName||'').replace(/_/g,' '))||parseOne(raw)||DateEngine.normalize(raw);
+  const rr=parseOne(raw), ff=parseOne(String(fileName||'').replace(/_/g,' '));
+  if(rr&&ff){
+    const yr=Number(rr.slice(0,4)), yf=Number(ff.slice(0,4));
+    if(Math.abs(yr-yf)>=1 && /20\d{2}/.test(String(fileName||''))) return ff;
+    return rr;
+  }
+  return rr||ff||DateEngine.normalize(raw);
 }
 function weeklyDateSort(a,b){return String(a||'').localeCompare(String(b||''))}
 
@@ -2104,10 +2148,12 @@ function renderPivot(){
 // ══ RENDER: WEEKLY ══
 function renderWeeklyDateSelect(){
   const dates=weeklyDates().slice().sort(weeklyDateSort).reverse(),wd=document.getElementById('wd'),wd2=document.getElementById('wd2');if(!wd||!wd2)return;
-  const keep=normalizeWeeklyDate(wd.value,'')||wd.value;
+  const keep=normalizeWeeklyDate(wd.value,'')||wd.value,latest=dates[0]||'';
   wd.innerHTML='<option value="">選擇週報日期</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
   wd2.innerHTML='<option value="">上一週（自動）</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
-  if(keep&&dates.includes(keep))wd.value=keep;else if(dates.length)wd.value=dates[0];
+  if(latest && APP.weeklyLatestSeen!==latest){wd.value=latest;APP.weeklyLatestSeen=latest;}
+  else if(keep&&dates.includes(keep))wd.value=keep;
+  else if(latest)wd.value=latest;
   document.getElementById('wc').textContent=dates.length;if(dates.length)renderWeekly();
 }
 
@@ -2423,60 +2469,79 @@ function renderSmv(){
 }
 
 // ══ RENDER: CARTON ══
+function cartonPeriodKey(d,mode){
+  if(mode==='week')return d;
+  if(mode==='month')return d.slice(0,7);
+  if(mode==='year')return d.slice(0,4);
+  return d;
+}
+function cartonPeriods(){return [...new Set(weeklyDates().map(d=>cartonPeriodKey(d,APP.cartonMode)))].sort()}
+function cartonSnapshotDate(period){
+  const ds=weeklyDates().filter(d=>cartonPeriodKey(d,APP.cartonMode)===period).sort(weeklyDateSort);
+  return ds[ds.length-1]||'';
+}
+function setCartonMode(m){
+  APP.cartonMode=m;APP.cartonPeriod='';
+  document.querySelectorAll('#ctn-mode-seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+  renderCarton();
+}
+function cartonNav(dir){
+  const el=document.getElementById('ctn-period');if(!el||!el.options.length)return;
+  el.selectedIndex=Math.max(0,Math.min(el.options.length-1,el.selectedIndex+dir));APP.cartonPeriod=el.value;renderCarton();
+}
+function cartonLatest(){const el=document.getElementById('ctn-period');if(el&&el.options.length){el.selectedIndex=el.options.length-1;APP.cartonPeriod=el.value;renderCarton()}}
+function cartonOpenPcs(r){return Number(r.garment||0)+Number(r.apron||0)+Number(r.topNapkin||0)}
+function cartonFilteredRows(date){
+  let rows=date?validWeeklySnapshots().filter(w=>w.as_of_date===date):[];
+  const typ=document.getElementById('ctn-type')?.value||'',cu=document.getElementById('ctn-customer')?.value||'';
+  if(typ)rows=rows.filter(r=>Number(r[typ]||0)>0);
+  if(cu)rows=rows.filter(r=>r.customer===cu);
+  return rows;
+}
 function renderCarton(){
-  const dates=weeklyDates().slice().sort(weeklyDateSort).reverse();
-  const latest=dates[0]||'';
-  const rows=latest?validWeeklySnapshots().filter(w=>w.as_of_date===latest):[];
-  const totOpen=rows.reduce((s,r)=>s+(r.totalOpenCtns||0),0);
-  const totProd=rows.reduce((s,r)=>s+(r.producedCtns||0),0);
-  const totUnprod=rows.reduce((s,r)=>s+(r.unproducedCtns||0),0);
-  const totSew=APP.sewing.length>0?calcSewingCtns():0;
+  const periods=cartonPeriods(),pe=document.getElementById('ctn-period');
+  if(pe){
+    const keep=APP.cartonPeriod||pe.value;
+    pe.innerHTML=periods.map(k=>`<option value="${k}">${APP.cartonMode==='week'?k:APP.cartonMode==='month'?k+' 月':k+' 年'}</option>`).join('')||'<option>—</option>';
+    APP.cartonPeriod=(keep&&periods.includes(keep))?keep:(periods[periods.length-1]||'');pe.value=APP.cartonPeriod;
+  }
+  const latest=cartonSnapshotDate(APP.cartonPeriod);
+  const allAtDate=latest?validWeeklySnapshots().filter(w=>w.as_of_date===latest):[];
+  const csel=document.getElementById('ctn-customer');if(csel){
+    const old=csel.value,custs=[...new Set(allAtDate.map(r=>r.customer))].sort();
+    csel.innerHTML='<option value="">全部客戶</option>'+custs.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if(old&&custs.includes(old))csel.value=old;
+  }
+  const rows=cartonFilteredRows(latest);
+  const note=document.getElementById('ctn-date-note');if(note)note.textContent=latest?`採用期末 Weekly：${latest}`:'無 Weekly';
+  const totOpen=rows.reduce((s,r)=>s+(Number(r.totalOpenCtns)||0),0),totProd=rows.reduce((s,r)=>s+(Number(r.producedCtns)||0),0),totUnprod=rows.reduce((s,r)=>s+(Number(r.unproducedCtns)||0),0),totPcs=rows.reduce((s,r)=>s+cartonOpenPcs(r),0),totSew=APP.sewing.length>0?calcSewingCtns():0;
   document.getElementById('ctn-kpis').innerHTML=`
-    <div class="kc ac"><div class="kl">週報開放箱數</div><div class="kv">${totOpen.toLocaleString()}</div></div>
-    <div class="kc gr"><div class="kl">週報已生產箱</div><div class="kv">${totProd.toLocaleString()}</div></div>
-    <div class="kc yl"><div class="kl">週報未生產箱</div><div class="kv">${totUnprod.toLocaleString()}</div></div>
-    <div class="kc cy"><div class="kl">車縫掃描箱數</div><div class="kv">${totSew>0?totSew.toLocaleString():'—'}</div></div>
-    <div class="kc ${totSew>0&&totProd>0?(Math.abs(totSew-totProd)<totProd*0.05?'gr':'rd'):''}"><div class="kl">掃描差異</div><div class="kv" style="font-size:16px">${totSew>0?((totSew-totProd)>=0?'+':'')+(totSew-totProd).toLocaleString():'—'}</div></div>`;
+    <div class="kc ac"><div class="kl">Open PCS</div><div class="kv">${totPcs.toLocaleString()}</div></div>
+    <div class="kc ac"><div class="kl">週報開放箱</div><div class="kv">${totOpen.toLocaleString(undefined,{maximumFractionDigits:1})}</div></div>
+    <div class="kc gr"><div class="kl">已生產箱</div><div class="kv">${totProd.toLocaleString(undefined,{maximumFractionDigits:1})}</div></div>
+    <div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${totUnprod.toLocaleString(undefined,{maximumFractionDigits:1})}</div></div>
+    <div class="kc cy"><div class="kl">車縫掃描箱</div><div class="kv">${totSew>0?totSew.toLocaleString():'—'}</div></div>`;
 
-  const maxC=Math.max(...rows.map(r=>r.totalOpenCtns||0),1);
-  document.getElementById('ctn-bars').innerHTML=rows.filter(r=>(r.totalOpenCtns||0)>0).sort((a,b)=>b.totalOpenCtns-a.totalOpenCtns).map(r=>{
-    const pct=((r.totalOpenCtns||0)/maxC*100).toFixed(0);
-    const pp=r.totalOpenCtns?Math.min(100,(r.producedCtns||0)/r.totalOpenCtns*100):0;
-    const sewCtns=getSewingCtnsByCustomer(r.customer);
-    const sp=r.totalOpenCtns?Math.min(100,(sewCtns/r.totalOpenCtns*100)):0;
-    const n=r.customer.length>22?r.customer.substring(0,20)+'…':r.customer;
-    return`<div class="ctn-row">
-      <div class="ctn-name" title="${r.customer}">${n}</div>
-      <div class="ctn-bar-wrap">
-        <div class="ctn-bar-prod" style="width:${(pp*pct/100).toFixed(0)}%"></div>
-        ${sewCtns>0?`<div class="ctn-bar-scan" style="width:${(sp*pct/100).toFixed(0)}%"></div>`:''}
-      </div>
-      <div style="font-size:9px;color:var(--tx2);font-family:var(--mono);min-width:60px;text-align:right">
-        ${(r.producedCtns||0)}/${(r.totalOpenCtns||0)}
-        ${sewCtns>0?`<span style="color:var(--cyn)"> S:${sewCtns}</span>`:''}
-      </div>
-    </div>`;
+  let trendDates=weeklyDates().filter(d=>cartonPeriodKey(d,APP.cartonMode)===APP.cartonPeriod).sort(weeklyDateSort);
+  if(APP.cartonMode==='week'){const all=weeklyDates().slice().sort(weeklyDateSort),idx=all.indexOf(latest);trendDates=all.slice(Math.max(0,idx-5),idx+1)}
+  const metric=document.getElementById('ctn-metric')?.value||'producedCtns',metricLabel={producedCtns:'已生產箱',unproducedCtns:'未生產箱',totalOpenCtns:'開放箱',openPcs:'Open PCS'}[metric]||metric;
+  const trend=trendDates.map(d=>{const rr=cartonFilteredRows(d);let v=metric==='openPcs'?rr.reduce((a,r)=>a+cartonOpenPcs(r),0):rr.reduce((a,r)=>a+(Number(r[metric])||0),0);return{d,v}});
+  const mx=Math.max(1,...trend.map(x=>x.v));
+  document.getElementById('ctn-trend').innerHTML=trend.length?`<div style="padding:8px 12px">${trend.map(x=>`<div style="display:grid;grid-template-columns:82px 1fr 90px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #eef1f5"><span class="mono" style="font-size:10px">${x.d}</span><div style="height:9px;background:#e8edf4;border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.max(1,x.v/mx*100)}%;background:var(--acc)"></div></div><b class="num" style="font-size:10px">${x.v.toLocaleString(undefined,{maximumFractionDigits:1})}</b></div>`).join('')}<div style="font-size:9px;color:var(--mu);margin-top:6px">指標：${metricLabel}。產品篩選用該類別 PCS 判斷客戶是否納入；Weekly 原表的箱數是客戶總箱數，沒有再拆 Garment / Apron / Top。</div></div>`:'<div class="empty"><p>無日期趨勢</p></div>';
+
+  const maxC=Math.max(...rows.map(r=>Number(r.totalOpenCtns)||0),1);
+  document.getElementById('ctn-bars').innerHTML=rows.filter(r=>(Number(r.totalOpenCtns)||0)>0).sort((a,b)=>(b.totalOpenCtns||0)-(a.totalOpenCtns||0)).map(r=>{
+    const pct=((r.totalOpenCtns||0)/maxC*100).toFixed(0),pp=r.totalOpenCtns?Math.min(100,(r.producedCtns||0)/r.totalOpenCtns*100):0,sewCtns=getSewingCtnsByCustomer(r.customer),sp=r.totalOpenCtns?Math.min(100,(sewCtns/r.totalOpenCtns*100)):0,n=r.customer.length>22?r.customer.substring(0,20)+'…':r.customer;
+    return`<div class="ctn-row"><div class="ctn-name" title="${r.customer}">${n}</div><div class="ctn-bar-wrap"><div class="ctn-bar-prod" style="width:${(pp*pct/100).toFixed(0)}%"></div>${sewCtns>0?`<div class="ctn-bar-scan" style="width:${(sp*pct/100).toFixed(0)}%"></div>`:''}</div><div style="font-size:9px;color:var(--tx2);font-family:var(--mono);min-width:70px;text-align:right">${(r.producedCtns||0)}/${(r.totalOpenCtns||0)}${sewCtns>0?` <span style="color:var(--cyn)">S:${sewCtns}</span>`:''}</div></div>`;
   }).join('')||'<div class="empty"><div class="ei">📦</div><p>無週報裝箱資料</p></div>';
 
   const tbody=document.getElementById('ctn-tbody');
   tbody.innerHTML=rows.map(r=>{
-    const sewC=getSewingCtnsByCustomer(r.customer);
-    const diff=sewC>0?(sewC-(r.producedCtns||0)):null;
-    const wkPct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0;
-    const swPct=r.totalOpenCtns&&sewC>0?Math.round(sewC/r.totalOpenCtns*100):null;
-    return`<tr>
-      <td><strong>${r.customer}</strong></td>
-      <td class="num">${(r.totalOpenCtns||0).toLocaleString()}</td>
-      <td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}</td>
-      <td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}</td>
-      <td class="num" style="color:var(--cyn)">${sewC>0?sewC.toLocaleString():'—'}</td>
-      <td class="num ${diff!==null?(diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'):'diff-zero'}">${diff!==null?((diff>=0?'+':'')+diff.toLocaleString()):'—'}</td>
-      <td class="ctr"><span style="color:${wkPct<30?'var(--red)':wkPct<60?'var(--ylw)':'var(--grn)'}">${wkPct}%</span></td>
-      <td class="ctr">${swPct!==null?`<span style="color:var(--cyn)">${swPct}%</span>`:'—'}</td>
-      <td style="font-size:10px;color:var(--tx2)">${r.remark||''}</td>
-    </tr>`;
+    const sewC=getSewingCtnsByCustomer(r.customer),diff=sewC>0?(sewC-(r.producedCtns||0)):null,wkPct=r.totalOpenCtns?Math.round((r.producedCtns||0)/r.totalOpenCtns*100):0,swPct=r.totalOpenCtns&&sewC>0?Math.round(sewC/r.totalOpenCtns*100):null;
+    return`<tr><td><strong>${r.customer}</strong><div class="subtxt">${latest} · G ${Number(r.garment||0).toLocaleString()} / A ${Number(r.apron||0).toLocaleString()} / T ${Number(r.topNapkin||0).toLocaleString()}</div></td><td class="num">${(r.totalOpenCtns||0).toLocaleString()}</td><td class="num" style="color:var(--grn)">${(r.producedCtns||0).toLocaleString()}</td><td class="num" style="color:var(--ylw)">${(r.unproducedCtns||0).toLocaleString()}</td><td class="num" style="color:var(--cyn)">${sewC>0?sewC.toLocaleString():'—'}</td><td class="num ${diff!==null?(diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'):'diff-zero'}">${diff!==null?((diff>=0?'+':'')+diff.toLocaleString()):'—'}</td><td class="ctr"><span style="color:${wkPct<30?'var(--red)':wkPct<60?'var(--ylw)':'var(--grn)'}">${wkPct}%</span></td><td class="ctr">${swPct!==null?`<span style="color:var(--cyn)">${swPct}%</span>`:'—'}</td><td style="font-size:10px;color:var(--tx2)">${r.remark||''}</td></tr>`;
   }).join('')||`<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--mu)">無資料</td></tr>`;
 }
+window.setCartonMode=setCartonMode;window.cartonNav=cartonNav;window.cartonLatest=cartonLatest;
 
 // ══ RENDER: LINK ══
 function setLinkPeriod(p,el){APP.linkPeriod=p;document.querySelectorAll('#pnl-link .pt').forEach(e=>e.classList.remove('on'));el.classList.add('on');renderLink();}
@@ -2690,6 +2755,12 @@ function renderSettings(){
   const ki=document.getElementById('s-ki');if(ki)ki.value=APP.sets.apiKey||'';
   updateDbStats();
 }
+function renderCrud(){const el=document.getElementById('crud-body');if(!el)return;const q=(document.getElementById('crud-q').value||'').toLowerCase();let rows=APP.orders.filter(o=>!q||[o.customer,o.po_number,o.style_code,o.sku,o.color,o.size].join(' ').toLowerCase().includes(q));document.getElementById('crud-count').textContent=`${rows.length} / ${APP.orders.length} 筆`;el.innerHTML=rows.slice(0,1000).map(o=>`<tr><td><b>${o.customer||'-'}</b><div class="subtxt">${o.po_number||'-'}</div></td><td>${o.style_code||'-'}<div class="subtxt">${o.sku||''}</div></td><td>${o.color||'-'}</td><td>${o.size||'-'}</td><td class="num">${Number(o.qty||0).toLocaleString()}</td><td class="mono">${DateEngine.normalize(o.ship_date||o.cancel_date)||o.ship_date||'-'}</td><td class="num">${o.unit_price==null?'-':Number(o.unit_price).toFixed(2)}</td><td><button class="btn bg2" onclick="editOrderLine(${o.id})" style="font-size:9px;padding:3px 7px">修改</button> <button class="btn br" onclick="deleteOrderLine(${o.id})" style="font-size:9px;padding:3px 7px">刪除</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">無資料</td></tr>'}
+function askOrderLine(old={}){const customer=prompt('Customer',old.customer||'');if(customer===null)return null;const po_number=prompt('PO Number',old.po_number||'');if(po_number===null)return null;const style_code=prompt('Style',old.style_code||'');if(style_code===null)return null;const sku=prompt('SKU / Item',old.sku||style_code||'');if(sku===null)return null;const color=prompt('Color',old.color||'');if(color===null)return null;const size=prompt('Size',old.size||'');if(size===null)return null;const qty=Number(prompt('Qty',old.qty||0));const ship_date=DateEngine.normalize(prompt('Ship Date YYYY-MM-DD',old.ship_date||'')||'');const unit_price=Number(prompt('Unit Price',old.unit_price||0))||0;if(!customer.trim()||!po_number.trim()||!qty){alert('Customer、PO、Qty 必填');return null}return{...old,customer:customer.trim(),po_number:po_number.trim(),style_code:style_code.trim(),sku:sku.trim(),color:color.trim(),size:size.trim(),qty,ship_date,unit_price,ext_price:qty*unit_price,source_type:old.source_type||'manual',source_file:old.source_file||'Manual'}}
+async function addOrderLine(){const r=askOrderLine();if(!r)return;const k=x=>[x.customer,x.po_number,x.sku,x.style_code,x.color,x.size,x.ship_date].join('|').toUpperCase();if(APP.orders.some(x=>k(x)===k(r))){alert('相同訂單明細已存在，未重複新增');return}r.id=await dbAdd('po_lines',r);APP.orders.push(r);renderCrud()}
+async function editOrderLine(id){const old=APP.orders.find(x=>x.id===id);if(!old)return;const r=askOrderLine(old);if(!r)return;await dbPut('po_lines',r);APP.orders=APP.orders.map(x=>x.id===id?r:x);renderCrud()}
+async function deleteOrderLine(id){if(!confirm('確定刪除這筆訂單明細？'))return;await dbDel('po_lines',id);APP.orders=APP.orders.filter(x=>x.id!==id);renderCrud()}
+function exportOrderLinesCsv(){if(!APP.orders.length)return;const keys=['customer','po_number','style_code','sku','color','size','qty','ship_date','unit_price','ext_price','source_file'],head=['Customer','PO','Style','SKU','Color','Size','Qty','Ship Date','Unit Price','Amount','Source'],csv='\ufeff'+[head.join(','),...APP.orders.map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='VRT_ORDER_LINES.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 function saveAllSets(){
   APP.sets.apiKey=document.getElementById('s-ki').value.trim();
   // Store names are fixed: sewing=localStorage, cutting=CuttingProd IDB
@@ -2715,6 +2786,7 @@ function go(tab,btn){
   document.getElementById('pnl-'+tab).classList.add('on');
   if(btn)btn.classList.add('on');
   if(tab==='master')renderMaster();
+  if(tab==='crud')renderCrud();
   if(tab==='pdforders')renderPdfOrders();
   if(tab==='reconcile')renderReconcile();
   if(tab==='pivot')renderPivotInit();
@@ -2803,7 +2875,7 @@ async function init(){
     document.getElementById('db-st').textContent='● DB已連接';
     document.getElementById('db-st').style.color='var(--grn)';
     await loadAll();loadSets();refreshAll();
-    log('VRT 訂單管理系統 v3.1 就緒','info');
+    log('VRT 訂單管理系統 v3.3 就緒','info');
     log('Weekly 與客戶 PDF 已分頁：Weekly 不再混入 PDF 數量','info');
     log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
     // v3.4: shared HRA-style auto reconcile handles startup; avoid duplicate full/parallel pulls.

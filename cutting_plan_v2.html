@@ -192,8 +192,9 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 </head>
 <body>
 
@@ -676,6 +677,7 @@ function applyCutLang(){
 // ══════════════════════ DB STORAGE (3-tier) ══════════════════════
 const LS_KEY  = "cutting_plan_v1";
 const LS_FAB  = "cutting_fabric_recv_v1";   // fabric received overrides {fabKey:yards}
+const PLAN_IDB='CuttingProd',PLAN_STORE='plan_records',PLAN_META='plan_meta';
 let DB = [];
 let FAB_RECV = {};
 
@@ -719,30 +721,27 @@ function getMaxDate(arr){ return [...new Set((arr||[]).map(r=>normalizeDate(r.da
 
 // Dedup key: date|po|selfKey|style|color|size|fabric
 function recKey(r){ return [normalizeDate(r.date),clean(r.po),clean(r.selfKey),clean(r.style),clean(r.color),clean(r.size),clean(r.erpFab)].join('|'); }
+function recHash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(36)}
 function dedupAndNorm(all){
   const map=new Map();
-  (all||[]).forEach(r=>{ const x={...r,date:normalizeDate(r.date)}; if(!x.id) x.id=uid();
-    const k=recKey(x); if(!map.has(k)) map.set(k,x);
+  (all||[]).forEach(r=>{ const x={...r,date:normalizeDate(r.date)},k=recKey(x);x.id='cutplan_'+recHash(k);
+    if(!map.has(k)) map.set(k,x);
     else { const ex=map.get(k); map.set(k,{...ex,actualQty:Math.max(num(ex.actualQty),num(x.actualQty))}); } });
   return [...map.values()];
 }
 
 async function loadDB(){
   _fileHandle = await getFileHandle("db");
-  if(_fileHandle){ try{ const data=await readFromFile(_fileHandle);
-    if(data?.recs){ DB=dedupAndNorm(data.recs); FAB_RECV=data.fabRecv||{}; return; } }catch(e){} }
-  try{ DB=dedupAndNorm(JSON.parse(localStorage.getItem(LS_KEY)||"[]"));
-    try{ FAB_RECV=JSON.parse(localStorage.getItem(LS_FAB)||"{}"); }catch(e){ FAB_RECV={}; }
-    console.log('[VRT Cut] loadDB | COUNT:',DB.length,'| MAX DATE:',getMaxDate(DB));
-  }catch(e){ DB=[]; }
+  try{DB=dedupAndNorm(await VRTProdStorage.all(PLAN_IDB,PLAN_STORE,{keyPath:'id'}));const m=await VRTProdStorage.get(PLAN_IDB,PLAN_META,'state');FAB_RECV=m&&m.fabRecv||{}}catch(e){DB=[];FAB_RECV={}}
+  if(!DB.length&&_fileHandle){try{const data=await readFromFile(_fileHandle);if(data?.recs){DB=dedupAndNorm(data.recs);FAB_RECV=data.fabRecv||{};await saveDB();return}}catch(e){}}
+  if(!DB.length){try{DB=dedupAndNorm(JSON.parse(localStorage.getItem(LS_KEY)||"[]"));FAB_RECV=JSON.parse(localStorage.getItem(LS_FAB)||"{}");if(DB.length)await saveDB()}catch(e){DB=[]}}
+  console.log('[VRT Cut] loadDB | COUNT:',DB.length,'| MAX DATE:',getMaxDate(DB));
 }
-function saveDB(){
+async function saveDB(){
+  DB=dedupAndNorm(DB);
   if(_fileHandle){ writeToFile(_fileHandle,{recs:DB,fabRecv:FAB_RECV,saved:new Date().toISOString()}); }
   try{ localStorage.setItem('vrt_cutting_max_date',getMaxDate(DB)); }catch(e){}
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(DB)); }
-  catch(e){ console.warn('[VRT Cut] localStorage full'); }
-  try{ localStorage.setItem(LS_FAB,JSON.stringify(FAB_RECV)); }catch(e){}
-  try{ if(typeof hubSyncPlans==='function') hubSyncPlans(); }catch(e){}   /* ★ 自動同步 plan_records（共用DB） */
+  try{await VRTProdStorage.replaceAll(PLAN_IDB,PLAN_STORE,DB,{keyPath:'id'});await VRTProdStorage.put(PLAN_IDB,PLAN_META,{fabRecv:FAB_RECV,savedAt:new Date().toISOString()},'state',{});localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_FAB)}catch(e){console.warn('[VRT Cut] IndexedDB save failed',e)}
 }
 async function connectDataFile(){
   if(!FSA){ alert("此瀏覽器不支援檔案連結，請用 Chrome 或 Edge"); return; }
@@ -757,25 +756,9 @@ async function connectDataFile(){
 }
 
 // ── Cloud IDB (full history, no size cap) ──
-const CLOUD_IDB_NAME='CuttingCloudPlan', CLOUD_IDB_STORE='cloud_records';
-function openCloudIDB(){
-  const build=db=>{ if(!db.objectStoreNames.contains(CLOUD_IDB_STORE)) db.createObjectStore(CLOUD_IDB_STORE,{keyPath:'id',autoIncrement:true}); };
-  const tryOpen=ver=>new Promise((res,rej)=>{ const req=ver?indexedDB.open(CLOUD_IDB_NAME,ver):indexedDB.open(CLOUD_IDB_NAME);
-    req.onupgradeneeded=e=>build(e.target.result);
-    req.onsuccess=e=>res(e.target.result); req.onerror=()=>rej(req.error); });
-  return tryOpen(1)
-    .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
-    .then(db=>{ if(db.objectStoreNames.contains(CLOUD_IDB_STORE)) return db;
-      const nv=db.version+1; db.close(); return tryOpen(nv); }); }
-async function saveToCloudIDB(recs){ const db=await openCloudIDB();
-  const tx=db.transaction(CLOUD_IDB_STORE,'readwrite'); const os=tx.objectStore(CLOUD_IDB_STORE);
-  await new Promise((res,rej)=>{ const q=os.clear(); q.onsuccess=res; q.onerror=rej; });
-  for(const r of recs){ os.put(r); }
-  return new Promise((res,rej)=>{ tx.oncomplete=()=>res(recs.length); tx.onerror=rej; }); }
-async function loadFromCloudIDB(){ try{ const db=await openCloudIDB();
-  return await new Promise((res)=>{ const tx=db.transaction(CLOUD_IDB_STORE,'readonly');
-    const q=tx.objectStore(CLOUD_IDB_STORE).getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([]); });
-  }catch(e){ return []; } }
+const CLOUD_IDB_NAME=PLAN_IDB,CLOUD_IDB_STORE=PLAN_STORE;
+async function saveToCloudIDB(recs){return await VRTProdStorage.replaceAll(PLAN_IDB,PLAN_STORE,dedupAndNorm(recs),{keyPath:'id'})}
+async function loadFromCloudIDB(){try{return await VRTProdStorage.all(PLAN_IDB,PLAN_STORE,{keyPath:'id'})}catch(e){return[]}}
 async function vcLoadFromCloudIDB(){ const recs=await loadFromCloudIDB(); if(!recs.length) return;
   const merged=dedupAndNorm(recs); const lMax=getMaxDate(DB), cMax=getMaxDate(merged);
   if(cMax>lMax || (cMax===lMax && merged.length>DB.length)){ DB=merged; updateHeader(); renderDBCard(); } }
@@ -800,9 +783,7 @@ async function vcAutoSync(){
   }catch(e){ console.log('[VRT Cut Sync] offline'); }
 }
 window.vcApplyCloudRecs=async function(allRecs){
-  try{ await saveToCloudIDB(allRecs); }catch(e){}
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(allRecs.slice(-5000))); }catch(e){}
-  DB=dedupAndNorm(allRecs); updateHeader(); renderDBCard();
+  DB=dedupAndNorm(allRecs);await saveDB();updateHeader();renderDBCard();
 };
 </script>
 <script>
@@ -1712,7 +1693,7 @@ function restoreData(e){
   function vcShowStatus(){
     const el=document.getElementById('vcStatus'); if(!el) return;
     const meta=JSON.parse(localStorage.getItem(LS_META)||'null');
-    const recs=(typeof DB!=='undefined'&&DB.length)?DB.length:JSON.parse(localStorage.getItem('cutting_plan_v1')||'[]').length;
+    const recs=(typeof DB!=='undefined'&&DB.length)?DB.length:0;
     if(meta){ const mins=(Date.now()-new Date(meta.ts))/60000;
       const age=mins<60?`${Math.round(mins)}分前`:`${Math.round(mins/60)}小時前`;
       el.textContent=`本機 ${recs} 筆 · 上次同步 ${age}`; el.className='vcp-status '+(mins<120?'ok':'warn');
@@ -1722,7 +1703,7 @@ function restoreData(e){
   window.vcPush = async function(){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);
     try{
-      const allRecs=(typeof DB!=='undefined'&&DB.length)?DB:JSON.parse(localStorage.getItem('cutting_plan_v1')||'[]');
+      const allRecs=(typeof DB!=='undefined'&&DB.length)?DB:[];
       const res=await VRTSmartSync.push({url:gasUrl,tool:'cuttingplan',records:allRecs,meta:{fabRecv:(typeof FAB_RECV!=='undefined'?FAB_RECV:{}),summary:buildCuttingSummary('all')},onStatus:m=>vcLog(m,'i')});
       if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length,smart:true}));vcLog(`✓ 智慧推送 · 傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');vcShowStatus();
@@ -1732,8 +1713,8 @@ function restoreData(e){
   window.vcPull = async function(){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);vcLog('智慧拉取：比對差異...','i');
     try{
-      const local=(typeof DB!=='undefined'&&DB.length)?DB:JSON.parse(localStorage.getItem('cutting_plan_v1')||'[]');
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cuttingplan',localRecords:local,meta:{fabRecv:(typeof FAB_RECV!=='undefined'?FAB_RECV:{})},onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{if(typeof FAB_RECV!=='undefined'&&meta&&meta.fabRecv)FAB_RECV=meta.fabRecv;if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs);else try{localStorage.setItem('cutting_plan_v1',JSON.stringify(recs))}catch(_){}}});
+      const local=(typeof DB!=='undefined'&&DB.length)?DB:[];
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cuttingplan',localRecords:local,meta:{fabRecv:(typeof FAB_RECV!=='undefined'?FAB_RECV:{})},onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{if(typeof FAB_RECV!=='undefined'&&meta&&meta.fabRecv)FAB_RECV=meta.fabRecv;if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs)}});
       if(!res.ok){vcLog('雲端尚無裁剪計劃資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');vcShowStatus();
     }catch(e){vcLog('✗ 拉取失敗：'+e.message,'err');}finally{vcSetBusy(false);}
   };
@@ -1776,9 +1757,9 @@ const PVA_SOURCE='PLAN';
 let _hubDb=null;
 function hubOpen(){return new Promise(function(res,rej){
   if(_hubDb)return res(_hubDb);
-  const HUB_STORES=['cutting_records','sewing_cache','plan_records','variance_records','history_records'];
+  const HUB_STORES=['cutting_records','sewing_cache','plan_records','variance_records','history_records','plan_meta'];
   const build=function(db){ HUB_STORES.forEach(function(s){
-    if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:'id'});});};
+    if(!db.objectStoreNames.contains(s))db.createObjectStore(s,s==='plan_meta'?undefined:{keyPath:'id'});});};
   const tryOpen=function(ver){return new Promise(function(r2,j2){
     const req=ver?indexedDB.open('CuttingProd',ver):indexedDB.open('CuttingProd');
     req.onupgradeneeded=function(e){build(e.target.result);};
@@ -1800,9 +1781,7 @@ function planToShared(r){return Object.assign({},r,{
   planQty:num(r.planQty||r.orderQty),actualQty:num(r.actualQty),
   createTime:r.createTime||pvaNow(),updateTime:pvaNow()});}
 let _hubSyncTimer=null;
-function hubSyncPlans(){clearTimeout(_hubSyncTimer);_hubSyncTimer=setTimeout(async function(){
-  try{await hubReplaceAll('plan_records',DB.map(planToShared));
-    console.log('[HUB] plan_records 已同步：',DB.length,'筆');}catch(e){console.warn('[HUB] 同步失敗',e);}},400);}
+function hubSyncPlans(){clearTimeout(_hubSyncTimer);_hubSyncTimer=setTimeout(async function(){try{await saveDB();console.log('[HUB] plan_records 已同步：',DB.length,'筆')}catch(e){console.warn('[HUB] 同步失敗',e)}},400)}
 window.hubSyncPlans=hubSyncPlans;
 async function hubRestorePlansIfEmpty(){try{
   if(DB.length)return;

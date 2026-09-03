@@ -163,8 +163,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -636,6 +636,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     <select id="rSec" onchange="renderRecs()"><option value="">所有Section</option></select>
     <select id="rLine" onchange="renderRecs()"><option value="">所有線別</option></select>
     <span id="rMeta" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-b" onclick="newSewRecord()">＋ 新增</button>
     <button class="btn btn-g" onclick="exportExcel('records')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
   </div>
   <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
@@ -647,7 +648,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     <div class="tw"><table><thead><tr>
       <th>日期</th><th>Section</th><th>線別</th><th>SELFKEY</th><th>PO</th>
       <th>款號</th><th>顏色</th><th>尺寸</th>
-      <th>件數</th><th>人數</th><th>效率</th><th>箱數</th>
+      <th>件數</th><th>人數</th><th>效率</th><th>箱數</th><th>操作</th>
     </tr></thead><tbody id="rBody"></tbody></table></div>
     <div id="rMore" style="padding:9px 11px;font-size:11px;color:#8b95b8;display:none"></div>
   </div>
@@ -1020,11 +1021,11 @@ function openMainIDB(){
 }
 async function saveToMainIDB(){
   const db=await openMainIDB();
-  // Save daily_records in one transaction
-  const tx=db.transaction('daily_records','readwrite');
-  const os=tx.objectStore('daily_records');
-  os.clear();
-  DB.forEach(r=>os.put(r));
+  DB=dedupAndNorm(DB);EFF_DB=(EFF_DB||[]).map((r,i)=>({...r,id:r.id||'eff_'+sewHash([r.period,r.section,r.lineNo,i].join('|'))}));
+  // Save both authoritative datasets atomically.
+  const tx=db.transaction(['daily_records','eff_records'],'readwrite');
+  const os=tx.objectStore('daily_records'),es=tx.objectStore('eff_records');
+  os.clear();es.clear();DB.forEach(r=>os.put(r));EFF_DB.forEach(r=>es.put(r));
   await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
   // Save meta
   const mt=db.transaction('system_meta','readwrite');
@@ -1045,10 +1046,12 @@ async function loadFromMainIDB(){
     });
   }catch(e){return [];}
 }
+async function loadEffFromMainIDB(){try{const db=await openMainIDB(),tx=db.transaction('eff_records','readonly');return await new Promise(res=>{const q=tx.objectStore('eff_records').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])})}catch(e){return[]}}
 async function clearMainIDB(){
   const db=await openMainIDB();
-  const tx=db.transaction(['daily_records','system_meta'],'readwrite');
+  const tx=db.transaction(['daily_records','eff_records','system_meta'],'readwrite');
   tx.objectStore('daily_records').clear();
+  tx.objectStore('eff_records').clear();
   tx.objectStore('system_meta').clear();
   return new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
 }
@@ -1075,6 +1078,7 @@ function dedupAndNorm(all){
   const dedupMap=new Map();
   rawDB.forEach(r=>{
     const k=[normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||"",r.tSrc||""].join("|");
+    r.id='sew_'+sewHash(k);r.date=normalizeDate(r.date);
     if(!dedupMap.has(k)) dedupMap.set(k,r);
     else{
       const ex=dedupMap.get(k);
@@ -1087,6 +1091,7 @@ function dedupAndNorm(all){
   const out=[...dedupMap.values()];
   return (typeof reconcileTgtSrc==="function") ? reconcileTgtSrc(out) : out;
 }
+function sewHash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(36)}
 
 async function loadDB(){
   // ★ Priority 1: VRT_SewingProduction IDB — full history, no size limit
@@ -1094,7 +1099,8 @@ async function loadDB(){
     const idbRecs=await loadFromMainIDB();
     if(idbRecs.length>0){
       DB=dedupAndNorm(idbRecs);
-      try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){}
+      EFF_DB=await loadEffFromMainIDB();
+      if(!EFF_DB.length){try{EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]");if(EFF_DB.length){await saveToMainIDB();localStorage.removeItem(LS_EFF)}}catch(e){}}
       console.log('[VRT] loadDB IDB | COUNT:',DB.length,'| MAX:',getMaxDate(DB),'| MIN:',getMinDate(DB));
       return;
     }
@@ -1119,7 +1125,7 @@ async function loadDB(){
       DB=dedupAndNorm(parsed);
       try{ EFF_DB=JSON.parse(localStorage.getItem(LS_EFF)||"[]"); }catch(e){ EFF_DB=[]; }
       await saveToMainIDB();
-      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_EFF);
       console.log('[VRT] loadDB localStorage → migrated to IDB | COUNT:',DB.length);
     }
     if(localStorage.getItem("sew_v4")) localStorage.removeItem("sew_v4");
@@ -1175,43 +1181,9 @@ loadDB().then(async ()=>{
   }
 });
 
-// ── Cloud IDB：SewingCloudProd / cloud_records ──────────────
-const CLOUD_IDB_NAME  = 'SewingCloudProd';
-const CLOUD_IDB_STORE = 'cloud_records';
-
-function openCloudIDB() {
-  const build = db => { if (!db.objectStoreNames.contains(CLOUD_IDB_STORE)) db.createObjectStore(CLOUD_IDB_STORE, { keyPath:'id', autoIncrement:true }); };
-  const tryOpen = ver => new Promise((res, rej) => {
-    const req = ver ? indexedDB.open(CLOUD_IDB_NAME, ver) : indexedDB.open(CLOUD_IDB_NAME);
-    req.onupgradeneeded = e => build(e.target.result);
-    req.onsuccess = e => res(e.target.result);
-    req.onerror   = () => rej(req.error);
-  });
-  // 自我修復：版本衝突改不帶版本；缺 store 升版補建
-  return tryOpen(1)
-    .catch(err => { if (err && err.name === 'VersionError') return tryOpen(null); throw err; })
-    .then(db => { if (db.objectStoreNames.contains(CLOUD_IDB_STORE)) return db;
-      const nv = db.version + 1; db.close(); return tryOpen(nv); });
-}
-async function saveToCloudIDB(recs) {
-  const db = await openCloudIDB();
-  const tx = db.transaction(CLOUD_IDB_STORE, 'readwrite');
-  const os = tx.objectStore(CLOUD_IDB_STORE);
-  await new Promise((res,rej) => { const q=os.clear(); q.onsuccess=res; q.onerror=rej; });
-  for (const r of recs) { os.put(r); }
-  return new Promise((res,rej) => { tx.oncomplete=()=>res(recs.length); tx.onerror=rej; });
-}
-async function loadFromCloudIDB() {
-  try {
-    const db = await openCloudIDB();
-    return await new Promise((res) => {
-      const tx = db.transaction(CLOUD_IDB_STORE, 'readonly');
-      const q  = tx.objectStore(CLOUD_IDB_STORE).getAll();
-      q.onsuccess = () => res(q.result || []);
-      q.onerror   = () => res([]);
-    });
-  } catch(e) { return []; }
-}
+// Compatibility aliases: cloud apply writes the same canonical main DB, never a second dataset.
+async function saveToCloudIDB(recs){return (recs||[]).length}
+async function loadFromCloudIDB(){return[]}
 
 // 開啟時先讀本機 cloud IDB（快，無需網路）
 async function vcLoadFromCloudIDB() {
@@ -1270,27 +1242,20 @@ async function vcAutoSync(){
         if(!cd.ok) throw new Error(cd.error||`第 ${i+1} 批拉取失敗`); if(!cd.data||!Array.isArray(cd.data.records)) throw new Error(`第 ${i+1} 批格式不完整`); allRecs=allRecs.concat(cd.data.records);
       }
       // eff 存在 meta
-      if (d.meta.eff && d.meta.eff.length)
-        try { localStorage.setItem(LS_EFF, JSON.stringify(d.meta.eff)); } catch(e) {}
+      if (d.meta.eff && d.meta.eff.length) EFF_DB=d.meta.eff;
     } else if (!d.chunked && d.data) {
       // 舊單批格式
       const payload = d.data;
       if (payload.lsKeys && payload.lsKeys.sewing_prod_v1)
         allRecs = JSON.parse(payload.lsKeys.sewing_prod_v1);
       else if (payload.records) allRecs = payload.records;
-      if (payload.lsKeys?.sewing_eff_v1)
-        try { localStorage.setItem(LS_EFF, payload.lsKeys.sewing_eff_v1); } catch(e) {}
+      if(payload.lsKeys?.sewing_eff_v1)try{EFF_DB=JSON.parse(payload.lsKeys.sewing_eff_v1)}catch(_){}
     }
     if (!allRecs.length) { tip.textContent = '☁ 雲端資料為空'; setTimeout(()=>tip.remove(),3000); return; }
 
     // 全量存入 cloudIDB（無大小限制）
     tip.textContent = `☁ 寫入 IDB（${allRecs.length.toLocaleString()} 筆）...`;
     await saveToCloudIDB(allRecs);
-
-    // localStorage 存近 90 天備用
-    const cutStr = new Date(Date.now() - 90*86400000).toISOString().slice(0,10);
-    const recent = allRecs.filter(r => (r.date||'') >= cutStr);
-    try { localStorage.setItem(LS_KEY, JSON.stringify(recent)); } catch(e) {}
 
     // ★ MERGE with local DB (GAS may only have partial/recent data)
     const gasRecs = dedupAndNorm(allRecs);
@@ -1333,6 +1298,7 @@ window.vcApplyCloudRecs = async function(allRecs, effData) {
   // Merge: local records first (local wins for dedup), then add GAS records
   const merged = dedupAndNorm([...DB, ...gasRecs]);
   DB = merged;
+  if(Array.isArray(effData))EFF_DB=effData;
   console.log('[VRT] After merge:',DB.length,'records | MAX:',getMaxDate(DB),'| MIN:',getMinDate(DB));
 
   // Persist full merged data to VRT_SewingProduction IDB (no size limit)
@@ -1344,8 +1310,6 @@ window.vcApplyCloudRecs = async function(allRecs, effData) {
     localStorage.setItem('vrt_sewing_max_date', getMaxDate(DB));
     localStorage.setItem('vrt_sewing_record_count', String(DB.length));
   } catch(e) {}
-  if (effData && effData.length) try { localStorage.setItem(LS_EFF, JSON.stringify(effData)); } catch(e) {}
-
   updateHeader(); renderDBCard(); renderDashboard();
 };
 
@@ -3189,16 +3153,8 @@ async function deleteWholeDay(){
 共 ${cnt} 筆，涵蓋：${lines}
 
 此操作不可復原。`)) return;
-  const ids=DB.filter(r=>r.date===date).map(r=>r.id);
   DB=DB.filter(r=>r.date!==date);
-  try{
-    if(!_idb)await openIDB();
-    for(const id of ids){
-      const tx=_idb.transaction("sewing_records","readwrite");
-      tx.objectStore("sewing_records").delete(id);
-      await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
-    }
-  }catch(e){console.warn("IDB delete failed:",e);}
+  await saveToMainIDB();
   populateDateSel();
   // 跳到相鄰的日期
   const dates=[...new Set(DB.map(r=>r.date))].sort().reverse();
@@ -3212,16 +3168,8 @@ async function deleteLineDay(date,lineNo){
   const cnt=DB.filter(r=>r.date===date&&r.lineNo===lineNo).length;
   if(!cnt) return;
   if(!confirm(`確定刪除 ${date} ${lineNo} 的全部 ${cnt} 筆記錄？\n此操作不可復原。`)) return;
-  const ids=DB.filter(r=>r.date===date&&r.lineNo===lineNo).map(r=>r.id);
   DB=DB.filter(r=>!(r.date===date&&r.lineNo===lineNo));
-  try{
-    if(!_idb)await openIDB();
-    for(const id of ids){
-      const tx=_idb.transaction("sewing_records","readwrite");
-      tx.objectStore("sewing_records").delete(id);
-      await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
-    }
-  }catch(e){console.warn("IDB delete failed:",e);}
+  await saveToMainIDB();
   populateDateSel();renderDaily();
   _sewToast(`✅ 已刪除 ${date} ${lineNo} 共 ${cnt} 筆記錄`,"ok");
 }
@@ -3232,12 +3180,7 @@ async function deleteOneRecord(id){
   if(!rec) return;
   if(!confirm(`確定刪除此筆？\n${rec.date} ${rec.lineNo} ${rec.styleNo||""} ${rec.color||""} ${(rec.pieces||0)}件\n此操作不可復原。`)) return;
   DB=DB.filter(r=>r.id!==id);
-  try{
-    if(!_idb)await openIDB();
-    const tx=_idb.transaction("sewing_records","readwrite");
-    tx.objectStore("sewing_records").delete(id);
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
-  }catch(e){console.warn("IDB delete failed:",e);}
+  await saveToMainIDB();
   populateDateSel();renderDaily();
   _sewToast(`✅ 已刪除 1 筆記錄`,"ok");
 }
@@ -4879,6 +4822,7 @@ function renderRecs(){
       <td class="mono">${r.workers||"-"}</td>
       <td>${r.efficiency>0?`<span class="b b${r.efficiency>=45?"ok":r.efficiency>=30?"wn":"bd"}">${r.efficiency}%</span>`:"-"}</td>
       <td class="mono">${r.cartons>0?r.cartons:"-"}</td>
+      <td><button onclick="editSewRecord('${r.id}')" style="border:0;background:none;color:#2563eb;cursor:pointer">✎</button><button onclick="deleteOneRecord('${r.id}')" style="border:0;background:none;color:#dc2626;cursor:pointer">✕</button></td>
     </tr>`).join("");
   const more=document.getElementById("rMore");
   if(recs.length>PAGE_SIZE){ more.style.display="flex"; more.innerHTML=`<span>顯示 1-${Math.min(PAGE_SIZE,recs.length)} / 共 ${recs.length} 筆</span><button onclick="recsNextPage()" style="padding:4px 12px;font-size:12px;border:1px solid #d0d5e8;border-radius:5px;cursor:pointer">下一頁 ▶</button>`; }
@@ -4906,6 +4850,7 @@ function recsNextPage(){
       <td class="mono">${r.workers||"-"}</td>
       <td>${r.efficiency>0?`<span class="b b${r.efficiency>=45?"ok":r.efficiency>=30?"wn":"bd"}">${r.efficiency}%</span>`:"-"}</td>
       <td class="mono">${r.cartons>0?r.cartons:"-"}</td>
+      <td><button onclick="editSewRecord('${r.id}')" style="border:0;background:none;color:#2563eb;cursor:pointer">✎</button><button onclick="deleteOneRecord('${r.id}')" style="border:0;background:none;color:#dc2626;cursor:pointer">✕</button></td>
     </tr>`).join("");
   const end=Math.min(start+PAGE_SIZE,recs.length);
   const more=document.getElementById("rMore");
@@ -4924,13 +4869,16 @@ function deleteByDate(){
   alert(`已刪除 ${dv} 的 ${count} 筆資料`);
 }
 
+function newSewRecord(){editSewRecord('')}
+async function editSewRecord(id){const old=DB.find(r=>r.id===id)||{},date=prompt('日期 YYYY-MM-DD',old.date||new Date().toISOString().slice(0,10));if(date===null)return;const section=prompt('Section (Garment / Apron)',old.section||'Garment');if(section===null)return;const lineNo=prompt('線別',old.lineNo||'Line 1');if(lineNo===null)return;const styleNo=prompt('款號',old.styleNo||'');if(styleNo===null)return;const po=prompt('PO',old.po||'');if(po===null)return;const pieces=Number(prompt('件數',old.pieces||0));if(!date||!lineNo||!pieces){alert('日期、線別、件數必填');return}const workers=Number(prompt('人數',old.workers||0))||0,efficiency=Number(prompt('效率 %',old.efficiency||0))||0;let r={...old,date:normalizeDate(date),section,lineNo:normLineNo(lineNo),styleNo,po,pieces,workers,efficiency,tSrc:old.tSrc||'manual'};r.id='sew_'+sewHash([r.date,r.section,r.lineNo,r.styleNo,r.po,r.selfKey||'',r.color||'',r.size||'',r.tSrc].join('|'));if(id)DB=DB.filter(x=>x.id!==id);DB=dedupAndNorm([...DB,r]);await saveToMainIDB();rebuildAllSelectors();renderRecs();updateHeader();renderDBCard()}
+
 function clearAll(){
   if(!confirm("確定清除【所有】資料？\n\n⚠️ 此操作無法復原")) return;
   DB=[]; EFF_DB=[];
   clearMainIDB().catch(e=>{});
   saveToCloudIDB([]).catch(e=>{});
   if(_fileHandle) writeToFile(_fileHandle,{daily:[],eff:[],saved:new Date().toISOString()});
-  try{ localStorage.removeItem(LS_KEY); localStorage.removeItem("vrt_sewing_max_date"); localStorage.removeItem("vrt_sewing_record_count"); }catch(e){}
+  try{ localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_EFF); localStorage.removeItem("vrt_sewing_max_date"); localStorage.removeItem("vrt_sewing_record_count"); }catch(e){}
   updateHeader(); renderDBCard(); renderDbHealth();
   document.getElementById("dKpi").innerHTML="";
   document.getElementById("dCards").innerHTML="";
@@ -5546,8 +5494,7 @@ async function scanAllFolders(silent=false){
     const el   = document.getElementById('vcStatus');
     const meta = JSON.parse(localStorage.getItem(LS_META) || 'null');
     // 優先用記憶體 DB（有全部資料），fallback 到 localStorage
-    const recs = (typeof DB !== 'undefined' && DB.length) ? DB.length
-               : JSON.parse(localStorage.getItem('sewing_prod_v1') || '[]').length;
+    const recs = (typeof DB !== 'undefined' && DB.length) ? DB.length : 0;
     if (meta) {
       const mins = (Date.now() - new Date(meta.ts)) / 60000;
       const age  = mins < 60 ? `${Math.round(mins)}分前` : `${Math.round(mins/60)}小時前`;
@@ -5564,8 +5511,8 @@ async function scanAllFolders(silent=false){
     if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);
     try {
-      const allRecs=(typeof DB!=='undefined'&&DB.length)?DB:JSON.parse(localStorage.getItem('sewing_prod_v1')||'[]');
-      const eff=(typeof EFF_DB!=='undefined'&&EFF_DB.length)?EFF_DB:JSON.parse(localStorage.getItem('sewing_eff_v1')||'[]');
+      const allRecs=(typeof DB!=='undefined'&&DB.length)?DB:[];
+      const eff=(typeof EFF_DB!=='undefined'&&EFF_DB.length)?EFF_DB:[];
       const res=await VRTSmartSync.push({url:gasUrl,tool:'sewing',records:allRecs,meta:{eff:eff,summary:buildSewingSummary(allRecs)},onStatus:m=>vcLog(m,'i')});
       if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取再推送','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length,smart:true}));
@@ -5578,10 +5525,10 @@ async function scanAllFolders(silent=false){
     if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);vcLog('智慧拉取：只下載雲端有變更的月份/區塊...','i');
     try{
-      const local=(typeof DB!=='undefined'&&DB.length)?DB:JSON.parse(localStorage.getItem('sewing_prod_v1')||'[]');
+      const local=(typeof DB!=='undefined'&&DB.length)?DB:[];
       const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,meta:{eff:(typeof EFF_DB!=='undefined'?EFF_DB:[])},onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
         const eff=meta&&Array.isArray(meta.eff)?meta.eff:((typeof EFF_DB!=='undefined')?EFF_DB:[]);
-        if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs,eff);else try{localStorage.setItem('sewing_prod_v1',JSON.stringify(recs))}catch(_){ }
+        if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs,eff);
       }});
       if(!res.ok){if(res.noCloud)vcLog('雲端尚無車縫資料','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));

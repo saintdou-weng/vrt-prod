@@ -1,4 +1,4 @@
-/* VRT Smart Sync v3.4 — HRA-style auto reconcile + persistent incremental sync + universal cloud status
+/* VRT Smart Sync v3.7 — persistent incremental sync + universal cloud status
    Core rules:
    - Only changed buckets are uploaded/downloaded.
    - Successful sync baseline persists across page reloads (IndexedDB + tiny localStorage fallback).
@@ -8,9 +8,10 @@
 */
 (function(g){
   'use strict';
-  if(g.VRTSmartSync && /^3\.4/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='3.4.0';
+  if(g.VRTSmartSync && /^3\.7(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='3.7.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
+  const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
   const UI_KEY='vrt_smart_sync_v32_ui_'+location.pathname;
   const _nativeFetch=g.fetch.bind(g);
   const enc=s=>encodeURIComponent(String(s||''));
@@ -58,12 +59,15 @@
     }
     return{tracked:[...tracked].sort(),pending:[...pending].sort()};
   }
-  const KEY_FIELDS=['id','uuid','recordId','key','detailId','lineNo','line','section','customer','cust','po','orderNo','styleNo','style','item','itemCode','erpCode','partNo','code','color','size','lotNumber','invoiceNo','invoice','carton','sku','location','supplier','type','stockType','syncType'];
+  const KEY_FIELDS=['id','uuid','recordId','key','detailId','lineNo','line','section','customer','cust','po','orderNo','styleNo','style','item','itemCode','erpCode','partNo','code','color','size','mode','shipmentMode','lotNumber','invoiceNo','invoice','carton','sku','location','supplier','type','stockType','syncType'];
   function recordDate(r){for(const k of DATE_FIELDS){const d=normDate(r&&r[k]);if(d)return d}return''}
   function semanticKey(r){
     if(!r||typeof r!=='object')return stable(r);
     for(const k of ['id','uuid','recordId','detailId'])if(r[k]!=null&&r[k]!=='')return k+':'+String(r[k]);
-    const parts=[];for(const k of KEY_FIELDS)if(r[k]!=null&&r[k]!=='')parts.push(k+'='+String(r[k]));
+    // The business date is part of the identity.  Without it, two shipments for the
+    // same customer/size/mode in different weeks collapse into one cloud row.
+    const parts=[],d=recordDate(r);if(d)parts.push('businessDate='+d);
+    for(const k of KEY_FIELDS)if(r[k]!=null&&r[k]!=='')parts.push(k+'='+String(r[k]));
     return parts.length?parts.join('|'):stable(r);
   }
   function bucketKey(r){
@@ -84,6 +88,9 @@
   }
   function hashMap(buckets){const o={};for(const k of Object.keys(buckets||{}))o[k]=buckets[k].hash;return o}
   function countMap(buckets){const o={};for(const k of Object.keys(buckets||{}))o[k]=buckets[k].count;return o}
+  function totalCount(m){return Object.values(m||{}).reduce((s,v)=>s+(Number(v)||0),0)}
+  function authorizeShrink(tool,reason,ttl){try{sessionStorage.setItem(SHRINK_PREFIX+tool,JSON.stringify({at:Date.now(),until:Date.now()+(Number(ttl)||300000),reason:reason||'explicit-delete'}));return true}catch(_){return false}}
+  function shrinkAuthorized(tool){try{const x=JSON.parse(sessionStorage.getItem(SHRINK_PREFIX+tool)||'null');return !!(x&&Number(x.until)>Date.now())}catch(_){return false}}
   function mapsEqual(a,b){a=a||{};b=b||{};const ka=Object.keys(a).sort(),kb=Object.keys(b).sort();if(ka.length!==kb.length)return false;for(let i=0;i<ka.length;i++)if(ka[i]!==kb[i]||String(a[ka[i]]||'')!==String(b[kb[i]]||''))return false;return true}
   function hasMeta(v){return !!(v&&typeof v==='object'&&Object.keys(v).length)}
   function mergeMetaDefault(local,remote){
@@ -108,14 +115,14 @@
   function lsKey(tool){return LS_PREFIX+String(tool||'tool')}
   async function stateGet(tool){
     let v=null;
-    try{const d=await openDB();v=await new Promise((res,rej)=>{const q=d.transaction(STORE,'readonly').objectStore(STORE).get(tool);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error)})}catch(_){}
+    try{const d=await openDB();try{v=await new Promise((res,rej)=>{const q=d.transaction(STORE,'readonly').objectStore(STORE).get(tool);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error)})}finally{d.close()}}catch(_){}
     if(v)return v;
     try{return JSON.parse(localStorage.getItem(lsKey(tool))||'null')}catch(_){return null}
   }
   async function statePut(tool,v){
     const data=Object.assign({version:VERSION,tool},v||{});
     let idbOk=false;
-    try{const d=await openDB();await new Promise((res,rej)=>{const tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).put(data,tool);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});idbOk=true}catch(_){}
+    try{const d=await openDB();try{await new Promise((res,rej)=>{const tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).put(data,tool);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});idbOk=true}finally{d.close()}}catch(_){}
     try{localStorage.setItem(lsKey(tool),JSON.stringify(data))}catch(_){}
     return idbOk;
   }
@@ -169,6 +176,11 @@
 
     if(!rm.exists&&rm.legacy){const legacyCount=Number(rm.legacyCount)||0;if(records.length<legacyCount){const msg=`停止：雲端 ${legacyCount} > 本機 ${records.length}，先拉取`;status('push',msg,'warn');throw new Error(`雲端舊資料較多（${legacyCount} > ${records.length}），請先拉取一次再推送`)}}
 
+    // Less-over-more protection. A first/stale client or a parser regression may
+    // never replace a larger cloud dataset. Explicit UI delete/clear actions grant
+    // a short authorization through Auto Sync; imports do not.
+    if(rm.exists){const rt=totalCount(remoteC),bt=totalCount(lastLocal),localShrank=bt>records.length,noBaseline=!bt;if(rt>records.length&&(localShrank||noBaseline)&&!opts.allowShrink&&!shrinkAuthorized(tool)){const msg=`已阻擋少覆多｜雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜先拉取核對`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,shrinkBlocked:true,cloudCount:rt,recordCount:records.length,uploaded:0}}}
+
     if(rm.exists&&mapsEqual(localH,remoteH)&&localMH===remoteMH){
       await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:localH,localCounts:localC,remoteMetaHash:remoteMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
       const msg=`已是最新｜本機 ${records.length.toLocaleString()}｜上傳 0｜未變 ${records.length.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:0,deleted:0,unchanged:records.length,changedBuckets:0,metaUpdated:false,noChange:true};
@@ -211,9 +223,8 @@
 
     const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);let sent=0;
     for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,count:b.count,records:b.records}),redirect:'follow'});sent+=b.count}
-    const auditRows=[];for(const k of changed)if(local[k]&&Array.isArray(local[k].records))auditRows.push(...local[k].records);
-    const auditPeriods=auditPeriodsForRecords(auditRows),approvalAudit=auditApprovalForRecords(auditRows);for(const k of deleted){const m=String(k).match(/^m:(20\d{2}-\d{2})(?::|$)/);if(m&&!auditPeriods.includes(m[1]))auditPeriods.push(m[1])}auditPeriods.sort();
-    await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,hashes:localH,counts:localC,deleted,changedBuckets:changed,auditPeriods,auditApprovalTrackedPeriods:approvalAudit.tracked,auditApprovalPendingPeriods:approvalAudit.pending,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'});
+    // PROD cloud transport only: do not create summary/approval reminder ledger entries.
+    await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'});
     await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
     const delCount=deleted.reduce((sum,k)=>sum+(Number(remoteC[k])||0),0),unchanged=Math.max(0,records.length-sent);
     const msg=`完成｜本機 ${records.length.toLocaleString()}｜上傳 ${sent.toLocaleString()}${metaChanged?'｜設定/總表已更新':''}｜刪除 ${delCount.toLocaleString()}｜未變 ${unchanged.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:sent,deleted:delCount,unchanged,changedBuckets:changed.length,metaUpdated:metaChanged};
@@ -226,7 +237,40 @@
     status('pull','比對雲端差異…','busy');onStatus('智慧拉取：比對雲端差異…');
     const rm=await manifest(url,tool);
     if(!rm.exists&&rm.legacy){
-      status('pull','首次升級：拉取舊雲端基準…','busy');const lp=await legacyPull(url,tool,m=>{status('pull',m,'busy');onStatus(m)}),merged=mergeRecords(localRecords,lp.records),legacyMeta=lp.meta||{};if(opts.apply)await opts.apply(merged,legacyMeta);const base=await push({url,tool,records:merged,meta:metaProvided?mergeMeta(localMeta,legacyMeta):(opts.metaBuilder?await opts.metaBuilder(merged,legacyMeta):legacyMeta),onStatus:m=>onStatus(m)});const mb=await buildBuckets(merged),mh=hashMap(mb),mc=countMap(mb),mmh=await metaHash(metaProvided?mergeMeta(localMeta,legacyMeta):legacyMeta);await statePut(tool,{remoteHashes:mh,remoteCounts:mc,localHashes:mh,localCounts:mc,remoteMetaHash:mmh,localMetaHash:mmh,lastPullAt:now(),updatedAt:now()});status('pull',`首次基準完成｜${merged.length.toLocaleString()} 筆`,'ok');return{ok:true,records:merged,meta:legacyMeta,migrated:true,pushResult:base,downloaded:lp.records.length,unchanged:0,pendingUpload:0}
+      // Never repeat the same legacy full download after a successful local baseline save.
+      const lastLegacy=await stateGet(tool), lm=rm.legacyMeta||{}, legacyCount=Number(rm.legacyCount)||0;
+      const legacySig=await hashText(stable({count:legacyCount,timestamp:lm.timestamp||lm.updatedAt||lm.uploadedAt||lm.savedAt||'',uploadId:lm.uploadId||'',fileName:lm.fileName||lm.source||'',summary:lm.summary||{}}));
+      if(lastLegacy&&lastLegacy.legacySig===legacySig&&localRecords.length>=legacyCount&&Number(lastLegacy.legacyLocalCount||0)<=localRecords.length){
+        status('pull','舊雲端基準未變｜下載 0｜正在升級同步格式…','busy');
+        const targetMeta=metaProvided?localMeta:(opts.metaBuilder?await opts.metaBuilder(localRecords,lm):lm);
+        try{
+          const base=await push({url,tool,records:localRecords,meta:targetMeta,onStatus:m=>onStatus(m)});
+          const mb=await buildBuckets(localRecords),mh=hashMap(mb),mc=countMap(mb),mmh=await metaHash(targetMeta);
+          await statePut(tool,{remoteHashes:mh,remoteCounts:mc,localHashes:mh,localCounts:mc,remoteMetaHash:mmh,localMetaHash:mmh,lastPullAt:now(),updatedAt:now(),legacySig,legacyLocalCount:localRecords.length,legacyMigratedAt:now()});
+          status('pull',`基準已升級｜下載 0｜未變 ${localRecords.length.toLocaleString()}`,'ok');
+          return{ok:true,records:localRecords,meta:targetMeta,migrated:true,pushResult:base,downloaded:0,unchanged:localRecords.length,pendingUpload:0,noRepeatLegacy:true}
+        }catch(e){
+          await statePut(tool,Object.assign({},lastLegacy,{legacySig,legacyLocalCount:localRecords.length,legacyRetryAt:now(),updatedAt:now()}));
+          status('pull','舊基準未變｜下載 0｜同步格式待重試','warn');
+          return{ok:true,records:localRecords,meta:lm,downloaded:0,unchanged:localRecords.length,pendingUpload:0,legacyRetry:true}
+        }
+      }
+      status('pull','首次升級：拉取舊雲端基準…','busy');
+      const lp=await legacyPull(url,tool,m=>{status('pull',m,'busy');onStatus(m)}),merged=mergeRecords(localRecords,lp.records),legacyMeta=lp.meta||{};
+      if(opts.apply)await opts.apply(merged,legacyMeta);
+      await statePut(tool,{legacySig,legacyLocalCount:merged.length,legacyBaselineAt:now(),lastPullAt:now(),updatedAt:now()});
+      let base=null;
+      try{
+        const targetMeta=metaProvided?mergeMeta(localMeta,legacyMeta):(opts.metaBuilder?await opts.metaBuilder(merged,legacyMeta):legacyMeta);
+        base=await push({url,tool,records:merged,meta:targetMeta,onStatus:m=>onStatus(m)});
+        const mb=await buildBuckets(merged),mh=hashMap(mb),mc=countMap(mb),mmh=await metaHash(targetMeta);
+        await statePut(tool,{remoteHashes:mh,remoteCounts:mc,localHashes:mh,localCounts:mc,remoteMetaHash:mmh,localMetaHash:mmh,lastPullAt:now(),updatedAt:now(),legacySig,legacyLocalCount:merged.length,legacyMigratedAt:now()});
+        status('pull',`首次基準完成｜${merged.length.toLocaleString()} 筆`,'ok');
+      }catch(e){
+        await statePut(tool,{legacySig,legacyLocalCount:merged.length,legacyBaselineAt:now(),legacyRetryAt:now(),lastPullAt:now(),updatedAt:now()});
+        status('pull',`舊資料已保存本機｜${merged.length.toLocaleString()} 筆｜格式升級待重試`,'warn');
+      }
+      return{ok:true,records:merged,meta:legacyMeta,migrated:true,pushResult:base,downloaded:lp.records.length,unchanged:0,pendingUpload:0}
     }
     if(!rm.exists){status('pull','雲端尚無資料','warn');return{ok:false,noCloud:true,records:localRecords,meta:{}}}
 
@@ -285,5 +329,5 @@
     return _nativeFetch(input,init);
   };
 
-  g.VRTSmartSync={version:VERSION,status,push,pull,auditSent,buildBuckets,semanticKey,bucketKey,mergeRecords,stable,stateGet,statePut,auditPeriodsForRecords,auditApprovalForRecords};
+  g.VRTSmartSync={version:VERSION,status,push,pull,auditSent,buildBuckets,semanticKey,bucketKey,mergeRecords,stable,stateGet,statePut,authorizeShrink,auditPeriodsForRecords,auditApprovalForRecords};
 })(window);

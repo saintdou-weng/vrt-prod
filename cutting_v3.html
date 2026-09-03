@@ -143,8 +143,9 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -561,6 +562,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
     <label>從</label><input type="date" id="recFrom" onchange="renderRecs()">
     <label>到</label><input type="date" id="recTo" onchange="renderRecs()">
     <span id="recCnt" style="font-size:12px;color:#8b95b8;margin-left:auto"></span>
+    <button class="btn btn-b btn-sm" onclick="newR()">＋ 新增</button>
     <button class="btn btn-g btn-sm" onclick="xls('all')" style="background:#e0f2fe;color:#0369a1;border-color:#7dd3fc">⬇ 匯出 Excel</button>
   </div>
   <div class="card"><div class="tw"><table>
@@ -612,8 +614,8 @@ function sewPieces(recs){
 }
 
 // ── IDB: CuttingProd（v2 與 cutting_plan 共用；含自我修復） ────────────────────
-const CUTPROD_STORES=["cutting_records","sewing_cache","plan_records","variance_records","history_records"];
-function _cutBuild(db){ CUTPROD_STORES.forEach(s=>{ if(!db.objectStoreNames.contains(s))db.createObjectStore(s,{keyPath:"id"}); }); }
+const CUTPROD_STORES=["cutting_records","sewing_cache","plan_records","variance_records","history_records","style_records","plan_meta"];
+function _cutBuild(db){ CUTPROD_STORES.forEach(s=>{ if(!db.objectStoreNames.contains(s))db.createObjectStore(s,s==="plan_meta"?undefined:{keyPath:"id"}); }); }
 function _cutTryOpen(ver){ return new Promise((res,rej)=>{
   const req=ver?indexedDB.open("CuttingProd",ver):indexedDB.open("CuttingProd");
   req.onupgradeneeded=e=>_cutBuild(e.target.result);
@@ -654,12 +656,9 @@ async function loadSew(opts){
   if(!opts.cloudOnly && _sewLoadedThisSession && SEW.length>0) return"cache";
 
   if(!opts.cloudOnly){
-    // 1. Try localStorage (sewing v5+ writes here，但 >5MB 的雲端資料不存這裡)
-    try{
-      const raw=localStorage.getItem("sewing_prod_v1");
-      if(raw){const p=JSON.parse(raw);if(Array.isArray(p)&&p.length){SEW=p;_sewLoadedThisSession=true;await saveSewIDB();return"local";}}
-    }catch(e){}
-    // 2. Fallback: sewing_cache IDB（支援新的 single-blob 格式 + 舊的 per-record 格式）
+    // 1. Canonical Sewing source. Do not maintain a second current dataset here.
+    try{const p=await VRTProdStorage.all('VRT_SewingProduction','daily_records',{keyPath:'id'});if(p.length){SEW=p;_sewLoadedThisSession=true;return"primary"}}catch(e){}
+    // 2. Legacy cutting cache (read-only migration fallback)
     try{
       if(!_idb)await openIDB();
       const tx=_idb.transaction("sewing_cache","readonly");
@@ -671,6 +670,8 @@ async function loadSew(opts){
       const recs=all.filter(r=>r.id!=="_batch_");
       if(recs.length>0){SEW=recs;_sewLoadedThisSession=true;return"cache";}
     }catch(e){SEW=[];}
+    // 3. One-time old localStorage migration
+    try{const raw=localStorage.getItem("sewing_prod_v1");if(raw){const p=JSON.parse(raw);if(Array.isArray(p)&&p.length){SEW=p;_sewLoadedThisSession=true;await saveSewIDB();return"legacy"}}}catch(e){}
   }
 
   // 3. Fallback: pull sewing data from GAS cloud
@@ -693,18 +694,11 @@ async function loadSew(opts){
 function _sewPullStatus(msg){
   try{const el=document.getElementById("sewConn");if(el)el.innerHTML=`<span class="conn-dot conn-off"></span>${msg}`;}catch(e){}
 }
-// saveSew: single-blob IDB put（比 per-record 並行寫入可靠，可處理 68,000+ 筆）
-async function saveSew(){
-  if(!_idb)await openIDB();
-  const tx=_idb.transaction("sewing_cache","readwrite");const st=tx.objectStore("sewing_cache");
-  await idbClr(st);
-  await idbPut(st,{id:"_batch_",records:SEW,ts:Date.now()});
-  await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
-}
-// 別名：step 1 存完後也用 single-blob 存 IDB
-async function saveSewIDB(){ try{await saveSew();}catch(e){console.warn("[cutting] saveSewIDB failed:",e);} }
-async function loadStyles(){STYLES=[];}
-async function saveStyles(){/* no-op */}
+async function saveSew(){SEW=SEW.map(r=>({...r,id:r.id||uid()}));await VRTProdStorage.replaceAll('VRT_SewingProduction','daily_records',SEW,{keyPath:'id'})}
+async function saveSewIDB(){try{await saveSew();localStorage.removeItem('sewing_prod_v1')}catch(e){console.warn("[cutting] saveSewIDB failed:",e)}}
+async function loadStyles(){try{if(!_idb)await openIDB();STYLES=await idbAll(_idb.transaction('style_records','readonly').objectStore('style_records'))}catch(e){STYLES=[]}}
+async function saveStyles(){if(!_idb)await openIDB();const tx=_idb.transaction('style_records','readwrite'),st=tx.objectStore('style_records');await idbClr(st);for(const r of STYLES){if(!r.id)r.id='style_'+styleHash([r.selfkey,r.po,r.styleNo,r.color,r.size].join('|'));await idbPut(st,r)}await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j})}
+function styleHash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(36)}
 
 // ── Utilities (identical to sewing_v5) ─────────────────────
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
@@ -2693,9 +2687,11 @@ function renderRecs(){
   if(q)rows=rows.filter(r=>(r.styleNo||"").toLowerCase().includes(q)||(r.lineNo||"").toLowerCase().includes(q));
   rows.sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById("recCnt").textContent=`${rows.length} / ${CUT.length} 筆`;
-  document.getElementById("recBody").innerHTML=rows.slice(0,500).map(r=>{const ia=r.efficiency>0&&r.efficiency<50;return`<tr${ia?' style="background:#fff1f2"':''}><td class="mono">${r.date}</td><td>${secBadge(r.section)}</td><td class="mono" style="font-weight:700">${r.lineNo}</td><td class="mono">${r.styleNo||"-"}</td><td class="mono" style="color:#6b7a9e;font-size:11px">${r.fabricItem||"-"}</td><td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${r.fabricType||''}">${r.fabricType?r.fabricType.slice(0,18)+(r.fabricType.length>18?'…':''):"-"}</td><td style="font-size:11px">${r.color||"-"}</td><td class="r" style="font-size:11px">${r.ydsPerPcs||"-"}</td><td class="r" style="color:#1d4ed8;font-weight:700">${fmt(r.pieces)}</td><td class="r">${r.workers||"-"}</td><td class="r">${eb(r.efficiency)}</td><td><button onclick="delR('${r.id}')" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:2px 6px">✕</button></td></tr>`;}).join("")||`<tr><td colspan="12" style="text-align:center;padding:40px;color:#8b95b8">無符合記錄</td></tr>`;
+  document.getElementById("recBody").innerHTML=rows.slice(0,500).map(r=>{const ia=r.efficiency>0&&r.efficiency<50;return`<tr${ia?' style="background:#fff1f2"':''}><td class="mono">${r.date}</td><td>${secBadge(r.section)}</td><td class="mono" style="font-weight:700">${r.lineNo}</td><td class="mono">${r.styleNo||"-"}</td><td class="mono" style="color:#6b7a9e;font-size:11px">${r.fabricItem||"-"}</td><td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${r.fabricType||''}">${r.fabricType?r.fabricType.slice(0,18)+(r.fabricType.length>18?'…':''):"-"}</td><td style="font-size:11px">${r.color||"-"}</td><td class="r" style="font-size:11px">${r.ydsPerPcs||"-"}</td><td class="r" style="color:#1d4ed8;font-weight:700">${fmt(r.pieces)}</td><td class="r">${r.workers||"-"}</td><td class="r">${eb(r.efficiency)}</td><td><button onclick="editR('${r.id}')" style="background:none;border:none;color:#2563eb;cursor:pointer;padding:2px 6px">✎</button><button onclick="delR('${r.id}')" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:2px 6px">✕</button></td></tr>`;}).join("")||`<tr><td colspan="12" style="text-align:center;padding:40px;color:#8b95b8">無符合記錄</td></tr>`;
 }
 function delR(id){if(!confirm("確定刪除？"))return;CUT=CUT.filter(r=>r.id!==id);saveCut();updateHdr();renderRecs();}
+function newR(){editR('')}
+async function editR(id){const old=CUT.find(r=>r.id===id)||{},date=prompt('日期 YYYY-MM-DD',old.date||TODAY);if(date===null)return;const section=prompt('Section (Apron / Garment)',old.section||'Garment');if(section===null)return;const lineNo=prompt('線別',old.lineNo||'Line 1');if(lineNo===null)return;const styleNo=prompt('款號',old.styleNo||'');if(styleNo===null)return;const pieces=Number(prompt('裁量 pieces',old.pieces||0));if(!date||!lineNo||!pieces){alert('日期、線別、裁量必填');return}const r={...old,id:old.id||uid(),date:parseDt(date)||date,section,lineNo:normLineNo(lineNo),styleNo,pieces};if(id)CUT=CUT.filter(x=>x.id!==id);CUT.push(r);await saveCut();updateHdr();renderRecs()}
 
 // ── Excel export ────────────────────────────────────────────
 function xls(type){
@@ -2711,32 +2707,39 @@ function xls(type){
   }
   if(type==="query"){
     const sec=document.getElementById("qSec").value;
-    const frm=document.getElementById("qFrom").value,to2=document.getElementById("qTo").value;
-    let rows=CUT.filter(r=>r.fabricItem);
+    const mo=document.getElementById("qMo").value;
+    const q=(document.getElementById("qSearch").value||"").toLowerCase();
+    let rows=CUT.filter(isDailyRec);
     if(sec)rows=rows.filter(r=>r.section===sec);
-    if(frm)rows=rows.filter(r=>r.date>=frm);
-    if(to2)rows=rows.filter(r=>r.date<=to2);
+    if(mo)rows=rows.filter(r=>r.date.startsWith(mo));
+    if(q)rows=rows.filter(r=>(r.styleNo+r.po+r.color+r.fabricItem+r.fabricType+r.size).toLowerCase().includes(q));
     if(qV==="fab"){
       const grp={};
-      rows.filter(r=>!q||r.fabricItem.toLowerCase().includes(q)||(r.fabricType||"").toLowerCase().includes(q)).forEach(r=>{
+      rows.filter(r=>r.fabricItem).forEach(r=>{
         const k=r.fabricItem;if(!grp[k])grp[k]={item:r.fabricItem,type:r.fabricType||"",pcs:0,yds:0,styles:new Set(),tables:new Set()};
         grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;if(r.styleNo)grp[k].styles.add(r.styleNo);if(r.lineNo)grp[k].tables.add(r.lineNo);
       });
       const ws=XLSX.utils.aoa_to_sheet([["品號(Item)","布規格","總裁量(件)","總用量(Yds)","款號數","Table數"],...Object.values(grp).sort((a,b)=>b.yds-a.yds).map(g=>[g.item,g.type,g.pcs,Math.round(g.yds*10)/10,g.styles.size,g.tables.size])]);
       ws["!cols"]=[{wch:12},{wch:40},{wch:10},{wch:12},{wch:8},{wch:8}];
       XLSX.utils.book_append_sheet(wb2,ws,"布料品號彙整");
+    } else if(qV==="mo"){
+      const grp={};
+      rows.forEach(r=>{const k=`${r.date.slice(0,7)}|${r.section}`,g=grp[k]||(grp[k]={month:r.date.slice(0,7),section:r.section,pcs:0,yds:0,styles:new Set(),pos:new Set(),days:new Set()});g.pcs+=r.pieces||0;g.yds+=r.totalYds||0;if(r.styleNo)g.styles.add(r.styleNo);if(r.po)g.pos.add(r.po);g.days.add(r.date)});
+      const ws=XLSX.utils.aoa_to_sheet([["月份","Section","總裁量(件)","總用量(Yds)","款號數","PO數","工作天"],...Object.values(grp).sort((a,b)=>b.month.localeCompare(a.month)||a.section.localeCompare(b.section)).map(g=>[g.month,g.section,g.pcs,Math.round(g.yds*10)/10,g.styles.size,g.pos.size,g.days.size])]);
+      ws["!cols"]=[{wch:10},{wch:10},{wch:12},{wch:14},{wch:10},{wch:8},{wch:8}];
+      XLSX.utils.book_append_sheet(wb2,ws,"月份彙整");
     } else {
       const grp={};
-      rows.filter(r=>r.styleNo&&(!q||r.styleNo.toLowerCase().includes(q)||(r.fabricItem||"").toLowerCase().includes(q))).forEach(r=>{
-        const k=r.styleNo;if(!grp[k])grp[k]={style:r.styleNo,item:r.fabricItem||"",type:r.fabricType||"",color:r.color||"",ydsPerPcs:r.ydsPerPcs||0,pcs:0,yds:0,tables:new Set()};
-        grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;if(r.lineNo)grp[k].tables.add(r.lineNo);
+      rows.filter(r=>r.styleNo).forEach(r=>{
+        const k=`${normalizeKey(r.styleNo)}|${normalizeKey(r.po)}|${normalizeKey(r.color)}`;if(!grp[k])grp[k]={style:r.styleNo,po:r.po||"",item:r.fabricItem||"",color:r.color||"",sizes:new Set(),ydsPerPcs:r.ydsPerPcs||0,pcs:0,yds:0,days:new Set()};
+        grp[k].pcs+=r.pieces;grp[k].yds+=r.totalYds||0;if(r.size)grp[k].sizes.add(r.size);if(r.date)grp[k].days.add(r.date);
         if(!grp[k].item&&r.fabricItem)grp[k].item=r.fabricItem;
       });
       const ws=XLSX.utils.aoa_to_sheet([["款號","PO","顏色","尺寸","品號(Item)","總裁量(件)","總用量(Yds)","Yds/Pcs","工作天"],...Object.values(grp).sort((a,b)=>b.pcs-a.pcs).map(g=>[g.style,g.po||"",g.color||"",[...g.sizes].sort().join("/"),g.item,g.pcs,Math.round(g.yds*10)/10,g.ydsPerPcs,g.days?.size||0])]);
-      ws["!cols"]=[{wch:18},{wch:12},{wch:40},{wch:12},{wch:8},{wch:10},{wch:12},{wch:8}];
+      ws["!cols"]=[{wch:18},{wch:12},{wch:14},{wch:12},{wch:14},{wch:12},{wch:14},{wch:10},{wch:8}];
       XLSX.utils.book_append_sheet(wb2,ws,"款號彙整");
     }
-    XLSX.writeFile(wb2,`裁剪${qV==="fab"?'布料':'款號'}彙整_${TODAY}.xlsx`);return;
+    XLSX.writeFile(wb2,`裁剪${qV==="fab"?'布料':qV==="mo"?'月份':'款號'}彙整_${TODAY}.xlsx`);return;
   }
   if(type==="wip"){
     // ★ v3.7：依目前檢視（週/月/年）匯出對應期間

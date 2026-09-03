@@ -213,8 +213,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
 </head>
 <body data-theme="light">
 
@@ -382,7 +382,7 @@ function openDB(){
     .catch(err=>{ if(err&&err.name==='VersionError') return tryOpen(null); throw err; })
     .then(db=>{ if(db.objectStoreNames.contains(STORE)) return db;
       const nv=db.version+1; db.close(); return tryOpen(nv); }); }
-async function dbSaveAll(arr){ try{ const db=await openDB(); const tx=db.transaction(STORE,'readwrite'),st=tx.objectStore(STORE); st.clear(); arr.forEach(r=>st.put(r)); return new Promise(r=>tx.oncomplete=()=>r(true)); }catch(e){ try{localStorage.setItem('vrt_pocc_records',JSON.stringify(arr));}catch(_){} return true; } }
+async function dbSaveAll(arr){ try{ const db=await openDB(); const tx=db.transaction(STORE,'readwrite'),st=tx.objectStore(STORE); st.clear(); arr.forEach(r=>st.put(r)); return new Promise((r,j)=>{tx.oncomplete=()=>r(true);tx.onerror=()=>j(tx.error)}); }catch(e){console.warn('PO Delivery IndexedDB save failed',e);return false} }
 async function dbLoadAll(){ try{ const db=await openDB(); const tx=db.transaction(STORE,'readonly'),st=tx.objectStore(STORE); return new Promise(r=>{ const q=st.getAll(); q.onsuccess=()=>r(q.result||[]); q.onerror=()=>r([]); }); }catch(e){ return JSON.parse(localStorage.getItem('vrt_pocc_records')||'[]'); } }
 
 function toast(msg,kind){ const w=document.getElementById('toastWrap'); const el=document.createElement('div'); el.className='toast '+(kind||''); el.textContent=msg; w.appendChild(el); setTimeout(()=>{el.style.opacity='0';el.style.transition='.3s';setTimeout(()=>el.remove(),300);},2600); }
