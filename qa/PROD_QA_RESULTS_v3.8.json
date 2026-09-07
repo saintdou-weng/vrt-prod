@@ -1,0 +1,202 @@
+{
+  "release": "VRT PROD v3.8",
+  "generatedAt": "2026-09-05T09:21:26.931Z",
+  "summary": {
+    "total": 17,
+    "pass": 17,
+    "fail": 0
+  },
+  "tests": [
+    {
+      "name": "PROD HTML inventory",
+      "status": "PASS",
+      "detail": "19 HTML files"
+    },
+    {
+      "name": "JavaScript syntax",
+      "status": "PASS",
+      "detail": "3 JS files + 81 inline scripts"
+    },
+    {
+      "name": "Local file references",
+      "status": "PASS",
+      "detail": "no missing local src/href"
+    },
+    {
+      "name": "Cloud modules use Smart Sync v3.7",
+      "status": "PASS",
+      "detail": "18 cloud HTML modules"
+    },
+    {
+      "name": "Cloud modules load Auto Sync v3.7",
+      "status": "PASS",
+      "detail": "18 cloud HTML modules"
+    },
+    {
+      "name": "Mobile/desktop responsive contract",
+      "status": "PASS",
+      "detail": "19 HTML modules have viewport + responsive CSS"
+    },
+    {
+      "name": "Weekly report baseline uses IndexedDB",
+      "status": "PASS",
+      "detail": "VRT_WeeklyReport/baselines; localStorage is migration-read only"
+    },
+    {
+      "name": "No automatic demo operational data",
+      "status": "PASS",
+      "detail": "IE/SMV and BOM start empty when no saved dataset exists"
+    },
+    {
+      "name": "Production schedule is Production Plan only",
+      "status": "PASS",
+      "detail": "planAggEvents/buildSchedule do not create schedule rows from Orders"
+    },
+    {
+      "name": "Cutting query Excel export",
+      "status": "PASS",
+      "detail": "current search/month/section and style/fabric/month views are exported"
+    },
+    {
+      "name": "PROD automatic reminder disabled",
+      "status": "PASS",
+      "detail": "no automatic summary/approval reminder"
+    },
+    {
+      "name": "Shipping dates remain distinct in Smart Sync",
+      "status": "PASS",
+      "detail": "same customer/size/mode on 2026-09-05 and 2026-09-19 stay as 2 records"
+    },
+    {
+      "name": "Less-over-more protection",
+      "status": "PASS",
+      "detail": "cloud 4 > local 3 is blocked before upload"
+    },
+    {
+      "name": "Unchanged Smart Pull downloads zero buckets",
+      "status": "PASS",
+      "detail": "downloaded=0; manifest-only check"
+    },
+    {
+      "name": "Attached Shipping workbook regression",
+      "status": "PASS",
+      "detail": {
+        "workbook": "1-VRT MONTHLY SHIPPING SCHEDULE (6).xlsx",
+        "allRecords": 17,
+        "septemberShipments": 4,
+        "septemberUniqueCustomers": 3,
+        "septemberCartons": 3370,
+        "records": [
+          {
+            "date": "2026-09-05",
+            "customer": "LECHNER",
+            "size": "20",
+            "mode": "SEA",
+            "cartons": 510,
+            "id": "ship_1l5u59f"
+          },
+          {
+            "date": "2026-09-05",
+            "customer": "AMERICAN DAWN",
+            "size": "40",
+            "mode": "SEA",
+            "cartons": 1170,
+            "id": "ship_jvx3a6"
+          },
+          {
+            "date": "2026-09-19",
+            "customer": "AMERICAN DAWN",
+            "size": "40",
+            "mode": "SEA",
+            "cartons": 1170,
+            "id": "ship_hdi8tx"
+          },
+          {
+            "date": "2026-09-26",
+            "customer": "NORTHERN",
+            "size": "20",
+            "mode": "SEA",
+            "cartons": 520,
+            "id": "ship_lj716f"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Attached Sewing workbook date regression",
+      "status": "PASS",
+      "detail": [
+        {
+          "workbook": "Daily Output Apron Report as of September_03, 2026.xlsx",
+          "date": "2026-09-03",
+          "section": "Apron",
+          "lines": 2,
+          "pieces": 908,
+          "cartons": 38.3,
+          "expected": [
+            "2026-09-03",
+            "Apron",
+            2,
+            908,
+            38.3
+          ]
+        },
+        {
+          "workbook": "Daily Output Garment Report as of September_03, 2026.xlsx",
+          "date": "2026-09-03",
+          "section": "Garment",
+          "lines": 8,
+          "pieces": 4022,
+          "cartons": 124,
+          "expected": [
+            "2026-09-03",
+            "Garment",
+            8,
+            4022,
+            124
+          ]
+        },
+        {
+          "workbook": "Daily Output Apron Report as of September_04, 2026.xlsx",
+          "date": "2026-09-04",
+          "section": "Apron",
+          "lines": 2,
+          "pieces": 912,
+          "cartons": 38,
+          "expected": [
+            "2026-09-04",
+            "Apron",
+            2,
+            912,
+            38
+          ]
+        },
+        {
+          "workbook": "Daily Output Garment Report as of September_04, 2026.xlsx",
+          "date": "2026-09-04",
+          "section": "Garment",
+          "lines": 8,
+          "pieces": 2989,
+          "cartons": 92,
+          "expected": [
+            "2026-09-04",
+            "Garment",
+            8,
+            2989,
+            92
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sewing date safety guards",
+      "status": "PASS",
+      "detail": {
+        "filenameFallback": true,
+        "missingDateBlocked": true,
+        "worksheetFilenameMismatchBlocked": true,
+        "todayFallbackRemoved": true
+      }
+    }
+  ]
+}

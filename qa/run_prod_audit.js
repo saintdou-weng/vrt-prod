@@ -195,6 +195,62 @@ function shippingWorkbookAudit(workbookPath) {
   });
 }
 
+function sewingWorkbookAudit(workbookPaths) {
+  if (!workbookPaths.length) {
+    add('Attached Sewing workbook date regression', true,
+      'not rerun: pass one or more --sewing-xlsx=/absolute/file.xlsx');
+    return;
+  }
+  const silentConsole = { log() {}, warn() {}, error() {} };
+  const context = { console: silentConsole, Buffer, process, setTimeout, clearTimeout, Date, Math, ArrayBuffer, Uint8Array };
+  context.window = context; context.global = context; context.globalThis = context;
+  vm.createContext(context);
+  const ieParts = scripts(read('ie_smv_report_v2_1.html'));
+  const xlsxBundle = ieParts.find(p => !/\bsrc\s*=/.test(p.attrs) && p.code.length > 500000 && /\bXLSX\b/.test(p.code));
+  vm.runInContext(xlsxBundle.code, context, { timeout: 30000, filename: 'embedded-xlsx.js' });
+  const sewing = read('sewing_v5.html');
+  const parser = sewing.slice(sewing.indexOf('function uid()'), sewing.indexOf('// ── Standard format parser'));
+  vm.runInContext(parser, context, { timeout: 30000, filename: 'sewing-parser.js' });
+
+  const expected = {
+    'Daily Output Apron Report as of September_03, 2026.xlsx': ['2026-09-03', 'Apron', 2, 908, 38.3],
+    'Daily Output Garment Report as of September_03, 2026.xlsx': ['2026-09-03', 'Garment', 8, 4022, 124],
+    'Daily Output Apron Report as of September_04, 2026.xlsx': ['2026-09-04', 'Apron', 2, 912, 38],
+    'Daily Output Garment Report as of September_04, 2026.xlsx': ['2026-09-04', 'Garment', 8, 2989, 92]
+  };
+  const results = workbookPaths.map(workbookPath => {
+    const name = path.basename(workbookPath);
+    const wb = context.XLSX.read(fs.readFileSync(workbookPath), { type: 'buffer', cellDates: true });
+    const parsed = context.parseVRT(wb, name);
+    return {
+      workbook: name, date: parsed.summary.date, section: parsed.summary.section,
+      lines: parsed.summary.lines, pieces: parsed.summary.totalPcs,
+      cartons: Math.round(parsed.recs.reduce((sum, row) => sum + Number(row.cartons || 0), 0) * 10) / 10,
+      expected: expected[name] || null
+    };
+  });
+  const pass = results.every(r => !r.expected ||
+    r.date === r.expected[0] && r.section === r.expected[1] &&
+    r.lines === r.expected[2] && r.pieces === r.expected[3] && r.cartons === r.expected[4]) &&
+    results.every(r => r.date !== '2026-09-05');
+  add('Attached Sewing workbook date regression', pass, results);
+
+  const firstBytes = fs.readFileSync(workbookPaths[0]);
+  const fallbackWb = context.XLSX.read(firstBytes, { type: 'buffer', cellDates: true });
+  delete fallbackWb.Sheets['Daily Output'].T3;
+  const filenameFallback = context.parseVRT(fallbackWb,
+    'Daily Output Apron Report as of September_03, 2026.xlsx').summary.date === '2026-09-03';
+  let missingBlocked = false, mismatchBlocked = false;
+  try { context.parseVRT(fallbackWb, 'Daily Output Apron Report.xlsx'); }
+  catch (e) { missingBlocked = /找不到報表日期/.test(String(e)); }
+  const mismatchWb = context.XLSX.read(firstBytes, { type: 'buffer', cellDates: true });
+  try { context.parseVRT(mismatchWb, 'Daily Output Apron Report as of September_04, 2026.xlsx'); }
+  catch (e) { mismatchBlocked = /報表日期不一致/.test(String(e)); }
+  add('Sewing date safety guards', filenameFallback && missingBlocked && mismatchBlocked,
+    { filenameFallback, missingDateBlocked: missingBlocked, worksheetFilenameMismatchBlocked: mismatchBlocked,
+      todayFallbackRemoved: !/let section="Sewing", date=new Date\(\)\.toISOString/.test(sewing) });
+}
+
 async function main() {
   const htmlFiles = fs.readdirSync(ROOT).filter(f => f.endsWith('.html')).sort();
   const jsFiles = fs.readdirSync(ROOT).filter(f => f.endsWith('.js')).sort();
@@ -205,9 +261,12 @@ async function main() {
   await smartSyncAudit();
   const arg = process.argv.find(x => x.startsWith('--shipping-xlsx='));
   shippingWorkbookAudit(arg ? arg.slice('--shipping-xlsx='.length) : '');
+  const sewingArgs = process.argv.filter(x => x.startsWith('--sewing-xlsx='))
+    .map(x => x.slice('--sewing-xlsx='.length));
+  sewingWorkbookAudit(sewingArgs);
   const failed = tests.filter(t => t.status === 'FAIL');
   const result = {
-    release: 'VRT PROD v3.7', generatedAt: new Date().toISOString(),
+    release: 'VRT PROD v3.8', generatedAt: new Date().toISOString(),
     summary: { total: tests.length, pass: tests.length - failed.length, fail: failed.length },
     tests
   };

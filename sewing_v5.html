@@ -171,7 +171,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.17 · AUTO SYNC</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.18 · AUTO SYNC</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -1514,6 +1514,23 @@ function parseDate(str){
   return "";
 }
 
+// Report dates are supplied by several VRT Excel templates. Some Garment files
+// use "September 03 ,2026" (a space before the comma), while Apron files use
+// "September 03, 2026". Never fall back to today's date: doing so silently
+// moves an older report into the import date and can replace another report.
+function parseReportDateValue(value, requireAsOf){
+  if(value instanceof Date && !isNaN(value)){
+    return `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,"0")}-${String(value.getDate()).padStart(2,"0")}`;
+  }
+  const s=String(value==null?"":value).replace(/_/g," ").trim();
+  if(!s) return "";
+  const prefix=requireAsOf?"as\\s+of\\s+":"";
+  const m=new RegExp(prefix+"([A-Za-z]{3,})\\s+(\\d{1,2})\\s*[,.-]?\\s*(\\d{4})","i").exec(s);
+  if(!m) return "";
+  const mo=MONTHS[m[1].toLowerCase().slice(0,3)];
+  return mo?`${m[3]}-${String(mo).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`:"";
+}
+
 function parseVRT(wb, fname){
   // Fix: prefer exact "Daily Output", then "Daily Output1", then any daily output variant
   const sheetName = wb.SheetNames.find(n=>n.trim()==="Daily Output") ||
@@ -1526,29 +1543,29 @@ function parseVRT(wb, fname){
   const isDayShift = sheetName.toLowerCase().includes('day shift') || sheetName.toLowerCase().includes('a&b');
 
   // ── date + section ──────────────────────────────────────────────────────
-  // Only scan first 6 rows to avoid picking up dates from production data
-  let section="Sewing", date=new Date().toISOString().slice(0,10);
-  let foundDate=false;
-  for(let i=0;i<Math.min(6,rows.length);i++){
+  // Scan only the report header so production-detail dates cannot be mistaken
+  // for the report date. Filename is a secondary source and disagreement is
+  // blocked instead of silently assigning data to the wrong day.
+  let section="Sewing", date="";
+  const headerCells=[];
+  for(let i=0;i<Math.min(8,rows.length);i++){
     (rows[i]||[]).forEach(cell=>{
+      headerCells.push(cell);
       if(typeof cell!=="string") return;
       const cl=cell.toLowerCase();
       // Section detection
       if(cl.includes("apron")&&!cl.includes("summary")&&!cl.includes("total")&&!cl.includes("line")) section="Apron";
       else if(cl.includes("garment")&&!cl.includes("summary")) section="Garment";
-      // Date: prefer cells that contain "as of" to avoid stale dates
-      const asOf = /as of\s+([A-Za-z]{3,})\s+(\d{1,2})[,.\-]?\s*(\d{4})/i.exec(cell);
-      if(asOf && !foundDate){
-        const mo=MONTHS[asOf[1].toLowerCase().slice(0,3)];
-        if(mo){ date=`${asOf[3]}-${String(mo).padStart(2,"0")}-${String(asOf[2]).padStart(2,"0")}`; foundDate=true; }
-      }
-      // Fallback: any "Month DD, YYYY" in first 6 rows (only if no "as of" found yet)
-      if(!foundDate){
-        const m=cell.match(/([A-Za-z]{3,})\s+(\d{1,2})[,.\-]?\s*(\d{4})/);
-        if(m){ const mo=MONTHS[m[1].toLowerCase().slice(0,3)]; if(mo) date=`${m[3]}-${String(mo).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`; }
-      }
     });
   }
+  date=headerCells.map(v=>parseReportDateValue(v,true)).find(Boolean)||
+       headerCells.map(v=>parseReportDateValue(v,false)).find(Boolean)||"";
+  const fileDate=parseReportDateValue(fname,false);
+  if(date&&fileDate&&date!==fileDate)
+    throw new Error(`報表日期不一致：工作表 ${date}，檔名 ${fileDate}。為避免存錯日期，本檔未匯入`);
+  date=date||fileDate;
+  if(!date)
+    throw new Error("找不到報表日期。為避免資料被錯放到今天，本檔未匯入；請確認工作表標題或檔名包含日期");
 
   // ── BODY SCAN v5.16: header-driven; supports both legacy and Aug-2026 SMV-Compare layout ──
   // Legacy: C Line / D SelfKey / E PO / F Style / G SMV / ... / P Total / Q Ctn
@@ -1645,7 +1662,10 @@ function parseVRT(wb, fname){
       lm[cur].normalPcs+=normalRow;
       lm[cur].otPcs+=otSlot;
       if(rowSmv>0) lm[cur].smvLoad+=(pcs*rowSmv);
-      const detailKey=`${st}|${color}|${size}`;
+      // PO/SelfKey are part of the business identity. The same style/color/size
+      // can be produced for two POs on one line; merging them loses the later
+      // row's carton quantity (e.g. 2026-09-03 Garment: 118 shown vs 124 source).
+      const detailKey=`${selfKey}|${po}|${st}|${color}|${size}`;
       if(!lm[cur].details[detailKey]) lm[cur].details[detailKey]={styleNo:st,selfKey,po,color,size,pcs:0,ctn:0,smv:rowSmv,normalPcs:0,otPcs:0,
         smvCompareCurrent:0,smvLast:0,smvRecheck:0,smvMinus10:0,smvMinus15:0,smvMinus20:0,smvCompareSource:""};
       const dd=lm[cur].details[detailKey];
@@ -1664,7 +1684,7 @@ function parseVRT(wb, fname){
     }
     if(ctn>0){
       if(st){
-        const dkc=`${st}|${color}|${size}`;
+        const dkc=`${selfKey}|${po}|${st}|${color}|${size}`;
         if(lm[cur].details[dkc]&&lm[cur].details[dkc].ctn===0){lm[cur].details[dkc].ctn+=ctn;lm[cur].ctn+=ctn;}
       }else if(Number.isInteger(ctn)) lm[cur].ctn+=ctn;
     }
