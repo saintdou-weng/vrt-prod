@@ -1,0 +1,366 @@
+{
+  "release": "VRT PROD 4.0.0",
+  "generatedAt": "2026-09-20T09:37:57.051Z",
+  "environment": "Node; simulated DOM and IndexedDB; mock cloud. Actual uploaded Excel files plus generated EML wrappers. No live GAS, mobile or desktop browser certification.",
+  "pass": 53,
+  "fail": 0,
+  "runnerFailed": false,
+  "tests": [
+    {
+      "name": "BOM page starts and uses canonical style for costing context",
+      "status": "PASS",
+      "detail": "BOM owns selection and same-origin costing view",
+      "suite": "bom_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Saving quote updates BOM materials, history and committed IDB together",
+      "status": "PASS",
+      "detail": "2 × 4 + 12/60 × 10 = 10; saved only in canonical BOM",
+      "suite": "bom_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Stale costing view cannot overwrite newer BOM",
+      "status": "PASS",
+      "detail": "stale-save rejection preserves latest materials",
+      "suite": "bom_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Editing BOM materials refreshes the same costing calculation",
+      "status": "PASS",
+      "detail": "BOM quantity 3 updates quotation cost to 14 without duplicate material set",
+      "suite": "bom_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Costing view starts blank and loads current BOM lines over stale cached lines",
+      "status": "PASS",
+      "detail": "no demo wages/SMV injected and no independent cost record written",
+      "suite": "bom_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "IE page starts and integration controls initialize",
+      "status": "PASS",
+      "detail": "actual inline JS executed with simulated DOM/IDB",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Actual weekly + both OBD imports",
+      "status": "PASS",
+      "detail": "35 approved / 21 pending weekly styles; OBD 5209=35 ops, 0950G=24 ops; pending date 2026-09-12",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Repeated IE imports are idempotent; operations keep repeated sequence numbers",
+      "status": "PASS",
+      "detail": "56 updates / 2 OBD revisions / 59 operations after two imports",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Approved publishing eligibility excludes both pending OBDs",
+      "status": "PASS",
+      "detail": "35 approved eligible; pending OBD cannot replace official SMV",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Publishing is idempotent and retains older official records",
+      "status": "PASS",
+      "detail": "35 new snapshots + old snapshot retained; same approved report cannot publish twice",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "IE Excel export and reimport preserve all styles and operations without duplicates",
+      "status": "PASS",
+      "detail": "56 IE + 2 OBD + 59 operations survive export/reimport",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "IE CSV summary export reimports without replacing operation details",
+      "status": "PASS",
+      "detail": "56 summaries reimported; linked 59 operations remain untouched",
+      "suite": "ie_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "BOM Excel preserves all styles, material variants and costing fields on export/reimport",
+      "status": "PASS",
+      "detail": "182 styles / 364 rows; no former 180-style cap or variant collapse",
+      "suite": "import_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Partial BOM import updates supplied fields only and persists quotation refresh",
+      "status": "PASS",
+      "detail": "1-row update retains second material, original price and prior version in IDB",
+      "suite": "import_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "BOM CSV quoted descriptions and cost columns round-trip",
+      "status": "PASS",
+      "detail": "CSV quotes, customer/style and unit price retained",
+      "suite": "import_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Machine stock online CRUD saves history and retains other items",
+      "status": "PASS",
+      "detail": "Create/Edit/IDB reload/Delete with period history and tombstone",
+      "suite": "import_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Needle Change Excel updates same record ID, repeats skip, deletions stay deleted",
+      "status": "PASS",
+      "detail": "Record ID updates 2→3; repeat 0 changes; deleted original cannot return",
+      "suite": "import_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Every HTML/JS syntax",
+      "status": "PASS",
+      "detail": "233 scripts parsed",
+      "suite": "logic_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Benchmark actual 86 catalog rows + 152 transactions / $14563.15",
+      "status": "PASS",
+      "detail": "summary sheets excluded; purchase quantity never stock",
+      "suite": "logic_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Actual stock 79 machine + 17 needle rows, no fabricated changes",
+      "status": "PASS",
+      "detail": "79 + 17; 6 populated daily order/receipt cells",
+      "suite": "logic_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Repeat stock import, same period corrections, smaller input, distinct periods",
+      "status": "PASS",
+      "detail": "unchanged skip; 79 retained after 3-row partial update; old state archived",
+      "suite": "logic_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "New costing + canonical BOM material conversion and no duplicate labor",
+      "status": "PASS",
+      "detail": "6.93 materials + 2 conversion + 1 special = 9.93; included labor excluded",
+      "suite": "logic_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Maintenance new objects survive envelope pack/unpack and source bytes untouched",
+      "status": "PASS",
+      "detail": "242 independently addressed records",
+      "suite": "logic_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Spare parts startup restores required filter controls; all tabs render",
+      "status": "PASS",
+      "detail": "9 render paths executed; simulated DOM (not layout)",
+      "suite": "maintenance_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Real Excel preview > commit > IDB save > render",
+      "status": "PASS",
+      "detail": "86 catalog / 152 transactions / 79 machine / 17 needle / 3 original files saved",
+      "suite": "maintenance_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Repeat all three original files does not grow records or purchase totals",
+      "status": "PASS",
+      "detail": "no repeated stock or cost accumulation",
+      "suite": "maintenance_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Stock and Needle Change online CRUD persists after reload",
+      "status": "PASS",
+      "detail": "Create 2 / Edit 3 / IDB reload / Delete tombstone; stock snapshot unchanged",
+      "suite": "maintenance_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Excel exports include raw transactions and round-trip stock + needle schema",
+      "status": "PASS",
+      "detail": "Inventory, transactions, both stock periods, Needle Change export schemas parse",
+      "suite": "maintenance_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Formal SMV rejects weekly/OBD inputs instead of treating pending values as official",
+      "status": "PASS",
+      "detail": "all 3 actual attachments must use IE importer",
+      "suite": "smv_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Formal Excel and renamed CSV imports share content deduplication and retain prior history",
+      "status": "PASS",
+      "detail": "same 2-style source imported 3 ways remains one formal snapshot",
+      "suite": "smv_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "One official value per customer/style/date; pending and future values cannot win",
+      "status": "PASS",
+      "detail": "new approved 7 wins; old 6.5 remains before effective date; other customer and future ignored",
+      "suite": "smv_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "String revision IDs support history, comparison and deletion without cloud resurrection",
+      "status": "PASS",
+      "detail": "new string IDs work and explicit deletion stays deleted after stale Pull",
+      "suite": "smv_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "First cloud push then unchanged Push and Pull transfer no records",
+      "status": "PASS",
+      "detail": "manifest only on repeat; source Excel not re-uploaded",
+      "suite": "sync_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "One changed part uploads one record, preserving original source attachment",
+      "status": "PASS",
+      "detail": "exactly one part record uploaded; transactions / source file unchanged",
+      "suite": "sync_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Fresh-device Pull retains mixed types and repeat Pull does not download again",
+      "status": "PASS",
+      "detail": "purchase, part, stock and original source all reconstructed",
+      "suite": "sync_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "IE and official SMV share transport without sharing record arrays",
+      "status": "PASS",
+      "detail": "pending 5 and official 6 stay separate after fresh pull",
+      "suite": "sync_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "BOM unchanged Push/Pull do not rewrite timestamps or resend quotation settings",
+      "status": "PASS",
+      "detail": "BOM repeat sync checks manifest only; material and cost timestamps unchanged",
+      "suite": "sync_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Smaller uninitialized client cannot push over populated cloud",
+      "status": "PASS",
+      "detail": "smaller payload blocked without touching server records",
+      "suite": "sync_results.json",
+      "runner": "../v39/run_all.js"
+    },
+    {
+      "name": "Latest IE weekly and pending A2642K: import, approval boundary, export and dedup",
+      "status": "PASS",
+      "detail": "60 weekly rows; 24 operations; 9.492 approved / 9.0174 adjusted; repeat/export dedup",
+      "runner": "run_attachment_checks.js"
+    },
+    {
+      "name": "SMV automatically hands off IE/OBD originals to IE preview",
+      "status": "PASS",
+      "detail": "original staged in IDB and correct destination selected",
+      "runner": "run_attachment_checks.js"
+    },
+    {
+      "name": "Daily maintenance imports render and persist without stock double deduction",
+      "status": "PASS",
+      "detail": "280 needle / 35 parts / 27 daily snapshots; five-file included button also retains 86 parts, 152 purchases and 2 older stock reports",
+      "runner": "run_attachment_checks.js"
+    },
+    {
+      "name": "Fabric 7090 records render, reload, partial merge and export/reimport",
+      "status": "PASS",
+      "detail": "7090 records, latest stock day visible, 5 views execute, native Excel headers recognized",
+      "runner": "run_attachment_checks.js"
+    },
+    {
+      "name": "QC actual workbook, correct totals, every tab, repeat/partial imports, export, delete",
+      "status": "PASS",
+      "detail": "13 reports / 11 active lines; 4708 inspected / 199 reject / 4509 output; rate 4.22685%; deletion tombstone retained",
+      "runner": "run_attachment_checks.js"
+    },
+    {
+      "name": "Interrupted multi-bucket pull resumes from IDB cache and unchanged reopen has zero downloads",
+      "status": "PASS",
+      "detail": "2 completed buckets survive interruption; no repeat downloads on retry or unchanged reopen",
+      "runner": "sync_recovery_checks.js"
+    },
+    {
+      "name": "Invalid bucket response cannot overwrite populated local data",
+      "status": "PASS",
+      "detail": "empty/truncated bucket rejected; apply never called",
+      "runner": "sync_recovery_checks.js"
+    },
+    {
+      "name": "Connection migration from existing small settings and site default require no module URL reentry",
+      "status": "PASS",
+      "detail": "legacy part settings → shared URL; fresh browser → supplied site config",
+      "runner": "sync_recovery_checks.js"
+    },
+    {
+      "name": "Existing DB data loads before automatic cloud pull; separate browser tab lease releases",
+      "status": "PASS",
+      "detail": "no empty-memory race; lease removed after completion",
+      "runner": "sync_recovery_checks.js"
+    },
+    {
+      "name": "QC online create/edit/delete/restore persist real form handler results",
+      "status": "PASS",
+      "detail": "actual form callbacks and IDB writes: create, edit, delete tombstone, restore history",
+      "runner": "crud_checks.js"
+    },
+    {
+      "name": "Fabric online create/edit/delete keeps other data and correct detail selection",
+      "status": "PASS",
+      "detail": "form create/edit, saved reload and tombstone deletion",
+      "runner": "crud_checks.js"
+    },
+    {
+      "name": "IE binary XLS and QC XLSX route correctly from EML attachments",
+      "status": "PASS",
+      "detail": "Generated MIME fixtures containing the unchanged attached workbooks; OLE XLS handed to IE and QC imports 13 reports",
+      "runner": "final_safety_checks.js"
+    },
+    {
+      "name": "Fabric clear preserves tombstones/history; cancel or storage failure keeps data",
+      "status": "PASS",
+      "detail": "Confirmed clear persists both deletions; cancelled and failed writes preserve all rows",
+      "runner": "final_safety_checks.js"
+    },
+    {
+      "name": "Legacy cloud migration does not mark a blocked push as successfully upgraded",
+      "status": "PASS",
+      "detail": "Local legacy data remains saved; cloud format migration remains pending after less-over-more guard",
+      "runner": "final_safety_checks.js"
+    },
+    {
+      "name": "Monthly Shipping keeps pending quantities, missing summary rows and canonical Excel/CSV roundtrips",
+      "status": "PASS",
+      "detail": "Generated layout fixture: 4 schedules retained including 2 without quantities; 300 pieces; Excel/CSV, partial correction and IndexedDB reload pass",
+      "runner": "final_safety_checks.js"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "BOM Excel preserves all styles, material variants and costing fields on export/reimport",
+    "status": "PASS",
+    "detail": "182 styles / 364 rows; no former 180-style cap or variant collapse"
+  },
+  {
+    "name": "Partial BOM import updates supplied fields only and persists quotation refresh",
+    "status": "PASS",
+    "detail": "1-row update retains second material, original price and prior version in IDB"
+  },
+  {
+    "name": "BOM CSV quoted descriptions and cost columns round-trip",
+    "status": "PASS",
+    "detail": "CSV quotes, customer/style and unit price retained"
+  },
+  {
+    "name": "Machine stock online CRUD saves history and retains other items",
+    "status": "PASS",
+    "detail": "Create/Edit/IDB reload/Delete with period history and tombstone"
+  },
+  {
+    "name": "Needle Change Excel updates same record ID, repeats skip, deletions stay deleted",
+    "status": "PASS",
+    "detail": "Record ID updates 2→3; repeat 0 changes; deleted original cannot return"
+  }
+]

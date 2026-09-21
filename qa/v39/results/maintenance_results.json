@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Spare parts startup restores required filter controls; all tabs render",
+    "status": "PASS",
+    "detail": "9 render paths executed; simulated DOM (not layout)"
+  },
+  {
+    "name": "Real Excel preview > commit > IDB save > render",
+    "status": "PASS",
+    "detail": "86 catalog / 152 transactions / 79 machine / 17 needle / 3 original files saved"
+  },
+  {
+    "name": "Repeat all three original files does not grow records or purchase totals",
+    "status": "PASS",
+    "detail": "no repeated stock or cost accumulation"
+  },
+  {
+    "name": "Stock and Needle Change online CRUD persists after reload",
+    "status": "PASS",
+    "detail": "Create 2 / Edit 3 / IDB reload / Delete tombstone; stock snapshot unchanged"
+  },
+  {
+    "name": "Excel exports include raw transactions and round-trip stock + needle schema",
+    "status": "PASS",
+    "detail": "Inventory, transactions, both stock periods, Needle Change export schemas parse"
+  }
+]

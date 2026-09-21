@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Formal SMV rejects weekly/OBD inputs instead of treating pending values as official",
+    "status": "PASS",
+    "detail": "all 3 actual attachments must use IE importer"
+  },
+  {
+    "name": "Formal Excel and renamed CSV imports share content deduplication and retain prior history",
+    "status": "PASS",
+    "detail": "same 2-style source imported 3 ways remains one formal snapshot"
+  },
+  {
+    "name": "One official value per customer/style/date; pending and future values cannot win",
+    "status": "PASS",
+    "detail": "new approved 7 wins; old 6.5 remains before effective date; other customer and future ignored"
+  },
+  {
+    "name": "String revision IDs support history, comparison and deletion without cloud resurrection",
+    "status": "PASS",
+    "detail": "new string IDs work and explicit deletion stays deleted after stale Pull"
+  }
+]

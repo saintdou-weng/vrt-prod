@@ -1,0 +1,37 @@
+[
+  {
+    "name": "IE page starts and integration controls initialize",
+    "status": "PASS",
+    "detail": "actual inline JS executed with simulated DOM/IDB"
+  },
+  {
+    "name": "Actual weekly + both OBD imports",
+    "status": "PASS",
+    "detail": "35 approved / 21 pending weekly styles; OBD 5209=35 ops, 0950G=24 ops; pending date 2026-09-12"
+  },
+  {
+    "name": "Repeated IE imports are idempotent; operations keep repeated sequence numbers",
+    "status": "PASS",
+    "detail": "56 updates / 2 OBD revisions / 59 operations after two imports"
+  },
+  {
+    "name": "Approved publishing eligibility excludes both pending OBDs",
+    "status": "PASS",
+    "detail": "35 approved eligible; pending OBD cannot replace official SMV"
+  },
+  {
+    "name": "Publishing is idempotent and retains older official records",
+    "status": "PASS",
+    "detail": "35 new snapshots + old snapshot retained; same approved report cannot publish twice"
+  },
+  {
+    "name": "IE Excel export and reimport preserve all styles and operations without duplicates",
+    "status": "PASS",
+    "detail": "56 IE + 2 OBD + 59 operations survive export/reimport"
+  },
+  {
+    "name": "IE CSV summary export reimports without replacing operation details",
+    "status": "PASS",
+    "detail": "56 summaries reimported; linked 59 operations remain untouched"
+  }
+]

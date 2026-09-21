@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 生產進度總表 v4.3</title>
@@ -122,7 +124,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -165,9 +167,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
+<script src="vrt-data-core-v39.js?v=4.0.0"></script>
 </head>
 <body>
 
@@ -347,7 +350,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
       </div>
       <div style="background:var(--s2);border-radius:7px;padding:11px;border:1px solid var(--bd)">
         <div style="color:var(--teal);font-weight:700;font-size:12px;margin-bottom:5px">📐 SMV<br><span style="color:var(--muted);font-weight:400">smv_manager_v5_final</span></div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">SewingProd</b> current<br>store: smv_snapshots</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">IndexedDB<br><b style="color:var(--t2)">VRT_SMV_Manager_v52</b> official<br>store: smv_snapshots</div>
       </div>
     </div>
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;font-size:12px;color:var(--t2);margin-bottom:9px">
@@ -475,11 +478,7 @@ async function loadAll(){
     try{const d=await idbOpen('VRT_SMV_Manager_v52');snaps=await idbAll(d,'smv_snapshots');d.close();}catch(_){}
     if(!snaps.length){try{const d=await idbOpen('SewingProd');snaps=await idbAll(d,'smv_snapshots');d.close();}catch(_){}}
     if(snaps.length){
-      snaps.sort((a,b)=>new Date(b.importedAt||b.importDate||b.reportDate||0)-new Date(a.importedAt||a.importDate||a.reportDate||0));
-      snaps.forEach(s=>{
-        const sec=s.section||'SMV';
-        (s.items||[]).forEach(i=>{if(!i.style)return;const sk=String(i.style).toUpperCase();if(!SMV_MAP[sk])SMV_MAP[sk]={curSMV:Number(i.curSMV),origSMV:Number(i.origSMV),section:sec,cust:i.cust,type:i.type||'',reportDate:s.reportDate||s.importDate||''};});
-      });
+      SMV_MAP=VRTData39.officialByStyle(snaps,new Date().toISOString().slice(0,10));
       SMV_INFO=`正式歷史 ${snaps.length} 版 · ${Object.keys(SMV_MAP).length} 款`;
       setDot('d-smv','ok');document.getElementById('l-smv').textContent=`SMV ${Object.keys(SMV_MAP).length} 款`;
     }else{
@@ -1284,7 +1283,7 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'production_overview',lockKey:'production_overview',pull:async function(){return await (window.vcAutoPullOverview&&window.vcAutoPullOverview());},push:async function(){return await (Promise.resolve(true));},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:5000});}catch(e){console.warn('[VRT Auto production_overview]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'production_overview',lockKey:'production_overview',pull:async function(){return await (window.vcAutoPullOverview&&window.vcAutoPullOverview());},push:async function(){return await (Promise.resolve(true));},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:5000});}catch(e){console.warn('[VRT Auto production_overview]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

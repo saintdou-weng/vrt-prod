@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>車縫生產分析系統</title>
@@ -120,7 +122,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -163,8 +165,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -822,7 +824,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script>
 // ═══════════════════════ DB STORAGE ═════════════════════════════════════════
 // Primary: File System Access API (persists across file renames/moves, works with Google Drive sync folder)
@@ -1166,7 +1168,7 @@ async function connectDataFile(){
 }
 
 // Init
-loadDB().then(async ()=>{
+window.VRT_LOCAL_READY=loadDB().then(async ()=>{
   updateHeader(); renderDBCard(); initFolderScan();
   _lang = localStorage.getItem("vrt_lang")||"zh"; applyLang();
   renderDashboard(); // initial render with raw DB data
@@ -1208,7 +1210,7 @@ async function vcLoadFromCloudIDB() {
 
 // 開啟時自動從雲端拉取並存入 IDB（主要資料來源）
 async function vcAutoSync(){
-  const gasUrl = localStorage.getItem('vrt_portal_gas_url') || '';
+  const gasUrl = VRTPlatform.getGasUrl() || '';
   if (!gasUrl) return;
 
   const hdr = document.querySelector('.hdr-right') || document.querySelector('.hdr');
@@ -5528,7 +5530,7 @@ async function scanAllFolders(silent=false){
   }
 
   window.vcPush = async function(){
-    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
+    gasUrl=VRTPlatform.getGasUrl()||gasUrl;if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);
     try {
       const allRecs=(typeof DB!=='undefined'&&DB.length)?DB:[];
@@ -5542,7 +5544,7 @@ async function scanAllFolders(silent=false){
   };
 
   window.vcPull = async function(){
-    if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
+    gasUrl=VRTPlatform.getGasUrl()||gasUrl;if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);vcLog('智慧拉取：只下載雲端有變更的月份/區塊...','i');
     try{
       const local=(typeof DB!=='undefined'&&DB.length)?DB:[];
@@ -5648,7 +5650,7 @@ async function loadAttIDBData(force) {
 
 // ── Cloud fetch attendance from GAS ──────────────────────
 async function fetchAttFromGAS() {
-  const gasUrl = localStorage.getItem('vrt_portal_gas_url') ||
+  const gasUrl = VRTPlatform.getGasUrl() ||
                  localStorage.getItem('ac_hra_gas_url') || '';
   if (!gasUrl) { alert('請先在設定頁填入 GAS URL'); return; }
   const el = document.getElementById('ac-status');
@@ -40422,7 +40424,7 @@ window.wExport = wExport;
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'sewing',lockKey:'sewing',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto sewing]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'sewing',lockKey:'sewing',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto sewing]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

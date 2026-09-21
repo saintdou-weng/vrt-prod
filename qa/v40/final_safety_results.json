@@ -1,0 +1,22 @@
+[
+  {
+    "name": "IE binary XLS and QC XLSX route correctly from EML attachments",
+    "status": "PASS",
+    "detail": "Generated MIME fixtures containing the unchanged attached workbooks; OLE XLS handed to IE and QC imports 13 reports"
+  },
+  {
+    "name": "Fabric clear preserves tombstones/history; cancel or storage failure keeps data",
+    "status": "PASS",
+    "detail": "Confirmed clear persists both deletions; cancelled and failed writes preserve all rows"
+  },
+  {
+    "name": "Legacy cloud migration does not mark a blocked push as successfully upgraded",
+    "status": "PASS",
+    "detail": "Local legacy data remains saved; cloud format migration remains pending after less-over-more guard"
+  },
+  {
+    "name": "Monthly Shipping keeps pending quantities, missing summary rows and canonical Excel/CSV roundtrips",
+    "status": "PASS",
+    "detail": "Generated layout fixture: 4 schedules retained including 2 without quantities; 300 pieces; Excel/CSV, partial correction and IndexedDB reload pass"
+  }
+]

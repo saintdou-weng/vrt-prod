@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 裁剪計畫管理系統 v2 · APS</title>
@@ -149,7 +151,7 @@ select{cursor:pointer}
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -193,8 +195,8 @@ select{cursor:pointer}
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 </head>
 <body>
 
@@ -624,7 +626,7 @@ select{cursor:pointer}
 .vcSpin{display:inline-block;animation:vcSpin .7s linear infinite}
 </style>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════
    VRT CUTTING PLAN MANAGEMENT SYSTEM v1
@@ -763,7 +765,7 @@ async function vcLoadFromCloudIDB(){ const recs=await loadFromCloudIDB(); if(!re
   const merged=dedupAndNorm(recs); const lMax=getMaxDate(DB), cMax=getMaxDate(merged);
   if(cMax>lMax || (cMax===lMax && merged.length>DB.length)){ DB=merged; updateHeader(); renderDBCard(); } }
 async function vcAutoSync(){
-  const gasUrl=localStorage.getItem('vrt_portal_gas_url')||''; if(!gasUrl) return;
+  const gasUrl=VRTPlatform.getGasUrl()||''; if(!gasUrl) return;
   try{
     const metaR=await fetch(`${gasUrl}?action=pull&meta=1&tool=cuttingplan`,{redirect:'follow'});
     const metaD=await metaR.json(); if(!metaD.ok) return; const d=metaD.data;
@@ -1603,7 +1605,7 @@ async function sendTG(type){
       body:JSON.stringify({ chat_id:group, text, parse_mode:'HTML', disable_web_page_preview:true })
     });
     const d=await r.json();
-    if(d.ok){ alert("✓ 已發送至 Telegram"); if(window.VRTSmartSync)await VRTSmartSync.auditSent({url:localStorage.getItem('vrt_portal_gas_url')||'',tool:'cuttingplan',type:'summary'}); }
+    if(d.ok){ alert("✓ 已發送至 Telegram"); if(window.VRTSmartSync)await VRTSmartSync.auditSent({url:VRTPlatform.getGasUrl()||'',tool:'cuttingplan',type:'summary'}); }
     else alert("✗ 發送失敗："+(d.description||'未知錯誤'));
   }catch(e){ alert("✗ 發送失敗："+e.message); }
 }
@@ -2067,7 +2069,7 @@ window.pvaExport=pvaExport;
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'cuttingplan',lockKey:'cuttingplan',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto cuttingplan]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'cuttingplan',lockKey:'cuttingplan',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto cuttingplan]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

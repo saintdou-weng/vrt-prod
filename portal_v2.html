@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT 生產系統入口</title>
@@ -119,7 +121,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -162,8 +164,11 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.0.0"></script>
+<script src="vrt-data-core-v39.js?v=4.0.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.0.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -179,7 +184,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 <div class="gas-bar">
   <label>GAS URL</label>
   <input id="gasInput" type="text" placeholder="https://script.google.com/macros/s/…/exec" />
-  <button class="btn-xs btn-save" onclick="saveGas()">儲存</button>
+  <button class="btn-xs btn-save" onclick="saveGas()">儲存</button><button class="btn-xs btn-save" onclick="downloadConnectionConfig()">下載共用連線設定</button>
   <div class="gas-dot" id="gasDot"></div>
   <span class="gas-lbl" id="gasLbl">未設定</span>
 </div>
@@ -414,13 +419,14 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
       </div>
       <div class="mc-sync" id="st-smv">雲端：未查詢</div>
       <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='smv_manager_v5_final.html'">📂 開啟</button>
+        <button class="btn-open" onclick="location.href='smv_manager_v5_final.html'">📂 正式 SMV／分析</button>
         <button class="btn-push" id="pp-smv" onclick="push('smv')">☁ 推送</button>
         <button class="btn-pull" id="pl-smv" onclick="pull('smv')">⬇ 拉取</button>
       </div>
     </div>
   </div>
 
+<div class="gtitle">✓ 品質檢驗 QUALITY CONTROL</div><div class="grid"><div class="mcard mc-sw" id="card-qc"><div class="mcard-stripe"></div><div class="mc-head"><div class="mc-icon">✓</div><div class="mc-info"><div class="mc-title">Final QC 檢驗管理</div><div class="mc-sub">日週月年 · 缺點／根因 · 效率 · 歷史</div></div><span class="mc-badge badge-none" id="bd-qc">--</span></div><div class="mc-sync" id="st-qc">雲端：未查詢</div><div class="mc-actions"><button class="btn-open" onclick="location.href='vrt_final_qc_v1.html'">📂 開啟 QC</button><button class="btn-push" id="pp-qc" onclick="push('qc')">☁ 推送</button><button class="btn-pull" id="pl-qc" onclick="pull('qc')">⬇ 拉取</button></div></div></div>
   <div class="gtitle">📦 倉儲出貨 WAREHOUSE · SHIPPING</div>
   <div class="grid">
     <div class="mcard mc-fg" id="card-fg">
@@ -477,6 +483,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 
   <div class="gtitle">🔧 工程維修 MAINTENANCE</div>
   <div class="grid">
+    <div class="mcard mc-smv" id="card-ie-smv"><div class="mc-head"><div class="mc-icon">📐</div><div><div class="mc-title">IE／SMV 工序與核可</div><div class="mc-sub">每週更新 · OBD 工序 · 核可版本 · 歷史</div></div></div><div class="mc-sync">獨立開啟 IE 報告；正式值供 SMV 與 BOM 取用。</div><div class="mc-actions"><button class="btn-open" onclick="location.href='ie_smv_report_v2_1.html'">📂 開啟 IE／SMV</button></div></div>
     <div class="mcard mc-sp" id="card-spareparts">
       <div class="mcard-stripe"></div>
       <div class="mc-head">
@@ -489,7 +496,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
       </div>
       <div class="mc-sync" id="st-spareparts">雲端：未查詢</div>
       <div class="mc-actions">
-        <button class="btn-open" onclick="location.href='vrt_spare_parts_v2.html'">📂 開啟</button>
+        <button class="btn-open" onclick="location.href='vrt_spare_parts_v2.html'">📂 採購／零件庫存／Needle Change</button>
         <button class="btn-push" id="pp-spareparts" onclick="push('spareparts')">☁ 推送</button>
         <button class="btn-pull" id="pl-spareparts" onclick="pull('spareparts')">⬇ 拉取</button>
       </div>
@@ -511,6 +518,7 @@ let gasUrl = localStorage.getItem(LS_GAS) || '';
 
 // ─── DATA DEFINITIONS (how to read/write each tool) ────────
 const TOOLS = {
+  qc:{read:async()=>{const records=await VRTProdStorage.all('VRT_FinalQC','records',{keyPath:'id'}),sources=await VRTProdStorage.all('VRT_FinalQC','sources',{keyPath:'id'});const rows=records.concat(sources.map(r=>({id:r.id,_vrtEntity:'qc.source',_vrtValue:r})));return{tool:'qc',records:rows,recordCount:rows.length,schemaVersion:40}},write:async data=>{await VRTProdStorage.replaceAll('VRT_FinalQC','records',(data.records||[]).filter(r=>!r._vrtEntity),{keyPath:'id'});await VRTProdStorage.replaceAll('VRT_FinalQC','sources',(data.records||[]).filter(r=>r._vrtEntity==='qc.source').map(r=>r._vrtValue),{keyPath:'id'});return(data.records||[]).length}},
   sewing:{
     read:async()=>{const recs=await idbGetAll('VRT_SewingProduction',1,'daily_records'),eff=await idbGetAll('VRT_SewingProduction',1,'eff_records');if(!recs.length)return null;return{tool:'sewing',recordCount:recs.length,records:recs,eff,summary:{source:'VRT_SewingProduction'}}},
     write:async data=>{let recs=Array.isArray(data.records)?data.records:[];if(!recs.length&&data.lsKeys?.sewing_prod_v1)try{recs=JSON.parse(data.lsKeys.sewing_prod_v1)}catch(_){};if(!recs.length)return 0;await idbReplaceAll('VRT_SewingProduction',1,'daily_records',recs);if(Array.isArray(data.eff))await idbReplaceAll('VRT_SewingProduction',1,'eff_records',data.eff);try{localStorage.setItem('vrt_sewing_record_count',String(recs.length));localStorage.setItem('vrt_sewing_max_date',recs.reduce((m,r)=>String(r.date||'')>m?String(r.date||''):m,''))}catch(_){}return recs.length}
@@ -525,8 +533,8 @@ const TOOLS = {
   },
   shipping:{read:async()=>{const recs=await idbGetAll('VRT_Shipping',1,'shipping_records'),meta=await idbKvGet('VRT_Shipping',1,'shipping_meta','state');return recs.length?{tool:'shipping',recordCount:recs.length,records:recs,summary:{filename:meta?.filename||'',savedAt:meta?.savedAt||''}}:null},write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;await idbReplaceAll('VRT_Shipping',1,'shipping_records',recs);await idbKvPut('VRT_Shipping',1,'shipping_meta','state',{filename:'Cloud',savedAt:new Date().toISOString(),count:recs.length});return recs.length}},
   smv:{
-    read:async()=>{const recs=await idbGetAll('VRT_SMV_Manager_v52',1,'smv_snapshots');if(!recs.length)return null;let ie=null;try{ie=await idbKvGet('vrt_ie_smv_integrated_v2',1,'state','main')}catch(_){}return{tool:'smv',recordCount:recs.length,records:recs,idbStore:{db:'VRT_SMV_Manager_v52',ver:1,store:'smv_snapshots',records:recs},ieSmvState:ie||undefined,summary:{snapshotCount:recs.length}}},
-    write:async data=>{const recs=Array.isArray(data.records)?data.records:(data.idbStore?.records||[]);if(recs.length)await idbReplaceAll('VRT_SMV_Manager_v52',1,'smv_snapshots',recs);return recs.length}
+    read:async()=>{const d=await VRTDomain39.readDomain('smv'),records=VRTDomain39.pack('smv',d);return{tool:'smv',recordCount:records.length,records,...VRTDomain39.metaFor('smv',d)}},
+    write:async data=>{await VRTDomain39.apply('smv',data.records||[],data);return(data.records||[]).length}
   },
   cuttingplan:{
     read:async()=>{const recs=await idbGetAll('CuttingProd',2,'plan_records');return recs.length?{tool:'cuttingplan',recordCount:recs.length,records:recs}:null},
@@ -545,8 +553,8 @@ const TOOLS = {
     write:async data=>{const recs=Array.isArray(data.records)?data.records:[];if(!recs.length)return 0;return await idbReplaceAll('VRT_FGInventory',1,'fg_records',recs)}
   },
   spareparts:{
-    read:async()=>{const parts=await idbGetAll('vrt_spareparts',2,'parts'),txns=await idbGetAll('vrt_spareparts',2,'txns'),versions=await idbGetAll('vrt_spareparts',2,'versions'),suppliers=await idbGetAll('vrt_spareparts',2,'suppliers'),invoices=await idbGetAll('vrt_spareparts',2,'invoices'),ocrhist=await idbGetAll('vrt_spareparts',2,'ocrhist');if(!parts.length&&!txns.length&&!versions.length)return null;return{tool:'spareparts',recordCount:txns.length,records:txns,dataMeta:{parts,versions,suppliers,invoices,ocrhist},summary:{parts:parts.length,txns:txns.length}}},
-    write:async data=>{const dm=data.dataMeta||data.data||data,txns=Array.isArray(data.records)?data.records:(Array.isArray(dm.txns)?dm.txns:[]);if(Array.isArray(dm.parts))await idbReplaceAll('vrt_spareparts',2,'parts',dm.parts);if(Array.isArray(txns))await idbReplaceAll('vrt_spareparts',2,'txns',txns);if(Array.isArray(dm.versions))await idbReplaceAll('vrt_spareparts',2,'versions',dm.versions);if(Array.isArray(dm.suppliers))await idbReplaceAll('vrt_spareparts',2,'suppliers',dm.suppliers);if(Array.isArray(dm.invoices))await idbReplaceAll('vrt_spareparts',2,'invoices',dm.invoices);if(Array.isArray(dm.ocrhist))await idbReplaceAll('vrt_spareparts',2,'ocrhist',dm.ocrhist);return txns.length||((dm.parts||[]).length)}
+    read:async()=>{const d=await VRTDomain39.readDomain('spareparts'),records=VRTDomain39.pack('spareparts',d);return{tool:'spareparts',recordCount:records.length,records,...VRTDomain39.metaFor('spareparts',d)}},
+    write:async data=>{await VRTDomain39.apply('spareparts',data.records||[],data);return(data.records||[]).length}
   },
   prodplan:{
     read:async()=>{const recs=await idbGetAll('VRT_ProductionPlan',1,'plan_records'),m=await idbKvGet('VRT_ProductionPlan',1,'plan_meta','state');return recs.length?{tool:'prodplan',recordCount:recs.length,records:recs,planVersions:m?.versions||[],summary:{source:m?.source||''}}:null},
@@ -608,6 +616,7 @@ function init() {
 }
 
 // ─── GAS URL ────────────────────────────────────────────
+function downloadConnectionConfig(){const u=VRTPlatform.getGasUrl();if(!u)return alert('這個瀏覽器尚未保存 GAS URL，請在平台設定一次。');const a=document.createElement('a'),b=new Blob(['window.VRT_DEPLOY_CONFIG = '+JSON.stringify({gasUrl:u})+';\n'],{type:'text/javascript'});a.href=URL.createObjectURL(b);a.download='vrt-deploy-config.js';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function saveGas() {
   gasUrl = document.getElementById('gasInput').value.trim();
   if (!gasUrl) return;
@@ -698,7 +707,9 @@ function portalPrimary(payload,tool){
   if(Array.isArray(payload.records))return payload.records;if(Array.isArray(payload.idbStore?.records))return payload.idbStore.records;if(Array.isArray(payload.idbData?.po_lines))return payload.idbData.po_lines;if(Array.isArray(payload.data?.txns))return payload.data.txns;if(Array.isArray(payload.data?.parts))return payload.data.parts;return[];
 }
 function portalMeta(payload,tool){
-  if(tool==='bom'){let st={};try{st=JSON.parse(payload.bomState||'{}')}catch(_){}return{customers:st.customers||[],rev:st.meta?.rev||0,savedAt:new Date().toISOString()}}
+  if(tool==='smv')return {domainVersion:39,ieSettings:payload.ieSettings||{},ieIntegration:payload.ieIntegration||{}};
+  if(tool==='spareparts')return {domainVersion:39};
+  if(tool==='bom'){let st={};try{st=JSON.parse(payload.bomState||'{}')}catch(_){}return{customers:st.customers||[]}}
   const m={...payload};delete m.records;if(m.idbStore)m.idbStore={...m.idbStore,records:[]};if(m.idbData)m.idbData={...m.idbData};if(m.idbData)delete m.idbData.po_lines;if(m.data&&Array.isArray(m.data.txns))m.data={...m.data,txns:[]};return m;
 }
 function portalRebuild(tool,recs,meta,localPayload){
@@ -723,7 +734,7 @@ async function pull(tool) {
 }
 
 
-const HRA_SYNC_TOOLS=['custstats','orders','podelivery','prodplan','cuttingplan','fabric','fabricdelivery','bom','cutting','sewing','smv','fg','shipping','monthship','spareparts'];
+const HRA_SYNC_TOOLS=['custstats','orders','podelivery','prodplan','cuttingplan','fabric','fabricdelivery','bom','cutting','sewing','qc','smv','fg','shipping','monthship','spareparts'];
 async function pushAllSmart(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');let changed=0,skip=0,fail=0;for(let i=0;i<HRA_SYNC_TOOLS.length;i++){const t=HRA_SYNC_TOOLS[i];if(el)el.textContent=`☁↑ ${i+1}/${HRA_SYNC_TOOLS.length} ${t}`;try{const r=await push(t);if(r&&r.ok){if(r.noChange||!(r.uploaded||0))skip++;else changed+=Number(r.uploaded)||0}else if(r&&r.needsPull)fail++}catch(_){fail++}}if(el)el.textContent=`☁↑ 完成｜變更上傳 ${changed.toLocaleString()}｜未變模組 ${skip}｜需處理 ${fail}`;await fetchStatus()}
 async function pullAllSmart(){if(!gasUrl){alert('請先設定 GAS URL');return}const el=document.getElementById('hraProgress');let down=0,skip=0,pending=0,fail=0;for(let i=0;i<HRA_SYNC_TOOLS.length;i++){const t=HRA_SYNC_TOOLS[i];if(el)el.textContent=`☁↓ ${i+1}/${HRA_SYNC_TOOLS.length} ${t}`;try{const r=await pull(t);if(r&&r.ok){down+=Number(r.downloaded)||0;pending+=Number(r.pendingUpload)||0;if(r.noChange||!(r.downloaded||0))skip++}else fail++}catch(_){fail++}}if(el)el.textContent=`☁↓ 完成｜新增/變更下載 ${down.toLocaleString()}｜未變模組 ${skip}｜待上傳 ${pending.toLocaleString()}｜失敗 ${fail}`;await fetchStatus()}
 async function showPendingAudit(){return false};

@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT PO Delivery Control Center</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{
@@ -170,7 +172,7 @@ tbody tr:hover{background:var(--bg)}
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -213,8 +215,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 </head>
 <body data-theme="light">
 
@@ -961,7 +963,7 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
   document.body.appendChild(panel);
 
   const LS_META='vrt_pocc_sync_meta';
-  const getUrl=()=>((SET.gas||localStorage.getItem('vrt_portal_gas_url')||'').trim());
+  const getUrl=()=>((SET.gas||VRTPlatform.getGasUrl()||'').trim());
   function vcLog(m,k){ const b=document.getElementById('vcLogBox');
     const c=k==='err'?'#f87171':(k==='ok'?'#4ade80':'#93c5fd');
     b.innerHTML+=`<div style="color:${c}">[${new Date().toTimeString().slice(0,8)}] ${m}</div>`; b.scrollTop=b.scrollHeight; }
@@ -978,7 +980,7 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
   document.getElementById('vcSave').onclick=()=>{
     const u=document.getElementById('vcUrl').value.trim();
     SET.gas=u; localStorage.setItem(SET_KEY,JSON.stringify(SET));
-    try{ localStorage.setItem('vrt_portal_gas_url',u); }catch(e){}
+    try{ VRTPlatform.setGasUrl(u); }catch(e){}
     vcLog('✓ GAS URL 已儲存','ok'); };
 
   document.getElementById('vcPushBtn2').onclick=async function(){
@@ -1003,7 +1005,7 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'podelivery',lockKey:'podelivery',pull:async function(){return await (document.getElementById('vcPullBtn2')&&document.getElementById('vcPullBtn2').onclick&&document.getElementById('vcPullBtn2').onclick());},push:async function(){return await (document.getElementById('vcPushBtn2')&&document.getElementById('vcPushBtn2').onclick&&document.getElementById('vcPushBtn2').onclick());},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto podelivery]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'podelivery',lockKey:'podelivery',pull:async function(){return await (document.getElementById('vcPullBtn2')&&document.getElementById('vcPullBtn2').onclick&&document.getElementById('vcPullBtn2').onclick());},push:async function(){return await (document.getElementById('vcPushBtn2')&&document.getElementById('vcPushBtn2').onclick&&document.getElementById('vcPushBtn2').onclick());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto podelivery]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

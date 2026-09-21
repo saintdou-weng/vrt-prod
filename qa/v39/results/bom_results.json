@@ -1,0 +1,27 @@
+[
+  {
+    "name": "BOM page starts and uses canonical style for costing context",
+    "status": "PASS",
+    "detail": "BOM owns selection and same-origin costing view"
+  },
+  {
+    "name": "Saving quote updates BOM materials, history and committed IDB together",
+    "status": "PASS",
+    "detail": "2 × 4 + 12/60 × 10 = 10; saved only in canonical BOM"
+  },
+  {
+    "name": "Stale costing view cannot overwrite newer BOM",
+    "status": "PASS",
+    "detail": "stale-save rejection preserves latest materials"
+  },
+  {
+    "name": "Editing BOM materials refreshes the same costing calculation",
+    "status": "PASS",
+    "detail": "BOM quantity 3 updates quotation cost to 14 without duplicate material set"
+  },
+  {
+    "name": "Costing view starts blank and loads current BOM lines over stale cached lines",
+    "status": "PASS",
+    "detail": "no demo wages/SMV injected and no independent cost record written"
+  }
+]

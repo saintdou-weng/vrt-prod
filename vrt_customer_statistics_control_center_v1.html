@@ -1,5 +1,7 @@
-<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VRT Customer Statistics v3.1</title><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><style>
+<!DOCTYPE html><html lang="zh-TW"><head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT Customer Statistics v3.1</title><script src="vendor/xlsx.full.min.js"></script><style>
 *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
 .header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .logo{width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,#f59e0b,#d97706);display:grid;place-items:center;font-size:23px;box-shadow:0 4px 16px #0003}
@@ -40,7 +42,7 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -83,8 +85,8 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 </head><body>
 <div class="header"><div class="logo">📊</div><div><div class="htitle">VRT Customer Statistics Control Center</div><div class="hsub">客戶訂單 · 完成 · 未作 · WIP · FG · Fabric · v3.1 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hOrder">0</b><span>總訂單 pcs</span></div><div class="hstat"><b id="hBal">0</b><span>未完成 pcs</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
 <div class="tabs"><div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="trend" onclick="goTab('trend')">📆 月年趨勢</div><div class="tab" data-tab="customer" onclick="goTab('customer')">👤 客戶分析</div><div class="tab" data-tab="product" onclick="goTab('product')">🏷 產品分析</div><div class="tab" data-tab="detail" onclick="goTab('detail')">📋 PO / 款式</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div></div>
@@ -109,7 +111,7 @@ function parseDetails(wb){let ws=wb.Sheets[wb.SheetNames.find(n=>n.toUpperCase()
   if(!customer||!po)continue;
   let order=num(r[10]),open=num(r[57]),completed=order-open,cutWip=num(r[49]),fg=num(r[54]),fgctn=num(r[55]),notSewn=num(r[56]),noFab=Math.max(notSewn-cutWip,0);
   out.push({id:i+1,customer,poDate:excelDate(r[1]),etd:excelDate(r[2]),eta:excelDate(r[3]),product:String(r[4]??'').trim(),po,style:String(r[6]??'').trim(),color:String(r[8]??'').trim(),size:String(r[9]??'').trim(),orderQty:order,completedQty:completed,balanceQty:open,cuttingWip:cutWip,fgPcs:fg,fgCtn:fgctn,actualNotSewn:notSewn,noFabric:noFab,openOrder:open,fabricItem:String(r[12]??'').trim(),fabricType:String(r[13]??'').trim(),fabricReq:num(r[16]),fabricStock:num(r[18])})}return out}
-async function importFile(f){try{let wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,raw:true}),d=parseDashboard(wb),details=parseDetails(wb);DATA={...d,details,source:f.name,savedAt:new Date().toISOString()};await save();renderAll();goTab('dashboard');cloudState('☁ Local updated');toast(`✓ Order ${N(d.overall?.orderQty)} · Balance ${N(d.overall?.balanceQty)} · ${details.length} rows`);if(localStorage.getItem('vrt_portal_gas_url'))cloudPush(true)}catch(e){toast('Import failed: '+e.message)}}
+async function importFile(f){try{let wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,raw:true}),d=parseDashboard(wb),details=parseDetails(wb);DATA={...d,details,source:f.name,savedAt:new Date().toISOString()};await save();renderAll();goTab('dashboard');cloudState('☁ Local updated');toast(`✓ Order ${N(d.overall?.orderQty)} · Balance ${N(d.overall?.balanceQty)} · ${details.length} rows`);if(VRTPlatform.getGasUrl())cloudPush(true)}catch(e){toast('Import failed: '+e.message)}}
 function refresh(){let o=DATA.overall||{};$('hOrder').textContent=N(o.orderQty);$('hBal').textContent=N(o.balanceQty)}function goTab(t){TAB=t;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id===t));renderTab(t)}function renderTab(t){({dashboard:renderDashboard,trend:renderTrend,customer:renderCustomers,product:renderProducts,detail:renderDetails,import:renderImport}[t]||(()=>{}))()}function renderAll(){refresh();renderTab(TAB)}
 function kpi(n,l,c=''){return `<div class="kpi ${c}"><div class="kn">${N(n)}</div><div class="kl">${l}</div></div>`}
 function renderDashboard(){let e=$('dashboard'),o=DATA.overall;if(!o){e.innerHTML=`<div class="card"><div class="empty">尚未匯入 Customer Statistics<br><br><button class="btn by" onclick="goTab('import')">📥 匯入</button></div></div>`;return}e.innerHTML=`<div class="al">資料來源：Excel 第一頁 <b>DASHBOARD</b>。Snapshot 更新日：<b>${DATA.snapshotDate||'-'}</b>。以下總數直接採用原報表，不用 ETD 重新推算。</div><div class="kpis">${kpi(o.orderQty,'總訂單量 pcs','b')}${kpi(o.completedQty,'總完成量 pcs','g')}${kpi(o.balanceQty,'總未完成 pcs','r')}${kpi(o.completion*100,'完成率 %','a')}${kpi(o.cuttingWip,'Cutting WIP','p')}${kpi(o.fgPcs,'FG 成品庫存 pcs','b')}${kpi(o.fgCtn,'FG 成品箱數','a')}${kpi(o.actualNotSewn,'Actual Order Not Sewing','p')}${kpi(o.noFabric,'No Fabric Available pcs','r')}${kpi(o.poCount,'PO 數','b')}</div><div class="card"><div class="ct">👤 客戶現況（來自 Dashboard）</div><div class="tbl"><table><thead><tr><th>Customer</th><th class="num">PO</th><th class="num">Order</th><th class="num">Completed</th><th class="num">Balance</th><th class="num">Cut WIP</th><th class="num">FG</th><th class="num">No Fabric</th></tr></thead><tbody>${DATA.customers.map((x,i)=>`<tr onclick="customerDetail(${i})" style="cursor:pointer"><td class="link">${esc(x.customer)}</td><td class="num">${x.poCount}</td><td class="num">${N(x.orderQty)}</td><td class="num">${N(x.completedQty)}</td><td class="num">${N(x.balanceQty)}</td><td class="num">${N(x.cuttingWip)}</td><td class="num">${N(x.fgPcs)}</td><td class="num">${N(x.noFabric)}</td></tr>`).join('')}</tbody></table></div></div>`}
@@ -124,12 +126,12 @@ function detailTable(rs){return `<div class="tbl"><table><thead><tr><th>ETD</th>
 function renderDetails(){let rs=DATA.details.filter(r=>!Q||[r.customer,r.po,r.style,r.color,r.fabricItem,r.fabricType].join(' ').toLowerCase().includes(Q.toLowerCase()));$('detail').innerHTML=`<div class="card"><div class="frow"><input class="search" placeholder="Customer / PO / Style / Fabric" value="${esc(Q)}" oninput="Q=this.value;renderDetails()"><span class="subtxt">${rs.length} rows</span></div>${detailTable(rs)}</div>`}
 function renderImport(){$('import').innerHTML=`<div class="card"><div class="ct">📥 ALL CUSTOMER STATISTICS</div><div class="al">新版會先讀 <b>DASHBOARD 第一頁</b> 的總訂單、完成、未完成、Cutting WIP、FG、Actual Not Sewing、No Fabric Available，再讀 ALL CUSTOMER 做 PO / ETD 月年分析。Dashboard 標題月份不作為日期，採用 Updated 日期。</div><div class="drop" onclick="$('fileInput').click()" ondragover="event.preventDefault()" ondrop="event.preventDefault();if(event.dataTransfer.files[0])importFile(event.dataTransfer.files[0])"><div style="font-size:38px">📊</div><b>拖拉 VRT - ALL CUSTOMER STATISTICS REPORT.xlsx</b></div>${DATA.source?`<div style="margin-top:12px">目前：${esc(DATA.source)} · Snapshot ${DATA.snapshotDate||'-'}</div>`:''}</div>`}
 async function cloudPush(silent=false){
-  let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){if(!silent)toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
+  let url=VRTPlatform.getGasUrl()||'';if(!url){if(!silent)toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
   const rows=DATA.details||[],compact={...DATA,details:[]},o=DATA.overall||{},summary={orderQty:o.orderQty||0,completedQty:o.completedQty||0,balanceQty:o.balanceQty||0,cuttingWip:o.cuttingWip||0,fgPcs:o.fgPcs||0,noFabric:o.noFabric||0,snapshotDate:DATA.snapshotDate||''};
   try{const res=await VRTSmartSync.push({url,tool:TOOL,records:rows,meta:{summaryData:compact,summary},onStatus:m=>cloudState('☁↑ '+m)});if(res&&res.needsPull){cloudState('☁↑ 先拉取雲端新資料',false);if(!silent)toast('雲端有較新資料，請先拉取');return}cloudState(`☁↑ 已同步 · 傳 ${res.uploaded||0} · 未變 ${res.unchanged||0}`);if(!silent)toast(`智慧上傳完成 · ${rows.length} rows`)}catch(e){cloudState('☁↑ Upload failed',false);if(!silent)toast('Upload failed: '+e.message)}
 }
 async function cloudPull(){
-  let url=localStorage.getItem('vrt_portal_gas_url')||'';if(!url){toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
+  let url=VRTPlatform.getGasUrl()||'';if(!url){toast('未設定 GAS URL');cloudState('☁ GAS URL missing',false);return}
   try{const o=DATA.overall||{},compact={...DATA,details:[]},localMeta={summaryData:compact,summary:{orderQty:o.orderQty||0,completedQty:o.completedQty||0,balanceQty:o.balanceQty||0,cuttingWip:o.cuttingWip||0,fgPcs:o.fgPcs||0,noFabric:o.noFabric||0,snapshotDate:DATA.snapshotDate||''}};const res=await VRTSmartSync.pull({url,tool:TOOL,localRecords:DATA.details||[],meta:localMeta,onStatus:m=>cloudState('☁↓ '+m),apply:async(rows,meta)=>{const base=(meta&&meta.summaryData)||{...DATA,details:[]};DATA={...base,details:rows,source:'Cloud',savedAt:new Date().toISOString()};await save();renderAll();}});if(!res.ok){cloudState('☁↓ No cloud data',false);toast('No cloud data');return}cloudState(`☁↓ 已同步 · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}`);toast(`智慧下載完成 · ${(DATA.details||[]).length} rows`)}catch(e){cloudState('☁↓ Download failed',false);toast('Download failed: '+e.message)}
 }
 function openModal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.add('on')}function closeModal(){$('modal').classList.remove('on')}
@@ -138,6 +140,6 @@ $('fileInput').addEventListener('change',e=>{if(e.target.files[0])importFile(e.t
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'custstats',lockKey:'custstats',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush(true));},canSync:function(){return !!localStorage.getItem('vrt_portal_gas_url');},startDelay:1200});}catch(e){console.warn('[VRT Auto custstats]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'custstats',lockKey:'custstats',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush(true));},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto custstats]',e)}},0)},{once:true});
 </script>
 </body></html>

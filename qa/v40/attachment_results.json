@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Latest IE weekly and pending A2642K: import, approval boundary, export and dedup",
+    "status": "PASS",
+    "detail": "60 weekly rows; 24 operations; 9.492 approved / 9.0174 adjusted; repeat/export dedup"
+  },
+  {
+    "name": "SMV automatically hands off IE/OBD originals to IE preview",
+    "status": "PASS",
+    "detail": "original staged in IDB and correct destination selected"
+  },
+  {
+    "name": "Daily maintenance imports render and persist without stock double deduction",
+    "status": "PASS",
+    "detail": "280 needle / 35 parts / 27 daily snapshots; five-file included button also retains 86 parts, 152 purchases and 2 older stock reports"
+  },
+  {
+    "name": "Fabric 7090 records render, reload, partial merge and export/reimport",
+    "status": "PASS",
+    "detail": "7090 records, latest stock day visible, 5 views execute, native Excel headers recognized"
+  },
+  {
+    "name": "QC actual workbook, correct totals, every tab, repeat/partial imports, export, delete",
+    "status": "PASS",
+    "detail": "13 reports / 11 active lines; 4708 inspected / 199 reject / 4509 output; rate 4.22685%; deletion tombstone retained"
+  }
+]

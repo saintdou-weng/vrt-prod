@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Every HTML/JS syntax",
+    "status": "PASS",
+    "detail": "233 scripts parsed"
+  },
+  {
+    "name": "Benchmark actual 86 catalog rows + 152 transactions / $14563.15",
+    "status": "PASS",
+    "detail": "summary sheets excluded; purchase quantity never stock"
+  },
+  {
+    "name": "Actual stock 79 machine + 17 needle rows, no fabricated changes",
+    "status": "PASS",
+    "detail": "79 + 17; 6 populated daily order/receipt cells"
+  },
+  {
+    "name": "Repeat stock import, same period corrections, smaller input, distinct periods",
+    "status": "PASS",
+    "detail": "unchanged skip; 79 retained after 3-row partial update; old state archived"
+  },
+  {
+    "name": "New costing + canonical BOM material conversion and no duplicate labor",
+    "status": "PASS",
+    "detail": "6.93 materials + 2 conversion + 1 special = 9.93; included labor excluded"
+  },
+  {
+    "name": "Maintenance new objects survive envelope pack/unpack and source bytes untouched",
+    "status": "PASS",
+    "detail": "242 independently addressed records"
+  }
+]

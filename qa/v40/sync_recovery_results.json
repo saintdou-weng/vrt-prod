@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Interrupted multi-bucket pull resumes from IDB cache and unchanged reopen has zero downloads",
+    "status": "PASS",
+    "detail": "2 completed buckets survive interruption; no repeat downloads on retry or unchanged reopen"
+  },
+  {
+    "name": "Invalid bucket response cannot overwrite populated local data",
+    "status": "PASS",
+    "detail": "empty/truncated bucket rejected; apply never called"
+  },
+  {
+    "name": "Connection migration from existing small settings and site default require no module URL reentry",
+    "status": "PASS",
+    "detail": "legacy part settings → shared URL; fresh browser → supplied site config"
+  },
+  {
+    "name": "Existing DB data loads before automatic cloud pull; separate browser tab lease releases",
+    "status": "PASS",
+    "detail": "no empty-memory race; lease removed after completion"
+  }
+]

@@ -5,10 +5,12 @@
      慣例：GAS POST text/plain;charset=utf-8｜日期一律本地時區 getters｜Telegram parse_mode HTML + escapeHtml｜SheetJS cellDates:false,raw:true｜onclick 全部 window-scoped -->
 <html lang="zh-TW">
 <head>
+<script src="vrt-deploy-config.js?v=4.0.0"></script>
+<script src="vrt-platform-v40.js?v=4.0.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Fabric Delivery & Greige Inventory Summary Center</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -109,7 +111,7 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
   function isGas(input){
     const u=typeof input==='string'?input:(input&&input.url)||'';
     if(/script\.google(?:usercontent)?\.com\//i.test(u))return true;
-    try{const c=(localStorage.getItem('vrt_portal_gas_url')||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
+    try{const c=(VRTPlatform.getGasUrl()||'').split('?')[0];return !!c&&u.startsWith(c)}catch(_){return false}
   }
   function synth(status,msg,extra){return new Response(JSON.stringify(Object.assign({ok:false,error:msg,vrtCloudTransport:true},extra||{})),{status:status||502,headers:{'Content-Type':'application/json;charset=utf-8'}})}
   function addUploadId(init){
@@ -153,8 +155,8 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=3.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=3.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
 </head>
 <body>
 
@@ -1226,7 +1228,7 @@ async function sendTG(){
       body:JSON.stringify({chat_id:S.cfg.tgChat,text:tgSummaryText(),parse_mode:"HTML"})});
     const j=await r.json();
     toast(j.ok?t("tgOK"):t("tgFail")+"："+(j.description||""));
-    if(j.ok&&window.VRTSmartSync)await VRTSmartSync.auditSent({url:S.cfg.gasEndpoint||localStorage.getItem('vrt_portal_gas_url')||'',tool:'fabricdelivery',type:'summary'});
+    if(j.ok&&window.VRTSmartSync)await VRTSmartSync.auditSent({url:S.cfg.gasEndpoint||VRTPlatform.getGasUrl()||'',tool:'fabricdelivery',type:'summary'});
   }catch(e){toast(t("tgFail")+"："+e.message)}
 }
 window.sendTG=sendTG;
@@ -1249,14 +1251,14 @@ function fdApplyRecords(rows,meta){
   if(meta&&Array.isArray(meta.versionHistory))S.versions=meta.versionHistory;
 }
 async function gasUpload(silent){
-  if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(VRTPlatform.getGasUrl()||'').trim();
   if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
   try{calcAll();const rows=fdCloudRecords(),meta={aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}};const res=await VRTSmartSync.push({url:S.cfg.gasEndpoint,tool:'fabricdelivery',records:rows,meta,onStatus:m=>toast('☁↑ '+m)});if(res&&res.needsPull){if(!silent)toast('⚠ 雲端有新資料，請先拉取差異');return false}if(!silent)toast(res.noChange?'☁↑ 已是最新':'☁↑ 智慧上傳完成 · '+(res.uploaded||0)+' 筆');return res}
   catch(e){if(!silent)toast(t('gasFail')+'：'+e.message);return false}
 }
 window.gasUpload=gasUpload;
 async function gasDownload(silent){
-  if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+  if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(VRTPlatform.getGasUrl()||'').trim();
   if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
   try{const rows=fdCloudRecords();const res=await VRTSmartSync.pull({url:S.cfg.gasEndpoint,tool:'fabricdelivery',localRecords:rows,meta:{aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}},onStatus:m=>toast('☁↓ '+m),apply:async(recs,meta)=>{fdApplyRecords(recs,meta);await saveLocal();calcAll();renderTab()}});if(!res.ok){if(!silent)toast(t('gasFail'));return false}if(!silent)toast(res.noChange?'☁↓ 已是最新':'☁↓ 智慧下載完成 · '+(res.downloaded||0)+' 筆');return res}
   catch(e){if(!silent)toast(t('gasFail')+'：'+e.message);return false}
@@ -1290,7 +1292,7 @@ window.cycleLang=cycleLang;
     let p=await VRTProdStorage.get(FAB_IDB,FAB_STORE,'state');
     if(!p){const saved=localStorage.getItem(LS_KEY);if(saved){p=JSON.parse(saved);S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};await saveLocal()} }
     else S={...S,...p,cfg:{...S.cfg,...(p.cfg||{})}};
-    if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(localStorage.getItem('vrt_portal_gas_url')||'').trim();
+    if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(VRTPlatform.getGasUrl()||'').trim();
   }catch(e){console.warn('Fabric delivery restore failed',e)}
   const boot=()=>{
     $("impFile").addEventListener("change",onImpFile);
@@ -1339,7 +1341,7 @@ window.cycleLang=cycleLang;
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricdelivery',lockKey:'fabricdelivery',pull:async function(){return await (window.gasDownload&&window.gasDownload(true));},push:async function(){return await (window.gasUpload&&window.gasUpload(true));},canSync:function(){return !!((window.S&&S.cfg&&S.cfg.gasEndpoint)||localStorage.getItem('vrt_portal_gas_url'));},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricdelivery]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricdelivery',lockKey:'fabricdelivery',pull:async function(){return await (window.gasDownload&&window.gasDownload(true));},push:async function(){return await (window.gasUpload&&window.gasUpload(true));},canSync:function(){return !!((window.S&&S.cfg&&S.cfg.gasEndpoint)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricdelivery]',e)}},0)},{once:true});
 </script>
 </body>
 </html>

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "QC online create/edit/delete/restore persist real form handler results",
+    "status": "PASS",
+    "detail": "actual form callbacks and IDB writes: create, edit, delete tombstone, restore history"
+  },
+  {
+    "name": "Fabric online create/edit/delete keeps other data and correct detail selection",
+    "status": "PASS",
+    "detail": "form create/edit, saved reload and tombstone deletion"
+  }
+]

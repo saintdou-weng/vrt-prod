@@ -1,0 +1,32 @@
+[
+  {
+    "name": "First cloud push then unchanged Push and Pull transfer no records",
+    "status": "PASS",
+    "detail": "manifest only on repeat; source Excel not re-uploaded"
+  },
+  {
+    "name": "One changed part uploads one record, preserving original source attachment",
+    "status": "PASS",
+    "detail": "exactly one part record uploaded; transactions / source file unchanged"
+  },
+  {
+    "name": "Fresh-device Pull retains mixed types and repeat Pull does not download again",
+    "status": "PASS",
+    "detail": "purchase, part, stock and original source all reconstructed"
+  },
+  {
+    "name": "IE and official SMV share transport without sharing record arrays",
+    "status": "PASS",
+    "detail": "pending 5 and official 6 stay separate after fresh pull"
+  },
+  {
+    "name": "BOM unchanged Push/Pull do not rewrite timestamps or resend quotation settings",
+    "status": "PASS",
+    "detail": "BOM repeat sync checks manifest only; material and cost timestamps unchanged"
+  },
+  {
+    "name": "Smaller uninitialized client cannot push over populated cloud",
+    "status": "PASS",
+    "detail": "smaller payload blocked without touching server records"
+  }
+]
