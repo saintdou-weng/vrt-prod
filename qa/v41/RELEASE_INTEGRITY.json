@@ -1,0 +1,52 @@
+{
+  "baseline": "VRT PROD v4.0",
+  "release": "VRT PROD v4.1",
+  "website_files_before": 96,
+  "website_files_after": 104,
+  "removed": [],
+  "original_config_preserved": true,
+  "original_gs_functions_removed": [],
+  "duplicate_top_level_gs_functions": [],
+  "changed_website_files": [
+    "READ_ME_v4.0_ZH.md",
+    "VRT_BOM_Management_v2_AI.html",
+    "VRT_FG_Inventory_Management_v1.html",
+    "VRT_PO_Delivery_Control_Center.html",
+    "cutting_plan_v2.html",
+    "cutting_v3.html",
+    "ie_smv_report_v2_1.html",
+    "orders_v3.html",
+    "portal_v2.html",
+    "production_plan_capacity_v1.html",
+    "production_v4.html",
+    "qa/v39/RESULTS_v3.9.json",
+    "qa/v40/RESULTS_v4.0.json",
+    "sewing_v5.html",
+    "shipping_v2.html",
+    "smv_manager_v5_final.html",
+    "vrt-auto-sync-v3.js",
+    "vrt-platform-v40.js",
+    "vrt-smart-sync-v3.js",
+    "vrt_bom_costing_view_v39.html",
+    "vrt_customer_statistics_control_center_v1.html",
+    "vrt_fabric_delivery_greige_center_v1.html",
+    "vrt_fabric_stock_control_v1.html",
+    "vrt_final_qc_v1.html",
+    "vrt_monthly_shipping_control_center_v1.html",
+    "vrt_production_weekly_report_generator_v3.html",
+    "vrt_spare_parts_v2.html"
+  ],
+  "new_website_files": [
+    "PROD_MODULE_ACCEPTANCE_v4.1.csv",
+    "READ_ME_v4.1_ZH.md",
+    "qa/v41/README.md",
+    "qa/v41/RESULTS_v4.1.json",
+    "qa/v41/gas_harness.js",
+    "qa/v41/gas_integration_checks.js",
+    "qa/v41/gas_integration_results.json",
+    "qa/v41/run_all.js"
+  ],
+  "excluded_from_inventory": [
+    "qa/v41/RELEASE_INTEGRITY.json"
+  ]
+}

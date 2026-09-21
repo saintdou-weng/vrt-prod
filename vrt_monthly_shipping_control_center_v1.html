@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="zh-TW"><head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Monthly Shipping v3.7</title><script src="vendor/xlsx.full.min.js"></script><style>
 *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
 .header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -86,8 +86,8 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 </head><body>
 <div class="header"><div class="logo">🚢</div><div><div class="htitle">VRT <span style="color:#fbbf24">Monthly Shipping</span> 控制中心</div><div class="hsub">Monthly Shipping Schedule only · v3.7 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hPieces">0</b><span>Pieces</span></div><div class="hstat"><b id="hCartons">0</b><span>Cartons</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="newShipment()">＋新增</button><button class="hbtn" onclick="exportXlsx()">匯出</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
 <div class="tabs"><div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="schedule" onclick="goTab('schedule')">🗓 月出貨排程</div><div class="tab" data-tab="trend" onclick="goTab('trend')">📆 月年趨勢</div><div class="tab" data-tab="revision" onclick="goTab('revision')">🔄 本月版本變更</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div></div>

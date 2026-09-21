@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script>
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 生產進度總表 v4.3</title>
@@ -167,10 +167,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
-<script src="vrt-data-core-v39.js?v=4.0.0"></script>
+<script src="vrt-data-core-v39.js?v=4.1.0"></script>
 </head>
 <body>
 

@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="zh-TW"><head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Customer Statistics v3.1</title><script src="vendor/xlsx.full.min.js"></script><style>
 *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
 .header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -85,8 +85,8 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 </head><body>
 <div class="header"><div class="logo">📊</div><div><div class="htitle">VRT Customer Statistics Control Center</div><div class="hsub">客戶訂單 · 完成 · 未作 · WIP · FG · Fabric · v3.1 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hOrder">0</b><span>總訂單 pcs</span></div><div class="hstat"><b id="hBal">0</b><span>未完成 pcs</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
 <div class="tabs"><div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="trend" onclick="goTab('trend')">📆 月年趨勢</div><div class="tab" data-tab="customer" onclick="goTab('customer')">👤 客戶分析</div><div class="tab" data-tab="product" onclick="goTab('product')">🏷 產品分析</div><div class="tab" data-tab="detail" onclick="goTab('detail')">📋 PO / 款式</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div></div>

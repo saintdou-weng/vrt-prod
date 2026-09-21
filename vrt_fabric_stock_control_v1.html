@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script>
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>VRT 布料庫存管理 · Fabric Stock</title>
@@ -98,8 +98,8 @@ table.old-list col:nth-child(1){width:17%}table.old-list col:nth-child(2){width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 </head><body>
 <div class="header">
   <div class="logo">🧶</div><div><div class="h-title" data-i="title">布料／輔料庫存管理</div><div class="h-sub">FABRIC + ACCESSORY STOCK · v4.0</div></div>
@@ -231,7 +231,7 @@ window.addEventListener('load',async()=>{window.VRT_LOCAL_READY=load();await win
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricstock',lockKey:'fabricstock',pull:async function(){return await (window.cloudPull&&window.cloudPull(true));},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!(VRTPlatform.getGasUrl()||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricstock]',e)}},0)},{once:true});
 </script>
-<script src="vrt-data-core-v39.js?v=4.0.0"></script>
-<script src="vrt-import-core-v40.js?v=4.0.0"></script>
-<script src="vrt-fabric-v40.js?v=4.0.0"></script>
+<script src="vrt-data-core-v39.js?v=4.1.0"></script>
+<script src="vrt-import-core-v40.js?v=4.1.0"></script>
+<script src="vrt-fabric-v40.js?v=4.1.0"></script>
 </body></html>

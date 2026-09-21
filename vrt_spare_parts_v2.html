@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script>
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 機修零件管理系統</title>
@@ -221,12 +221,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.0.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.0.0"></script>
-<script src="vrt-import-core-v40.js?v=4.0.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.0.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-data-core-v39.js?v=4.1.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.1.0"></script>
+<script src="vrt-import-core-v40.js?v=4.1.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.1.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
 #app .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.v39-table{min-width:1000px}.v39-table td{min-width:75px}.v39-table td:nth-child(2),.v39-table td:nth-child(4){min-width:150px}.toolbar input,.toolbar select{max-width:100%;min-height:38px}.toolbar .tb-group{min-width:0}.tabs .tab{min-height:44px}

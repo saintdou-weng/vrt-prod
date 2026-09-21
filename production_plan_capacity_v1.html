@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-TW"><head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Production Plan & Capacity v3.1</title>
 <script src="vendor/xlsx.full.min.js"></script>
 <style>
@@ -93,8 +93,8 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 </head><body>
 <div class="header"><div class="logo">🏭</div><div><div class="htitle">VRT Production Plan & Capacity</div><div class="hsub">生產排產與產能控制中心 · v3.7 · AUTO SYNC · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hRec">0</b><span id="hRecLabel">本月記錄</span></div><div class="hstat"><b id="hPcs">0</b><span id="hPcsLabel">本月排單 pcs</span></div><div class="hstat"><b id="hLines">0</b><span id="hLinesLabel">本月線別</span></div></div><button class="hbtn" id="langBtn" onclick="toggleLang()">中</button><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="newPlan()">＋新增</button><button class="hbtn" onclick="exportPlanXlsx()">匯出</button><button class="hbtn" onclick="goTab('import')">⬇ 匯入</button></div>
 <div class="tabs">

@@ -1,4 +1,4 @@
-/* VRT PROD Auto Sync v3.7 — local-first incremental PROD Smart Sync
+/* VRT PROD Auto Sync v4.1 — local-first incremental PROD Smart Sync
  * Principles:
  * - local-first UI; cloud never blocks page startup
  * - background Pull -> Push reconcile
@@ -9,7 +9,7 @@
  */
 (function(g){
   'use strict';if(g.VRTProdAutoSync)return;
-  const VERSION='4.0.0',PFX='vrt:prod:auto37:',LOCK='vrt:prod:auto37:lock:',C={};
+  const VERSION='4.1.0',PFX='vrt:prod:auto37:',LOCK='vrt:prod:auto37:lock:',C={};
   const TAB=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
   const online=()=>{try{return !('onLine' in navigator)||navigator.onLine}catch(_){return true}};
   const read=k=>{try{return JSON.parse(localStorage.getItem(PFX+k)||'null')}catch(_){return null}};

@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.0.0"></script>
-<script src="vrt-platform-v40.js?v=4.0.0"></script>
+<script src="vrt-deploy-config.js?v=4.1.0"></script>
+<script src="vrt-platform-v40.js?v=4.1.0"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#123b58">
@@ -87,10 +87,10 @@
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.0.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.0.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.0.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.0.0"></script>
+<script src="vrt-data-core-v39.js?v=4.1.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.1.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
 </head>
 <body>
 <nav style="padding:12px 20px;background:#fff;display:flex;gap:16px;flex-wrap:wrap"><a href="portal_v2.html">← PROD</a><strong>IE／SMV 工序與核可</strong><button type="button" class="btn secondary" data-action="loadIncluded39">📎 匯入 9/19 IE／OBD</button><button type="button" class="btn secondary" data-action="exportCSV39">IE 更新 CSV</button><a href="smv_manager_v5_final.html">正式 SMV／效率分析</a><a href="VRT_BOM_Management_v2_AI.html">BOM／成本報價</a></nav>

@@ -1,0 +1,82 @@
+[
+  {
+    "name": "QC attachment → real frontend → actual GS → second device, no repeat transfers",
+    "status": "PASS",
+    "detail": "13 reports; latest day 4708 / 199 / 4509, 11 active lines; second device intact; unchanged Push/Pull send zero buckets/commits"
+  },
+  {
+    "name": "Large unchanged metadata omitted from response and recovered from persistent IDB",
+    "status": "PASS",
+    "detail": "300-entry side table restored from IDB after script reload; unchanged manifest response < 1800 bytes"
+  },
+  {
+    "name": "IE/OBD and official SMV use one cloud domain and retain approval separation",
+    "status": "PASS",
+    "detail": "60 weekly updates + 24 pending operations + existing official snapshot retained under smart_smv; no second master or repeat download"
+  },
+  {
+    "name": "Old nested spareparts payload migrates completely once without empty import display",
+    "status": "PASS",
+    "detail": "2 parts, 1 purchase, 1 version and needle change retain IDs; legacy download only once and page reload contains purchases"
+  },
+  {
+    "name": "Legacy duplicate records may migrate to deduplicated baseline without endless redownload",
+    "status": "PASS",
+    "detail": "complete legacy count 2 verified before dedup to 1; migration committed once"
+  },
+  {
+    "name": "Stale concurrent commit rejected; other staged uploads and current data retained",
+    "status": "PASS",
+    "detail": "Alice commits; Bob receives SYNC_CONFLICT; committed and staged files preserved, lock released"
+  },
+  {
+    "name": "Reusing a committed upload ID cannot mutate published data before a new commit",
+    "status": "PASS",
+    "detail": "same upload ID + different bytes rejected; committed row stays 1"
+  },
+  {
+    "name": "Missing staged data, incorrect checksums/counts and old protocol cannot replace manifest",
+    "status": "PASS",
+    "detail": "all malformed or pre-v4.1 commits rejected before pointer change"
+  },
+  {
+    "name": "Shrink requires explicit deletion and announced removed buckets",
+    "status": "PASS",
+    "detail": "2→1 blocked until allowShrink; 1→0 also requires explicit deleted bucket list"
+  },
+  {
+    "name": "Pull cannot apply a different revision or corrupted cloud content with the same row count",
+    "status": "PASS",
+    "detail": "stale hash and same-count corruption rejected, local apply never called"
+  },
+  {
+    "name": "Legacy changed during migration conflicts, corrupt manifest never treated as empty cloud",
+    "status": "PASS",
+    "detail": "legacy file revision checked at commit; malformed pointer produces an error, not fresh empty state"
+  },
+  {
+    "name": "Current summaries use Smart Sync, explicit QC status, no setup or automatic notifications",
+    "status": "PASS",
+    "detail": "QC status present; BOM/current summaries ignore legacy snapshots; optional check is read-only; zero Telegram calls or trigger creation"
+  },
+  {
+    "name": "Busy lock and post-commit Sheets failure report correct outcome without destroying data",
+    "status": "PASS",
+    "detail": "busy commit rejected safely; completed Drive save returns visible Sheets warning and retains cloud data"
+  },
+  {
+    "name": "Existing v3 QC cloud summary upgrades without uploading unchanged report buckets",
+    "status": "PASS",
+    "detail": "old updatedAt revision accepted; server QC summary refreshed once; original bucket pointer retained and zero bucket uploads"
+  },
+  {
+    "name": "Automatic offline/reconnect and reopen use actual QC callbacks and GS without duplicate transfers",
+    "status": "PASS",
+    "detail": "offline edits persist; automatic reconnect pushes, fresh device pulls 13 reports, unchanged resume checks manifest only and releases lease"
+  },
+  {
+    "name": "Checksum fallback clients can read verified server data without Web Crypto",
+    "status": "PASS",
+    "detail": "server verifies stored SHA; browser fallback checksum verifies received bytes"
+  }
+]

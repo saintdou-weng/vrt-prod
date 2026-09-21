@@ -1,4 +1,4 @@
-/* VRT Smart Sync v3.9 — persistent incremental sync + universal cloud status
+/* VRT Smart Sync v4.1 — persistent incremental sync + universal cloud status
    Core rules:
    - Only changed buckets are uploaded/downloaded.
    - Successful sync baseline persists across page reloads (IndexedDB + tiny localStorage fallback).
@@ -8,8 +8,8 @@
 */
 (function(g){
   'use strict';
-  if(g.VRTSmartSync && /^4\.0(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.0.0';
+  if(g.VRTSmartSync && /^4\.1(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.1.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
   const UI_KEY='vrt_smart_sync_v32_ui_'+location.pathname;
@@ -150,13 +150,13 @@
 
   async function jsonFetch(url,opt){const controller=typeof AbortController!=='undefined'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),45000):null;let r,text;try{r=await _nativeFetch(url,Object.assign({},opt||{},controller?{signal:controller.signal}:{}));text=await r.text()}finally{if(timer)clearTimeout(timer)}let j;try{j=JSON.parse(text)}catch(e){throw new Error('Cloud returned non-JSON: '+text.replace(/\s+/g,' ').slice(0,100))}if(!r.ok||(j&&j.ok===false))throw new Error((j&&j.error)||('HTTP '+r.status));return j}
   async function manifest(url,tool){
-    const q=url+(url.includes('?')?'&':'?')+'action=smartManifest&tool='+enc(tool);
-    try{const j=await jsonFetch(q,{redirect:'follow'});return j.data||j}
-    catch(getErr){
-      // HRA-style compatibility: some Apps Script deployments reject GET after a redeploy/cache edge.
-      try{const j=await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartManifest',tool}),redirect:'follow'});return j.data||j}
-      catch(postErr){throw new Error('Manifest check failed: '+postErr.message+' / '+getErr.message)}
-    }
+    let cached=null;try{cached=await cacheRead(url,tool,'_metadata')}catch(_){}
+    const tag=cached&&cached.hash||'',q=url+(url.includes('?')?'&':'?')+'action=smartManifest&tool='+enc(tool)+(tag?'&metaHash='+enc(tag):'');
+    let j;try{j=await jsonFetch(q,{redirect:'follow'})}catch(getErr){try{j=await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartManifest',tool,metaHash:tag}),redirect:'follow'})}catch(postErr){throw new Error('Manifest check failed: '+postErr.message+' / '+getErr.message)}}
+    const m=j.data||j;
+    if(m.metaUnchanged){if(!cached||cached.hash!==m.metaHash||!Array.isArray(cached.records))throw new Error('本機設定快取不完整，請重試 Pull');m.meta=cached.records[0]||{}}
+    if(m.exists&&!m.metaUnchanged){const hash=m.metaHash||await metaHash(m.meta||{});if(!cached||cached.hash!==hash)try{await cacheSave(url,tool,'_metadata',hash,[m.meta||{}])}catch(_){}}
+    return m;
   }
   async function auditSent(opts){
     const url=String(opts&&opts.url||'').trim(),tool=String(opts&&opts.tool||'').trim();
@@ -172,24 +172,38 @@
     let records=[],meta={};
     if(env.chunked&&env.meta){meta=env.meta;const tc=Number(meta.totalChunks)||0;for(let i=0;i<tc;i++){onStatus&&onStatus(`首次基準拉取 ${i+1}/${tc}`);const cj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=pull&tool='+enc(tool)+'&chunk='+i+(meta.uploadId?'&uploadId='+enc(meta.uploadId):''),{redirect:'follow'});if(!cj.data||!Array.isArray(cj.data.records))throw new Error('Legacy chunk '+(i+1)+' incomplete');records=records.concat(cj.data.records)}}
     else{const p=env.data||env;meta=p||{};records=(p&&p.records)||(p&&p.idbStore&&p.idbStore.records)||(p&&p.idbData&&p.idbData.po_lines)||[]}
-    return{records:Array.isArray(records)?records:[],meta};
+    records=Array.isArray(records)?records:[];let sourceRecordCount=records.length;
+    if((tool==='smv'||tool==='spareparts')&&g.VRTDomain39){
+      const D=g.VRTDomain39,source=Object.assign({},meta.dataMeta||{},meta.data||{}),d=D.unpack(tool,records,Object.assign({},meta,{dataMeta:source}));
+      if(tool==='spareparts'){
+        sourceRecordCount=Math.max(sourceRecordCount,(source.txns||[]).length,(source.parts||[]).length);
+        d.txns=D.mergeRows(d.txns,source.txns||[]);d.maintenance=D.mergeMaintenance(d.maintenance,source.maintenance||source.maintenance39||{});
+      }
+      records=D.pack(tool,d);sourceRecordCount=Math.max(sourceRecordCount,records.length);meta=D.metaFor(tool,d);
+    }else{
+      meta=Object.assign({},meta);delete meta.records;
+      if(meta.idbStore){meta.idbStore=Object.assign({},meta.idbStore);delete meta.idbStore.records}
+      if(meta.idbData&&Array.isArray(meta.idbData.po_lines)){meta.idbData=Object.assign({},meta.idbData);delete meta.idbData.po_lines}
+    }
+    return{records,meta,sourceRecordCount};
   }
 
   async function push(opts){
     opts=opts||{};
     const url=String((g.VRTPlatform&&g.VRTPlatform.getGasUrl())||opts.url||'').trim(),tool=opts.tool,records=sortRecords(opts.records||[]),onStatus=opts.onStatus||(()=>{});if(!url)throw new Error('GAS URL missing');
-    const localMeta=opts.meta||{};
+    const localMeta=JSON.parse(JSON.stringify(opts.meta||{}));
     status('push','比對雲端差異…','busy');onStatus('智慧同步：比對雲端差異…');
     const rm=await manifest(url,tool),local=await buildBuckets(records),localH=hashMap(local),localC=countMap(local),localMH=await metaHash(localMeta),remoteMeta=(rm&&rm.meta)||{},remoteMH=await metaHash(remoteMeta),last=await stateGet(tool),lastRemote=(last&&last.remoteHashes)||(last&&last.hashes)||{},lastLocal=(last&&last.localHashes)||(last&&last.hashes)||{},lastRMH=(last&&last.remoteMetaHash)||'',lastLMH=(last&&last.localMetaHash)||'',remoteH=(rm&&rm.hashes)||{},remoteC=(rm&&rm.counts)||{};
 
-    if(!rm.exists&&rm.legacy){const legacyCount=Number(rm.legacyCount)||0;if(records.length<legacyCount){const msg=`停止：雲端 ${legacyCount} > 本機 ${records.length}，先拉取`;status('push',msg,'warn');throw new Error(`雲端舊資料較多（${legacyCount} > ${records.length}），請先拉取一次再推送`)}}
+    if(Object.prototype.hasOwnProperty.call(opts,'expectedLegacyRevision')&&String(opts.expectedLegacyRevision||'')!==String(rm.revision||''))throw new Error('舊雲端已更新，請重新 Pull；本機資料保留');
+    if(!rm.exists&&rm.legacy){const legacyCount=Number(rm.legacyCount)||0;if(!Object.prototype.hasOwnProperty.call(opts,'expectedLegacyRevision')){status('push','舊雲端尚未核對｜請先 Pull，本機資料保留','warn');return{ok:false,needsPull:true,legacyBaselineRequired:true,uploaded:0}}if(records.length<legacyCount&&Number(opts.legacyBaselineCount||0)<legacyCount){const msg=`停止：雲端 ${legacyCount} > 本機 ${records.length}，先拉取`;status('push',msg,'warn');throw new Error(`雲端舊資料較多（${legacyCount} > ${records.length}），請先拉取一次再推送`)}}
 
     // Less-over-more protection. A first/stale client or a parser regression may
     // never replace a larger cloud dataset. Explicit UI delete/clear actions grant
     // a short authorization through Auto Sync; imports do not.
     if(rm.exists){const rt=totalCount(remoteC),bt=totalCount(lastLocal),localShrank=bt>records.length,noBaseline=!bt;if(rt>records.length&&(localShrank||noBaseline)&&!opts.allowShrink&&!shrinkAuthorized(tool)){const msg=`已阻擋少覆多｜雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜先拉取核對`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,shrinkBlocked:true,cloudCount:rt,recordCount:records.length,uploaded:0}}}
 
-    if(rm.exists&&mapsEqual(localH,remoteH)&&localMH===remoteMH){
+    if(rm.exists&&mapsEqual(localH,remoteH)&&localMH===remoteMH&&!rm.summaryNeedsRefresh){
       await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:localH,localCounts:localC,remoteMetaHash:remoteMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
       const msg=`已是最新｜本機 ${records.length.toLocaleString()}｜上傳 0｜未變 ${records.length.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:0,deleted:0,unchanged:records.length,changedBuckets:0,metaUpdated:false,noChange:true};
     }
@@ -208,7 +222,7 @@
       else if(!lc&&!rc&&lh!==rh){if(lh)changed.push(k);else deleted.push(k)}
     }
 
-    let metaChanged=false,metaNeedsPull=false,metaConflict=false;
+    let metaChanged=!!rm.summaryNeedsRefresh,metaNeedsPull=false,metaConflict=false;
     if(localMH!==remoteMH){
       const haveMetaBaseline=!!(lastLMH||lastRMH);
       if(!haveMetaBaseline){
@@ -229,13 +243,15 @@
       const msg=`已是最新｜上傳 0｜未變 ${records.length.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:0,deleted:0,unchanged:records.length,metaUpdated:false,noChange:true};
     }
 
-    const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);let sent=0;
-    for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,count:b.count,records:b.records}),redirect:'follow'});sent+=b.count}
+    const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),contentHashes={};let sent=0;
+    for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];contentHashes[k]=await hashText(JSON.stringify(b.records));status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,contentHash:contentHashes[k],count:b.count,records:b.records}),redirect:'follow'});sent+=b.count}
     // PROD cloud transport only: do not create summary/approval reminder ledger entries.
-    await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'});
+    const commit=await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision:rm.revision||rm.updatedAt||'',contentHashes,allowShrink:!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'});
+    try{await cacheSave(url,tool,'_metadata',localMH,[localMeta])}catch(_){}
     await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
+    const warnings=(commit.data&&commit.data.warnings)||[];
     const delCount=deleted.reduce((sum,k)=>sum+(Number(remoteC[k])||0),0),unchanged=Math.max(0,records.length-sent);
-    const msg=`完成｜本機 ${records.length.toLocaleString()}｜上傳 ${sent.toLocaleString()}${metaChanged?'｜設定/總表已更新':''}｜刪除 ${delCount.toLocaleString()}｜未變 ${unchanged.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:sent,deleted:delCount,unchanged,changedBuckets:changed.length,metaUpdated:metaChanged};
+    const msg=`完成｜本機 ${records.length.toLocaleString()}｜上傳 ${sent.toLocaleString()}${metaChanged?'｜設定/總表已更新':''}｜刪除 ${delCount.toLocaleString()}｜未變 ${unchanged.toLocaleString()}`;status('push',msg+(warnings.length?'｜'+warnings.join('；'):''),warnings.length?'warn':'ok');onStatus(msg);return{ok:true,warnings,recordCount:records.length,uploaded:sent,deleted:delCount,unchanged,changedBuckets:changed.length,metaUpdated:metaChanged};
   }
 
   async function pull(opts){
@@ -248,11 +264,11 @@
       // Never repeat the same legacy full download after a successful local baseline save.
       const lastLegacy=await stateGet(tool), lm=rm.legacyMeta||{}, legacyCount=Number(rm.legacyCount)||0;
       const legacySig=await hashText(stable({count:legacyCount,timestamp:lm.timestamp||lm.updatedAt||lm.uploadedAt||lm.savedAt||'',uploadId:lm.uploadId||'',fileName:lm.fileName||lm.source||'',summary:lm.summary||{}}));
-      if(lastLegacy&&lastLegacy.legacySig===legacySig&&localRecords.length>=legacyCount&&Number(lastLegacy.legacyLocalCount||0)<=localRecords.length){
+      if(lastLegacy&&lastLegacy.legacySig===legacySig&&Math.max(localRecords.length,Number(lastLegacy.legacyBaselineCount||0))>=legacyCount&&Number(lastLegacy.legacyLocalCount||0)<=localRecords.length){
         status('pull','舊雲端基準未變｜下載 0｜正在升級同步格式…','busy');
         const targetMeta=metaProvided?localMeta:(opts.metaBuilder?await opts.metaBuilder(localRecords,lm):lm);
         try{
-          const base=await push({url,tool,records:localRecords,meta:targetMeta,onStatus:m=>onStatus(m)});
+          const base=await push({url,tool,records:localRecords,meta:targetMeta,expectedLegacyRevision:rm.revision||'',legacyBaselineCount:lastLegacy.legacyBaselineCount||0,onStatus:m=>onStatus(m)});
           if(!base||base.ok===false)throw new Error('同步格式尚未升級，保留本機基準待重試');
           const mb=await buildBuckets(localRecords),mh=hashMap(mb),mc=countMap(mb),mmh=await metaHash(targetMeta);
           await statePut(tool,{remoteHashes:mh,remoteCounts:mc,localHashes:mh,localCounts:mc,remoteMetaHash:mmh,localMetaHash:mmh,lastPullAt:now(),updatedAt:now(),legacySig,legacyLocalCount:localRecords.length,legacyMigratedAt:now()});
@@ -266,18 +282,19 @@
       }
       status('pull','首次升級：拉取舊雲端基準…','busy');
       const lp=await legacyPull(url,tool,m=>{status('pull',m,'busy');onStatus(m)}),merged=mergeRecords(localRecords,lp.records),legacyMeta=lp.meta||{};
+      if(Number(rm.legacyCount||0)>Math.max(lp.sourceRecordCount||0,lp.records.length))throw new Error('舊雲端資料尚未完整下載，本機資料保留');
       if(opts.apply)await opts.apply(merged,legacyMeta);
-      await statePut(tool,{legacySig,legacyLocalCount:merged.length,legacyBaselineAt:now(),lastPullAt:now(),updatedAt:now()});
+      await statePut(tool,{legacySig,legacyBaselineCount:Math.max(lp.sourceRecordCount||0,lp.records.length),legacyLocalCount:merged.length,legacyBaselineAt:now(),lastPullAt:now(),updatedAt:now()});
       let base=null;
       try{
         const targetMeta=metaProvided?mergeMeta(localMeta,legacyMeta):(opts.metaBuilder?await opts.metaBuilder(merged,legacyMeta):legacyMeta);
-        base=await push({url,tool,records:merged,meta:targetMeta,onStatus:m=>onStatus(m)});
+        base=await push({url,tool,records:merged,meta:targetMeta,expectedLegacyRevision:rm.revision||'',legacyBaselineCount:Math.max(lp.sourceRecordCount||0,lp.records.length),onStatus:m=>onStatus(m)});
         if(!base||base.ok===false)throw new Error('同步格式尚未升級，保留本機基準待重試');
         const mb=await buildBuckets(merged),mh=hashMap(mb),mc=countMap(mb),mmh=await metaHash(targetMeta);
-        await statePut(tool,{remoteHashes:mh,remoteCounts:mc,localHashes:mh,localCounts:mc,remoteMetaHash:mmh,localMetaHash:mmh,lastPullAt:now(),updatedAt:now(),legacySig,legacyLocalCount:merged.length,legacyMigratedAt:now()});
+        await statePut(tool,{remoteHashes:mh,remoteCounts:mc,localHashes:mh,localCounts:mc,remoteMetaHash:mmh,localMetaHash:mmh,lastPullAt:now(),updatedAt:now(),legacySig,legacyBaselineCount:Math.max(lp.sourceRecordCount||0,lp.records.length),legacyLocalCount:merged.length,legacyMigratedAt:now()});
         status('pull',`首次基準完成｜${merged.length.toLocaleString()} 筆`,'ok');
       }catch(e){
-        await statePut(tool,{legacySig,legacyLocalCount:merged.length,legacyBaselineAt:now(),legacyRetryAt:now(),lastPullAt:now(),updatedAt:now()});
+        await statePut(tool,{legacySig,legacyBaselineCount:Math.max(lp.sourceRecordCount||0,lp.records.length),legacyLocalCount:merged.length,legacyBaselineAt:now(),legacyRetryAt:now(),lastPullAt:now(),updatedAt:now()});
         status('pull',`舊資料已保存本機｜${merged.length.toLocaleString()} 筆｜格式升級待重試`,'warn');
       }
       return{ok:true,records:merged,meta:legacyMeta,migrated:!!(base&&base.ok),legacyRetry:!base||base.ok===false,pushResult:base,downloaded:lp.records.length,unchanged:0,pendingUpload:0}
@@ -313,8 +330,10 @@
     const ready=new Map();let cursor=0,done=0,fetchFailure=null;
     async function fetchBucket(k){let cached=null;try{cached=await cacheRead(url,tool,k)}catch(_){}
       if(cached&&cached.hash===remoteH[k])return{rows:cached.records,cached:true};
-      const bj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartBucket&tool='+enc(tool)+'&bucket='+enc(k),{redirect:'follow'}),rows=(bj.data&&bj.data.records)||bj.records;
+      const bj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartBucket&tool='+enc(tool)+'&bucket='+enc(k)+'&hash='+enc(remoteH[k]),{redirect:'follow'}),rows=(bj.data&&bj.data.records)||bj.records;
       if(!Array.isArray(rows))throw new Error('Cloud bucket 格式不完整：'+k);
+      const response=bj.data||bj;if(response.hash&&response.hash!==remoteH[k])throw new Error('雲端此區已更新，請重試 Pull：'+k);
+      if(response.contentHash){const verified=await hashText(JSON.stringify(rows));if(verified!==response.contentHash&&verified!==response.contentHashFallback)throw new Error('Cloud bucket 內容核對失敗：'+k)}
       if(remoteC[k]!=null&&rows.length!==Number(remoteC[k]))throw new Error('Cloud bucket 筆數不一致，保留本機資料：'+k);
       await cacheSave(url,tool,k,remoteH[k],rows);return{rows,cached:false};
     }
