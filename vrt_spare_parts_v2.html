@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.1.0"></script>
-<script src="vrt-platform-v40.js?v=4.1.0"></script>
+<script src="vrt-deploy-config.js?v=4.3.0"></script>
+<script src="vrt-platform-v40.js?v=4.3.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 機修零件管理系統</title>
@@ -221,12 +221,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.1.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.1.0"></script>
-<script src="vrt-import-core-v40.js?v=4.1.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.1.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-data-core-v39.js?v=4.3.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.3.0"></script>
+<script src="vrt-import-core-v40.js?v=4.3.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.3.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.3.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
 #app .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.v39-table{min-width:1000px}.v39-table td{min-width:75px}.v39-table td:nth-child(2),.v39-table td:nth-child(4){min-width:150px}.toolbar input,.toolbar select{max-width:100%;min-height:38px}.toolbar .tb-group{min-width:0}.tabs .tab{min-height:44px}
@@ -239,7 +239,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Parts & Needle Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v3.9 · Purchase / Stock / Needle Change</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v4.3 · Purchase / Stock / Needle Change</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -644,7 +644,7 @@ function updateHeaderStats(){
 function ensurePurchasePartMaster(){
   const tx=purchaseTxns().filter(x=>x.includeInMaster!==false),by=new Map((PARTS||[]).filter(p=>p&&p.partNo).map(p=>[String(p.partNo).trim(),p]));let changed=false,latest={};
   tx.forEach(x=>{const key=String(x.partNo||x.name||'').trim();if(!key)return;if(!latest[key]||String(x.date||'')>=String(latest[key].date||''))latest[key]=x;let p=by.get(key);if(!p){p={id:uid(),partNo:key,name:x.name||key,spec:x.spec||'',category:x.category||'Other',brand:x.brand||'',machineType:x.machineType||'',location:'',unit:x.unit||'PCS',qty:0,unitPrice:Number(x.unitPrice)||0,minStock:'',maxStock:'',remark:'Purchase master (derived)',purchaseOnly:true,createdAt:x.date||todayStr(),updatedAt:x.date||todayStr()};PARTS.push(p);by.set(key,p);changed=true}else{['name','spec','category','machineType','unit'].forEach(k=>{if(!p[k]&&x[k]){p[k]=x[k];changed=true}})}});
-  Object.entries(latest).forEach(([key,x])=>{const p=by.get(key);if(p&&p.purchaseOnly&&Number(x.unitPrice)>0&&Number(p.unitPrice)!==Number(x.unitPrice)){p.unitPrice=Number(x.unitPrice);p.updatedAt=x.date||todayStr();changed=true}});return changed;
+  Object.entries(latest).forEach(([key,x])=>{const p=by.get(key);if(p&&p.purchaseOnly&&VRTData39.partUnit(p.unit)===VRTData39.partUnit(x.unit)&&Number(x.unitPrice)>0&&Number(p.unitPrice)!==Number(x.unitPrice)){p.unitPrice=Number(x.unitPrice);p.updatedAt=x.date||todayStr();changed=true}});return changed;
 }
 function spL(zh,en,km){return _lang==='en'?en:_lang==='km'?(km||en):zh}
 
@@ -653,10 +653,10 @@ function monthTxns(){const m=latestPurchaseMonth();return TXNS.filter(x=>ym(x.da
 function renderDashboard(){
   fillFilterSelects();ensurePurchasePartMaster();const all=filteredTxns().filter(x=>purchaseTxns().includes(x)),latestM=latestPurchaseMonth(),latestY=latestPurchaseYear(),mx=all.filter(x=>(x.statementMonth||ym(x.date))===latestM),yx=all.filter(x=>String(x.statementMonth||x.date||'').startsWith(latestY)),ms=purchaseStats(mx),ys=purchaseStats(yx),allst=purchaseStats(all);
   const kpi=(n,u,l,cls)=>`<div class="kpi ${cls}"><div class="kpi-n">${n}<span class="kpi-u">${u||''}</span></div><div class="kpi-l">${l}</div></div>`;
-  let h=`<div class="sec on"><div class="al al-i" style="margin-bottom:10px">${spL('本模組只管理採購與價格；採購數量不當成現有庫存。零件主檔缺少時會由採購記錄重建。','Purchase & price only. Purchase quantity is not treated as on-hand stock.')}</div><div class="kpi-strip">${kpi(num(allst.parts),'',spL('🔧 採購零件數','🔧 Purchased Parts'),'k-blue')}${kpi(money(ys.spend).replace(/\.\d+$/,''),'',`💰 ${latestY} ${spL('年度採購','Year Spend')}`,'k-green')}${kpi(money(ms.spend).replace(/\.\d+$/,''),'',`💵 ${latestM} ${spL('月採購','Month Spend')}`,'k-blue')}${kpi(num(ms.lines),'',spL('🧾 最新月採購筆數','🧾 Latest Month Lines'),'k-amber')}${kpi(num(ms.qty),'',spL('📦 最新月採購數量','📦 Latest Month Qty'),'k-violet')}${kpi(num(ms.invoices),'',spL('📄 最新月發票數','📄 Latest Month Invoices'),'k-slate')}</div>`;
-  const byPart={};yx.forEach(x=>{const k=x.partNo||x.name||'--',o=byPart[k]||(byPart[k]={key:k,name:x.name||'',qty:0,spend:0});o.qty+=Number(x.qty)||0;o.spend+=purchaseAmount(x)});const tops=Object.values(byPart).sort((a,b)=>b.spend-a.spend).slice(0,12);
-  h+=`<div class="g2"><div class="card"><div class="ct">🏆 ${spL('年度採購金額前 12 項','Top 12 Year Purchase Spend')}</div><div class="tw"><table><thead><tr><th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${spL('採購量','Qty')}</th><th class="num">${spL('採購金額','Spend')}</th></tr></thead><tbody>`+tops.map(o=>`<tr><td class="mono">${escapeHtml(o.key)}</td><td>${escapeHtml(o.name)}</td><td class="num">${num(o.qty)}</td><td class="num">${money(o.spend)}</td></tr>`).join('')+`</tbody></table></div></div>`;
-  const recent=[...all].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).slice(0,12);h+=`<div class="card"><div class="ct">🧾 ${spL('最近採購','Recent Purchases')}</div><div class="tw"><table><thead><tr><th>${t('colDate')}</th><th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th class="num">${t('colPrice')}</th></tr></thead><tbody>`+recent.map(x=>`<tr><td class="mono">${escapeHtml(x.date||'')}</td><td class="mono">${escapeHtml(x.partNo||'')}</td><td>${escapeHtml(x.name||PARTS.find(p=>p.partNo===x.partNo)?.name||'')}</td><td class="num">${num(x.qty)}</td><td class="num">${money(x.unitPrice||0)}</td></tr>`).join('')+`</tbody></table></div></div></div></div>`;$('app').innerHTML=h;updateHeaderStats();
+  let h=`<div class="sec on"><div class="al al-i" style="margin-bottom:10px">${spL('本模組只管理採購與價格；採購數量不當成現有庫存。零件主檔缺少時會由採購記錄重建。','Purchase & price only. Purchase quantity is not treated as on-hand stock.')}</div><div class="kpi-strip">${kpi(num(allst.parts),'',spL('🔧 採購零件數','🔧 Purchased Parts'),'k-blue')}${kpi(money(ys.spend).replace(/\.\d+$/,''),'',`💰 ${latestY} ${spL('年度採購','Year Spend')}`,'k-green')}${kpi(money(ms.spend).replace(/\.\d+$/,''),'',`💵 ${latestM} ${spL('月採購','Month Spend')}`,'k-blue')}${kpi(num(ms.lines),'',spL('🧾 最新月採購筆數','🧾 Latest Month Lines'),'k-amber')}${kpi(purchaseQuantityText43(mx),'',spL('📦 最新月採購數量','📦 Latest Month Qty'),'k-violet')}${kpi(num(ms.invoices),'',spL('📄 最新月發票數','📄 Latest Month Invoices'),'k-slate')}</div>`;
+  const byPart={};yx.forEach(x=>{const k=x.partNo||x.name||'--',o=byPart[k]||(byPart[k]={key:k,name:x.name||'',qty:0,spend:0,rows:[]});o.rows.push(x);o.qty+=Number(x.qty)||0;o.spend+=purchaseAmount(x)});const tops=Object.values(byPart).sort((a,b)=>b.spend-a.spend).slice(0,12);
+  h+=`<div class="g2"><div class="card"><div class="ct">🏆 ${spL('年度採購金額前 12 項','Top 12 Year Purchase Spend')}</div><div class="tw"><table><thead><tr><th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${spL('採購量','Qty')}</th><th class="num">${spL('採購金額','Spend')}</th></tr></thead><tbody>`+tops.map(o=>`<tr><td class="mono">${escapeHtml(o.key)}</td><td>${escapeHtml(o.name)}</td><td class="num">${purchaseQuantityText43(o.rows)}</td><td class="num">${money(o.spend)}</td></tr>`).join('')+`</tbody></table></div></div>`;
+  const recent=[...all].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).slice(0,12);h+=`<div class="card"><div class="ct">🧾 ${spL('最近採購','Recent Purchases')}</div><div class="tw"><table><thead><tr><th>${t('colDate')}</th><th>${t('colPartNo')}</th><th>${t('colName')}</th><th class="num">${t('colQty')}</th><th class="num">${t('colPrice')}</th></tr></thead><tbody>`+recent.map(x=>`<tr><td class="mono">${escapeHtml(x.date||'')}</td><td class="mono">${escapeHtml(x.partNo||'')}</td><td>${escapeHtml(x.name||PARTS.find(p=>p.partNo===x.partNo)?.name||'')}</td><td class="num">${num(x.qty)} ${escapeHtml(x.unit||'')}</td><td class="num">${money(x.unitPrice||0)}</td></tr>`).join('')+`</tbody></table></div></div></div></div>`;$('app').innerHTML=h;updateHeaderStats();
 }
 function emptyRow(c){return `<tr><td colspan="${c}" class="empty">${t('noData')}</td></tr>`;}
 
@@ -666,8 +666,9 @@ function priceAbnormalCount(){
   PARTS.forEach(p=>{const h=priceHistory(p.partNo);if(h.length>=2){const a=h[h.length-1].price,b=h[h.length-2].price;if(b&&Math.abs(a-b)/b>0.2)c++;}});
   return c;
 }
-function priceHistory(partNo){
-  return purchaseTxns().filter(x=>x.partNo===partNo&&x.unitPrice).map(x=>({date:x.date,price:+x.unitPrice}))
+function priceHistory(partNo,selectedUnit){
+  const rows=purchaseTxns().filter(x=>x.partNo===partNo&&x.unitPrice),unit=VRTData39.partUnit(selectedUnit||PARTS.find(p=>p.partNo===partNo)?.unit||rows[0]?.unit);
+  return rows.filter(x=>VRTData39.partUnit(x.unit)===unit).map(x=>({date:x.date,price:+x.unitPrice,unit:x.unit}))
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 }
 
@@ -807,22 +808,24 @@ function balanceAtMonthEnd(partNo,yearMonth){
 }
 function renderMonthly(){
   fillFilterSelects();ensurePurchasePartMaster();const year=Number(latestPurchaseYear())||new Date().getFullYear(),months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
-  const rows=months.map(m=>{const xs=monthPurchases(m),st=purchaseStats(xs),prices=xs.filter(x=>Number(x.unitPrice)>0).map(x=>Number(x.unitPrice));return{m,...st,avg:prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0}});let totals={lines:0,qty:0,spend:0};
+  const rows=months.map(m=>{const xs=monthPurchases(m),st=purchaseStats(xs),prices=xs.filter(x=>Number(x.unitPrice)>0).map(x=>Number(x.unitPrice));return{m,...st,qtyText:purchaseQuantityText43(xs),avg:new Set(xs.map(x=>VRTData39.partUnit(x.unit))).size<=1&&prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0}});let totals={lines:0,qty:0,spend:0};
   let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${year} ${spL('採購月報','Purchase Monthly')}</div><div class="tw"><table><thead><tr><th>${spL('月份','Month')}</th><th class="num">${spL('採購筆數','Lines')}</th><th class="num">${spL('零件數','Parts')}</th><th class="num">${spL('採購數量','Qty')}</th><th class="num">${spL('發票數','Invoices')}</th><th class="num">${spL('平均單價','Avg Price')}</th><th class="num">${spL('採購金額','Spend')}</th></tr></thead><tbody>`;
-  h+=rows.map(r=>{totals.lines+=r.lines;totals.qty+=r.qty;totals.spend+=r.spend;return `<tr><td>${r.m}</td><td class="num">${num(r.lines)}</td><td class="num">${num(r.parts)}</td><td class="num">${num(r.qty)}</td><td class="num">${num(r.invoices)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.spend)}</td></tr>`}).join('');h+=`<tr style="font-weight:700;background:var(--soft)"><td>${spL('全年','Year Total')}</td><td class="num">${num(totals.lines)}</td><td class="num">-</td><td class="num">${num(totals.qty)}</td><td class="num">-</td><td class="num">-</td><td class="num">${money(totals.spend)}</td></tr></tbody></table></div><div class="al al-i" style="margin-top:12px">${spL('這裡只比較採購，不計算發出與庫存。','Purchase comparison only; no issue/on-hand inventory calculation.')}</div></div></div>`;$('app').innerHTML=h;
+  h+=rows.map(r=>{totals.lines+=r.lines;totals.qty+=r.qty;totals.spend+=r.spend;return `<tr><td>${r.m}</td><td class="num">${num(r.lines)}</td><td class="num">${num(r.parts)}</td><td class="num">${r.qtyText}</td><td class="num">${num(r.invoices)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.spend)}</td></tr>`}).join('');h+=`<tr style="font-weight:700;background:var(--soft)"><td>${spL('全年','Year Total')}</td><td class="num">${num(totals.lines)}</td><td class="num">-</td><td class="num">${purchaseQuantityText43(purchaseTxns().filter(x=>String(x.statementMonth||x.date).startsWith(String(year))))}</td><td class="num">-</td><td class="num">-</td><td class="num">${money(totals.spend)}</td></tr></tbody></table></div><div class="al al-i" style="margin-top:12px">${spL('這裡只比較採購，不計算發出與庫存。','Purchase comparison only; no issue/on-hand inventory calculation.')}</div></div></div>`;$('app').innerHTML=h;
 }
 
 /* ========== PRICE ANALYSIS ========== */
 function renderPrice(){
   fillFilterSelects();
   // 有兩筆以上 IN 價的零件
-  const parts=PARTS.filter(p=>priceHistory(p.partNo).length>=1);
+  const parts=PARTS.filter(p=>purchaseTxns().some(x=>x.partNo===p.partNo&&x.unitPrice));
   const sel=$('priceSel')?$('priceSel').value:(parts[0]?parts[0].partNo:'');
   let h=`<div class="sec on"><div class="card"><div class="frow">
     <span class="tb-lbl">${t('prSelect')}</span>
     <select id="priceSel" onchange="renderPrice()">${parts.map(p=>`<option value="${escapeHtml(p.partNo)}" ${p.partNo===sel?'selected':''}>${escapeHtml(p.partNo)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
   </div>`;
-  const hist=priceHistory(sel);
+  const units=[...new Set(purchaseTxns().filter(x=>x.partNo===sel&&x.unitPrice).map(x=>VRTData39.partUnit(x.unit)))],previousUnit=$('priceUnit43')?.value,selectedUnit=units.includes(previousUnit)?previousUnit:units[0];
+  h+='<label>計價單位 <select id="priceUnit43" onchange="renderPrice()">'+units.map(u=>'<option '+(u===selectedUnit?'selected':'')+' value="'+escapeHtml(u)+'">'+escapeHtml(u)+'</option>').join('')+'</select></label><p>同單位比較；不同包裝不自動換算。</p>';
+  const hist=priceHistory(sel,selectedUnit);
   if(hist.length){
     const prices=hist.map(x=>x.price);
     const avg=prices.reduce((a,b)=>a+b,0)/prices.length, mx=Math.max(...prices), mn=Math.min(...prices), last=prices[prices.length-1];
@@ -847,7 +850,7 @@ function renderPrice(){
   // 同規格不同品牌比較
   const cur=PARTS.find(p=>p.partNo===sel);
   if(cur){
-    const same=PARTS.filter(p=>p.spec&&p.spec===cur.spec);
+    const same=PARTS.filter(p=>p.spec&&p.spec===cur.spec&&VRTData39.partUnit(p.unit)===VRTData39.partUnit(cur.unit));
     if(same.length>1){
       h+=`<div class="card"><div class="ct">⚖ ${t('prCompare')} — ${escapeHtml(cur.spec)}</div><div class="tw"><table><thead><tr>
         <th>${t('colBrand')}</th><th>${t('colPartNo')}</th><th class="num">${t('colPrice')}</th><th class="num">${t('colQty')}</th></tr></thead><tbody>`;
@@ -1141,6 +1144,7 @@ function latestPurchaseDate(){
 function latestPurchaseMonth(){return latestPurchaseDate().slice(0,7);}
 function latestPurchaseYear(){return latestPurchaseDate().slice(0,4);}
 function monthPurchases(m){return purchaseTxns().filter(x=>ym(x.date)===m);}
+function purchaseQuantityText43(xs){const m=new Map();for(const x of xs){const u=VRTData39.partUnit(x.unit)||'未註明';m.set(u,(m.get(u)||0)+(Number(x.qty)||0))}return [...m].map(([u,n])=>num(n)+' '+escapeHtml(u)).join(' / ')||'0'}
 function purchaseStats(xs){
   xs=Array.isArray(xs)?xs:[];
   const spend=xs.reduce((sum,x)=>sum+purchaseAmount(x),0);

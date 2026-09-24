@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.1.0"></script>
-<script src="vrt-platform-v40.js?v=4.1.0"></script>
+<script src="vrt-deploy-config.js?v=4.3.0"></script>
+<script src="vrt-platform-v40.js?v=4.3.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMV 管理系統 v5.7 · Official SMV</title>
@@ -172,12 +172,12 @@ tr:hover td{background:#eff6ff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.1.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.1.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-data-core-v39.js?v=4.3.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.3.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.3.0"></script>
 </head>
-<body>
+<body><div style="padding:12px 20px;background:#eaf2ff;color:#173760">IE Weekly Update、OBD 工序檔請至 <a href="ie_smv_report_v2_1.html?v=4.3.0" style="font-weight:700">📐 IE 工程／SMV 改善</a>。本頁管理正式 SMV 與分析。</div>
 <div class="hdr">
   <div class="hdr-logo">📐</div>
   <div><h1>正式 SMV 管理系統 v5.7</h1><small>Standard Minute Value · Mobile Safe · IE / SMV 獨立管理 · Editable Official SMV · Scenario -10/-15/-20/-35</small></div>

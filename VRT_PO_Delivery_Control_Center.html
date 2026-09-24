@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.1.0"></script>
-<script src="vrt-platform-v40.js?v=4.1.0"></script>
+<script src="vrt-deploy-config.js?v=4.3.0"></script>
+<script src="vrt-platform-v40.js?v=4.3.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT PO Delivery Control Center</title>
@@ -215,8 +215,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.3.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.3.0"></script>
 </head>
 <body data-theme="light">
 

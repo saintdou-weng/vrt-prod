@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.1.0"></script>
-<script src="vrt-platform-v40.js?v=4.1.0"></script>
+<script src="vrt-deploy-config.js?v=4.3.0"></script>
+<script src="vrt-platform-v40.js?v=4.3.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT BOM Management AI · v2.3 SMV + ACC Cost Linked</title>
@@ -343,11 +343,11 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.1.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.1.0"></script>
-<script src="vrt-bom-cost-core-v39.js?v=4.1.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.1.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.1.0"></script>
+<script src="vrt-data-core-v39.js?v=4.3.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.3.0"></script>
+<script src="vrt-bom-cost-core-v39.js?v=4.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.3.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.3.0"></script>
 </head>
 <body>
 
@@ -2249,6 +2249,6 @@ if(document.readyState!=='loading')init();
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'bom',lockKey:'bom',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!((DB.settings&&DB.settings.cloudProxy)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto bom]',e)}},0)},{once:true});
 </script>
-<script src="vrt-bom-import-v39.js?v=4.1.0"></script>
+<script src="vrt-bom-import-v39.js?v=4.3.0"></script>
 </body>
 </html>
