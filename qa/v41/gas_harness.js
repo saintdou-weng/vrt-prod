@@ -1,6 +1,6 @@
 /* Executes the supplied, modified GS in memory. No Google or Telegram network access. */
 const fs=require('fs'),path=require('path'),vm=require('vm'),crypto=require('crypto');
-const gsPath=path.resolve(__dirname,'../../../AppsScript/VRT_Production_v4.1.gs');
+const gsPath=path.resolve(__dirname,'../../../AppsScript/VRT_Production_v4.2.gs');
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex').slice(0,24);
 function createGas(){
   let tick=Date.now(),seq=0,locked=false,busy=false;const files=[],props=new Map(),sheets=new Map(),events=[],calls=[];
@@ -24,7 +24,7 @@ function createGas(){
     LockService:{getScriptLock:()=>({tryLock(){events.push({op:'lock'});if(busy||locked)return false;locked=true;return true},releaseLock(){locked=false;events.push({op:'unlock'})}})},
     UrlFetchApp:{fetch(){events.push({op:'forbidden-network'});throw Error('No external messages or network permitted in QA')}},
     ScriptApp:{getService:()=>({getUrl:()=> 'https://script.google.com/macros/s/MOCK_PROD/exec'})}
-  };vm.createContext(ctx);vm.runInContext(fs.readFileSync(gsPath,'utf8'),ctx,{filename:'VRT_Production_v4.1.gs'});
+  };vm.createContext(ctx);vm.runInContext(fs.readFileSync(gsPath,'utf8'),ctx,{filename:'VRT_Production_v4.2.gs'});
   const unwrap=r=>JSON.parse(r.getContent());
   function get(p){const j=unwrap(ctx.doGet({parameter:p}));calls.push({method:'GET',p:structuredClone(p),response:structuredClone(j)});return j}
   function post(p){const j=unwrap(ctx.doPost({postData:{contents:JSON.stringify(p)}}));calls.push({method:'POST',p:structuredClone(p),response:structuredClone(j)});return j}

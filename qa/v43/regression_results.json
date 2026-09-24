@@ -1,0 +1,62 @@
+[
+  {
+    "name": "QC real September 22 daily and weekly input confirms and persists 91 canonical reports",
+    "status": "PASS",
+    "detail": "Daily 13 + weekly 78; duplicate adds 0; 34247 inspected / 1680 reject / 31652 output; imported weeks visible instead of hidden by latest-day filter"
+  },
+  {
+    "name": "Parts existing 152 rows and unit aliases no longer abort cross-year imports",
+    "status": "PASS",
+    "detail": "392 unique purchase rows (152 + 218 + 22); 51 separate invoice references; same inputs in both workbooks add 0; bobbin stock remains 17 PCS"
+  },
+  {
+    "name": "True parts package-unit differences preserve separate values and survive domain packing",
+    "status": "PASS",
+    "detail": "PCS and BOX remain distinct; no invented conversion, stock reset or lost source-unit price"
+  },
+  {
+    "name": "IE actual preview-confirm path saves weekly updates and pending OBD operations",
+    "status": "PASS",
+    "detail": "60 weekly records, 1 OBD versions, 24 operations saved from editable preview; repeat adds zero"
+  },
+  {
+    "name": "IE mixed invalid file keeps valid preview; failed save retains preview and previous state",
+    "status": "PASS",
+    "detail": "One unsupported workbook does not discard valid files; storage errors are visible in modal and can be retried without phantom saved data"
+  },
+  {
+    "name": "Fabric reference examples are recognized and excluded from live inventory",
+    "status": "PASS",
+    "detail": "72 labeled example transactions excluded; UI explains reference-only status and directs user to real ledger entry"
+  },
+  {
+    "name": "Fabric opening / receipt / issue calculate once; forms, export, reimport, delete and reload retain correct balances",
+    "status": "PASS",
+    "detail": "100 opening + 20 received - 30 issued = 90; opening is not receipts; native roundtrip, online form, tombstone, negative-balance guard and IDB reload verified"
+  },
+  {
+    "name": "Fabric ledger and original stock coexist through actual Production GS smart-sync handlers",
+    "status": "PASS",
+    "detail": "Production GS v4.2 already accepts fabric_movement records; second device receives ledger/deletion; unchanged Pull/Push transfers zero buckets"
+  },
+  {
+    "name": "Portal fabric partial writes preserve snapshots, ledger and tombstones",
+    "status": "PASS",
+    "detail": "Portal and owner page share the same ledger; subset pull cannot erase other stock, movement or local audit records"
+  },
+  {
+    "name": "Fabric bilingual headers and CSV exports preserve quantities; a failed save retains prior records",
+    "status": "PASS",
+    "detail": "English/Khmer CRLF headings read; 100 opening - 15 issued = 85 through CSV; storage failure does not pretend to save"
+  },
+  {
+    "name": "OBD copy suffixes cannot turn Pending into a module or permit premature official SMV",
+    "status": "PASS",
+    "detail": "83 operations across three Pending OBD files; numeric download suffix ignored; none eligible to replace approved official SMV"
+  },
+  {
+    "name": "Part price comparison never averages PCS with BOX; failed import can be retried",
+    "status": "PASS",
+    "detail": "Unit-specific price history, labeled quantity totals and rollback/retry through the real import commit function"
+  }
+]

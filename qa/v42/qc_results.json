@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Live FileList is captured before input reset, and the real custom input handler imports",
+    "status": "PASS",
+    "detail": "Clearing the original live collection no longer loses files; custom Traditional Chinese chooser uses same tested handler"
+  },
+  {
+    "name": "Weekly primary detail imports every reported day and defect without Sunday templates or summary duplication",
+    "status": "PASS",
+    "detail": "78 date/line rows; 6 dates; 13 named lines; 28816 inspected / 1312 reject / 26664 actual output; 840 unfinished; no invented attendance"
+  },
+  {
+    "name": "Daily report retains real line date, complete style/hourly detail and weighted calculations",
+    "status": "PASS",
+    "detail": "13 reports, 11 active lines; August 1 blank template keeps original date with warning; 4.4580% recomputed reject, 39.3753% weighted efficiency"
+  },
+  {
+    "name": "Daily and weekly imports are quantity/order independent; detailed daily always wins",
+    "status": "PASS",
+    "detail": "79 canonical rows in either order; overlap counted once; detailed styles retained; both original files retained"
+  },
+  {
+    "name": "Repeat, renamed, partial and deleted-record imports cannot inflate totals or erase other lines",
+    "status": "PASS",
+    "detail": "Repeat adds/updates zero; same bytes with a new filename reuse original; one-line changes preserve 78 others; deleted row does not resurrect"
+  },
+  {
+    "name": "Mixed invalid/valid selection visibly reports each error and saves only recognized files",
+    "status": "PASS",
+    "detail": "Valid file not discarded because another file fails; no silent zero-row success or accidental empty commit"
+  },
+  {
+    "name": "Excel, CSV and JSON backups preserve weekly gaps, daily detail and history through reimport",
+    "status": "PASS",
+    "detail": "79 rows including source comparisons and gap field; JSON restores both originals and all retained historical data"
+  },
+  {
+    "name": "Every mature QC tab renders source-backed content; compact layout and Traditional Chinese chooser are wired",
+    "status": "PASS",
+    "detail": "13 functional tabs, Sewing-style line cards/charts/KPIs, hidden period filters on import; responsive CSS and Traditional Chinese strings checked statically (no device layout claim)"
+  },
+  {
+    "name": "Online manual QC edits accept explained unfinished output, preserve history and reject invalid quantities",
+    "status": "PASS",
+    "detail": "Real form callbacks, persisted edit/history/restore; normalized line identity; output above net inspection blocked without losing earlier data"
+  },
+  {
+    "name": "Weekly-only cloud upload accepts documented gap and does not fabricate efficiency",
+    "status": "PASS",
+    "detail": "Actual Production GS v4.2 handlers accept 78 weekly rows + source, aggregate 840 gap, keep weighted efficiency unavailable and deliver identical data to a second client"
+  },
+  {
+    "name": "Daily+weekly actual GS roundtrip, persisted reload and unchanged sync transfer no buckets",
+    "status": "PASS",
+    "detail": "79 rows and both originals survive IDB reload; latest daily totals and weighted efficiency correct; repeated Push/Pull = 0 bucket transfers and 0 commits; no external notifications"
+  },
+  {
+    "name": "Backend rejects fabricated or unaccounted reconciliation quantities",
+    "status": "PASS",
+    "detail": "Correct source gap accepted; missing explanation, inconsistent gap, excess output, missing quantities and negative minutes rejected"
+  }
+]

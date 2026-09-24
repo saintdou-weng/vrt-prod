@@ -1,0 +1,21 @@
+{
+  "release": "4.2.0",
+  "htmlCount": 21,
+  "missingLocalScriptsOrStyles": [],
+  "semanticRuntimeChanges": [
+    "vrt_final_qc_v1.html",
+    "portal_v2.html",
+    "vrt-platform-v40.js"
+  ],
+  "addedRuntimeFiles": [
+    "vrt-qc-core-v42.js",
+    "vrt-qc-v42.js",
+    "vrt-qc-v42.css"
+  ],
+  "removedUnusedRuntimeFiles": [
+    "vrt-qc-v40.js"
+  ],
+  "databaseNamesUnchanged": true,
+  "liveBrowserValidation": "not performed; file protocol blocked",
+  "referenceSewingReplaced": false
+}

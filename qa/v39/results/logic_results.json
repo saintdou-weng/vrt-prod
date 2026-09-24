@@ -2,7 +2,7 @@
   {
     "name": "Every HTML/JS syntax",
     "status": "PASS",
-    "detail": "233 scripts parsed"
+    "detail": "239 scripts parsed"
   },
   {
     "name": "Benchmark actual 86 catalog rows + 152 transactions / $14563.15",

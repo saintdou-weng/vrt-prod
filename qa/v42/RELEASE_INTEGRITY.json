@@ -1,0 +1,599 @@
+{
+  "release": "4.2.0",
+  "tests": {
+    "pass": 81,
+    "fail": 0
+  },
+  "files": [
+    {
+      "path": "AppsScript/VRT_Production_v4.2.gs",
+      "bytes": 77975,
+      "sha256": "0e828ee95783127901b334edd1fac6b271fa42cd178fedf5f9499e0f925e9958"
+    },
+    {
+      "path": "START_HERE_v4.2.txt",
+      "bytes": 2797,
+      "sha256": "93e53bfbbf052a466e00af8dc41a981fb6d27c658a8bf8faba6839f40c988ec6"
+    },
+    {
+      "path": "vrt-prod-main/PROD_MODULE_ACCEPTANCE_v3.9.csv",
+      "bytes": 9129,
+      "sha256": "cb94e9c84a16039719328841f891a751718e8b93969e53350a16b127e3b85cb1"
+    },
+    {
+      "path": "vrt-prod-main/PROD_MODULE_ACCEPTANCE_v4.0.csv",
+      "bytes": 11635,
+      "sha256": "e11d5a4799f9c13c1a4047921ed3863424e151057d516d8c9579bc1e89f746e5"
+    },
+    {
+      "path": "vrt-prod-main/PROD_MODULE_ACCEPTANCE_v4.1.csv",
+      "bytes": 13737,
+      "sha256": "2b03a1ebe73941d6edff339b4befbe067aa5d00f2e997c3e312fd2da5cf35443"
+    },
+    {
+      "path": "vrt-prod-main/PROD_MODULE_ACCEPTANCE_v4.2.csv",
+      "bytes": 13646,
+      "sha256": "14cc23bba5bac9d228d48743124d7a0fc55af0916da68aa40f9c1d97e59fcc03"
+    },
+    {
+      "path": "vrt-prod-main/PROD_MODULE_TEST_MATRIX_v3.7.csv",
+      "bytes": 3385,
+      "sha256": "7bd819193ddfaadbaa11784fd678ba3a18a3ea8a1a33ca634cd0c79cbb4bfbf1"
+    },
+    {
+      "path": "vrt-prod-main/READ_ME_v3.9_ZH.txt",
+      "bytes": 7256,
+      "sha256": "7ef49e1270b61903bf5b86383e189a5abcd5a8fa863164debca424ced1d90ff1"
+    },
+    {
+      "path": "vrt-prod-main/READ_ME_v4.0_ZH.md",
+      "bytes": 8495,
+      "sha256": "cb63c344984f0d62bb2ee5b5a4de1d10a708997718b02fcabce78c10f14b87b1"
+    },
+    {
+      "path": "vrt-prod-main/READ_ME_v4.1_ZH.md",
+      "bytes": 7490,
+      "sha256": "bd43ddbe528543421f563e2b1a21658fab26adf76e881748dfe4c3ee6f1e4e20"
+    },
+    {
+      "path": "vrt-prod-main/READ_ME_v4.2_ZH.md",
+      "bytes": 5503,
+      "sha256": "6b63f8a3495368f018eba7184ca8e3a2d0b8ffc669a41ebb5861118190a6d4e1"
+    },
+    {
+      "path": "vrt-prod-main/VRT_BOM_Management_v2_AI.html",
+      "bytes": 182058,
+      "sha256": "900ab43834057dfe676e9bfada9a48bfa570d4b139276e491b6c69ff19cdcfd6"
+    },
+    {
+      "path": "vrt-prod-main/VRT_FG_Inventory_Management_v1.html",
+      "bytes": 164794,
+      "sha256": "e54ef8c7f93b81f55e292de727aab052bfb4f5ce1fcb3b663aa4e3ec1be0d057"
+    },
+    {
+      "path": "vrt-prod-main/VRT_PLAN_SEWING_AUDIT_20260818.txt",
+      "bytes": 3061,
+      "sha256": "a3ac0bf7b766ad7688664529ee322bb99165ab27057b4f3000760863454cc864"
+    },
+    {
+      "path": "vrt-prod-main/VRT_PO_Delivery_Control_Center.html",
+      "bytes": 175480,
+      "sha256": "ab88c4e62e941721c6a5bb318afd2d851cf18ce923d8015460791230ad44d8b4"
+    },
+    {
+      "path": "vrt-prod-main/VRT_PROD_HRA_SYNC_REMINDER_v3_3_NOTES.txt",
+      "bytes": 1938,
+      "sha256": "1d52fb962a36655df0112f6eed901409bebfa7ce4c9ce7fb8a980d06bcf75e3e"
+    },
+    {
+      "path": "vrt-prod-main/VRT_PROD_v3.7_RELEASE_NOTES.txt",
+      "bytes": 1071,
+      "sha256": "1d1ec91fd7b22ca0d678e44ade90ab353f60268d3fe7f66db5a0dfaf70384a17"
+    },
+    {
+      "path": "vrt-prod-main/cutting_plan_v2.html",
+      "bytes": 162232,
+      "sha256": "8eb9f157b7b3979419d526f030c9b96396f595633441f0bb4ce06a9660334cbc"
+    },
+    {
+      "path": "vrt-prod-main/cutting_v3.html",
+      "bytes": 191553,
+      "sha256": "17d237715697553ef9ee27c25a0a2eb25b53a51650cc3be87ab63a52dc220c18"
+    },
+    {
+      "path": "vrt-prod-main/ie_smv_report_v2_1.html",
+      "bytes": 1029439,
+      "sha256": "48d79295e31a93d0650e5c1071fbb814d3cc723bbfe9f0af8ce78fe07bda8680"
+    },
+    {
+      "path": "vrt-prod-main/inventory_sources/FABRIC OLD STOCK USING.xlsx",
+      "bytes": 92149,
+      "sha256": "0b84fbef3e0275278e5c07a73deaf8e305ab5e284b4d7adb673ac83f60e5421d"
+    },
+    {
+      "path": "vrt-prod-main/inventory_sources/FABRIC STOCK UPDATE ON 19.06.2026.xlsx",
+      "bytes": 459633,
+      "sha256": "95840697caad7100cd9b26a0f523c6b04aa879d1d640da57764f6a690414e2bd"
+    },
+    {
+      "path": "vrt-prod-main/inventory_sources/README.txt",
+      "bytes": 595,
+      "sha256": "3edaa9cb825882a181bac7cc38d0aeeabebb488701f69086a2686fa63fc2ed6f"
+    },
+    {
+      "path": "vrt-prod-main/inventory_sources/Stock Assessory 11.Aug.2026.XLS",
+      "bytes": 1851898,
+      "sha256": "b597f79e06376e23a6f0a1ac92c66dbb62585cef54520717015171fe8311f257"
+    },
+    {
+      "path": "vrt-prod-main/orders_v3.html",
+      "bytes": 208805,
+      "sha256": "396f6be5575e5d07f1d49cb904415b7c0d0ac5e0b319a656f479a27033cb256c"
+    },
+    {
+      "path": "vrt-prod-main/portal_v2.html",
+      "bytes": 61912,
+      "sha256": "974cb59e7f33415e2f49c0cff10cd7ceb2f626dcf9598d05856be823b71d647f"
+    },
+    {
+      "path": "vrt-prod-main/production_plan_capacity_v1.html",
+      "bytes": 1216803,
+      "sha256": "be0d8264ba9434cb41d33cda06a873836354046dc6be1681a2af4616dec9df12"
+    },
+    {
+      "path": "vrt-prod-main/production_v4.html",
+      "bytes": 85600,
+      "sha256": "12420f6c9a51c13614b163a97d507c2235ba249712ef756668a0d584b57abe8f"
+    },
+    {
+      "path": "vrt-prod-main/qa/PROD_QA_RESULTS_v3.7.json",
+      "bytes": 3421,
+      "sha256": "aae857940b440f3221d8459175dcaf39bd78a7d73af00958a0a06c57145425e3"
+    },
+    {
+      "path": "vrt-prod-main/qa/PROD_QA_RESULTS_v3.8.json",
+      "bytes": 5290,
+      "sha256": "514c300e889fa4fdbca1c6059427ce3ec7063bd95719341203f7f39f2ac7a430"
+    },
+    {
+      "path": "vrt-prod-main/qa/run_prod_audit.js",
+      "bytes": 14520,
+      "sha256": "78dfa63fd2de5a129368ee9653cb5e4fb822d840f50e527ddf7636a81549dbc3"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/PRESERVATION_v3.9.json",
+      "bytes": 9381,
+      "sha256": "abe4be0bc7a0db2bc25fe22857e8c73bb0ec0aec41232577870a25442f90f362"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/README.md",
+      "bytes": 1490,
+      "sha256": "b475a77150f7b0ea17db6fcac71d5b1ea402cd2976625080571d1cd042ad3f16"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/RESULTS_v3.9.json",
+      "bytes": 9344,
+      "sha256": "42423a63222ce02a9e99ce8bc525548ec447faa141f8d44575afaa9dc764aa2b"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/inputs.js",
+      "bytes": 667,
+      "sha256": "48f40fdaaaa3c3ff61a54db4f7a6cd15f2361891f4991d5ea5056c7e4de749e3"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_bom_runtime.js",
+      "bytes": 4391,
+      "sha256": "e73417842a3cbfaa41d749c17a628a22884e07df3a78f482248942c31b049f66"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_ie_runtime.js",
+      "bytes": 4986,
+      "sha256": "148a949ed989f519fad3b0ac6ce82c883853d4932dca875dee2d80763ef7fe2a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_import_roundtrip.js",
+      "bytes": 5404,
+      "sha256": "55de315932e8f8404e35d7d4fd9daca2a04747e7eebd546901ae073c9eb28c84"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_logic.js",
+      "bytes": 4814,
+      "sha256": "7e6d1f54fa3433a56dafbde46500655d98cf0c82a6010ce7e36cc91dfe92fe45"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_maintenance_runtime.js",
+      "bytes": 4441,
+      "sha256": "c218bb3c47ed6cf392400de995a7ea3293e89d546e97399afda94b3cdb8d825c"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_smv_runtime.js",
+      "bytes": 4810,
+      "sha256": "62db60bce8a790cbf23be7334ee6ead4aee4c22f1c2880c442cf8820e3cac380"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/qa_sync.js",
+      "bytes": 6502,
+      "sha256": "92c64487b388fef3c8de7d0977535557679e5e40c8bb592d1170e14a727cbda9"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/bom_results.json",
+      "bytes": 921,
+      "sha256": "49865faa0df1c91b640e79478a04001dafb7ff069bc8be972f1e7d6f5099a5b4"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/ie_results.json",
+      "bytes": 1338,
+      "sha256": "aea1b0b2e1a9e79a68c0645e3a7744f53677d115a5b8e5fc9c6a0f7cdcc93752"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/import_results.json",
+      "bytes": 1014,
+      "sha256": "575de4a2ee2656db5ac54903c6483a97db346835a0322059265eeb7482bd8345"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/logic_results.json",
+      "bytes": 1058,
+      "sha256": "4d7f2dfb5ccef7a7c4022fac10904522af5a6b6b43acf00cdcc36994a32202fc"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/maintenance_results.json",
+      "bytes": 965,
+      "sha256": "5418fa1cabe3a8effde5681099fb305304630bae2314397164cec45a89df9e11"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/smv_results.json",
+      "bytes": 870,
+      "sha256": "892f52219911a94690198ad0a5f243b83d8e92933dd5b7e781d9ba7c2f2ecfcf"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/results/sync_results.json",
+      "bytes": 1174,
+      "sha256": "9e6dac28771bb7a89e5caae58b19e84e858ab2bf74c02fe6f476db9842d562d5"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/run_all.js",
+      "bytes": 1199,
+      "sha256": "06ebd2127c913282964f1df45345a092ed1377176597d19ca7101189e59da95a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v39/runtime_harness.js",
+      "bytes": 7064,
+      "sha256": "df34f51964fe0534a783ac1712d9c9daa8cc38ec45b70693ef9dc824eea7cc79"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/INTEGRITY_v4.0.json",
+      "bytes": 104,
+      "sha256": "8a26d551cdd6f2cfaf45d1d18b8b75351a128d913d088de09ddfc90debfd0b7a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/PRESERVATION_v4.0.json",
+      "bytes": 7713,
+      "sha256": "4139872f35908f0345ba6970d58812c45102e831bfe29e811b7895e38ab13c5e"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/README.md",
+      "bytes": 1285,
+      "sha256": "bba257aad0c8dda006109b743e0f32936b78b9c0abb7e6c1604d17efdb7d6755"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/RESULTS_v4.0.json",
+      "bytes": 15062,
+      "sha256": "754fc2095735c058093d8c4676a69a7b5732efe90cea7df36d84896c1c4fd476"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/attachment_results.json",
+      "bytes": 1163,
+      "sha256": "06fb36cd815490bec04b615dff4b0d014e78f593cd957d277d37862679737e7a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/crud_checks.js",
+      "bytes": 2949,
+      "sha256": "82e2c8ef330223dbcbbdf345dd7d86583b88b1e83fd827ae8ef1cebb002653b0"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/crud_results.json",
+      "bytes": 416,
+      "sha256": "eba8ae5239e1d983eab541a7489a469f893882158381f33fe6cb4a9c7dc2729a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/final_safety_checks.js",
+      "bytes": 7049,
+      "sha256": "1a029fe3430168e9ac6c92b398c1349bfa3121f83bf7aa2fcfcce752f0fff8e1"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/final_safety_results.json",
+      "bytes": 1018,
+      "sha256": "ad0ca51cbf5af53ca879b010744e78e028143d783055583490558789ec5e248e"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/run_all.js",
+      "bytes": 1726,
+      "sha256": "edf3becf0a0e5541673e285b45ce3f21c58fc6efb389d627a05083e6e0ec603d"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/run_attachment_checks.js",
+      "bytes": 7841,
+      "sha256": "5a3515678d59d6966ef60b17c92d9e8d2c3a26033be487f890bc15474778a120"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/sync_recovery_checks.js",
+      "bytes": 4857,
+      "sha256": "7f9b61e3e3ce3bbe206162af1e5e7b2c3b098fdaeee78fd1b17e59049dc96a76"
+    },
+    {
+      "path": "vrt-prod-main/qa/v40/sync_recovery_results.json",
+      "bytes": 862,
+      "sha256": "ff368a5ae80129e1beee2190b18b580e3e8003f918cf0f0491fa0552c495a62f"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/README.md",
+      "bytes": 1084,
+      "sha256": "35fff04ab3064983388433d71669ba0be43ebb2442a74025ea9ef903af5485aa"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/RELEASE_INTEGRITY.json",
+      "bytes": 1560,
+      "sha256": "21ed2d9242c73977f42fd1f5726a30b87ca155a656da984beab256096cd66f44"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/RESULTS_v4.1.json",
+      "bytes": 19874,
+      "sha256": "882e0d3095fd5bf60f0a9c3212a154fb2ed3fd16d14c87df09eb90273e145084"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/gas_harness.js",
+      "bytes": 5197,
+      "sha256": "bce497641d464bda0ea92866138be001a607f3055ce65b08e60c95a0abd0189c"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/gas_integration_checks.js",
+      "bytes": 17936,
+      "sha256": "4cbbd1e99476e85f25a9760eb7f1d70d20a8b6ff64505a46256b91a08a66ff48"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/gas_integration_results.json",
+      "bytes": 3951,
+      "sha256": "2cb78c9f8f0f529611b23a4544f1d676879ad498bb565a7d302118853f3f4531"
+    },
+    {
+      "path": "vrt-prod-main/qa/v41/run_all.js",
+      "bytes": 1634,
+      "sha256": "5534d3a5726e577c2621e4d665e445a9bd747b0a6d2740e3aa002efbd347e76a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v42/PRESERVATION_v4.2.json",
+      "bytes": 484,
+      "sha256": "fedc737520d7dc02982d696cf9c9934a9e59d02f41aa4cd79c600d03ace9729a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v42/README.md",
+      "bytes": 778,
+      "sha256": "4f153905b609da02b684b993671260d7e3c5786eb77a3f65fd712ab12560150a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v42/RESULTS_v4.2.json",
+      "bytes": 23969,
+      "sha256": "8be918899e76c9c2b943588356fef54d7b69feea193483e9d500c9bdedb85847"
+    },
+    {
+      "path": "vrt-prod-main/qa/v42/qc_release_checks.js",
+      "bytes": 14050,
+      "sha256": "faf764b4634d059418cb72d0a4294f68ba3a8f99d0bb7d2ad444ef4bd08c5e3a"
+    },
+    {
+      "path": "vrt-prod-main/qa/v42/qc_results.json",
+      "bytes": 3528,
+      "sha256": "7e8cb812724b32444baa05618837a38d6f512a0a45000677c547a99994a26d8e"
+    },
+    {
+      "path": "vrt-prod-main/qa/v42/run_all.js",
+      "bytes": 1671,
+      "sha256": "13ed6f1dd3147f9b03ce70c1db1b21e0a3bcea38b517d57c3cb076835da43c87"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Fabric_20260915.xlsx",
+      "bytes": 466737,
+      "sha256": "92e2d54faf0009da099c7bd62ed12b8f20e1e270b10140f69f69b0899e12c8a0"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Final_QC_20260917.xlsx",
+      "bytes": 3407200,
+      "sha256": "ac5a18d72c77764d4ae41a349cbafb3c8f11c5976277efa938265909b378a5a6"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Final_QC_20260919.xlsx",
+      "bytes": 3408313,
+      "sha256": "49ccfb7f86a7b81c4437c97ee4b58c4fae6cc1e3851d69ee6014e1eedc20c23d"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/IE_Weekly_20260912.xlsx",
+      "bytes": 2294895,
+      "sha256": "522307451a511f27e7e4c333f56a96d4879a79e73d267518a253cf094c2b8ac7"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/IE_Weekly_20260919.xlsx",
+      "bytes": 2322947,
+      "sha256": "c24e8cdc41555864254b9777d108f2e99cdec9bfec9c9b8cc1f2e84ee652d938"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Machine_Parts_Stock_20260901_10.xlsx",
+      "bytes": 3735914,
+      "sha256": "0f5d87d4a44612a991b91f4b7f62cbf4b98fef641a44e11cdb942af88999d531"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Needle_Change_202609.xlsx",
+      "bytes": 150580,
+      "sha256": "9162def907d99a7f2b49300270afecd000e18b4c0606e5ec158dbe98735f0bb6"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Needle_Stock_202607.xlsx",
+      "bytes": 23191,
+      "sha256": "3eab4ab5e099683f132a3146a835bd2c913976bcf47ac413bd8c978b59ce9a48"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/OBD_0950G_pending.xls",
+      "bytes": 51712,
+      "sha256": "13642d92ef327d09afb0d720749562d274a17c7b7d747d42d6e404f9eb0ee616"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/OBD_5209_pending.xls",
+      "bytes": 217088,
+      "sha256": "7e454874029a0850fa2768dcb026cd46f80e55910ae03d9f36344fa88fab62c6"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/OBD_A2642K_pending.xls",
+      "bytes": 231424,
+      "sha256": "548e524a09e1f0cae27645fbb457d31409550de7a41e2aeb70764aeb69035861"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Parts_Change_202609.xlsx",
+      "bytes": 117106,
+      "sha256": "a75ef07d93e912ed67aaa1ad2f9bcc9b3392e936481b956a4df0723e52e16382"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/Parts_Price_Benchmark_2026H1.xlsx",
+      "bytes": 84995,
+      "sha256": "c840c08d949a04a466fa47198908418bf61832017f1c47735149cb71587c1a09"
+    },
+    {
+      "path": "vrt-prod-main/release_sources/QC_Weekly_20260914_19.xlsx",
+      "bytes": 129373,
+      "sha256": "f1ef277f8da364c80a7309f2aa50ca2185ab980da9b572b58b6a32996175bd89"
+    },
+    {
+      "path": "vrt-prod-main/sewing_v5.html",
+      "bytes": 1556976,
+      "sha256": "e69d4665bd3468d619dd0c66c4b699204a3b3142aa4b204d35759cf8b8274ca1"
+    },
+    {
+      "path": "vrt-prod-main/shipping_v2.html",
+      "bytes": 66534,
+      "sha256": "31547e14fb545bedc2ec566ca0baddfa30f2da3188a6c36db2c3a5b5346f4ff4"
+    },
+    {
+      "path": "vrt-prod-main/smv_manager_v5_final.html",
+      "bytes": 121322,
+      "sha256": "de8a52217f72b030852fb2f9e082418e2322c53a36ed7d9cbc4eb9a3fc797d90"
+    },
+    {
+      "path": "vrt-prod-main/vendor/xlsx.full.min.js",
+      "bytes": 881780,
+      "sha256": "513ed28162fb12ec58aeb7482e5b9e523d7eab9c0c1fe648e0fc3f7b034be286"
+    },
+    {
+      "path": "vrt-prod-main/vrt-auto-sync-v3.js",
+      "bytes": 7156,
+      "sha256": "4194c9953514918d323ef656035d96ab3db512212c555299feb4d56a48c83071"
+    },
+    {
+      "path": "vrt-prod-main/vrt-bom-cost-core-v39.js",
+      "bytes": 2685,
+      "sha256": "4f02ecaf78f70eb99c6685946517f3ada400bb088a40e2ba40e054828592915e"
+    },
+    {
+      "path": "vrt-prod-main/vrt-bom-import-v39.js",
+      "bytes": 8061,
+      "sha256": "bf82eca57bb691f08d79faec6689527f9c9b7c91118bdf93114d8fa6f192f26d"
+    },
+    {
+      "path": "vrt-prod-main/vrt-data-core-v39.js",
+      "bytes": 17689,
+      "sha256": "558405e8f62a6b9e4820e9963f45f2955111c64fcf6b9ed780b62d3c0894a508"
+    },
+    {
+      "path": "vrt-prod-main/vrt-deploy-config.js",
+      "bytes": 146,
+      "sha256": "0c354404e3322c796e7233872097136eed8f5ad4d78f79dc229a3dbc5a6a785e"
+    },
+    {
+      "path": "vrt-prod-main/vrt-domain-sync-v39.js",
+      "bytes": 7591,
+      "sha256": "fa6132549101db8d66c4e995375b55fc28c82734d41fd2347d764db5c7521739"
+    },
+    {
+      "path": "vrt-prod-main/vrt-fabric-v40.js",
+      "bytes": 14051,
+      "sha256": "97b20a440c272c7680608a03509ca1f9a269721d8a4c06f5f1fc5f984c7fbc20"
+    },
+    {
+      "path": "vrt-prod-main/vrt-import-core-v40.js",
+      "bytes": 13201,
+      "sha256": "c234e3bcee68340bc0b9aa1dcedc4b224ca096d57f7ef9f4c25e4f668f491c38"
+    },
+    {
+      "path": "vrt-prod-main/vrt-maintenance-v39.js",
+      "bytes": 31884,
+      "sha256": "bf93a9cd9118e3a570caed6ddd866668beb652b8f876365c72c1ef4c4409bdae"
+    },
+    {
+      "path": "vrt-prod-main/vrt-platform-v40.js",
+      "bytes": 1881,
+      "sha256": "343cd7a327d9f96b6f60abb6a3118db1fda39baef082cb53e91d452d07aed8d6"
+    },
+    {
+      "path": "vrt-prod-main/vrt-prod-storage-vnext.js",
+      "bytes": 3508,
+      "sha256": "da4980a896d88fdd537cbc866f7a9e4290adea3f06594cdc80d6d3eb39a164ec"
+    },
+    {
+      "path": "vrt-prod-main/vrt-qc-core-v42.js",
+      "bytes": 8468,
+      "sha256": "cd502c4f0782e6e83349a5cd2e466fcfb3aa7ec68b3c11c269d74a49ba8c79e5"
+    },
+    {
+      "path": "vrt-prod-main/vrt-qc-v42.css",
+      "bytes": 14137,
+      "sha256": "a966327357843ddb45760e3cffe535ab6f58fe540464d2d4d57f74506b7dbb94"
+    },
+    {
+      "path": "vrt-prod-main/vrt-qc-v42.js",
+      "bytes": 41798,
+      "sha256": "95ff400522bc2559dc0073d486afe59db705e630e2c57f6c8742b9074a0fc1a3"
+    },
+    {
+      "path": "vrt-prod-main/vrt-smart-sync-v3.js",
+      "bytes": 38793,
+      "sha256": "eae4f5a965bd34a55c1e71af51b69c68ba1683d094713326fd06804615627cf7"
+    },
+    {
+      "path": "vrt-prod-main/vrt_bom_costing_view_v39.html",
+      "bytes": 107690,
+      "sha256": "1289f9aa2ca287d22d63c844e30875dde0b53db08ba6091ca44aec254057fd89"
+    },
+    {
+      "path": "vrt-prod-main/vrt_customer_statistics_control_center_v1.html",
+      "bytes": 29758,
+      "sha256": "4f4cf5a17606d50af902817cfc5795c3b993bbf78a992624146a64b0c0469c99"
+    },
+    {
+      "path": "vrt-prod-main/vrt_fabric_delivery_greige_center_v1.html",
+      "bytes": 105947,
+      "sha256": "a31532b5a528472621a878c3b9218ae6f7262127e2c275cfb5a97a94d7a37131"
+    },
+    {
+      "path": "vrt-prod-main/vrt_fabric_stock_control_v1.html",
+      "bytes": 78045,
+      "sha256": "796f053edae20b262a92e4c2003827f1b38b62e2ad8d5c8e70dfc587df8cf300"
+    },
+    {
+      "path": "vrt-prod-main/vrt_final_qc_v1.html",
+      "bytes": 3124,
+      "sha256": "3da52cff0bbab880b5a9914f2c080f9d1ef844ead7cf4b73e9599edc4d8d42ab"
+    },
+    {
+      "path": "vrt-prod-main/vrt_monthly_shipping_control_center_v1.html",
+      "bytes": 35479,
+      "sha256": "cdf3b9127b404d8aca7e61811f4f8f441b3807ace2385ee1ef497b42c3e5644c"
+    },
+    {
+      "path": "vrt-prod-main/vrt_production_weekly_report_generator_v3.html",
+      "bytes": 1803528,
+      "sha256": "7bab1dc605d3aee2bf6a6abb5060897ed7d9dd7d516874046e154362ea90bf2c"
+    },
+    {
+      "path": "vrt-prod-main/vrt_spare_parts_v2.html",
+      "bytes": 122836,
+      "sha256": "b55bf03588ce123639040eaf4a9bbf49b71ad8321e63f536fb8fcf7575e04f4e"
+    }
+  ]
+}
