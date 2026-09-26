@@ -165,7 +165,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
@@ -5529,13 +5529,15 @@ async function scanAllFolders(silent=false){
     if (!gasUrl) { el.textContent += ' · ⚠ 未設定 GAS URL'; el.className = 'vcp-status err'; }
   }
 
+  const SEW_SYNC_NET43={vrtTimeoutMs:90000,vrtRetryDelays:[5000,15000,45000],vrtOnRetry:(attempt,delay)=>vcLog(`雲端忙碌，${Math.round(delay/1000)} 秒後自動重試 (${attempt}/3)`,'i')};
+
   window.vcPush = async function(){
     gasUrl=VRTPlatform.getGasUrl()||gasUrl;if (!gasUrl){ vcLog('請先填入 GAS URL', 'err'); return; }
     vcSetBusy(true);
     try {
       const allRecs=(typeof DB!=='undefined'&&DB.length)?DB:[];
       const eff=(typeof EFF_DB!=='undefined'&&EFF_DB.length)?EFF_DB:[];
-      const res=await VRTSmartSync.push({url:gasUrl,tool:'sewing',records:allRecs,meta:{eff:eff,summary:buildSewingSummary(allRecs)},onStatus:m=>vcLog(m,'i')});
+      const res=await VRTSmartSync.push({url:gasUrl,tool:'sewing',records:allRecs,meta:{eff:eff,summary:buildSewingSummary(allRecs)},network:SEW_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i')});
       if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取再推送','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length,smart:true}));
       vcLog(`✓ 智慧推送完成 · 本機 ${allRecs.length} 筆 · 本次傳送 ${res.uploaded||0} 筆範圍 · 未變 ${res.unchanged||0}`,'ok');vcShowStatus();
@@ -5548,7 +5550,7 @@ async function scanAllFolders(silent=false){
     vcSetBusy(true);vcLog('智慧拉取：只下載雲端有變更的月份/區塊...','i');
     try{
       const local=(typeof DB!=='undefined'&&DB.length)?DB:[];
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,meta:{eff:(typeof EFF_DB!=='undefined'?EFF_DB:[])},onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,meta:{eff:(typeof EFF_DB!=='undefined'?EFF_DB:[])},network:SEW_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
         const eff=meta&&Array.isArray(meta.eff)?meta.eff:((typeof EFF_DB!=='undefined')?EFF_DB:[]);
         if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs,eff);
       }});

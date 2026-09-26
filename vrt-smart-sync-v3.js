@@ -8,8 +8,8 @@
 */
 (function(g){
   'use strict';
-  if(g.VRTSmartSync && /^4\.2(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.2.0';
+  if(g.VRTSmartSync && /^4\.3(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.3.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
   const RESUME_PREFIX='vrt_smart_sync_v42_resume_';
@@ -95,9 +95,9 @@
   function authorizeShrink(tool,reason,ttl){try{sessionStorage.setItem(SHRINK_PREFIX+tool,JSON.stringify({at:Date.now(),until:Date.now()+(Number(ttl)||300000),reason:reason||'explicit-delete'}));return true}catch(_){return false}}
   function shrinkAuthorized(tool){try{const x=JSON.parse(sessionStorage.getItem(SHRINK_PREFIX+tool)||'null');return !!(x&&Number(x.until)>Date.now())}catch(_){return false}}
   function resumeKey(tool){return RESUME_PREFIX+String(tool||'tool')}
-  function resumeGet(tool){try{return JSON.parse(sessionStorage.getItem(resumeKey(tool))||'null')}catch(_){return null}}
-  function resumePut(tool,v){try{sessionStorage.setItem(resumeKey(tool),JSON.stringify(v||{}))}catch(_){}}
-  function resumeClear(tool){try{sessionStorage.removeItem(resumeKey(tool))}catch(_){}}
+  function resumeGet(tool){try{return JSON.parse(localStorage.getItem(resumeKey(tool))||'null')}catch(_){return null}}
+  function resumePut(tool,v){try{localStorage.setItem(resumeKey(tool),JSON.stringify(v||{}))}catch(_){}}
+  function resumeClear(tool){try{localStorage.removeItem(resumeKey(tool))}catch(_){}}
   function mapsEqual(a,b){a=a||{};b=b||{};const ka=Object.keys(a).sort(),kb=Object.keys(b).sort();if(ka.length!==kb.length)return false;for(let i=0;i<ka.length;i++)if(ka[i]!==kb[i]||String(a[ka[i]]||'')!==String(b[kb[i]]||''))return false;return true}
   function hasMeta(v){return !!(v&&typeof v==='object'&&Object.keys(v).length)}
   function mergeMetaDefault(local,remote){
@@ -154,7 +154,7 @@
   function status(dir,text,type){st[dir]=String(text||'');st[dir+'Type']=type||'busy';st[dir+'At']=now();persistUI();paint();try{document.querySelectorAll('button,[role="button"],.hicon,.cloud').forEach(b=>{const tx=(b.textContent||'')+' '+(b.id||'')+' '+(b.title||'');if(/☁|cloud|推送|拉取|上傳|下載/i.test(tx))b.title='上傳：'+st.push+'\n拉取：'+st.pull})}catch(_){} }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{ensureUI();paint()});else setTimeout(()=>{ensureUI();paint()},0);
 
-  async function jsonFetch(url,opt){opt=Object.assign({},opt||{});const timeoutMs=Number(opt.vrtTimeoutMs)||45000,retries=Array.isArray(opt.vrtRetryDelays)?opt.vrtRetryDelays:[],onRetry=opt.vrtOnRetry;delete opt.vrtTimeoutMs;delete opt.vrtRetryDelays;delete opt.vrtOnRetry;let attempt=0;for(;;){const controller=typeof AbortController!=='undefined'?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;let r,text;try{r=await _nativeFetch(url,Object.assign({},opt,controller?{signal:controller.signal}:{}));text=await r.text();let j;try{j=JSON.parse(text)}catch(e){const er=new Error(/^\s*</.test(text||'')?'Cloud returned HTML / service busy':'Cloud returned non-JSON');er.retryable=true;throw er}if(!r.ok||(j&&j.ok===false)){const er=new Error((j&&j.error)||('HTTP '+r.status));er.retryable=[429,502,503,504].includes(r.status);throw er}return j}catch(e){const abort=e&&((e.name==='AbortError')||/aborted|timeout/i.test(e.message||''));const retryable=abort||e.retryable||/HTTP (429|502|503|504)|service busy|non-JSON|HTML/i.test(e.message||'');if(retryable&&attempt<retries.length){const delay=Number(retries[attempt++])||0;try{onRetry&&onRetry(attempt,delay,e)}catch(_){};if(delay)await new Promise(r=>setTimeout(r,delay));continue}throw e}finally{if(timer)clearTimeout(timer)}}}
+  async function jsonFetch(url,opt){opt=Object.assign({},opt||{});const timeoutMs=Number(opt.vrtTimeoutMs)||45000,retries=Array.isArray(opt.vrtRetryDelays)?opt.vrtRetryDelays:[],onRetry=opt.vrtOnRetry;delete opt.vrtTimeoutMs;delete opt.vrtRetryDelays;delete opt.vrtOnRetry;let attempt=0;for(;;){const controller=typeof AbortController!=='undefined'?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;let r,text;try{r=await _nativeFetch(url,Object.assign({},opt,controller?{signal:controller.signal}:{}));text=await r.text();let j;try{j=JSON.parse(text)}catch(e){const er=new Error(/^\s*</.test(text||'')?'Cloud returned HTML / service busy':'Cloud returned non-JSON');er.retryable=true;throw er}if(!r.ok||(j&&j.ok===false)){const er=new Error((j&&j.error)||(r.status===404?'GAS action/URL not found (HTTP 404)':('HTTP '+r.status)));er.retryable=[429,502,503,504].includes(r.status);throw er}return j}catch(e){const abort=e&&((e.name==='AbortError')||/aborted|timeout/i.test(e.message||''));const retryable=abort||e.retryable||/HTTP (429|502|503|504)|service busy|non-JSON|HTML/i.test(e.message||'');if(retryable&&attempt<retries.length){const delay=Number(retries[attempt++])||0;try{onRetry&&onRetry(attempt,delay,e)}catch(_){};if(delay)await new Promise(r=>setTimeout(r,delay));continue}throw e}finally{if(timer)clearTimeout(timer)}}}
   async function manifest(url,tool,net){
     let cached=null;try{cached=await cacheRead(url,tool,'_metadata')}catch(_){}
     const tag=cached&&cached.hash||'',q=url+(url.includes('?')?'&':'?')+'action=smartManifest&tool='+enc(tool)+(tag?'&metaHash='+enc(tag):'');
@@ -207,7 +207,7 @@
     // Less-over-more protection. A first/stale client or a parser regression may
     // never replace a larger cloud dataset. Explicit UI delete/clear actions grant
     // a short authorization through Auto Sync; imports do not.
-    if(rm.exists){const rt=totalCount(remoteC),bt=totalCount(lastLocal),localShrank=bt>records.length,noBaseline=!bt;if(rt>records.length&&(localShrank||noBaseline)&&!opts.allowShrink&&!shrinkAuthorized(tool)){const msg=`已阻擋少覆多｜雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜先拉取核對`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,shrinkBlocked:true,cloudCount:rt,recordCount:records.length,uploaded:0}}}
+    if(rm.exists&&!opts.forceBaseline){const rt=totalCount(remoteC),bt=totalCount(lastLocal),localShrank=bt>records.length,noBaseline=!bt;if(rt>records.length&&(localShrank||noBaseline)&&!opts.allowShrink&&!shrinkAuthorized(tool)){const msg=`已阻擋少覆多｜雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜先拉取核對`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,shrinkBlocked:true,cloudCount:rt,recordCount:records.length,uploaded:0}}}
 
     if(rm.exists&&mapsEqual(localH,remoteH)&&localMH===remoteMH&&!rm.summaryNeedsRefresh){
       await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:localH,localCounts:localC,remoteMetaHash:remoteMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
@@ -228,8 +228,14 @@
       else if(!lc&&!rc&&lh!==rh){if(lh)changed.push(k);else deleted.push(k)}
     }
 
-    let metaChanged=!!rm.summaryNeedsRefresh,metaNeedsPull=false,metaConflict=false;
-    if(localMH!==remoteMH){
+    if(opts.forceBaseline){
+      changed=Object.keys(localH).sort();
+      deleted=Object.keys(remoteH).filter(k=>!localH[k]).sort();
+      remoteChanged=[];conflicts=[];
+    }
+
+    let metaChanged=!!rm.summaryNeedsRefresh||!!opts.forceBaseline,metaNeedsPull=false,metaConflict=false;
+    if(localMH!==remoteMH&&!opts.forceBaseline){
       const haveMetaBaseline=!!(lastLMH||lastRMH);
       if(!haveMetaBaseline){
         if(hasMeta(remoteMeta)&&hasMeta(localMeta))metaNeedsPull=true;
@@ -243,7 +249,7 @@
         else metaChanged=true;
       }
     }
-    if(remoteChanged.length||conflicts.length||metaNeedsPull){const msg=`雲端有新變更 ${remoteChanged.length} 區${metaNeedsPull?' + 設定/總表':''}，衝突 ${conflicts.length+(metaConflict?1:0)}；先拉取差異`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,remoteChanged,conflicts,metaNeedsPull,recordCount:records.length}}
+    if(!opts.forceBaseline&&(remoteChanged.length||conflicts.length||metaNeedsPull)){const msg=`雲端有新變更 ${remoteChanged.length} 區${metaNeedsPull?' + 設定/總表':''}，衝突 ${conflicts.length+(metaConflict?1:0)}；先拉取差異`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,remoteChanged,conflicts,metaNeedsPull,recordCount:records.length}}
     if(!changed.length&&!deleted.length&&!metaChanged){
       await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:localH,localCounts:localC,remoteMetaHash:remoteMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
       const msg=`已是最新｜上傳 0｜未變 ${records.length.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:0,deleted:0,unchanged:records.length,metaUpdated:false,noChange:true};
@@ -266,7 +272,7 @@
       const pendingCount=changed.slice(i+1).reduce((n,key)=>n+Number(local[key]?.count||0),0);onStatus(`已完成 ${sent}｜待上傳 ${pendingCount}`);
     }
     // PROD cloud transport only: do not create summary/approval reminder ledger entries.
-    const commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
+    const commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.forceBaseline||!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
     if(opts.resumeBuckets)resumeClear(tool);
     try{await cacheSave(url,tool,'_metadata',localMH,[localMeta])}catch(_){}
     await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
@@ -341,11 +347,24 @@
       const msg=pendingMeta?`已檢查｜下載 0｜資料未變 ${localRecords.length.toLocaleString()}｜設定待上傳`:`已是最新｜本機 ${localRecords.length.toLocaleString()}｜下載 0｜未變 ${localRecords.length.toLocaleString()}`;status('pull',msg,pendingMeta?'warn':'ok');onStatus(msg);return{ok:true,records:localRecords,meta:effectiveMeta,downloaded:0,unchanged:localRecords.length,pendingUpload:0,pendingMetaUpload:pendingMeta,conflicts:metaConflict?1:0,noChange:!applyMeta&&!pendingMeta};
     }
     if(last&&mapsEqual(remoteH,lastRemote)&&mapsEqual(localH,lastLocal)&&remoteMH===lastRMH&&(!metaProvided||localMH===lastLMH)){
-      let pending=0;for(const k of Object.keys(local||{}))if((localH[k]||'')!==(remoteH[k]||''))pending+=Number(local[k].count)||0;
-      const msg=pending?`已檢查｜沒有新下載｜下載 0｜待上傳 ${pending.toLocaleString()}`:`已同步｜沒有新資料｜下載 0｜本機 ${localRecords.length.toLocaleString()}`;status('pull',msg,pending?'warn':'ok');onStatus(msg);return{ok:true,records:localRecords,meta:effectiveMeta,downloaded:0,unchanged:Math.max(0,localRecords.length-pending),pendingUpload:pending,pendingMetaUpload:false,conflicts:0,noChange:true};
+      // v4.7: do not suppress a Pull merely because both manifests are unchanged since the
+      // previous check. If a differing bucket has the same-or-more cloud rows, the cloud
+      // can contain records this browser is missing (cutting had 42 such rows). Fetch it.
+      let pending=0,cloudMayHaveMissing=false;
+      const diffKeys=new Set([...Object.keys(localH),...Object.keys(remoteH)]);
+      for(const k of diffKeys){
+        if((localH[k]||'')===(remoteH[k]||''))continue;
+        const lc=Number(localC[k]||0),rc=Number(remoteC[k]||0);
+        if(rc>=lc&&rc>0)cloudMayHaveMissing=true;
+        if(lc>rc)pending+=lc;
+      }
+      if(!cloudMayHaveMissing){
+        const msg=pending?`已檢查｜沒有新下載｜下載 0｜待上傳 ${pending.toLocaleString()}`:`已同步｜沒有新資料｜下載 0｜本機 ${localRecords.length.toLocaleString()}`;status('pull',msg,pending?'warn':'ok');onStatus(msg);return{ok:true,records:localRecords,meta:effectiveMeta,downloaded:0,unchanged:Math.max(0,localRecords.length-pending),pendingUpload:pending,pendingMetaUpload:false,conflicts:0,noChange:true};
+      }
+      const msg='偵測到雲端可能有本機缺少資料｜重新核對差異';status('pull',msg,'busy');onStatus(msg);
     }
 
-    const outBuckets={};let downloaded=0,same=0,pendingUpload=0,conflicts=metaConflict?1:0;
+    const outBuckets={};let downloaded=0,same=0,pendingUpload=0,conflicts=metaConflict?1:0;const pendingBuckets=[];
     const cloudKeys=Object.keys(remoteH).sort().reverse(); // recent periods first
     const needed=cloudKeys.filter(k=>{const lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';return !(lh===rh&&local[k])&&!((bl||br)&&rh===br&&local[k])});
     const ready=new Map();let cursor=0,done=0,fetchFailure=null;
@@ -365,22 +384,27 @@
       const k=cloudKeys[i],lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';
       if(lh===rh&&local[k]){outBuckets[k]=local[k].records;same+=local[k].count;continue}
       const haveBaseline=!!(bl||br);
-      if(haveBaseline){const localChanged=lh!==bl,cloudChanged=rh!==br;if(!cloudChanged&&local[k]){outBuckets[k]=local[k].records;pendingUpload+=local[k].count;continue}}
+      if(haveBaseline){const localChanged=lh!==bl,cloudChanged=rh!==br;if(!cloudChanged&&localChanged&&local[k]){outBuckets[k]=local[k].records;pendingUpload+=local[k].count;pendingBuckets.push({bucket:k,count:local[k].count,reason:'local-changed'});continue}}
       status('pull',`下載變更 ${i+1}/${cloudKeys.length} · ${k}`,'busy');onStatus(`下載變更 · ${k}`);
       const received=ready.get(k);if(!received)throw new Error('缺少下載區塊 '+k);const remoteRows=received.rows;if(received.cached)same+=remoteRows.length;else downloaded+=remoteRows.length;
       const localChanged=haveBaseline?(lh!==bl):!!lh,cloudChanged=haveBaseline?(rh!==br):true;
-      if(localChanged&&cloudChanged&&local[k]&&lh!==rh){outBuckets[k]=mergeRecords(local[k].records,remoteRows);conflicts++;pendingUpload+=outBuckets[k].length}else outBuckets[k]=remoteRows;
+      if(haveBaseline&&!localChanged&&!cloudChanged&&local[k]&&lh!==rh){
+        // A previous manifest-only check can leave a stale mismatch recorded as a baseline.
+        // Reconcile the actual rows now instead of forever calling the whole local bucket "pending".
+        const mergedRows=mergeRecords(local[k].records,remoteRows),mb=await buildBuckets(mergedRows),mh=(mb[k]&&mb[k].hash)||'';
+        outBuckets[k]=mergedRows;if(mh!==rh){pendingUpload+=mergedRows.length;pendingBuckets.push({bucket:k,count:mergedRows.length,reason:'reconciled-local-extra'})}
+      }else if(localChanged&&cloudChanged&&local[k]&&lh!==rh){outBuckets[k]=mergeRecords(local[k].records,remoteRows);conflicts++;pendingUpload+=outBuckets[k].length;pendingBuckets.push({bucket:k,count:outBuckets[k].length,reason:'both-changed'})}else outBuckets[k]=remoteRows;
     }
     for(const k of Object.keys(local)){
       if(remoteH[k])continue;const lh=localH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'',haveBaseline=!!(bl||br);
       if(haveBaseline&&bl&&lh===bl&&br){/* cloud deleted unchanged local bucket */}
-      else{outBuckets[k]=local[k].records;pendingUpload+=local[k].count}
+      else{outBuckets[k]=local[k].records;pendingUpload+=local[k].count;pendingBuckets.push({bucket:k,count:local[k].count,reason:'local-only'})}
     }
     const merged=sortRecords(Object.values(outBuckets).flat());
     let actual=merged;if(opts.apply){const applied=await opts.apply(merged,effectiveMeta);if(Array.isArray(applied))actual=applied}
     const mb=await buildBuckets(actual),mergedH=hashMap(mb),mergedC=countMap(mb),effMH=await metaHash(effectiveMeta);
     await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:mergedH,localCounts:mergedC,remoteMetaHash:remoteMH,localMetaHash:effMH,lastPullAt:now(),updatedAt:now()});
-    let msg=`完成｜本機 ${merged.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;status('pull',msg,conflicts?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:merged,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingMetaUpload:pendingMeta,conflicts};
+    let msg=`完成｜本機 ${merged.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;status('pull',msg,conflicts?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:merged,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts};
   }
 
   // Universal status for legacy/non-smart requests. Smart requests are handled above.

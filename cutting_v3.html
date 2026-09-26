@@ -146,7 +146,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
@@ -3047,11 +3047,13 @@ async function scanAllFolders(silent=false){
     if (!gasUrl){ el.textContent += ' · ⚠ 未設定 URL'; el.className = 'vcp-status err'; }
   }
 
+  const CUT_SYNC_NET43={vrtTimeoutMs:90000,vrtRetryDelays:[5000,15000,45000],vrtOnRetry:(attempt,delay)=>vcLog(`雲端忙碌，${Math.round(delay/1000)} 秒後自動重試 (${attempt}/3)`,'i')};
+
   window.vcPush = async function(){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);
     try{
       const allRecs=(typeof CUT!=='undefined'&&CUT.length)?CUT:await vcIdbGetAll('CuttingProd',1,'cutting_records');
-      const res=await VRTSmartSync.push({url:gasUrl,tool:'cutting',records:allRecs,meta:{summary:buildCuttingSummary(allRecs),idbStore:{db:'CuttingProd',ver:1,store:'cutting_records'}},onStatus:m=>vcLog(m,'i')});
+      const res=await VRTSmartSync.push({url:gasUrl,tool:'cutting',records:allRecs,meta:{summary:buildCuttingSummary(allRecs),idbStore:{db:'CuttingProd',ver:1,store:'cutting_records'}},network:CUT_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i')});
       if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:allRecs.length,smart:true}));vcLog(`✓ 智慧推送完成 · 本機 ${allRecs.length} · 傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');vcShowStatus();
     }catch(e){vcLog('✗ 推送失敗：'+e.message,'err');}finally{vcSetBusy(false);}
@@ -3061,8 +3063,8 @@ async function scanAllFolders(silent=false){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);vcLog('智慧拉取：比對差異...','i');
     try{
       const local=(typeof CUT!=='undefined'&&CUT.length)?CUT:await vcIdbGetAll('CuttingProd',1,'cutting_records');
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cutting',localRecords:local,onStatus:m=>vcLog(m,'i'),apply:async recs=>{await vcIdbPutAll('CuttingProd',1,'cutting_records',recs);if(typeof CUT!=='undefined'){CUT.length=0;recs.forEach(r=>CUT.push(r));}}});
-      if(!res.ok){if(res.noCloud)vcLog('雲端尚無裁剪資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取完成 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');vcShowStatus();
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'cutting',localRecords:local,network:CUT_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i'),apply:async recs=>{await vcIdbPutAll('CuttingProd',1,'cutting_records',recs);if(typeof CUT!=='undefined'){CUT.length=0;recs.forEach(r=>CUT.push(r));}}});
+      if(!res.ok){if(res.noCloud)vcLog('雲端尚無裁剪資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取完成 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');if(res.pendingBuckets&&res.pendingBuckets.length)vcLog('待上傳區塊：'+res.pendingBuckets.map(x=>x.bucket+' '+x.count+'筆('+x.reason+')').join('；'),'i');vcShowStatus();
     }catch(e){vcLog('✗ 拉取失敗：'+e.message,'err');}finally{vcSetBusy(false);}
   };
 

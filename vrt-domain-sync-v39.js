@@ -8,7 +8,19 @@
   const emptyMaintenance=()=>({schemaVersion:3,invoiceSummaries:[],stockReports:[],needleChanges:[],partChanges:[],sourceDocuments:[],tombstones:[],editHistory:[]});
   function mergeRows(a,b,key=r=>r.id){const map=new Map();[...(a||[]),...(b||[])].forEach(r=>{const k=key(r),old=map.get(k);if(!old||String(r.updatedAt||r.createdAt||'')>=String(old.updatedAt||old.createdAt||''))map.set(k,C.copy(r))});return [...map.values()]}
   function mergeMaintenance(a,b){const out=emptyMaintenance();for(const k of ['stockReports','needleChanges','partChanges','sourceDocuments','tombstones','editHistory','invoiceSummaries'])out[k]=mergeRows(a?.[k],b?.[k]);const reports=new Map((a?.stockReports||[]).map(r=>[r.id,r]));for(const r of b?.stockReports||[]){const old=reports.get(r.id);if(!old){reports.set(r.id,r);continue}const winner=String(r.updatedAt||'')>=String(old.updatedAt||'')?r:old,other=winner===r?old:r,dead=new Set([...(old.deletedItemIds||[]),...(r.deletedItemIds||[])]),items=mergeRows(other.items,winner.items).filter(x=>!dead.has(x.id));reports.set(r.id,{...winner,items,deletedItemIds:[...dead],fingerprint:C.hash(items),history:mergeRows(old.history,r.history,x=>x.fingerprint||C.hash(x))})}out.stockReports=[...reports.values()];const dead=new Set(out.tombstones.map(r=>r.id));out.stockReports=out.stockReports.filter(r=>!dead.has(r.id));out.needleChanges=out.needleChanges.filter(r=>!dead.has(r.id));out.partChanges=out.partChanges.filter(r=>!dead.has(r.id));return out}
-  function envelope(entity,value,id){return {id:'v39:'+entity+':'+id,_vrtEntity:entity,_vrtValue:value,recordDate:value.testDate||value.date||value.end||value.reportDate||'',updatedAt:value.updatedAt||value.createdAt||''}}
+  function syncPart43(v,n){v=String(v||'');let h=2166136261>>>0;for(let i=0;i<v.length;i++){h^=v.charCodeAt(i);h=Math.imul(h,16777619)}return String((h>>>0)%Math.max(1,n)).padStart(2,'0')}
+  function envelope(entity,value,id){
+    const row={id:'v39:'+entity+':'+id,_vrtEntity:entity,_vrtValue:value,recordDate:value.testDate||value.date||value.end||value.reportDate||'',updatedAt:value.updatedAt||value.createdAt||''};
+    // v4.7: deterministic multi-record buckets. This keeps the IE baseline small enough
+    // to upload in tens of requests instead of one HTTP request per operation/style.
+    if(entity==='ie.operations')row._smartBucket='ie_operations_'+syncPart43(id,16);
+    else if(entity==='ie.styles')row._smartBucket='ie_styles_'+syncPart43(id,4);
+    else if(entity==='ie.updates')row._smartBucket='ie_updates_'+syncPart43(id,4);
+    else if(entity==='ie.importLog')row._smartBucket='ie_importlog_'+syncPart43(id,2);
+    else if(entity==='ie.tombstones')row._smartBucket='ie_tombstones';
+    else if(entity==='ie.sourceDocuments')row._smartBucket='ie_source_'+syncPart43(id,8);
+    return row
+  }
   function pack(tool,d){const rows=[];if(tool==='smv'){(d.snaps||[]).forEach(r=>rows.push(r));for(const k of ['updates','styles','operations','sourceDocuments','tombstones','importLog'])(d.ie?.[k]||[]).forEach(r=>rows.push(envelope('ie.'+k,r,r.id||C.hash(r))));}
     else{(d.txns||[]).forEach(r=>rows.push(r));for(const k of ['parts','versions','suppliers','invoices','ocrhist'])(d[k]||[]).forEach(r=>rows.push(envelope('parts.'+k,r,r.id||C.hash(r))));for(const k of ['stockReports','needleChanges','partChanges','sourceDocuments','tombstones','editHistory','invoiceSummaries'])(d.maintenance?.[k]||[]).forEach(r=>rows.push(envelope('maintenance.'+k,r,r.id||C.hash(r))));}return rows}
   function unpack(tool,rows,meta){const d=tool==='smv'?{snaps:[],ie:C.initIE({})}:{txns:[],parts:[],versions:[],suppliers:[],invoices:[],ocrhist:[],maintenance:emptyMaintenance()};
@@ -22,6 +34,6 @@
     if(tool==='smv'){const ie=C.mergeIE(local.ie,incoming.ie),dead=new Set(ie.tombstones.filter(t=>t.id.startsWith('snapshot:')).map(t=>t.id.slice(9))),snaps=mergeRows(local.snaps,incoming.snaps).filter(s=>!dead.has(String(s.id)));await write('VRT_SMV_Manager_v52',{smv_snapshots:{rows:snaps}});await write('vrt_ie_smv_integrated_v2',{state:{key:'main',value:ie}});return{snaps,ie}}
     const out={};for(const k of ['parts','txns','versions','suppliers','invoices','ocrhist'])out[k]=mergeRows(local[k],incoming[k],k==='parts'?r=>C.norm(r.partNo):r=>r.id);
     out.maintenance=mergeMaintenance(local.maintenance,incoming.maintenance);const dead=new Set(out.maintenance.tombstones.map(r=>r.id));const deadParts=new Set(out.maintenance.tombstones.filter(r=>r.partNo).map(r=>C.norm(r.partNo)));out.parts=out.parts.filter(r=>!dead.has(r.id)&&!deadParts.has(C.norm(r.partNo)));out.txns=out.txns.filter(r=>!dead.has(r.id));const entries={};for(const k of ['parts','txns','versions','suppliers','invoices','ocrhist'])entries[k]={rows:out[k]};entries.meta={value:{k:'maintenance39',v:out.maintenance}};await write('vrt_spareparts',entries);return out}
-  async function sync(tool,direction,url,onStatus){const d=await readDomain(tool),rs=pack(tool,d),meta=metaFor(tool,d);if(direction==='push')return await g.VRTSmartSync.push({url,tool,records:rs,meta,onStatus});return await g.VRTSmartSync.pull({url,tool,localRecords:rs,meta,onStatus,apply:async(rows,m)=>apply(tool,rows,m)})}
+  async function sync(tool,direction,url,onStatus,opts){opts=opts||{};const d=await readDomain(tool),rs=pack(tool,d),meta=metaFor(tool,d),common={url,tool,meta,onStatus,...opts};if(direction==='push')return await g.VRTSmartSync.push({...common,records:rs});return await g.VRTSmartSync.pull({...common,localRecords:rs,apply:async(rows,m)=>apply(tool,rows,m)})}
   g.VRTDomain39={read,write,readDomain,pack,unpack,apply,sync,metaFor,emptyMaintenance,mergeMaintenance,mergeRows};
 })(window);

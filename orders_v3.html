@@ -184,14 +184,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.3 · Weekly 最新日期／箱數分析／DB 修正</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.4 · Weekly 最新日期／箱數分析／DB 修正</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
@@ -970,6 +970,15 @@ function validWeeklySnapshots(){
   return Object.values(m);
 }
 
+async function repairKnownBogusPo43(){
+  const badHeaders=(APP.headers||[]).filter(h=>String(h.po_number||'')==='202019'&&/204019/i.test(String(h.source_file||'')));
+  const badIds=new Set(badHeaders.map(h=>Number(h.id)));let n=0;
+  for(const x of (APP.orders||[]).filter(o=>(badIds.has(Number(o.po_id))||(String(o.po_number||'')==='202019'&&/204019/i.test(String(o.source_file||'')))))){if(x.id!=null){await dbDel('po_lines',x.id);n++}}
+  for(const h of badHeaders)if(h.id!=null)await dbDel('po_headers',h.id);
+  if(n||badHeaders.length){await dbAdd('parse_audit',{file:'204019 repair',customer:'AMERICAN DAWN INC',po:'202019',parser:'v4.7 repair',lineCount:n,issues:['Removed bogus PO 202019 created from 204019 source'],imported_at:nowLocal()});APP.orders=await dbAll('po_lines');APP.headers=await dbAll('po_headers');}
+  return n;
+}
+
 async function loadAll(){
   APP.orders=await dbAll('po_lines');
   APP.headers=await dbAll('po_headers');
@@ -978,6 +987,7 @@ async function loadAll(){
   const repaired=await repairWeeklyHistory();
   if(repaired){APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');}
   try{APP.audit=await dbAll('parse_audit');}catch(e){APP.audit=[];}
+  await repairKnownBogusPo43();
   // Read sewing: SewingCloudProd IDB first, then localStorage fallback
   APP.sewing=await readSewingFromLocalStorage();
   // Read cutting from CuttingProd IDB (cutting_v3 storage)
@@ -1286,7 +1296,7 @@ const TEMPLATE_LIBRARY=[
     detect:t=>/american\s*dawn/i.test(t),
     header:{
       customer:()=>'AMERICAN DAWN INC',
-      po:t=>(t.match(/\b(\d{6})\s+\d\s+\d+\s+of\s+\d+/)||t.match(/PURCHASE ORDER NUMBER[\s\S]{0,60}?(\d{6,7})/i)||t.match(/\b(\d{6})\b\s+\d{2}-[A-Z]{3}-\d{2}/i)||[])[1]||null,
+      po:t=>{const n=String(t||'').replace(/\s+/g,' '),m=n.match(/PURCHASE\s+ORDER\s+NUMBER\s*[:#-]?\s*(\d{6})\b/i);return m?m[1]:null;},
       revision:t=>(t.match(/REVISION[\s\S]{0,20}?\b(\d{1,2})\b/i)||[])[1]||null,
       vendor:t=>(t.match(/VENDOR NO\.?\s*([A-Z0-9]+)/i)||[])[1]||null,
       orderDate:t=>(t.match(/\b(\d{2}-[A-Z]{3}-\d{2,4})\b/)||[])[1]||null,
@@ -1862,24 +1872,55 @@ function parseWeekly(buf,asOf,fileName=''){
 const pn=v=>{if(v==null)return 0;if(typeof v==='number')return isNaN(v)?0:Math.round(v*100)/100;const n=parseFloat(v.toString().replace(/[,$]/g,''));return isNaN(n)?0:n;};
 
 // ══ MAIN IMPORT（v4：支援直接 .pdf/.xlsx，並寫入 parse_audit） ══
-async function importPoText(t,subj,fileName,rowText,fileHash=''){
-  const key=APP.sets.apiKey;
-  const parsed=await parsePO(t,key,fileName,rowText);
-  if(!parsed||!parsed.lines.length){
-    log(`⚠ ${fileName} 未解析到明細`,'warn');
-    if(parsed&&parsed._audit) await dbAdd('parse_audit',parsed._audit);
-    return 0;
+let PENDING_PO43=null;
+const PDF_UI43_KEY='vrt_orders_pdf_ui_v43';
+function pdfUiSave43(){try{localStorage.setItem(PDF_UI43_KEY,JSON.stringify({gran:APP.pdfGran,basis:APP.pdfBasis,period:APP.pdfPeriod}))}catch(_){}}
+function pdfUiRestore43(){try{const x=JSON.parse(localStorage.getItem(PDF_UI43_KEY)||'null');if(x){if(['day','week','month','year'].includes(x.gran))APP.pdfGran=x.gran;if(['ship','order'].includes(x.basis))APP.pdfBasis=x.basis;if(x.period)APP.pdfPeriod=x.period}}catch(_){}}
+function explicitAdiPo43(t){const n=String(t||'').replace(/\s+/g,' '),m=n.match(/PURCHASE\s+ORDER\s+NUMBER\s*[:#-]?\s*(\d{6})\b/i);return m?m[1]:null}
+function isRevisionPo43(fileName,parsed){return /revised\s*prices|(?:^|[-_\s])rev(?:ision)?(?:[-_\s.]|$)/i.test(fileName||'')||!!(parsed&&parsed.header&&parsed.header.revision)}
+function poPreviewTotals43(parsed){const qty=(parsed.lines||[]).reduce((a,x)=>a+(Number(x.qty)||0),0),amount=(parsed.lines||[]).reduce((a,x)=>a+(Number(x.ext_price)||Number(x.amount)||0),0),dates=(parsed.lines||[]).map(x=>DateEngine.normalize(x.ship_date||x.cancel_date)).filter(Boolean).sort();return{qty,amount,shipDate:dates[0]||DateEngine.normalize(parsed.header&&parsed.header.required_date)||'-'}}
+function hidePoModal43(){const m=document.getElementById('ord-detail-modal');if(m)m.style.display='none'}
+function cancelPendingPo43(){if(PENDING_PO43&&PENDING_PO43.resolve){const r=PENDING_PO43.resolve;PENDING_PO43=null;hidePoModal43();r(0);return}hidePoModal43()}
+async function commitPendingPo43(){const p=PENDING_PO43;if(!p)return;PENDING_PO43=null;hidePoModal43();try{const n=await commitPoParsed43(p);await loadAll();refreshAll();p.resolve(n)}catch(e){log('✗ PO 寫入失敗：'+e.message,'err');p.resolve(0)}}
+window.cancelPendingPo43=cancelPendingPo43;window.commitPendingPo43=commitPendingPo43;
+
+async function commitPoParsed43(p){
+  const {parsed,subj,fileName,fileHash}=p,customer=parsed.header.customer,po=String(parsed.header.po_number||'').trim();
+  const same=(APP.headers||[]).filter(h=>canonicalCustomer(h.customer)===canonicalCustomer(customer)&&String(h.po_number||'').trim()===po).sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0));
+  const revised=isRevisionPo43(fileName,parsed),existing=same[0]||null;
+  let hid;
+  if(existing){
+    const oldLines=(APP.orders||[]).filter(x=>Number(x.po_id)===Number(existing.id));
+    await dbAdd('order_imports',{type:'po_revision',subject:subj,file_name:fileName,file_hash:fileHash,po_number:po,customer,rows:parsed.lines.length,imported_at:nowLocal(),previous_header:{...existing},previous_lines:oldLines.map(x=>({...x})),revision_update:true});
+    for(const x of oldLines)if(x.id!=null)await dbDel('po_lines',x.id);
+    hid=existing.id;await dbPut('po_headers',{...existing,...parsed.header,id:hid,source_email:subj,source_file:fileName,source_hash:fileHash,source_date:nowLocal(),updated_at:nowLocal(),revision_history_count:(Number(existing.revision_history_count)||0)+1});
+    log(`${revised?'修訂版':'同 PO 更新'}：${customer} PO ${po}，保留原 PO id ${hid}`,'info');
+  }else{
+    hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:fileName,source_hash:fileHash,source_date:nowLocal()});
+    await dbAdd('order_imports',{type:'po',subject:subj,file_name:fileName,file_hash:fileHash,po_number:po,customer,rows:parsed.lines.length,imported_at:nowLocal()});
   }
-  log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行 · 信心${parsed._audit.avgConfidence}%`,'info');
-  const hid=await dbAdd('po_headers',{...parsed.header,source_email:subj,source_file:fileName,source_hash:fileHash,source_date:nowLocal()});
-  for(const ln of parsed.lines){await dbAdd('po_lines',{...ln,po_id:hid,customer:parsed.header.customer,po_number:parsed.header.po_number,source_file:fileName,source_email:subj,source_hash:fileHash,source_type:'pdf'});}
-  await dbAdd('order_imports',{type:'po',subject:subj,file_name:fileName,file_hash:fileHash,rows:parsed.lines.length,imported_at:nowLocal()});
+  for(const ln of parsed.lines)await dbAdd('po_lines',{...ln,po_id:hid,customer,po_number:po,source_file:fileName,source_email:subj,source_hash:fileHash,source_type:'pdf'});
   await dbAdd('parse_audit',parsed._audit);
-  const a=parsed._audit;
-  if(a.totalMatch===false) log(`⚠ 總額不符：明細 $${a.computedTotal} ≠ 表頭 $${a.declaredTotal}（見 解析品質）`,'warn');
-  if(a.issues&&a.issues.length) log(`⚠ QC ${a.issues.length} 項（見 解析品質 分頁）`,'warn');
-  if(a.reviewCount) log(`🔎 ${a.reviewCount} 行信心<95 進入複核佇列`,'warn');
-  return parsed.lines.length;
+  const a=parsed._audit||{};if(a.totalMatch===false)log(`⚠ 總額不符：明細 $${a.computedTotal} ≠ 表頭 $${a.declaredTotal}`,'warn');if(a.issues&&a.issues.length)log(`⚠ QC ${a.issues.length} 項（見解析品質）`,'warn');
+  log(`✓ ${customer} PO ${po} 已寫入 ${parsed.lines.length} 行`,'ok');return parsed.lines.length;
+}
+
+async function previewPoImport43(payload){
+  const {parsed,fileName}=payload,t=poPreviewTotals43(parsed),od=DateEngine.normalize(parsed.header.order_date)||parsed.header.order_date||'-';
+  return await new Promise(resolve=>{PENDING_PO43={...payload,resolve};openOrderModal('📄 客戶 PO 匯入預覽',`<div class="info-box" style="margin-bottom:10px"><b>來源：</b>${escHtml(fileName)}<br><b>此步尚未寫入資料庫。</b> 請核對後才確認。</div><div class="krow"><div class="kc"><div class="kl">PO</div><div class="kv" style="font-size:18px">${escHtml(parsed.header.po_number||'-')}</div></div><div class="kc"><div class="kl">客戶</div><div class="kv" style="font-size:14px">${escHtml(parsed.header.customer||'-')}</div></div><div class="kc"><div class="kl">下單日</div><div class="kv" style="font-size:15px">${escHtml(od)}</div></div><div class="kc"><div class="kl">交期</div><div class="kv" style="font-size:15px">${escHtml(t.shipDate)}</div></div><div class="kc ac"><div class="kl">行數 / 數量</div><div class="kv" style="font-size:16px">${parsed.lines.length} / ${t.qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv" style="font-size:16px">$${t.amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn bg2" data-action="cancelPoImport" onclick="cancelPendingPo43()">取消</button><button class="btn pri" data-action="confirmPoImport" onclick="commitPendingPo43()">確認匯入</button></div>`)});
+}
+function escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+async function importPoText(t,subj,fileName,rowText,fileHash=''){
+  const key=APP.sets.apiKey,parsed=await parsePO(t,key,fileName,rowText);
+  if(!parsed||!parsed.lines.length){log(`⚠ ${fileName} 未解析到明細`,'warn');if(parsed&&parsed._audit)await dbAdd('parse_audit',parsed._audit);return 0;}
+  // ADI must use the PURCHASE ORDER NUMBER printed inside the PDF. Never infer a PO from filename/hash/date text.
+  if(canonicalCustomer(parsed.header.customer)==='ADI'){
+    const explicit=explicitAdiPo43(t);if(!explicit){log(`✗ ${fileName}：找不到 PDF 內 PURCHASE ORDER NUMBER，已停止匯入，避免猜錯 PO`,'err');return 0;}
+    parsed.header.po_number=explicit;for(const ln of parsed.lines)ln.po_number=explicit;if(parsed._audit)parsed._audit.po=explicit;
+  }
+  log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行 · 先預覽`,'info');
+  return await previewPoImport43({parsed,subj,fileName,fileHash});
 }
 
 async function processFile(file){
@@ -2081,10 +2122,10 @@ function orderMeta(o){const x=orderMetaRaw(o);return{...x,order_date:DateEngine.
 function pdfDate(o){const x=orderMeta(o);return APP.pdfBasis==='order'?(DateEngine.normalize(x.order_date)||''):(DateEngine.normalize(x.ship_date||x.cancel_date)||'')}
 function pdfPeriodKey(o,g){const d=pdfDate(o);if(!d)return null;return periodKey(d,g)}
 function pdfPeriods(){return [...new Set(uniquePdfOrders().map(o=>pdfPeriodKey(o,APP.pdfGran)).filter(Boolean))].sort()}
-function setPdfGran(g){APP.pdfGran=g;APP.pdfPeriod='';document.querySelectorAll('#pdf-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));renderPdfOrders()}
-function pdfBasisChange(){APP.pdfBasis=document.getElementById('pdf-date-basis').value;APP.pdfPeriod='';renderPdfOrders()}
-function pdfPeriodNav(dir){const p=document.getElementById('pdf-period');if(!p||!p.options.length)return;let i=Math.max(0,Math.min(p.options.length-1,p.selectedIndex+dir));p.selectedIndex=i;APP.pdfPeriod=p.value;renderPdfOrders()}
-function pdfLatest(){const p=document.getElementById('pdf-period');if(p&&p.options.length){p.selectedIndex=p.options.length-1;APP.pdfPeriod=p.value;renderPdfOrders()}}
+function setPdfGran(g){APP.pdfGran=g;APP.pdfPeriod='';pdfUiSave43();document.querySelectorAll('#pdf-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));renderPdfOrders()}
+function pdfBasisChange(){APP.pdfBasis=document.getElementById('pdf-date-basis').value;APP.pdfPeriod='';pdfUiSave43();renderPdfOrders()}
+function pdfPeriodNav(dir){const p=document.getElementById('pdf-period');if(!p||!p.options.length)return;let i=Math.max(0,Math.min(p.options.length-1,p.selectedIndex+dir));p.selectedIndex=i;APP.pdfPeriod=p.value;pdfUiSave43();renderPdfOrders()}
+function pdfLatest(){const p=document.getElementById('pdf-period');if(p&&p.options.length){p.selectedIndex=p.options.length-1;APP.pdfPeriod=p.value;pdfUiSave43();renderPdfOrders()}}
 function pdfGroups(){
   const hm=headerMap(),m={};
   uniquePdfOrders().forEach(o=>{const h=hm[o.po_id]||{},x=orderMeta(o),key=(o.po_id||'')+'|'+x.customer+'|'+x.po_number+'|'+(x.source_file||'');let g=m[key]||(m[key]={key,po_id:o.po_id,customer:x.customer,po:x.po_number,orderDates:[],shipDates:[],qty:0,amount:0,styles:new Set(),colors:new Set(),sizes:new Set(),lines:[],source:x.source_file||x.parser||'-',format:x.format||x.parser||'-'});if(x.order_date)g.orderDates.push(DateEngine.normalize(x.order_date)||x.order_date);let sd=DateEngine.normalize(x.ship_date||x.cancel_date);if(sd)g.shipDates.push(sd);g.qty+=Number(x.qty)||0;g.amount+=Number(x.ext_price)||0;if(x.style_code)g.styles.add(x.style_code);if(x.color)g.colors.add(x.color);if(x.size)g.sizes.add(x.size);g.lines.push(x)});
@@ -2092,7 +2133,7 @@ function pdfGroups(){
 }
 function pdfGroupDate(g){return APP.pdfBasis==='order'?g.orderDate:g.shipDate}
 function renderPdfOrders(){
-  const pe=document.getElementById('pdf-period');if(!pe)return;const ps=pdfPeriods();if(!APP.pdfPeriod||!ps.includes(APP.pdfPeriod))APP.pdfPeriod=ps[ps.length-1]||'';pe.innerHTML=ps.map(k=>`<option value="${k}" ${k===APP.pdfPeriod?'selected':''}>${periodLabel(k,APP.pdfGran)}</option>`).join('')||'<option>—</option>';pe.value=APP.pdfPeriod;
+  const pe=document.getElementById('pdf-period');if(!pe)return;document.getElementById('pdf-date-basis').value=APP.pdfBasis;document.querySelectorAll('#pdf-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===APP.pdfGran));const ps=pdfPeriods();if(!APP.pdfPeriod||!ps.includes(APP.pdfPeriod))APP.pdfPeriod=ps[ps.length-1]||'';pdfUiSave43();pe.innerHTML=ps.map(k=>`<option value="${k}" ${k===APP.pdfPeriod?'selected':''}>${periodLabel(k,APP.pdfGran)}</option>`).join('')||'<option>—</option>';pe.value=APP.pdfPeriod;
   const cust=document.getElementById('pdf-customer'),cv=cust.value,customers=[...new Set(uniquePdfOrders().map(o=>orderMeta(o).customer).filter(Boolean))].sort();cust.innerHTML='<option value="">全部客戶</option>'+customers.map(c=>`<option value="${c}" ${c===cv?'selected':''}>${c}</option>`).join('');
   const q=(document.getElementById('pdf-search').value||'').toLowerCase();let gs=pdfGroups().filter(g=>{const d=pdfGroupDate(g),pk=d?periodKey(d,APP.pdfGran):null;if(APP.pdfPeriod&&pk!==APP.pdfPeriod)return false;if(cv&&g.customer!==cv)return false;if(q&&![g.customer,g.po,g.source,g.styles.join(' ')].join(' ').toLowerCase().includes(q))return false;return true}).sort((a,b)=>(pdfGroupDate(a)||'').localeCompare(pdfGroupDate(b)||''));
   const qty=gs.reduce((a,g)=>a+g.qty,0),amt=gs.reduce((a,g)=>a+g.amount,0),undated=pdfGroups().filter(g=>!pdfGroupDate(g)).length;
@@ -2101,7 +2142,7 @@ function renderPdfOrders(){
   document.getElementById('pdf-orders-body').innerHTML=gs.map((g,i)=>`<tr class="rowclick" onclick="openPdfGroup(${JSON.stringify(g.key)})"><td><div class="compound"><div class="p">${g.customer}</div><div class="s">PO ${g.po||'-'}</div></div></td><td class="mono">${g.orderDate||'-'}<br><span style="color:var(--acc)">→ ${g.shipDate||'-'}</span></td><td><div class="compound"><div class="p">${g.styles.slice(0,3).join(', ')||'-'}</div><div class="s">${g.lines.length} lines · ${g.colors.length} colors · ${g.sizes.length} sizes</div></div></td><td class="num"><strong>${g.qty.toLocaleString()}</strong></td><td class="num">$${g.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td><td><span class="source-badge src-pdf">PDF</span><div class="subtxt" title="${g.source}">${g.source.length>28?g.source.slice(0,26)+'…':g.source}</div></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--mu)">此期間沒有 PDF 訂單</td></tr>';
 }
 function openPdfGroup(key){const g=pdfGroups().find(x=>x.key===key);if(!g)return;const lines=g.lines;openOrderModal(`📄 ${g.customer} · PO ${g.po||'-'}`,`<div class="krow"><div class="kc"><div class="kl">下單日</div><div class="kv" style="font-size:16px">${g.orderDate||'-'}</div></div><div class="kc"><div class="kl">要求出貨日</div><div class="kv" style="font-size:16px">${g.shipDate||'-'}</div></div><div class="kc ac"><div class="kl">數量</div><div class="kv">${g.qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv">$${g.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div></div><div class="info-box" style="margin:10px 0"><b>來源 PDF：</b>${g.source}<br><b>Parser：</b>${g.format}</div><div class="tw"><table class="dt"><thead><tr><th>Style / SKU</th><th>Color</th><th>Size</th><th class="num">Qty</th><th>Ship Date</th><th class="num">Price</th></tr></thead><tbody>${lines.map(x=>`<tr><td>${x.style_code||'-'}<div class="subtxt">${x.sku||''}</div></td><td>${x.color||'-'}</td><td>${x.size||'-'}</td><td class="num">${(x.qty||0).toLocaleString()}</td><td class="mono">${DateEngine.normalize(x.ship_date||x.cancel_date)||x.ship_date||x.cancel_date||'-'}</td><td class="num">${x.unit_price?'$'+Number(x.unit_price).toFixed(2):'-'}</td></tr>`).join('')}</tbody></table></div>`)}
-function openOrderModal(title,html){let m=document.getElementById('ord-detail-modal');if(!m){m=document.createElement('div');m.id='ord-detail-modal';m.style.cssText='position:fixed;inset:0;background:#0008;z-index:10001;display:none;padding:20px;overflow:auto';m.innerHTML='<div id="ord-detail-box" style="width:min(980px,100%);margin:4vh auto;background:white;border-radius:10px;padding:16px"></div>';m.onclick=e=>{if(e.target===m)m.style.display='none'};document.body.appendChild(m)}document.getElementById('ord-detail-box').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:12px"><b style="font-size:15px">${title}</b><button class="btn bg2" onclick="document.getElementById('ord-detail-modal').style.display='none'">✕</button></div>${html}`;m.style.display='block'}
+function openOrderModal(title,html){let m=document.getElementById('ord-detail-modal');if(!m){m=document.createElement('div');m.id='ord-detail-modal';m.style.cssText='position:fixed;inset:0;background:#0008;z-index:10001;display:none;padding:20px;overflow:auto';m.innerHTML='<div id="ord-detail-box" style="width:min(980px,100%);margin:4vh auto;background:white;border-radius:10px;padding:16px"></div>';m.onclick=e=>{if(e.target===m)cancelPendingPo43()};document.body.appendChild(m)}document.getElementById('ord-detail-box').innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:12px"><b style="font-size:15px">${title}</b><button class="btn bg2" onclick="cancelPendingPo43()">✕</button></div>${html}`;m.style.display='block'}
 
 // ══ PDF ↔ WEEKLY RECONCILIATION ══
 function uniqueWeeklySnapshots(){return validWeeklySnapshots()}
@@ -2876,8 +2917,8 @@ async function init(){
     await openDB();
     document.getElementById('db-st').textContent='● DB已連接';
     document.getElementById('db-st').style.color='var(--grn)';
-    await loadAll();loadSets();refreshAll();
-    log('VRT 訂單管理系統 v3.3 就緒','info');
+    await loadAll();loadSets();pdfUiRestore43();refreshAll();
+    log('VRT 訂單管理系統 v3.4 就緒','info');
     log('Weekly 與客戶 PDF 已分頁：Weekly 不再混入 PDF 數量','info');
     log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
     // v3.4: shared HRA-style auto reconcile handles startup; avoid duplicate full/parallel pulls.

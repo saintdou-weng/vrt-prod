@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
+<script src="vrt-deploy-config.js?v=4.7.0"></script>
+<script src="vrt-platform-v40.js?v=4.7.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 出貨分析儀表板</title>
@@ -227,9 +227,9 @@ tbody tr:hover td{background:#f8fafc}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.7.0"></script>
 </head>
 <body>
 
@@ -251,6 +251,7 @@ tbody tr:hover td{background:#f8fafc}
     <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📂 開啟檔案</button>
     <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xls" style="display:none" onchange="handleFile(event)">
     <button class="btn btn-ghost" id="btnCloudSync" onclick="syncToGas()" style="display:none;background:#1e2640;color:#fff;border-color:#1e2640">☁️ 同步至雲端</button>
+    <button class="btn btn-ghost" id="btnCloudBaseline43" onclick="buildShippingBaseline43()" style="display:none;background:#312e81;color:#fff;border-color:#4338ca">🧱 建立雲端基準</button>
     <button class="btn btn-ghost" onclick="pullFromGas()" style="background:#0c1a2c;color:#93c5fd;border-color:#1d4ed8">⬇ 雲端拉取</button>
   </div>
 </div>
@@ -383,7 +384,12 @@ const SHIP_IDB='VRT_Shipping',SHIP_REC='shipping_records',SHIP_META='shipping_me
 
 function shipHash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(36)}
 function shipKey(r){return [r.etd,r.cust,r.po,r.style,r.color,r.size,r.item,r.erp].map(v=>String(v||'').trim().toUpperCase()).join('|')}
-function normalizeShipRows(rows){const m=new Map;for(const raw of rows||[]){if(!raw)continue;const r={...raw};r.id='shipping_'+shipHash(shipKey(r));r.orig=pn(r.orig);r.shipped=pn(r.shipped);r.open=pn(r.open);r.status=classify(r.orig,r.shipped,r.open,r.remark);m.set(r.id,r)}return[...m.values()]}
+function normalizeShipRows(rows){const m=new Map;for(const raw of rows||[]){if(!raw)continue;const r={...raw};delete r._smartBucket;r.id='shipping_'+shipHash(shipKey(r));r.orig=pn(r.orig);r.shipped=pn(r.shipped);r.open=pn(r.open);r.status=classify(r.orig,r.shipped,r.open,r.remark);m.set(r.id,r)}return[...m.values()]}
+function shippingSyncRows43(rows){
+  return (rows||[]).map(raw=>{const r={...raw},h=parseInt(shipHash(r.id||shipKey(r)),36)||0;r._smartBucket='shipping_'+String(Math.abs(h)%32).padStart(2,'0');return r});
+}
+const SHIPPING_SYNC_NET43={vrtTimeoutMs:90000,vrtRetryDelays:[5000,15000,45000],vrtOnRetry:(attempt,delay)=>{try{const b=document.getElementById('btnCloudSync');if(b)b.textContent='☁ 雲端忙碌，'+Math.round(delay/1000)+'s 後重試 '+attempt+'/3'}catch(_){}}};
+
 
 // ── 全量資料只存 IndexedDB ──
 async function shipSave(filename) {
@@ -407,7 +413,7 @@ async function shipRestore() {
     applyFilters();
     document.getElementById('uploadScreen').style.display='none';
     document.getElementById('dashboard').style.display='block';
-    document.getElementById('btnCloudSync').style.display='';
+    document.getElementById('btnCloudSync').style.display='';const bb43=document.getElementById('btnCloudBaseline43');if(bb43)bb43.style.display='';
     // 顯示還原提示
     const tip = document.getElementById('loadStatus');
     if (tip) { tip.textContent = `✅ 已自動還原上次資料（${age}天前）`; setTimeout(()=>tip.textContent='',4000); }
@@ -508,7 +514,7 @@ async function loadFile(file){
     applyFilters();
     document.getElementById('uploadScreen').style.display='none';
     document.getElementById('dashboard').style.display='block';
-    document.getElementById('btnCloudSync').style.display='';
+    document.getElementById('btnCloudSync').style.display='';const bb43=document.getElementById('btnCloudBaseline43');if(bb43)bb43.style.display='';
     document.getElementById('loadStatus').textContent='';
     await shipSave(file.name);
   }catch(e){
@@ -955,16 +961,21 @@ function exportExcel(){if(!FILTERED.length){alert('無資料可匯出');return}c
 // ══════════════════════════════════════════════
 // CLOUD SYNC
 // ══════════════════════════════════════════════
-async function syncToGas(){
+async function syncToGas(forceBaseline=false){
   const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){const u=prompt('請貼上 GAS /exec URL：');if(!u)return;VRTPlatform.setGasUrl(u.trim())}
   const url=VRTPlatform.getGasUrl();if(!ALL.length){alert('請先載入出貨排程檔案');return;}
-  const btn=document.getElementById('btnCloudSync'),orig=btn.textContent;btn.disabled=true;btn.textContent='☁ 智慧同步...';
+  const btn=document.getElementById('btnCloudSync'),orig=btn.textContent;btn.disabled=true;btn.textContent=forceBaseline?'☁ 建立基準...':'☁ 智慧同步...';
   try{
     const shipped=ALL.filter(r=>r.status==='shipped').length,outstanding=ALL.filter(r=>r.status==='outstanding').length,abnormal=ALL.filter(r=>r.status==='abnormal').length;
-    const res=await VRTSmartSync.push({url,tool:'shipping',records:ALL,meta:{summary:{total:ALL.length,shipped,outstanding,abnormal,shipRate:ALL.length?Math.round(shipped/ALL.length*100):0,fileDate:new Date().toISOString().slice(0,10)}},onStatus:m=>{btn.textContent='☁ '+m.slice(0,24)}});
-    if(res&&res.needsPull){btn.textContent='⚠ 先拉取';btn.style.background='#d97706';return;}
-    btn.textContent=`✓ 傳 ${res.uploaded||0} / 未變 ${res.unchanged||0}`;btn.style.background='#059669';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},3500);
-  }catch(e){btn.textContent='✗ '+e.message.slice(0,18);btn.style.background='#dc2626';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},4000)}
+    const res=await VRTSmartSync.push({url,tool:'shipping',records:shippingSyncRows43(ALL),meta:{summary:{total:ALL.length,shipped,outstanding,abnormal,shipRate:ALL.length?Math.round(shipped/ALL.length*100):0,fileDate:new Date().toISOString().slice(0,10)}},network:SHIPPING_SYNC_NET43,resumeBuckets:true,forceBaseline:!!forceBaseline,allowShrink:!!forceBaseline,onStatus:m=>{btn.textContent='☁ '+m.slice(0,34)}});
+    if(res&&res.needsPull){btn.textContent='⚠ 先拉取';btn.style.background='#d97706';return res;}
+    btn.textContent=`✓ 傳 ${res.uploaded||0} / 未變 ${res.unchanged||0}`;btn.style.background='#059669';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},3500);return res;
+  }catch(e){btn.textContent='✗ '+e.message.slice(0,28);btn.style.background='#dc2626';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},5000);throw e}
+}
+async function buildShippingBaseline43(){
+  if(!ALL.length){alert('請先載入出貨資料');return}
+  if(!confirm('建立雲端基準會把目前本機 '+ALL.length.toLocaleString()+' 筆出貨資料分批建立為雲端完整基準。之後只同步差異。確定繼續？'))return;
+  return await syncToGas(true);
 }
 
 // ── 從雲端拉取出貨資料 ──
@@ -972,7 +983,7 @@ async function pullFromGas(){
   const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){alert('請先設定 GAS URL');return;}
   const btn=document.getElementById('btnCloudSync'),orig=btn.textContent;btn.disabled=true;btn.textContent='⬇ 智慧拉取...';
   try{
-    const res=await VRTSmartSync.pull({url:gasUrl,tool:'shipping',localRecords:ALL,onStatus:m=>{btn.textContent='⬇ '+m.slice(0,24)},apply:async recs=>{ALL=normalizeShipRows(recs);await shipSave('Cloud');buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block';document.getElementById('btnCloudSync').style.display='';return ALL;}});
+    const res=await VRTSmartSync.pull({url:gasUrl,tool:'shipping',localRecords:shippingSyncRows43(ALL),network:SHIPPING_SYNC_NET43,resumeBuckets:true,onStatus:m=>{btn.textContent='⬇ '+m.slice(0,24)},apply:async recs=>{ALL=normalizeShipRows(recs);await shipSave('Cloud');buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block';document.getElementById('btnCloudSync').style.display='';const bb43=document.getElementById('btnCloudBaseline43');if(bb43)bb43.style.display='';return ALL;}});
     if(!res.ok){btn.textContent='雲端無資料';return;}document.getElementById('fileInfo').textContent=`雲端智慧同步 · ${ALL.length.toLocaleString()} 筆`;setStatus('已還原',true);btn.textContent=`✓ 下載 ${res.downloaded||0} / 未變 ${res.unchanged||0}`;btn.style.background='#059669';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},3500);
   }catch(e){btn.textContent='✗ '+e.message.slice(0,18);btn.style.background='#dc2626';setTimeout(()=>{btn.textContent=orig;btn.style.background='#1e2640';btn.disabled=false},4000)}
 }
