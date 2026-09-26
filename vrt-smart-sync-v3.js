@@ -148,11 +148,11 @@
   function status(dir,text,type){st[dir]=String(text||'');st[dir+'Type']=type||'busy';st[dir+'At']=now();persistUI();paint();try{document.querySelectorAll('button,[role="button"],.hicon,.cloud').forEach(b=>{const tx=(b.textContent||'')+' '+(b.id||'')+' '+(b.title||'');if(/☁|cloud|推送|拉取|上傳|下載/i.test(tx))b.title='上傳：'+st.push+'\n拉取：'+st.pull})}catch(_){} }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{ensureUI();paint()});else setTimeout(()=>{ensureUI();paint()},0);
 
-  async function jsonFetch(url,opt){const controller=typeof AbortController!=='undefined'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),45000):null;let r,text;try{r=await _nativeFetch(url,Object.assign({},opt||{},controller?{signal:controller.signal}:{}));text=await r.text()}finally{if(timer)clearTimeout(timer)}let j;try{j=JSON.parse(text)}catch(e){throw new Error('Cloud returned non-JSON: '+text.replace(/\s+/g,' ').slice(0,100))}if(!r.ok||(j&&j.ok===false))throw new Error((j&&j.error)||('HTTP '+r.status));return j}
-  async function manifest(url,tool){
+  async function jsonFetch(url,opt){opt=Object.assign({},opt||{});const timeoutMs=Number(opt.vrtTimeoutMs)||45000,retries=Array.isArray(opt.vrtRetryDelays)?opt.vrtRetryDelays:[],onRetry=opt.vrtOnRetry;delete opt.vrtTimeoutMs;delete opt.vrtRetryDelays;delete opt.vrtOnRetry;let attempt=0;for(;;){const controller=typeof AbortController!=='undefined'?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;let r,text;try{r=await _nativeFetch(url,Object.assign({},opt,controller?{signal:controller.signal}:{}));text=await r.text();let j;try{j=JSON.parse(text)}catch(e){const er=new Error(/^\s*</.test(text||'')?'Cloud returned HTML / service busy':'Cloud returned non-JSON');er.retryable=true;throw er}if(!r.ok||(j&&j.ok===false)){const er=new Error((j&&j.error)||('HTTP '+r.status));er.retryable=[429,502,503,504].includes(r.status);throw er}return j}catch(e){const abort=e&&((e.name==='AbortError')||/aborted|timeout/i.test(e.message||''));const retryable=abort||e.retryable||/HTTP (429|502|503|504)|service busy|non-JSON|HTML/i.test(e.message||'');if(retryable&&attempt<retries.length){const delay=Number(retries[attempt++])||0;try{onRetry&&onRetry(attempt,delay,e)}catch(_){};if(delay)await new Promise(r=>setTimeout(r,delay));continue}throw e}finally{if(timer)clearTimeout(timer)}}}
+  async function manifest(url,tool,net){
     let cached=null;try{cached=await cacheRead(url,tool,'_metadata')}catch(_){}
     const tag=cached&&cached.hash||'',q=url+(url.includes('?')?'&':'?')+'action=smartManifest&tool='+enc(tool)+(tag?'&metaHash='+enc(tag):'');
-    let j;try{j=await jsonFetch(q,{redirect:'follow'})}catch(getErr){try{j=await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartManifest',tool,metaHash:tag}),redirect:'follow'})}catch(postErr){throw new Error('Manifest check failed: '+postErr.message+' / '+getErr.message)}}
+    let j;try{j=await jsonFetch(q,Object.assign({redirect:'follow'},net||{}))}catch(getErr){try{j=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartManifest',tool,metaHash:tag}),redirect:'follow'},net||{}))}catch(postErr){throw new Error('Manifest check failed: '+postErr.message+' / '+getErr.message)}}
     const m=j.data||j;
     if(m.metaUnchanged){if(!cached||cached.hash!==m.metaHash||!Array.isArray(cached.records))throw new Error('本機設定快取不完整，請重試 Pull');m.meta=cached.records[0]||{}}
     if(m.exists&&!m.metaUnchanged){const hash=m.metaHash||await metaHash(m.meta||{});if(!cached||cached.hash!==hash)try{await cacheSave(url,tool,'_metadata',hash,[m.meta||{}])}catch(_){}}
@@ -193,7 +193,7 @@
     const url=String((g.VRTPlatform&&g.VRTPlatform.getGasUrl())||opts.url||'').trim(),tool=opts.tool,records=sortRecords(opts.records||[]),onStatus=opts.onStatus||(()=>{});if(!url)throw new Error('GAS URL missing');
     const localMeta=JSON.parse(JSON.stringify(opts.meta||{}));
     status('push','比對雲端差異…','busy');onStatus('智慧同步：比對雲端差異…');
-    const rm=await manifest(url,tool),local=await buildBuckets(records),localH=hashMap(local),localC=countMap(local),localMH=await metaHash(localMeta),remoteMeta=(rm&&rm.meta)||{},remoteMH=await metaHash(remoteMeta),last=await stateGet(tool),lastRemote=(last&&last.remoteHashes)||(last&&last.hashes)||{},lastLocal=(last&&last.localHashes)||(last&&last.hashes)||{},lastRMH=(last&&last.remoteMetaHash)||'',lastLMH=(last&&last.localMetaHash)||'',remoteH=(rm&&rm.hashes)||{},remoteC=(rm&&rm.counts)||{};
+    const net=opts.network||{},rm=await manifest(url,tool,net),local=await buildBuckets(records),localH=hashMap(local),localC=countMap(local),localMH=await metaHash(localMeta),remoteMeta=(rm&&rm.meta)||{},remoteMH=await metaHash(remoteMeta),last=await stateGet(tool),lastRemote=(last&&last.remoteHashes)||(last&&last.hashes)||{},lastLocal=(last&&last.localHashes)||(last&&last.hashes)||{},lastRMH=(last&&last.remoteMetaHash)||'',lastLMH=(last&&last.localMetaHash)||'',remoteH=(rm&&rm.hashes)||{},remoteC=(rm&&rm.counts)||{};
 
     if(Object.prototype.hasOwnProperty.call(opts,'expectedLegacyRevision')&&String(opts.expectedLegacyRevision||'')!==String(rm.revision||''))throw new Error('舊雲端已更新，請重新 Pull；本機資料保留');
     if(!rm.exists&&rm.legacy){const legacyCount=Number(rm.legacyCount)||0;if(!Object.prototype.hasOwnProperty.call(opts,'expectedLegacyRevision')){status('push','舊雲端尚未核對｜請先 Pull，本機資料保留','warn');return{ok:false,needsPull:true,legacyBaselineRequired:true,uploaded:0}}if(records.length<legacyCount&&Number(opts.legacyBaselineCount||0)<legacyCount){const msg=`停止：雲端 ${legacyCount} > 本機 ${records.length}，先拉取`;status('push',msg,'warn');throw new Error(`雲端舊資料較多（${legacyCount} > ${records.length}），請先拉取一次再推送`)}}
@@ -244,9 +244,9 @@
     }
 
     const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),contentHashes={};let sent=0;
-    for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];contentHashes[k]=await hashText(JSON.stringify(b.records));status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,contentHash:contentHashes[k],count:b.count,records:b.records}),redirect:'follow'});sent+=b.count}
+    for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];contentHashes[k]=await hashText(JSON.stringify(b.records));status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,contentHash:contentHashes[k],count:b.count,records:b.records}),redirect:'follow'},net));sent+=b.count}
     // PROD cloud transport only: do not create summary/approval reminder ledger entries.
-    const commit=await jsonFetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision:rm.revision||rm.updatedAt||'',contentHashes,allowShrink:!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'});
+    const commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision:rm.revision||rm.updatedAt||'',contentHashes,allowShrink:!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
     try{await cacheSave(url,tool,'_metadata',localMH,[localMeta])}catch(_){}
     await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
     const warnings=(commit.data&&commit.data.warnings)||[];
@@ -259,7 +259,7 @@
     const url=String((g.VRTPlatform&&g.VRTPlatform.getGasUrl())||opts.url||'').trim(),tool=opts.tool,localRecords=sortRecords(opts.localRecords||[]),onStatus=opts.onStatus||(()=>{});if(!url)throw new Error('GAS URL missing');
     const metaProvided=Object.prototype.hasOwnProperty.call(opts,'meta'),localMeta=metaProvided?(opts.meta||{}):{},mergeMeta=typeof opts.mergeMeta==='function'?opts.mergeMeta:mergeMetaDefault;
     status('pull','比對雲端差異…','busy');onStatus('智慧拉取：比對雲端差異…');
-    const rm=await manifest(url,tool);
+    const net=opts.network||{},rm=await manifest(url,tool,net);
     if(!rm.exists&&rm.legacy){
       // Never repeat the same legacy full download after a successful local baseline save.
       const lastLegacy=await stateGet(tool), lm=rm.legacyMeta||{}, legacyCount=Number(rm.legacyCount)||0;
@@ -330,7 +330,7 @@
     const ready=new Map();let cursor=0,done=0,fetchFailure=null;
     async function fetchBucket(k){let cached=null;try{cached=await cacheRead(url,tool,k)}catch(_){}
       if(cached&&cached.hash===remoteH[k])return{rows:cached.records,cached:true};
-      const bj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartBucket&tool='+enc(tool)+'&bucket='+enc(k)+'&hash='+enc(remoteH[k]),{redirect:'follow'}),rows=(bj.data&&bj.data.records)||bj.records;
+      const bj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartBucket&tool='+enc(tool)+'&bucket='+enc(k)+'&hash='+enc(remoteH[k]),Object.assign({redirect:'follow'},net)),rows=(bj.data&&bj.data.records)||bj.records;
       if(!Array.isArray(rows))throw new Error('Cloud bucket 格式不完整：'+k);
       const response=bj.data||bj;if(response.hash&&response.hash!==remoteH[k])throw new Error('雲端此區已更新，請重試 Pull：'+k);
       if(response.contentHash){const verified=await hashText(JSON.stringify(rows));if(verified!==response.contentHash&&verified!==response.contentHashFallback)throw new Error('Cloud bucket 內容核對失敗：'+k)}

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.3.0"></script>
-<script src="vrt-platform-v40.js?v=4.3.0"></script>
+<script src="vrt-deploy-config.js?v=4.4.0"></script>
+<script src="vrt-platform-v40.js?v=4.4.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT BOM Management AI · v2.3 SMV + ACC Cost Linked</title>
+<title>VRT BOM／Costing Sheet · v4.4</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -343,11 +343,11 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.3.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.3.0"></script>
-<script src="vrt-bom-cost-core-v39.js?v=4.3.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.3.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.3.0"></script>
+<script src="vrt-data-core-v39.js?v=4.4.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.4.0"></script>
+<script src="vrt-bom-cost-core-v39.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 </head>
 <body>
 
@@ -395,7 +395,7 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
 const I18N = {
   zh:{
     'app.title':'VRT BOM 智慧管理系統',
-    'tab.dashboard':'儀表板','tab.bom':'BOM','tab.costing':'成本／報價','tab.material':'物料','tab.analysis':'分析',
+    'tab.dashboard':'儀表板','tab.bom':'BOM','tab.costing':'Costing Sheet／報價','tab.material':'物料','tab.analysis':'分析',
     'tab.reports':'報表','tab.import':'匯入','tab.settings':'設定','tab.help':'說明',
     'rg.file':'檔案','rg.edit':'編輯','rg.version':'版本','rg.io':'匯入匯出','rg.tool':'工具',
     'rg.view':'檢視','rg.ai':'AI 智慧','rg.cloud':'雲端','rg.report':'報表','rg.sys':'系統',
@@ -417,14 +417,14 @@ const I18N = {
     'msg.saved':'已儲存','msg.deleted':'已刪除','msg.imported':'匯入完成','msg.exported':'已匯出','msg.nodata':'尚無資料',
     'dash.title':'營運儀表板','dash.sub':'BOM 全局即時概況',
     'boms.title':'BOM 管理','boms.sub':'款式物料表 · 版本控制','boms.new':'新增 BOM',
-    'cost.title':'成本與報價反推','cost.sub':'同一款式、同一份物料：修改後儲存至 BOM，成本與報價一起更新','cost.select':'選擇 BOM 款式','cost.sync':'載入／同步選定 BOM','cost.linked':'已連結成本版本','cost.unlinked':'尚未建立成本版本',
+    'cost.title':'Costing Sheet／成本與報價','cost.sub':'同一款式、同一份物料：修改後儲存至 BOM，成本與報價一起更新','cost.select':'選擇款式／方案','cost.sync':'載入／同步選定 BOM','cost.linked':'已連結成本版本','cost.unlinked':'尚未建立成本版本',
     'mat.title':'物料總覽','mat.sub':'跨款式物料明細 · 支援十萬筆','ana.title':'用料分析','ana.sub':'物料與客戶分佈',
     'rep.title':'報表中心','rep.sub':'產生並匯出各式報表','imp.title':'AI 智慧匯入','imp.sub':'PDF / Excel 自動辨識 BOM',
     'set.title':'系統設定','set.sub':'公司 · 通知 · 雲端','help.title':'使用說明','help.sub':'功能導覽與快速上手'
   },
   en:{
     'app.title':'VRT BOM Management AI',
-    'tab.dashboard':'Dashboard','tab.bom':'BOM','tab.costing':'Cost / Quote','tab.material':'Material','tab.analysis':'Analysis',
+    'tab.dashboard':'Dashboard','tab.bom':'BOM','tab.costing':'Costing Sheet / Quote','tab.material':'Material','tab.analysis':'Analysis',
     'tab.reports':'Reports','tab.import':'Import','tab.settings':'Settings','tab.help':'Help',
     'rg.file':'File','rg.edit':'Edit','rg.version':'Version','rg.io':'Import/Export','rg.tool':'Tools',
     'rg.view':'View','rg.ai':'AI','rg.cloud':'Cloud','rg.report':'Reports','rg.sys':'System',
@@ -446,14 +446,14 @@ const I18N = {
     'msg.saved':'Saved','msg.deleted':'Deleted','msg.imported':'Imported','msg.exported':'Exported','msg.nodata':'No data',
     'dash.title':'Operations Dashboard','dash.sub':'Real-time BOM overview',
     'boms.title':'BOM Management','boms.sub':'Style materials · version control','boms.new':'New BOM',
-    'cost.title':'Cost & Reverse Quote','cost.sub':'One BOM and material list. Save updates materials, cost and quotation together.','cost.select':'Select BOM style','cost.sync':'Load / sync selected BOM','cost.linked':'Linked costing version','cost.unlinked':'No costing version yet',
+    'cost.title':'Costing Sheet / Cost & Quote','cost.sub':'One BOM and material list. Save updates materials, cost and quotation together.','cost.select':'Select style / variant','cost.sync':'Load / sync selected BOM','cost.linked':'Linked costing version','cost.unlinked':'No costing version yet',
     'mat.title':'Material Overview','mat.sub':'Cross-style materials · 100k records','ana.title':'Usage Analysis','ana.sub':'Material & customer distribution',
     'rep.title':'Report Center','rep.sub':'Generate & export reports','imp.title':'AI Smart Import','imp.sub':'Auto-recognize BOM from PDF/Excel',
     'set.title':'Settings','set.sub':'Company · notify · cloud','help.title':'Help','help.sub':'Feature guide'
   },
   km:{
     'app.title':'ប្រព័ន្ធគ្រប់គ្រង BOM VRT',
-    'tab.dashboard':'ផ្ទាំង','tab.bom':'BOM','tab.costing':'ថ្លៃ / តម្លៃលក់','tab.material':'សម្ភារៈ','tab.analysis':'វិភាគ',
+    'tab.dashboard':'ផ្ទាំង','tab.bom':'BOM','tab.costing':'Costing Sheet / តម្លៃលក់','tab.material':'សម្ភារៈ','tab.analysis':'វិភាគ',
     'tab.reports':'របាយការណ៍','tab.import':'នាំចូល','tab.settings':'ការកំណត់','tab.help':'ជំនួយ',
     'rg.file':'ឯកសារ','rg.edit':'កែ','rg.version':'កំណែ','rg.io':'នាំចូល/ចេញ','rg.tool':'ឧបករណ៍',
     'rg.view':'មើល','rg.ai':'AI','rg.cloud':'ពពក','rg.report':'របាយការណ៍','rg.sys':'ប្រព័ន្ធ',
@@ -784,6 +784,7 @@ function normItem(raw,idx){
   const cat = raw.category||classifyItem(item);
   return {
     id: raw.id||uid('it'),
+    sourceRef:raw.sourceRef||'',sourceNo:raw.sourceNo||'',costRef:raw.costRef||'',sourceCostDozen:raw.sourceCostDozen??null,costSheetPriceMissing:!!raw.costSheetPriceMissing,costSheetQtyMissing:!!raw.costSheetQtyMissing,
     no: raw.no||idx+1,
     category: CATS.indexOf(cat)>=0?cat:classifyItem(item),
     itemName: item,
@@ -796,10 +797,10 @@ function normItem(raw,idx){
     width: raw.width||raw['Width/size']||raw.widthSize||'',
     supplier: raw.supplier||'',
     unit: raw.unit||raw.Unit||detectUnit(item+' '+(raw.desc||''))||(DB.settings.defaultUnit||'Yards'),
-    qtyPcs: parseNum(raw.qtyPcs!=null?raw.qtyPcs:(raw['Qty/Unit']!=null?raw['Qty/Unit']:raw.qtyUnit)),
-    qtyDozen: parseNum(raw.qtyDozen!=null?raw.qtyDozen:raw['Qty/Dozen']),
+    qtyPcs: raw.costSheetQtyMissing?null:parseNum(raw.qtyPcs!=null?raw.qtyPcs:(raw['Qty/Unit']!=null?raw['Qty/Unit']:raw.qtyUnit)),
+    qtyDozen: raw.costSheetQtyMissing?null:parseNum(raw.qtyDozen!=null?raw.qtyDozen:raw['Qty/Dozen']),
     wastePct: raw.wastePct!=null?parseNum(raw.wastePct):(DB.settings.defaultWaste||0),
-    unitCost: parseNum(raw.unitCost),
+    unitCost: raw.unitCost===null&&raw.costSheetPriceMissing?null:parseNum(raw.unitCost),
     remark: raw.remark||'',costActive:raw.costActive!==false,freightPct:parseNum(raw.freightPct),overrideCost:raw.overrideCost===''?null:raw.overrideCost??null
   };
 }
@@ -814,6 +815,7 @@ function coerceStyle(raw){
     season:raw.season||'', revision:raw.revision||'', department:raw.department||'', factory:raw.factory||'',
     baseSize:raw.baseSize||'', sizeRange:raw.sizeRange||'', sampleDate:raw.sampleDate||'', effectiveDate:raw.effectiveDate||'',
     status:raw.status||'Active', source:raw.source||'manual', dateModified:raw.dateModified||'', remark:raw.remark||'',
+    variantKey:raw.variantKey||'',variantLabel:raw.variantLabel||'',
     items, versions:raw.versions||[], costing:raw.costing||null, costingSummary:raw.costingSummary||null,
     latestProductionSMV:raw.latestProductionSMV??null, smvLink:raw.smvLink||null,
     createdAt:raw.createdAt||nowISO(), updatedAt:nowISO()
@@ -929,7 +931,7 @@ function renderDashboard(){
 
   const recent=DB.styles.slice().sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt)).slice(0,8);
   const rows=recent.map(s=>`<tr>
-    <td><span class="lk" onclick="openBomEditor('${s.id}')">${esc(s.styleNo)}</span></td>
+    <td><span class="lk" onclick="openBomEditor('${s.id}')">${esc(s.styleNo)}</span>${s.variantLabel?`<div class="muted">${esc(s.variantLabel)}</div>`:""}</td>
     <td>${esc(custName(s.customerCode))}</td>
     <td class="muted">${esc(s.styleName||s.description||'')}</td>
     <td class="center">${(s.items||[]).length}</td>
@@ -975,7 +977,7 @@ function renderBoms(){
   if(FILTER.cust) list=list.filter(s=>s.customerCode===FILTER.cust);
   if(FILTER.status) list=list.filter(s=>s.status===FILTER.status);
   if(FILTER.q){ const q=FILTER.q.toLowerCase();
-    list=list.filter(s=>(s.styleNo+' '+s.styleName+' '+s.description+' '+s.customerCode).toLowerCase().includes(q)
+    list=list.filter(s=>(s.styleNo+' '+(s.variantLabel||'')+' '+s.styleName+' '+s.description+' '+s.customerCode).toLowerCase().includes(q)
       || (s.items||[]).some(i=>(i.itemName+' '+i.description).toLowerCase().includes(q))); }
   list.sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
 
@@ -984,7 +986,7 @@ function renderBoms(){
     const tk=(s.items||[]).filter(i=>i.category==='Trim').length;
     return `<tr class="${SELECTED_ID===s.id?'':''}" style="${SELECTED_ID===s.id?'background:var(--brand-soft)':''}" onclick="selRow('${s.id}')">
       <td onclick="event.stopPropagation()"><input type="radio" name="bomsel" ${SELECTED_ID===s.id?'checked':''} onclick="selRow('${s.id}')"></td>
-      <td><span class="lk" onclick="event.stopPropagation();openBomEditor('${s.id}')">${esc(s.styleNo)}</span>
+      <td><span class="lk" onclick="event.stopPropagation();openBomEditor('${s.id}')">${esc(s.styleNo)}</span>${s.variantLabel?`<div class="muted">${esc(s.variantLabel)}</div>`:""}
         ${s.source==='pdf'?'<i class="bi bi-filetype-pdf" style="color:var(--red);margin-left:5px" title="PDF 匯入"></i>':''}</td>
       <td class="muted">${esc(s.styleName||'')}</td>
       <td>${esc(custName(s.customerCode))}</td>
@@ -1105,7 +1107,7 @@ function drawItemRows(){
   </tr>`).join('');
   const c=document.getElementById('itemCount'); if(c)c.textContent=EDIT_ITEMS.length+' 項';
 }
-function updItem(i,k,v){ if(!EDIT_ITEMS[i])return; EDIT_ITEMS[i][k]=(k==='qtyPcs'||k==='qtyDozen'||k==='wastePct')?parseNum(v):v; }
+function updItem(i,k,v){if(!EDIT_ITEMS[i])return;EDIT_ITEMS[i][k]=['qtyPcs','qtyDozen','wastePct'].includes(k)?parseNum(v):v;if(k==='qtyPcs'){EDIT_ITEMS[i].qtyDozen=EDIT_ITEMS[i].qtyPcs*12;EDIT_ITEMS[i].costSheetQtyMissing=false}if(k==='qtyDozen'){EDIT_ITEMS[i].qtyPcs=EDIT_ITEMS[i].qtyDozen/12;EDIT_ITEMS[i].costSheetQtyMissing=false}}
 function syncDozen(i){ const it=EDIT_ITEMS[i]; if(it&&it.qtyPcs&&!it.qtyDozen){ it.qtyDozen=+(it.qtyPcs*12).toFixed(2);
   const row=document.getElementById('itemBody').children[i]; if(row) row.querySelectorAll('input.num')[1].value=it.qtyDozen; } }
 function autoCat(i){ const it=EDIT_ITEMS[i]; if(!it)return; const c=classifyItem(it.itemName);
@@ -1135,7 +1137,7 @@ function saveBom(){
   if(EDIT_ID){ st=styleById(EDIT_ID);
     st.versions=st.versions||[];
     st.versions.push({ver:st.versions.length+1, ts:nowISO(), editor:DB.settings.dept||'user',
-      comment:'更新', items:(st.items||[]).length, snapshot:JSON.stringify(st.items)});
+      comment:'更新', items:(st.items||[]).length, snapshot:JSON.stringify(st.items),costingSnapshot:JSON.parse(JSON.stringify(st.costing||null)),hasCostingSnapshot:true});
     Object.assign(st,f); st.updatedAt=nowISO();
     logAct('更新 BOM',st.styleNo);
   }else{ isNew=true;
@@ -1396,6 +1398,7 @@ function selectedCostingStyle(){
 function costingRecordSummary(rec){return VRTBomCost39.calculate(rec)}
 function costingStatusMarkup(s){
   const q=s&&costingRecordSummary(s.costing?{...s.costing,bomLines:VRTBomCost39.lines(s)}:null);
+  if(q&&!q.complete)return `<span class="badge b-pending">缺少單價／成本未完整</span><span>Cost ${fmt(q.unitCost,4)}（已知部分）</span>`;
   if(!q)return `<span class="badge b-pending">${t('cost.unlinked')}</span>`;
   return `<span class="badge b-active">${t('cost.linked')}</span><span>Cost <b>USD ${fmt(q.unitCost,4)}</b></span><span>GM <b>${fmt((q.gm||0)*100,2)}%</b></span><span>${esc(localStamp(q.updatedAt))}</span>`;
 }
@@ -1412,7 +1415,7 @@ function renderCosting(){
   if(!DB.styles.length){ m.innerHTML=`${head}<div class="empty">${t('msg.nodata')}</div>`; return; }
   const s=selectedCostingStyle();
   const opts=DB.styles.slice().sort((a,b)=>(a.customerCode+' '+a.styleNo).localeCompare(b.customerCode+' '+b.styleNo))
-    .map(x=>`<option value="${esc(x.id)}" ${x.id===COSTING_STYLE_ID?'selected':''}>${esc(x.customerCode)} · ${esc(x.styleNo)}${x.costing?' · ✓':''}</option>`).join('');
+    .map(x=>`<option value="${esc(x.id)}" ${x.id===COSTING_STYLE_ID?'selected':''}>${esc(x.customerCode)} · ${esc(x.styleNo)}${x.variantLabel?' · '+esc(x.variantLabel):''}${x.costing?' · ✓':''}</option>`).join('');
   m.innerHTML=`${head}
     <div class="costing-head">
       <label class="muted" for="costingStyleSelect">${t('cost.select')}</label>
@@ -1422,9 +1425,9 @@ function renderCosting(){
     </div>
     <div class="costing-host"><iframe class="costing-frame" id="costingFrame" title="VRT BOM Costing"></iframe></div>`;
   COSTING_FRAME_READY=false; COSTING_PENDING_MODE='load';
-  requestAnimationFrame(()=>{ const fr=document.getElementById('costingFrame'); if(fr)fr.src='vrt_bom_costing_view_v39.html'; });
+  requestAnimationFrame(()=>{ const fr=document.getElementById('costingFrame'); if(fr)fr.src='vrt_bom_costing_view_v39.html?v=4.4.0'; });
 }
-async function syncOfficialSmv39(){try{const rows=await VRTDomain39.read('VRT_SMV_Manager_v52','smv_snapshots'),index=VRTData39.officialRows(rows||[],new Date().toISOString().slice(0,10)).filter(r=>VRTData39.norm(r.section)!=='CUTTING');let count=0;const s=selectedCostingStyle();if(!s)return;const candidates=index.filter(r=>VRTData39.norm(r.style)===VRTData39.norm(s.styleNo)),exact=candidates.filter(r=>VRTData39.norm(r.cust)===VRTData39.norm(s.customerCode));const r=VRTData39.resolveOfficial(index,s.styleNo,s.customerCode);if(!r)return toast('未找到唯一核可 SMV，請至 IE／SMV 檢查。','warn');s.latestProductionSMV=r.curSMV;s.smvLink={productionSMV:r.curSMV,smvDate:r.date,section:r.section,source:r.source};if(s.costing?.profile)s.costing.profile.productionSMV=r.curSMV;s.updatedAt=nowISO();await persist();sendCostingContext('load');toast('Production SMV 已更新為 '+r.curSMV+'；報價工時依所選模式。','good')}catch(e){toast(e.message,'warn')}}
+async function syncOfficialSmv39(){try{const rows=await VRTDomain39.read('VRT_SMV_Manager_v52','smv_snapshots'),index=VRTData39.officialRows(rows||[],new Date().toISOString().slice(0,10)).filter(r=>VRTData39.norm(r.section)!=='CUTTING');let count=0;const s=selectedCostingStyle();if(!s)return;if(s.costing?.sourceSheet?.smvMatchNeedsReview&&s.styleNo===s.costing.sourceSheet.sourceStyleNo)return toast('請先確認長／短袖方案的款號，再連結核可 SMV。','warn');const candidates=index.filter(r=>VRTData39.norm(r.style)===VRTData39.norm(s.styleNo)),exact=candidates.filter(r=>VRTData39.norm(r.cust)===VRTData39.norm(s.customerCode));const r=VRTData39.resolveOfficial(index,s.styleNo,s.customerCode);if(!r)return toast('未找到唯一核可 SMV，請至 IE／SMV 檢查。','warn');s.latestProductionSMV=r.curSMV;s.smvLink={productionSMV:r.curSMV,smvDate:r.date,section:r.section,source:r.source};if(s.costing?.profile)s.costing.profile.productionSMV=r.curSMV;s.updatedAt=nowISO();await persist();sendCostingContext('load');toast('Production SMV 已更新為 '+r.curSMV+'；報價工時依所選模式。','good')}catch(e){toast(e.message,'warn')}}
 function reloadCostingFrame(){ if(CURRENT==='costing')renderCosting(); }
 async function sendCostingContext(mode){
   const s=selectedCostingStyle(), fr=document.getElementById('costingFrame'); COSTING_PENDING_MODE=mode||'load';
@@ -1432,7 +1435,7 @@ async function sendCostingContext(mode){
   if(!fr||!fr.contentWindow||!COSTING_FRAME_READY)return;
   const bomLines=VRTBomCost39.lines(s);
   if(!ACC_FLOW_COST_CACHE.length)ACC_FLOW_COST_CACHE=await loadAccFlowLocal();
-  fr.contentWindow.postMessage({type:'BOM_MANAGEMENT_COSTING_CONTEXT',mode:COSTING_PENDING_MODE,styleId:s.id,record:s.costing||null,
+  fr.contentWindow.postMessage({type:'BOM_MANAGEMENT_COSTING_CONTEXT',mode:COSTING_PENDING_MODE,styleId:s.id,record:s.costing||null,bomStyle:s,
     styleNo:s.styleNo,customer:s.customerCode,category:s.styleName||s.department||s.description||'',revision:s.revision||'',effectiveDate:s.effectiveDate||'',
     productionSMV:(s.smvLink?.productionSMV??s.latestProductionSMV??s.costing?.profile?.productionSMV),smvNote:s.smvLink?`Official Production SMV ${s.smvLink.productionSMV} · ${s.smvLink.smvDate||''} · ${s.smvLink.section||''} · ${s.smvLink.source||'SMV Manager'}`:(s.costing?.profile?.smvNote||''),
     bomLines,lang:LANG,cloudEndpoint:DB.settings.cloudProxy||'',sourceUpdatedAt:s.updatedAt||'',accFactoryCosts:ACC_FLOW_COST_CACHE,accFactoryCostSource:ACC_FLOW_COST_SOURCE},'*');
@@ -1680,7 +1683,7 @@ function removeQueue(i){ PDF_QUEUE.splice(i,1); renderImport(); }
 function pickFile(accept,cb,multiple){ const inp=document.createElement('input'); inp.type='file'; inp.accept=accept;
   if(multiple)inp.multiple=true; inp.onchange=()=>cb(Array.from(inp.files)); inp.click(); }
 function pickPDF(){ pickFile('.pdf,application/pdf',handlePdfFiles,true); }
-function pickExcel(){ pickFile('.xlsx,.xls,.csv',files=>importExcelFiles(files)); }
+function pickExcel(){ pickFile('.xlsx,.xls,.csv',files=>importExcelFiles(files),true); }
 function pickJSON(){ pickFile('.json',files=>files[0]&&importJSONFile(files[0])); }
 function pickBackup(){ pickFile('.json',files=>files[0]&&restoreBackup(files[0])); }
 function onPdfDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('drag');
@@ -1921,7 +1924,7 @@ function importJSONFile(file){ const fr=new FileReader();
   }catch(e){ toast('JSON 格式錯誤','bad'); } }; fr.readAsText(file); }
 
 /* ---------- Export ---------- */
-function styleToAOA(s){ const aoa=[['Customer',s.customerCode],['Style No',s.styleNo],['Style Name',s.styleName||''],
+function styleToAOA(s){ const aoa=[['Customer',s.customerCode],['Style No',s.styleNo],['Variant Key',s.variantKey||''],['Variant Label',s.variantLabel||''],['Style Name',s.styleName||''],
   ['Revision',s.revision||''],['Size Range',s.sizeRange||''],['Base Size',s.baseSize||''],[],
   ['Nº','Category','Item','Description','Color','Width','Qty/PCS','Qty/Dozen','Unit','Waste%']];
   (s.items||[]).forEach((i,n)=>aoa.push([n+1,i.category,i.itemName,i.description,i.color,i.width,i.qtyPcs,i.qtyDozen,i.unit,i.wastePct]));
@@ -2031,7 +2034,7 @@ async function gasPost(url,payload){ const body=new URLSearchParams();
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body.toString()});
   const txt=await r.text(); let d; try{ d=JSON.parse(txt); }catch(e){ throw new Error('GAS 回傳非 JSON：'+String(txt||'').replace(/\s+/g,' ').slice(0,160)); }
   if(!r.ok||(d&&d.ok===false))throw new Error((d&&d.error)||('HTTP '+r.status)); return d; }
-function dedupKey(s){ return (s.customerCode||'')+'|'+(s.styleNo||''); }
+function dedupKey(s){ return (s.customerCode||'')+'|'+(s.styleNo||'')+'|'+(s.variantKey||''); }
 async function cloudPush(){ const url=DB.settings.cloudProxy; if(!url){ toast('請先設定 Cloud URL','warn'); go('settings'); return; }
   setCloudTag('dirty'); toast('智慧上傳：比對變更…',''); try{
     const res=await VRTSmartSync.push({url,tool:'bom',records:DB.styles,meta:{customers:DB.customers},onStatus:m=>toast(m,'')});
@@ -2219,8 +2222,8 @@ const SMV_HANDOFF_KEY='vrt_smv_bom_handoff_v1';
 function smvNorm(v){return String(v==null?'':v).replace(/\s+/g,' ').trim().toUpperCase();}
 async function applySmvHandoff(){
   let h=null;try{h=JSON.parse(localStorage.getItem(SMV_HANDOFF_KEY)||'null')}catch(_){h=null}if(!h||!h.styleNo)return false;
-  let s=(h.bomStyleId&&styleById(h.bomStyleId))||DB.styles.find(x=>smvNorm(x.styleNo)===smvNorm(h.styleNo));
-  if(!s)return false;
+  const matches=DB.styles.filter(x=>smvNorm(x.styleNo)===smvNorm(h.styleNo)&&(!h.customer||smvNorm(x.customerCode)===smvNorm(h.customer)));let s=(h.bomStyleId&&matches.find(x=>x.id===h.bomStyleId))||(matches.length===1?matches[0]:null);
+  if(!s)return false;if(s.costing?.sourceSheet?.smvMatchNeedsReview&&s.styleNo===s.costing.sourceSheet.sourceStyleNo)return false;
   const smv=Number(h.productionSMV);if(Number.isFinite(smv)){s.latestProductionSMV=smv;s.smvLink={productionSMV:smv,smvDate:h.smvDate||'',section:h.section||'',source:h.source||'SMV Manager',updatedAt:h.ts||nowISO()};if(s.costing?.profile){s.costing.profile.productionSMV=smv;s.costing.profile.smvNote=`Official Production SMV ${smv} · ${h.smvDate||''} · ${h.section||''} · ${h.source||'SMV Manager'}`;s.costing.updatedAt=nowISO();s.costingSummary=costingRecordSummary(s.costing)}}
   s.updatedAt=nowISO();COSTING_STYLE_ID=s.id;await persist();try{localStorage.removeItem(SMV_HANDOFF_KEY)}catch(_){}return true;
 }
@@ -2249,6 +2252,8 @@ if(document.readyState!=='loading')init();
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'bom',lockKey:'bom',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!((DB.settings&&DB.settings.cloudProxy)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto bom]',e)}},0)},{once:true});
 </script>
-<script src="vrt-bom-import-v39.js?v=4.3.0"></script>
+<script src="vrt-cost-sheet-v44.js?v=4.4.0"></script>
+<script src="vrt-bom-import-v39.js?v=4.4.0"></script>
+<script src="vrt-bom-costing-ui-v44.js?v=4.4.0"></script>
 </body>
 </html>

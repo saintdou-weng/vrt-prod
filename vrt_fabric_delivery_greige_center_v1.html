@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<!-- VRT Fabric Delivery & Greige Inventory Summary Center v1
+<!-- VRT Fabric Delivery & Greige Inventory Summary Center v1.1
      VRT 布料交期與胚布庫存分析中心
      家族一致風格：底 #eef1f7 / header #1e2640→#2d3658 / amber #f59e0b
      慣例：GAS POST text/plain;charset=utf-8｜日期一律本地時區 getters｜Telegram parse_mode HTML + escapeHtml｜SheetJS cellDates:false,raw:true｜onclick 全部 window-scoped -->
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.3.0"></script>
-<script src="vrt-platform-v40.js?v=4.3.0"></script>
+<script src="vrt-deploy-config.js?v=4.4.1"></script>
+<script src="vrt-platform-v40.js?v=4.4.1"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Fabric Delivery & Greige Inventory Summary Center</title>
@@ -155,8 +155,8 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.3.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.3.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.4.1"></script>
+<script src="vrt-auto-sync-v3.js?v=4.4.1"></script>
 </head>
 <body>
 
@@ -447,7 +447,7 @@ const SEED_ALIASES=[
 /* ================= 狀態 ================= */
 const LS_KEY="vrt_fabric_center_v1";
 const FAB_IDB="VRT_FabricDelivery",FAB_STORE="app_state";
-let S={orders:[],tachiang:[],outsource:[],greige:[],aliases:[],versions:[],cfg:{gasEndpoint:"",gasToken:"",tgToken:"",tgChat:"",year:2026,lang:"zh"}};
+let S={orders:[],tachiang:[],outsource:[],greige:[],aliases:[],versions:[],tombstones:[],cfg:{gasEndpoint:"",gasToken:"",tgToken:"",tgChat:"",year:2026,lang:"zh"}};
 let FAB=[],SHIP=[],curTab="dash",charts={},sortState={},previewData=null,editCtx=null;
 
 /* ================= 小工具 ================= */
@@ -949,13 +949,15 @@ function editSave(){
   const arr=type==="orders"?S.orders:S.greige;
   let row=id?arr.find(r=>r.id===id):null;
   if(!row){row={id:uid(),sourceFile:"manual",sourceDate:nowStr(),newColor:false};arr.push(row)}
-  fields.forEach(f=>{const v=$("ef_"+f[0]).value;row[f[0]]=f[2]?(v===""?null:+v):v.trim()});
+  fields.forEach(f=>{const v=$("ef_"+f[0]).value;row[f[0]]=f[2]?(v===""?null:+v):v.trim()});row.updatedAt=new Date().toISOString();
   saveLocal();closeModal("mEdit");toast(t("saved"));renderTab();
 }
 function editDelete(){
-  const type=editCtx.type,id=editCtx.id;
+  const type=editCtx.type,id=editCtx.id;if(!id||!confirm('確定刪除所選這 1 筆？刪除會同步到雲端。'))return;
+  const arr=type==="orders"?S.orders:S.greige,row=arr.find(r=>r.id===id),ts=new Date().toISOString();
+  S.tombstones=S.tombstones||[];const prior=S.tombstones.find(x=>x.id===id);if(!prior||String(prior.deletedAt||'')<ts)S.tombstones=S.tombstones.filter(x=>x.id!==id).concat([{id,deletedAt:ts,updatedAt:ts,deletedBy:(S.cfg&&S.cfg.user)||'local-user',syncType:'tombstone',entityType:type}]);
   if(type==="orders")S.orders=S.orders.filter(r=>r.id!==id);else S.greige=S.greige.filter(r=>r.id!==id);
-  saveLocal();closeModal("mEdit");renderTab();
+  saveLocal();window.VRTProdAutoSync?.markDirty('fabricdelivery','delete',{},250);closeModal("mEdit");renderTab();
 }
 window.editRow=editRow;window.editSave=editSave;window.editDelete=editDelete;
 
@@ -1133,7 +1135,7 @@ function confirmMerge(){
   snapshot("before import "+previewData.type); /* 先留舊版快照 */
   const mode=$("mergeMode").value,type=previewData.type,rows=previewData.rows;
   const target={orders:"orders",tachiang:"tachiang",outsource:"outsource",greige:"greige"}[type];
-  if(mode==="replace")S[target]=rows;else S[target]=S[target].concat(rows);
+  if(mode==="replace"){const ts=new Date().toISOString(),incoming=new Set(rows.map(r=>r.id));S.tombstones=S.tombstones||[];for(const old of (S[target]||[]))if(old.id&&!incoming.has(old.id))S.tombstones=S.tombstones.filter(x=>x.id!==old.id).concat([{id:old.id,deletedAt:ts,updatedAt:ts,deletedBy:(S.cfg&&S.cfg.user)||'local-user',syncType:'tombstone',entityType:target}]);S[target]=rows.map(r=>({...r,updatedAt:r.updatedAt||ts}))}else S[target]=S[target].concat(rows.map(r=>({...r,updatedAt:r.updatedAt||new Date().toISOString()})));
   saveLocal();
   snapshot("import "+type+" ("+rows.length+" rows, "+mode+")");
   closeModal("mImport");toast("已合併 "+rows.length+" 筆 → "+type);
@@ -1240,21 +1242,20 @@ function fdCloudRecords(){
   (S.greige||[]).forEach(x=>rows.push({...x,syncType:'greige'}));
   (S.tachiang||[]).forEach(x=>rows.push({...x,syncType:'tachiang'}));
   (S.outsource||[]).forEach(x=>rows.push({...x,syncType:'outsource'}));
+  (S.tombstones||[]).forEach(x=>rows.push({...x,syncType:'tombstone',deleted:true}));
   return rows;
 }
 function fdApplyRecords(rows,meta){
-  S.orders=(rows||[]).filter(x=>x.syncType==='order').map(({syncType,...x})=>x);
-  S.greige=(rows||[]).filter(x=>x.syncType==='greige').map(({syncType,...x})=>x);
-  S.tachiang=(rows||[]).filter(x=>x.syncType==='tachiang').map(({syncType,...x})=>x);
-  S.outsource=(rows||[]).filter(x=>x.syncType==='outsource').map(({syncType,...x})=>x);
-  if(meta&&meta.aliases)S.aliases=meta.aliases;
-  if(meta&&Array.isArray(meta.versionHistory))S.versions=meta.versionHistory;
+  const incoming=rows||[],remoteT=incoming.filter(x=>x.syncType==='tombstone'||x.deleted),localT=S.tombstones||[],tmap=new Map();for(const t of localT.concat(remoteT)){const old=tmap.get(t.id);if(!old||String(t.deletedAt||t.updatedAt||'')>String(old.deletedAt||old.updatedAt||''))tmap.set(t.id,t)}S.tombstones=[...tmap.values()];
+  const dead=new Map(S.tombstones.map(t=>[t.id,String(t.deletedAt||t.updatedAt||'')]));const choose=(type,local)=>{const map=new Map((local||[]).map(x=>[x.id,x]));for(const x of incoming.filter(r=>r.syncType===type)){const d=dead.get(x.id);if(d&&d>=String(x.updatedAt||'')){map.delete(x.id);continue}const old=map.get(x.id);if(!old||String(x.updatedAt||'')>=String(old.updatedAt||''))map.set(x.id,x)}for(const [id,d] of dead)if(map.has(id)&&d>=String(map.get(id).updatedAt||''))map.delete(id);return [...map.values()].map(({syncType,...x})=>x)};
+  S.orders=choose('order',S.orders);S.greige=choose('greige',S.greige);S.tachiang=choose('tachiang',S.tachiang);S.outsource=choose('outsource',S.outsource);
+  if(meta&&meta.aliases)S.aliases=meta.aliases;if(meta&&Array.isArray(meta.versionHistory))S.versions=meta.versionHistory;
 }
 async function gasUpload(silent){
   if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(VRTPlatform.getGasUrl()||'').trim();
   if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
   try{calcAll();const rows=fdCloudRecords(),meta={aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}};const res=await VRTSmartSync.push({url:S.cfg.gasEndpoint,tool:'fabricdelivery',records:rows,meta,onStatus:m=>toast('☁↑ '+m)});if(res&&res.needsPull){if(!silent)toast('⚠ 雲端有新資料，請先拉取差異');return false}if(!silent)toast(res.noChange?'☁↑ 已是最新':'☁↑ 智慧上傳完成 · '+(res.uploaded||0)+' 筆');return res}
-  catch(e){if(!silent)toast(t('gasFail')+'：'+e.message);return false}
+  catch(e){window.__fabricDeliveryLastSyncError=e.message||String(e);const pending=(S.tombstones||[]).length;if(!silent)toast('☁↑ 雲端待重試 · '+window.__fabricDeliveryLastSyncError+(pending?' · 待上傳 '+pending:''));try{VRTSmartSync.status('push','雲端待重試 · '+window.__fabricDeliveryLastSyncError+(pending?' · 待上傳 '+pending:''),'err')}catch(_){}return false}
 }
 window.gasUpload=gasUpload;
 async function gasDownload(silent){
