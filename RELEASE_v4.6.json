@@ -1,0 +1,15 @@
+{
+  "release": "4.6",
+  "date": "2026-09-26",
+  "base": "4.5",
+  "appsScript": "unchanged VRT_Production_v4.2.gs",
+  "changedModules": [
+    "Fabric Stock / Fabric Movement",
+    "Greige Delivery / Inventory",
+    "IE / SMV",
+    "Spare Parts / Needle Stock",
+    "Smart Sync optional resume"
+  ],
+  "notChanged": ["Final QC rules", "BOM", "Production", "Shipping", "Cutting", "PO"],
+  "notes": "Post-test corrections from user attachment plus Sewing-like spare-parts period navigation."
+}

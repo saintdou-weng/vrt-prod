@@ -644,9 +644,34 @@ function idbPut(st,r){return new Promise((res,j)=>{const q=st.put(r);q.onsuccess
 async function loadCut(){try{if(!_idb)await openIDB();const tx=_idb.transaction(CUT_ST,"readonly");CUT=await idbAll(tx.objectStore(CUT_ST));}catch(e){CUT=[];}}
 async function saveCut(){
   if(!_idb)await openIDB();
-  const tx=_idb.transaction(CUT_ST,"readwrite");const st=tx.objectStore(CUT_ST);
-  await idbClr(st);await Promise.all(CUT.map(r=>idbPut(st,r)));
-  await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j;});
+  // Keep all requests inside one live IDB transaction. Awaiting clear() before issuing
+  // thousands of put() calls can let Chromium auto-close the transaction.
+  return await new Promise((resolve,reject)=>{
+    const tx=_idb.transaction(CUT_ST,"readwrite"),st=tx.objectStore(CUT_ST);
+    let settled=false;const timer=setTimeout(()=>{try{tx.abort()}catch(_){}if(!settled){settled=true;reject(new Error('本機資料庫寫入逾時'))}},60000);
+    st.clear();for(const r0 of CUT){const r={...r0,id:r0.id||uid()};st.put(r)}
+    tx.oncomplete=()=>{clearTimeout(timer);if(!settled){settled=true;resolve(true)}};
+    tx.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;reject(tx.error||new Error('IndexedDB 寫入失敗'))}};
+    tx.onabort=()=>{clearTimeout(timer);if(!settled){settled=true;reject(tx.error||new Error('IndexedDB 寫入已中止'))}};
+  });
+}
+async function saveCutImport49(importDates,newRows,onProgress){
+  if(!_idb)await openIDB();
+  return await new Promise((resolve,reject)=>{
+    const tx=_idb.transaction(CUT_ST,"readwrite"),st=tx.objectStore(CUT_ST);let deleted=0,inserted=0,settled=false;
+    const timer=setTimeout(()=>{try{tx.abort()}catch(_){}if(!settled){settled=true;reject(new Error('匯入本機資料庫逾時（60 秒）'))}},60000);
+    const req=st.openCursor();
+    req.onsuccess=e=>{
+      const cur=e.target.result;
+      if(cur){if(importDates.has(cur.value&&cur.value.date)){cur.delete();deleted++;if(onProgress&&deleted%250===0)onProgress(`清理同日期舊資料 ${deleted} 筆…`)}cur.continue();return}
+      if(onProgress)onProgress(`寫入本次 ${newRows.length.toLocaleString()} 筆…`);
+      for(const r0 of newRows){st.put({...r0,id:r0.id||uid()});inserted++}
+    };
+    req.onerror=()=>{try{tx.abort()}catch(_){}};
+    tx.oncomplete=()=>{clearTimeout(timer);if(!settled){settled=true;resolve({deleted,inserted})}};
+    tx.onerror=()=>{clearTimeout(timer);if(!settled){settled=true;reject(tx.error||req.error||new Error('IndexedDB 匯入失敗'))}};
+    tx.onabort=()=>{clearTimeout(timer);if(!settled){settled=true;reject(tx.error||req.error||new Error('IndexedDB 匯入已中止'))}};
+  });
 }
 async function loadSew(opts){
   // opts.cloudOnly=true  → 跳過 1/2/session，強制從雲端拉取
@@ -1798,22 +1823,24 @@ async function doImport(){
 
 async function confirmImport(){
   if(!pendingRecs.length)return;
-  const msgEl=document.getElementById("importMsg");
-  msgEl.textContent="存入中...";msgEl.style.color="#6b7a9e";
+  const msgEl=document.getElementById("importMsg"),before=CUT.slice();
+  msgEl.textContent="存入中：準備本機增量寫入…";msgEl.style.color="#6b7a9e";
   try{
-    const importDates=new Set(pendingRecs.map(r=>r.date));
-    CUT=CUT.filter(r=>!importDates.has(r.date));
-    const map=new Map();
-    pendingRecs.forEach(r=>map.set(`${r.date}|${r.section}|${r.lineNo}|${r.styleNo}`,r));
-    CUT=[...CUT,...map.values()];
-    CUT.sort((a,b)=>b.date.localeCompare(a.date));
-    await saveCut();updateHdr();renderDBCard();
+    // Local import is always allowed. The "cloud has more than local" protection applies only
+    // to Cloud Push and must never block repairing missing local dates such as 9/14, 9/21, 9/23.
+    const importDates=new Set(pendingRecs.map(r=>r.date)),map=new Map();
+    pendingRecs.forEach(r=>map.set(`${r.date}|${r.section}|${r.lineNo}|${r.styleNo}`,{...r,id:r.id||uid()}));
+    const newRows=[...map.values()],next=before.filter(r=>!importDates.has(r.date)).concat(newRows);
+    next.sort((a,b)=>b.date.localeCompare(a.date));
+    const wr=await saveCutImport49(importDates,newRows,t=>{msgEl.textContent='存入中：'+t});
+    CUT=next;updateHdr();renderDBCard();
     pendingFiles=[];pendingRecs=[];renderFileList();
     document.getElementById("previewArea").style.display="none";
-    msgEl.textContent=`✓ 已儲存 ${CUT.length} 筆記錄`;msgEl.style.color="#059669";
+    msgEl.textContent=`✓ 已存入 ${wr.inserted.toLocaleString()} 筆（取代同日期舊資料 ${wr.deleted.toLocaleString()} 筆）｜本機共 ${CUT.length.toLocaleString()} 筆`;msgEl.style.color="#059669";
     if(typeof _afterConfirmCb==="function"){ _afterConfirmCb(); _afterConfirmCb=null; }
   }catch(err){
-    msgEl.textContent=`❌ 存入失敗：${err.message}（請重新整理頁面後再試）`;msgEl.style.color="#dc2626";
+    CUT=before;
+    msgEl.textContent=`❌ 存入失敗：${err.message}（本機原資料未變更）`;msgEl.style.color="#dc2626";
     console.error("confirmImport error:",err);
   }
 }

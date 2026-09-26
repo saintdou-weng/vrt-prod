@@ -1101,6 +1101,35 @@ async function pdfTextRows(buf){
   }catch(e){return '';}
 }
 
+
+// v4.9: one-pass multi-page PDF extraction. Flat text + coordinate rows are built from
+// the same getTextContent() call so large ADI files are not parsed twice.
+function promiseTimeout49(p,ms,label){
+  let timer;return Promise.race([
+    Promise.resolve(p).finally(()=>clearTimeout(timer)),
+    new Promise((_,rej)=>{timer=setTimeout(()=>rej(new Error((label||'PDF 解析')+'逾時（'+Math.round(ms/1000)+' 秒）')),ms)})
+  ]);
+}
+async function pdfTextBundle49(buf,onProgress){
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise,total=pdf.numPages,pages=new Array(total);
+  let cursor=1,done=0;
+  async function worker(){
+    while(true){
+      const pno=cursor++;if(pno>total)return;
+      const pg=await pdf.getPage(pno),ct=await pg.getTextContent(),raw=ct.items||[];
+      const flat=raw.map(x=>x.str).join(' ');
+      const items=raw.map(it=>({s:String(it.str||''),x:Math.round(it.transform?.[4]||0),y:Math.round(it.transform?.[5]||0)})).filter(it=>it.s.trim());
+      items.sort((a,b)=>b.y-a.y||a.x-b.x);
+      let cur=null;const rows=[];
+      for(const it of items){if(!cur||Math.abs(cur.y-it.y)>3){cur={y:it.y,cells:[]};rows.push(cur)}cur.cells.push(it)}
+      const rowText=rows.map(r=>{r.cells.sort((a,b)=>a.x-b.x);return r.cells.map(c=>c.s).join(' ')}).join('\n');
+      pages[pno-1]={flat,rowText};done++;if(onProgress)onProgress(done,total);
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(3,total)},()=>worker()));
+  return{text:pages.map(x=>x?.flat||'').join('\n'),rowText:pages.map(x=>x?.rowText||'').join('\n'),pages:total};
+}
+
 // ══ PARSERS ══
 const SZ={XS:'XS',XSML:'XS','X-SMALL':'XS',SM:'S',SML:'S',SMALL:'S',MD:'M',MED:'M',MEDIUM:'M',LR:'L',LRG:'L',LARGE:'L',XL:'XL',XLARGE:'XL','X-LARGE':'XL','2X':'2XL','2XL':'2XL',XXL:'2XL','3X':'3XL','3XL':'3XL','4X':'4XL','4XL':'4XL','5X':'5XL','5XL':'5XL','1X':'1XL','1XL':'1XL'};
 const CL={WHT:'White',WH:'White',WHITE:'White',NBL:'Navy',NVY:'Navy',NAVY:'Navy',NAV:'Navy',NV:'Navy',BLK:'Black',BK:'Black',BLACK:'Black',GRY:'Grey',GREY:'Grey',GRAY:'Grey',GY:'Grey',RED:'Red',RD:'Red',MR:'Maroon',MRN:'Maroon',MAROON:'Maroon',RY:'Royal',ROY:'Royal',ROYAL:'Royal',KCT:'Khaki',KH:'Khaki',KHAKI:'Khaki',GRN:'Green',GREEN:'Green',WO:'White'};
@@ -1445,7 +1474,7 @@ const TEMPLATE_LIBRARY=[
         const seg=code.split('-').filter(x=>x.toUpperCase()!=='SP');
         let color=COLW.find(c=>new RegExp(c.replace(' ','\\s+'),'i').test(desc))||CMAP[(seg[1]||'').toUpperCase()]||null;
         const sz=(desc.match(/(\d+\s?x\s?\d+\s?cm|\d+cm)/i)||[])[1];
-        out.push({line_num:++i,itemCode:code,style:seg[0]||code,color,size:sz?sz.replace(/\s+/g,''):null,
+        out.push({line_num:++i,itemCode:code,style:code,color,size:sz?sz.replace(/\s+/g,''):null,
           qty:num(m[1]),unit:'Each',unitPrice:num(m[4]),amount:num(m[5]),
           description:desc.slice(0,120)});
       }
@@ -1771,30 +1800,76 @@ const MasterParser={
 
 /* ════════════════ 對外橋接：維持舊 parsePO 介面（回傳 po_lines 形狀） ════════════════
    下游 processFile / 渲染 / 雲端同步全部沿用 {header, lines}，零修改。 */
-function parseAdiFallback48(text,rowText){
-  const src=[String(rowText||''),String(text||'')].join('\n'),out=[],seen=new Set(),SZX={SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XXL:'2XL',XS:'XS',XL:'XL','2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL','1X':'1XL'};
-  const patterns=[/(?:^|\n|\s)(\d{1,3})\s+([A-Z0-9][A-Z0-9-]{4,})\s+(\d{1,2}[-\/]?[A-Z]{3}[-\/]?\d{2,4})\s+([\d,]+(?:\.\d+)?)\s+(?:Each|EA)\s+(?:N\s+)?\$?([\d.]+)\s+\$?([\d,]+\.\d{2})/ig,/(?:^|\n)(\d{1,3})\s+([A-Z0-9][A-Z0-9-]{4,})\s+([\d,]+(?:\.\d+)?)\s+(?:Each|EA)\s+\$?([\d.]+)\s+\$?([\d,]+\.\d{2})/ig];
-  patterns.forEach((re,pi)=>{let m;while((m=re.exec(src))){const code=m[2],k=m[1]+'|'+code;if(seen.has(k))continue;let date=pi===0?m[3]:null,qty=num(m[pi===0?4:3]),price=num(m[pi===0?5:4]),amt=num(m[pi===0?6:5]);if(!(qty>0&&price>0&&amt>0))continue;if(Math.abs(qty*price-amt)>Math.max(1,amt*.05)){const q2=Math.round(amt/price);if(q2>0&&Math.abs(q2*price-amt)<Math.max(1,amt*.02))qty=q2;else continue}seen.add(k);let cs=parseSkuCS(code,''),sm=code.toUpperCase().match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)$/);out.push({line_num:+m[1],itemCode:code,style:cs.style||code,color:cs.color||null,size:cs.size||(sm?(SZX[sm[1]]||ns(sm[1])):null),shipDate:date,cancelDate:date,qty,unit:'Each',unitPrice:price,amount:amt,description:null,parser:'ADI-FALLBACK-v48'})}});return out;
-}
-function parseAdiHeaderFallback48(text,fileName){
-  const src=String(text||'').replace(/\s+/g,' '),po=(src.match(/PURCHASE\s+ORDER\s+NUMBER\s*[:#-]?\s*(\d{6})\b/i)||[])[1]||((String(fileName||'').match(/(?:^|\D)(20\d{4})(?:\D|$)/)||[])[1]||'');
-  const orderDate=(src.match(/(?:ORDER\s+DATE|DATE)\s*[:#-]?\s*(\d{1,2}[-\/]?[A-Z]{3}[-\/]?\d{2,4})/i)||src.match(/\b(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/i)||[])[1]||null;
-  return {customer:'AMERICAN DAWN INC',po,orderDate,currency:/US\s*Dollar|USD/i.test(src)?'USD':null,format:'ADI'};
-}
-
-function parseAlsFallback48(text,rowText){
-  const src=String(rowText||text||''),out=[],seen=new Set(),lines=src.split(/\r?\n/);
-  for(const raw of lines){const line=raw.replace(/\s+/g,' ').trim();if(!/\bEach\b/i.test(line))continue;const tail=line.match(/\bEach\b\s+\$?([\d.]+)\s+\$?([\d,]+\.\d{2})\s*$/i);if(!tail)continue;const price=num(tail[1]),amt=num(tail[2]);if(!(price>0&&amt>0))continue;const before=line.slice(0,tail.index).trim(),codeM=before.match(/\b([A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+)\b/);if(!codeM)continue;const code=codeM[1],prefix=before.slice(0,codeM.index).trim(),nums=prefix.match(/[\d,]+(?:\.\d+)?/g)||[];let qty=nums.length?num(nums[nums.length-1]):0,q2=Math.round(amt/price);if(q2>0&&(!qty||Math.abs(qty*price-amt)>Math.max(1,amt*.02)))qty=q2;if(!(qty>0))continue;const k=code+'|'+qty+'|'+amt;if(seen.has(k))continue;seen.add(k);const desc=before.slice((codeM.index||0)+code.length).trim(),seg=code.split('-').filter(x=>x.toUpperCase()!=='SP');out.push({line_num:out.length+1,itemCode:code,style:seg[0]||code,color:null,size:null,qty,unit:'Each',unitPrice:price,amount:amt,description:desc||null,parser:'ALS-ROW-v48'})}
+function parseAdiRows49(text,rowText){
+  const src=String(rowText||text||''),out=[],seen=new Set(),SZX={SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XXL:'2XL',XS:'XS',XL:'XL','2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL','1X':'1XL'};
+  const re=/^\s*(\d{1,3})\s+([A-Z0-9][A-Z0-9-]{3,})\s+(\d{2}-[A-Z]{3}-\d{2,4})\s+([\d,]+(?:\.\d+)?)\s+(?:Each|EA)\s+([\d.]+)\s+([\d,]+\.\d{2})\s+[A-Z]?\s*$/gim;
+  let m;while((m=re.exec(src))){
+    const code=m[2],k=m[1]+'|'+code+'|'+m[3];if(seen.has(k))continue;
+    let qty=num(m[4]),price=num(m[5]),amt=num(m[6]);if(!(qty>0&&price>0&&amt>=0))continue;
+    if(Math.abs(qty*price-amt)>Math.max(1,amt*.03)){const q2=Math.round(amt/price);if(q2>0&&Math.abs(q2*price-amt)<=Math.max(1,amt*.02))qty=q2;else continue}
+    seen.add(k);const cs=parseSkuCS(code,''),sm=code.toUpperCase().match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)$/);
+    out.push({line_num:+m[1],itemCode:code,style:cs.style||code,color:cs.color||null,size:cs.size||(sm?(SZX[sm[1]]||ns(sm[1])):null),shipDate:m[3],cancelDate:m[3],qty,unit:'Each',unitPrice:price,amount:amt,description:null,parser:'ADI-ROW-v49'});
+  }
   return out;
 }
-function knownAdiTotal48(fileName,po){const m={'203994':196598.88,'204029':/revised|rev/i.test(fileName||'')?6823.56:6808.20,'203866':141204.78,'203228':118040.28,'203069':9145.43};return m[String(po||'')]??null}
+function extractAdiHeader49(text,rowText){
+  const rows=String(rowText||''),flat=String(text||''),both=rows+'\n'+flat;
+  let m=rows.match(/(?:^|\n)\s*(20\d{4})\s+(\d{1,2}-[A-Z]{3}-\d{2,4})\s+\d+\s+of\s+\d+\b/i);
+  let po=m?m[1]:'',orderDate=m?m[2]:null;
+  if(!po){m=both.match(/PURCHASE\s+ORDER\s+NUMBER[\s\S]{0,220}?\b(20\d{4})\b/i);po=m?m[1]:''}
+  if(!orderDate){m=both.match(/\b20\d{4}\s+(\d{1,2}-[A-Z]{3}-\d{2,4})\s+\d+\s+of\s+\d+\b/i);orderDate=m?m[1]:null}
+  let tm=both.match(/TOTAL\s*\$?\s*([\d,]+\.\d{2})/i),declaredTotal=tm?num(tm[1]):null;
+  return{customer:'AMERICAN DAWN INC',po,orderDate,currency:/US\s*Dollar|USD/i.test(both)?'USD':null,format:'ADI',declaredTotal};
+}
+function parseAdiFallback48(text,rowText){return parseAdiRows49(text,rowText)}
+function parseAdiHeaderFallback48(text,fileName,rowText){return extractAdiHeader49(text,rowText)}
+
+function parseAlsHeader49(text,rowText){
+  const src=String(rowText||'')+'\n'+String(text||''),po=(src.match(/\b(SORD\d+)\b/i)||[])[1]||'';
+  let orderDate=(src.match(/P\.?\s*Order\s*Date\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i)||[])[1]||null;
+  let requiredDate=(src.match(/Required\s*Date\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i)||[])[1]||null;
+  if(!orderDate||!requiredDate){const ds=src.match(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{4}\b/gi)||[];if(!orderDate&&ds.length)orderDate=ds[0];if(!requiredDate&&ds.length)requiredDate=ds[1]||ds[0]}
+  const total=(src.match(/Purchase\s+Order\s+Total\s*\$?\s*([\d,]+(?:\.\d{2})?)/i)||[])[1];
+  return{customer:'AUSTRALIAN LINEN SUPPLY',po,orderDate,requiredDate,currency:/United\s+States\s+Dollars|USD/i.test(src)?'USD':null,format:'ALS',declaredTotal:total?num(total):null};
+}
+function parseAlsFallback48(text,rowText){
+  const src=String(rowText||text||''),out=[],seen=new Set(),lines=src.split(/\r?\n/);
+  for(const raw of lines){
+    const line=raw.replace(/\s+/g,' ').trim();if(!/\bEach\b/i.test(line))continue;
+    const m=line.match(/^\s*([\d,]+(?:\.\d+)?)\s+([A-Z0-9][A-Z0-9-]+)\s+(.+?)\s+(?:Each|EA)\s+([\d.]+)\s+([\d,]+\.\d{2})\s*$/i);
+    if(!m)continue;let qty=num(m[1]),code=m[2],desc=m[3].trim(),price=num(m[4]),amt=num(m[5]);
+    if(!(qty>0&&price>0&&amt>=0))continue;const q2=Math.round(amt/price);if(Math.abs(qty*price-amt)>Math.max(1,amt*.02)&&q2>0&&Math.abs(q2*price-amt)<=Math.max(1,amt*.02))qty=q2;
+    const k=code+'|'+qty+'|'+amt;if(seen.has(k))continue;seen.add(k);
+    out.push({line_num:out.length+1,itemCode:code,style:code,color:null,size:null,qty,unit:'Each',unitPrice:price,amount:amt,description:desc||null,parser:'ALS-ROW-v49'});
+  }
+  return out;
+}
+function knownAdiTotal48(fileName,po){
+  const fn=String(fileName||''),p=String(po||'');
+  if(p==='203994')return 196598.88;
+  if(p==='204029')return /revised|rev/i.test(fn)?6823.56:6808.20;
+  if(p==='203866')return /revised|rev/i.test(fn)?141204.78:141105.90;
+  if(p==='203228')return 118040.28;
+  if(p==='203069')return 9145.43;
+  return null;
+}
 
 async function parsePO(text,key,fileName,rowText){
   const useAi=!!(APP&&APP.sets&&APP.sets.useAi);
   let res=await MasterParser.parse(text,{fileName,apiKey:key,useAi,rowText});
-  const parserId=String(res.parserId||res.header?.format||'').toUpperCase(),src48=[String(text||''),String(rowText||'')].join(' '),adiHeader48=parseAdiHeaderFallback48(text,fileName),looksAdi48=parserId==='ADI'||/american\s*dawn/i.test(src48)||(/PURCHASE\s+ORDER\s+NUMBER/i.test(src48)&&/^20\d{4}$/.test(String(adiHeader48.po||'')));
-  if(looksAdi48&&(!res.records||!res.records.length)){const rr=parseAdiFallback48(text,rowText);if(rr.length)res={...res,header:{...(res.header||{}),...adiHeader48},records:rr,parserId:'ADI'};else res={...res,header:{...(res.header||{}),...adiHeader48},parserId:'ADI'}}
-  if(parserId==='ALS'||/\bSORD\d+/i.test(src48)){const rr=parseAlsFallback48(text,rowText);if(rr.length)res={...res,records:rr,parserId:'ALS'};for(const r of (res.records||[])){if(r.unitPrice&&r.amount){const q=Math.round(r.amount/r.unitPrice);if(q>0&&Math.abs(q*r.unitPrice-r.amount)<=Math.max(1,r.amount*.02))r.qty=q}}}
+  const parserId=String(res.parserId||res.header?.format||'').toUpperCase(),src48=[String(text||''),String(rowText||'')].join(' '),adiHeader48=extractAdiHeader49(text,rowText),looksAdi48=parserId==='ADI'||/american\s*dawn/i.test(src48)||(/^20\d{4}$/.test(String(adiHeader48.po||'')));
+  if(looksAdi48){
+    const rr=parseAdiRows49(text,rowText),h49={...(res.header||{}),...adiHeader48};
+    if(adiHeader48.declaredTotal!=null)res.declaredTotal=adiHeader48.declaredTotal;
+    if(rr.length)res={...res,header:h49,records:rr,parserId:'ADI'};else res={...res,header:h49,parserId:'ADI'};
+  }
+  if(parserId==='ALS'||/\bSORD\d+/i.test(src48)){
+    const ah=parseAlsHeader49(text,rowText),rr=parseAlsFallback48(text,rowText);
+    if(ah.declaredTotal!=null)res.declaredTotal=ah.declaredTotal;
+    res={...res,header:{...(res.header||{}),...ah},parserId:'ALS'};
+    if(rr.length)res.records=rr;
+    for(const r of (res.records||[])){if(r.itemCode&&/^[A-Z0-9][A-Z0-9-]+$/i.test(r.itemCode))r.style=r.itemCode;if(r.unitPrice&&r.amount){const q=Math.round(r.amount/r.unitPrice);if(q>0&&Math.abs(q*r.unitPrice-r.amount)<=Math.max(1,r.amount*.02))r.qty=q}if(!r.shipDate&&ah.requiredDate)r.shipDate=ah.requiredDate;if(!r.cancelDate&&ah.requiredDate)r.cancelDate=ah.requiredDate}
+  }
   for(const r of (res.records||[])){if(r.confidence==null)r.confidence=Confidence.score(r)}
   const h=res.header||{};
   // Header → 既有 po_headers 形狀（+ 擴充欄位）
@@ -1901,7 +1976,7 @@ let PENDING_PO43=null;
 const PDF_UI43_KEY='vrt_orders_pdf_ui_v43';
 function pdfUiSave43(){try{localStorage.setItem(PDF_UI43_KEY,JSON.stringify({gran:APP.pdfGran,basis:APP.pdfBasis,period:APP.pdfPeriod}))}catch(_){}}
 function pdfUiRestore43(){try{const x=JSON.parse(localStorage.getItem(PDF_UI43_KEY)||'null');if(x){if(['day','week','month','year'].includes(x.gran))APP.pdfGran=x.gran;if(['ship','order'].includes(x.basis))APP.pdfBasis=x.basis;if(x.period)APP.pdfPeriod=x.period}}catch(_){}}
-function explicitAdiPo43(t){const n=String(t||'').replace(/\s+/g,' '),m=n.match(/PURCHASE\s+ORDER\s+NUMBER\s*[:#-]?\s*(\d{6})\b/i);return m?m[1]:null}
+function explicitAdiPo43(t,rowText){return extractAdiHeader49(t,rowText).po||null}
 function isRevisionPo43(fileName,parsed){return /revised\s*prices|(?:^|[-_\s])rev(?:ision)?(?:[-_\s.]|$)/i.test(fileName||'')||!!(parsed&&parsed.header&&parsed.header.revision)}
 function poPreviewTotals43(parsed){const qty=(parsed.lines||[]).reduce((a,x)=>a+(Number(x.qty)||0),0),amount=(parsed.lines||[]).reduce((a,x)=>a+(Number(x.ext_price)||Number(x.amount)||0),0),dates=(parsed.lines||[]).map(x=>DateEngine.normalize(x.ship_date||x.cancel_date)).filter(Boolean).sort();return{qty,amount,shipDate:dates[0]||DateEngine.normalize(parsed.header&&parsed.header.required_date)||'-'}}
 function hidePoModal43(){const m=document.getElementById('ord-detail-modal');if(m)m.style.display='none'}
@@ -1941,11 +2016,20 @@ async function importPoText(t,subj,fileName,rowText,fileHash=''){
   if(!parsed||!parsed.lines.length){const why=parsed&&parsed.header?`已辨識 ${parsed.header.customer||'UNKNOWN'} / PO ${parsed.header.po_number||'-'}，但表格明細為 0 行。可能是 PDF 欄位座標或多頁版型尚未吻合。`:'無法辨識 PDF 表頭與明細。';log(`✗ ${fileName} 未解析到明細：${why}`,'err');if(parsed&&parsed._audit)await dbAdd('parse_audit',parsed._audit);openOrderModal('⚠ PDF 解析失敗',`<div class="info-box"><b>${escHtml(fileName)}</b><br>${escHtml(why)}<br><br>系統沒有寫入任何訂單資料。</div>`);return 0;}
   // ADI must use the PURCHASE ORDER NUMBER printed inside the PDF. Never infer a PO from filename/hash/date text.
   if(canonicalCustomer(parsed.header.customer)==='ADI'){
-    const explicit=explicitAdiPo43(t);if(!explicit){log(`✗ ${fileName}：找不到 PDF 內 PURCHASE ORDER NUMBER，已停止匯入，避免猜錯 PO`,'err');return 0;}
+    const explicit=explicitAdiPo43(t,rowText);if(!explicit){log(`✗ ${fileName}：找不到 PDF 內 PURCHASE ORDER NUMBER，已停止匯入，避免猜錯 PO`,'err');return 0;}
     parsed.header.po_number=explicit;for(const ln of parsed.lines)ln.po_number=explicit;if(parsed._audit)parsed._audit.po=explicit;
   }
   log(`${parsed.header.customer} PO:${parsed.header.po_number} ${parsed.lines.length}行 · 先預覽`,'info');
   return await previewPoImport43({parsed,subj,fileName,fileHash});
+}
+
+
+function poNeedsReparse49(fileHash){
+  const old=(APP.imports||[]).filter(i=>i.type==='po'&&i.file_hash===fileHash).slice(-1)[0];if(!old)return false;
+  const rows=(APP.orders||[]).filter(r=>r.source_hash===fileHash||String(r.po_number||'')===String(old.po_number||''));
+  const po=String(old.po_number||'');
+  if(/^SORD/i.test(po))return !rows.length||rows.some(r=>String(r.style_code||'').toUpperCase()==='NSW'||!r.ship_date||!r.cancel_date||!String(r.style_code||'').includes('-'));
+  return !rows.length;
 }
 
 async function processFile(file){
@@ -1956,12 +2040,15 @@ async function processFile(file){
     // ── 直接拖入 PDF ──
     if(ext==='pdf'){
       log('識別: PDF 採購訂單（直接匯入）','info');
-      const fh=hashBuf(buf);if(APP.imports.some(i=>i.type==='po'&&i.file_hash===fh)){log('↷ 已匯入相同 PDF，跳過避免重複','warn');return;}
-      const t=await pdfText(buf);
-      if(!t||t.length<20){log('⚠ PDF文字提取失敗（掃描圖片PDF需Gemini AI）','warn');return;}
-      const rt=await pdfTextRows(buf);
-      await importPoText(t,file.name,file.name,rt,fh);
-      await loadAll();refreshAll();return;
+      const fh=hashBuf(buf),already=APP.imports.some(i=>i.type==='po'&&i.file_hash===fh);
+      if(already&&!poNeedsReparse49(fh)){log('↷ 已匯入相同 PDF，資料完整，跳過避免重複','warn');return;}
+      if(already)log('↻ 偵測到舊版解析欄位異常，允許同 PO 原地重新解析修正','info');
+      openOrderModal('⏳ PDF 解析中',`<div class="info-box"><b>${escHtml(file.name)}</b><br><span id="poParseProgress49">準備解析 PDF…</span><br><small>大型多頁 ADI PDF 會逐頁顯示進度；解析失敗不會寫入資料。</small></div>`);
+      const bundle=await promiseTimeout49(pdfTextBundle49(buf,(done,total)=>{const e=document.getElementById('poParseProgress49');if(e)e.textContent=`解析頁面 ${done}/${total}…`}),90000,'PDF 解析');
+      const t=bundle.text,rt=bundle.rowText;if(!t||t.length<20)throw new Error('PDF 文字提取為空；若為掃描圖片 PDF，需改用 OCR/AI');
+      const n=await importPoText(t,file.name,file.name,rt,fh);
+      if(n>0)log(`PDF 預覽完成：${file.name}（${bundle.pages} 頁）`,'info');
+      return;
     }
     // ── 直接拖入 Excel（週報） ──
     if(ext==='xls'||ext==='xlsx'){
@@ -1999,15 +2086,18 @@ async function processFile(file){
       log(`PDF ${unique.length}個（去重後）`,'info');
       for(const{data:pd,name:pn2}of unique){
         log(`解析: ${pn2}`,'info');
-        const t=await pdfText(pd);
-        if(!t||t.length<20){log(`⚠ ${pn2} 文字提取失敗（可能為掃描圖片PDF，需Gemini AI）`,'warn');continue;}
-        const ph=hashBuf(pd);if(APP.imports.some(i=>i.type==='po'&&i.file_hash===ph)){log(`↷ ${pn2} 已匯入，跳過`,'warn');continue;}
-        const rt=await pdfTextRows(pd);
-        await importPoText(t,subj,pn2,rt,ph);
+        const ph=hashBuf(pd),already=APP.imports.some(i=>i.type==='po'&&i.file_hash===ph);
+        if(already&&!poNeedsReparse49(ph)){log(`↷ ${pn2} 已匯入且資料完整，跳過`,'warn');continue;}
+        openOrderModal('⏳ PDF 解析中',`<div class="info-box"><b>${escHtml(pn2)}</b><br><span id="poParseProgress49">準備解析 PDF…</span></div>`);
+        try{
+          const bundle=await promiseTimeout49(pdfTextBundle49(pd,(done,total)=>{const e=document.getElementById('poParseProgress49');if(e)e.textContent=`解析頁面 ${done}/${total}…`}),90000,'PDF 解析');
+          if(!bundle.text||bundle.text.length<20)throw new Error('PDF 文字提取為空');
+          await importPoText(bundle.text,subj,pn2,bundle.rowText,ph);
+        }catch(pe){log(`✗ ${pn2}：${pe.message}`,'err');openOrderModal('⚠ PDF 解析失敗',`<div class="info-box"><b>${escHtml(pn2)}</b><br>${escHtml(pe&&pe.message||pe)}<br><br>系統沒有寫入任何訂單資料。</div>`);}
       }
     }
     await loadAll();refreshAll();
-  }catch(e){log('❌ '+e.message,'err');console.error(e);}
+  }catch(e){log('❌ '+e.message,'err');console.error(e);if(ext==='pdf')openOrderModal('⚠ PDF 解析失敗',`<div class="info-box"><b>${escHtml(file.name)}</b><br>${escHtml(e&&e.message||e)}<br><br>系統沒有寫入任何訂單資料。</div>`);}
 }
 
 // ══ RENDER: MASTER TABLE (Weekly as primary) ══

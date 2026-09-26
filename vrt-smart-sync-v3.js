@@ -1,4 +1,4 @@
-/* VRT Smart Sync v4.5 — persistent incremental sync + universal cloud status
+/* VRT Smart Sync v4.5.1 — persistent incremental sync + universal cloud status
    Core rules:
    - Only changed buckets are uploaded/downloaded.
    - Successful sync baseline persists across page reloads (IndexedDB + tiny localStorage fallback).
@@ -9,7 +9,7 @@
 (function(g){
   'use strict';
   if(g.VRTSmartSync && /^4\.5(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.5.0';
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.5.1';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
   const RESUME_PREFIX='vrt_smart_sync_v42_resume_';
@@ -424,7 +424,7 @@
     let actual=merged;if(opts.apply){const applied=await opts.apply(merged,effectiveMeta);if(Array.isArray(applied))actual=applied}
     const mb=await buildBuckets(actual),mergedH=hashMap(mb),mergedC=countMap(mb),effMH=await metaHash(effectiveMeta);
     await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:mergedH,localCounts:mergedC,remoteMetaHash:remoteMH,localMetaHash:effMH,lastPullAt:now(),updatedAt:now()});
-    let msg=`完成｜本機 ${merged.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;if(missingBuckets.length)msg+=`｜雲端缺區 ${missingBuckets.length}`;status('pull',(missingBuckets.length?'⚠ ':'')+msg,(conflicts||missingBuckets.length)?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:merged,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts,missingBuckets,partial:missingBuckets.length>0};
+    const normalizedAway=Math.max(0,merged.length-actual.length);let msg=`完成｜本機 ${actual.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(normalizedAway)msg+=`｜去重 ${normalizedAway.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;if(missingBuckets.length)msg+=`｜雲端缺區 ${missingBuckets.length}`;status('pull',(missingBuckets.length?'⚠ ':'')+msg,(conflicts||missingBuckets.length)?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:actual,rawMergedCount:merged.length,normalizedAway,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts,missingBuckets,partial:missingBuckets.length>0};
   }
 
   // Universal status for legacy/non-smart requests. Smart requests are handled above.
