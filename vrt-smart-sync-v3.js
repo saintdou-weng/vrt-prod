@@ -1,4 +1,4 @@
-/* VRT Smart Sync v4.1 — persistent incremental sync + universal cloud status
+/* VRT Smart Sync v4.2 — persistent incremental sync + universal cloud status
    Core rules:
    - Only changed buckets are uploaded/downloaded.
    - Successful sync baseline persists across page reloads (IndexedDB + tiny localStorage fallback).
@@ -8,10 +8,11 @@
 */
 (function(g){
   'use strict';
-  if(g.VRTSmartSync && /^4\.1(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.1.0';
+  if(g.VRTSmartSync && /^4\.2(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.2.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
+  const RESUME_PREFIX='vrt_smart_sync_v42_resume_';
   const UI_KEY='vrt_smart_sync_v32_ui_'+location.pathname;
   const _nativeFetch=g.fetch.bind(g);
   const enc=s=>encodeURIComponent(String(s||''));
@@ -71,6 +72,7 @@
     return parts.length?parts.join('|'):stable(r);
   }
   function bucketKey(r){
+    if(r&&r._smartBucket)return 'p:'+String(r._smartBucket).replace(/[^A-Za-z0-9_-]+/g,'_').slice(0,60);
     if(r&&r._vrtEntity)return 'h:'+fnv(semanticKey(r));
     const d=recordDate(r);if(d)return 'm:'+d.slice(0,7);
     const y=String((r&&r.stockYear)||'').match(/^20\d{2}$/);if(y)return 'y:'+y[0];
@@ -92,6 +94,10 @@
   function totalCount(m){return Object.values(m||{}).reduce((s,v)=>s+(Number(v)||0),0)}
   function authorizeShrink(tool,reason,ttl){try{sessionStorage.setItem(SHRINK_PREFIX+tool,JSON.stringify({at:Date.now(),until:Date.now()+(Number(ttl)||300000),reason:reason||'explicit-delete'}));return true}catch(_){return false}}
   function shrinkAuthorized(tool){try{const x=JSON.parse(sessionStorage.getItem(SHRINK_PREFIX+tool)||'null');return !!(x&&Number(x.until)>Date.now())}catch(_){return false}}
+  function resumeKey(tool){return RESUME_PREFIX+String(tool||'tool')}
+  function resumeGet(tool){try{return JSON.parse(sessionStorage.getItem(resumeKey(tool))||'null')}catch(_){return null}}
+  function resumePut(tool,v){try{sessionStorage.setItem(resumeKey(tool),JSON.stringify(v||{}))}catch(_){}}
+  function resumeClear(tool){try{sessionStorage.removeItem(resumeKey(tool))}catch(_){}}
   function mapsEqual(a,b){a=a||{};b=b||{};const ka=Object.keys(a).sort(),kb=Object.keys(b).sort();if(ka.length!==kb.length)return false;for(let i=0;i<ka.length;i++)if(ka[i]!==kb[i]||String(a[ka[i]]||'')!==String(b[kb[i]]||''))return false;return true}
   function hasMeta(v){return !!(v&&typeof v==='object'&&Object.keys(v).length)}
   function mergeMetaDefault(local,remote){
@@ -243,10 +249,25 @@
       const msg=`已是最新｜上傳 0｜未變 ${records.length.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:0,deleted:0,unchanged:records.length,metaUpdated:false,noChange:true};
     }
 
-    const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),contentHashes={};let sent=0;
-    for(let i=0;i<changed.length;i++){const k=changed[i],b=local[k];contentHashes[k]=await hashText(JSON.stringify(b.records));status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,contentHash:contentHashes[k],count:b.count,records:b.records}),redirect:'follow'},net));sent+=b.count}
+    /* Optional per-page upload resume. Successful smartBucket calls are staged by the same uploadId,
+       so a later retry can continue from the failed bucket instead of resending bucket 1. */
+    const priority=Array.isArray(opts.priorityBuckets)?opts.priorityBuckets:[];changed.sort((a,b)=>{const ai=priority.indexOf(a),bi=priority.indexOf(b);if(ai>=0||bi>=0)return(ai<0?9999:ai)-(bi<0?9999:bi);return a.localeCompare(b)});
+    const contentHashes={};for(const k of changed)contentHashes[k]=await hashText(JSON.stringify(local[k].records));
+    const baseRevision=rm.revision||rm.updatedAt||'',resumeSig=await hashText(stable({baseRevision,changed:changed.map(k=>[k,localH[k],localC[k],contentHashes[k]]),deleted,localMH}));
+    let resume=opts.resumeBuckets?resumeGet(tool):null;
+    if(!resume||resume.signature!==resumeSig||String(resume.baseRevision||'')!==String(baseRevision||'')){resume={uploadId:Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),signature:resumeSig,baseRevision,changed:changed.slice(),completed:{}};if(opts.resumeBuckets)resumePut(tool,resume)}
+    const uploadId=resume.uploadId,completed=resume.completed||{};let sent=0;
+    for(let i=0;i<changed.length;i++){
+      const k=changed[i],b=local[k];sent+=b.count;
+      if(opts.resumeBuckets&&completed[k]===contentHashes[k]){const pendingCount=changed.slice(i+1).reduce((n,key)=>n+Number(local[key]?.count||0),0);status('push',`沿用已完成 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`沿用已完成 ${i+1}/${changed.length} · 待上傳 ${pendingCount}`);continue}
+      status('push',`上傳變更 ${i+1}/${changed.length} · ${k}`,'busy');onStatus(`上傳變更 ${i+1}/${changed.length} · ${b.count} 筆`);
+      await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartBucket',tool,uploadId,bucket:k,hash:b.hash,contentHash:contentHashes[k],count:b.count,records:b.records}),redirect:'follow'},net));
+      if(opts.resumeBuckets){completed[k]=contentHashes[k];resume.completed=completed;resume.changed=changed.slice();resumePut(tool,resume)}
+      const pendingCount=changed.slice(i+1).reduce((n,key)=>n+Number(local[key]?.count||0),0);onStatus(`已完成 ${sent}｜待上傳 ${pendingCount}`);
+    }
     // PROD cloud transport only: do not create summary/approval reminder ledger entries.
-    const commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision:rm.revision||rm.updatedAt||'',contentHashes,allowShrink:!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
+    const commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
+    if(opts.resumeBuckets)resumeClear(tool);
     try{await cacheSave(url,tool,'_metadata',localMH,[localMeta])}catch(_){}
     await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
     const warnings=(commit.data&&commit.data.warnings)||[];

@@ -224,8 +224,8 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 <script src="vrt-data-core-v39.js?v=4.4.0"></script>
 <script src="vrt-domain-sync-v39.js?v=4.4.0"></script>
 <script src="vrt-import-core-v40.js?v=4.4.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.4.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.6.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.6.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
@@ -239,7 +239,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Parts & Needle Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v4.3 · Purchase / Stock / Needle Change</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v4.6 · Purchase / Stock / Needle Change</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -806,11 +806,74 @@ function balanceAtMonthEnd(partNo,yearMonth){
   // 用 IN-OUT 累積（假設期初0；若有目前 qty 與 txn 不符，以 txn 為準近似）
   return ins.reduce((s,x)=>s+(x.type==='IN'?+x.qty:-+x.qty),0);
 }
+let PART_PERIOD_MODE='month',PART_PERIOD_SELECTED={day:'',week:'',month:'',year:''};
+function partsIsoWeekKey(dateStr){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr||'')))return'';
+  const d=new Date(dateStr+'T00:00:00'),x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+4-(x.getDay()||7));
+  const y=x.getFullYear(),y0=new Date(y,0,1),w=Math.ceil((((x-y0)/86400000)+1)/7);
+  return y+'-W'+String(w).padStart(2,'0');
+}
+function partsWeekRange(key){
+  const m=String(key||'').match(/^(\d{4})-W(\d{2})$/);if(!m)return['',''];
+  const y=+m[1],w=+m[2],jan4=new Date(y,0,4),mon=new Date(jan4);mon.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(w-1)*7);
+  const sun=new Date(mon);sun.setDate(mon.getDate()+6);const f=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');return[f(mon),f(sun)];
+}
+function partsPeriodKey(x,mode){
+  const d=String(x?.date||'').slice(0,10),m=String(x?.statementMonth||'').slice(0,7);
+  if(mode==='day')return/^\d{4}-\d{2}-\d{2}$/.test(d)?d:'';
+  if(mode==='week')return partsIsoWeekKey(d);
+  if(mode==='month')return/^\d{4}-\d{2}$/.test(m)?m:(/^\d{4}-\d{2}/.test(d)?d.slice(0,7):'');
+  if(mode==='year')return(/^\d{4}/.test(m)?m.slice(0,4):/^\d{4}/.test(d)?d.slice(0,4):'');
+  return'';
+}
+function partsPeriodKeys(mode){return [...new Set(purchaseTxns().map(x=>partsPeriodKey(x,mode)).filter(Boolean))].sort().reverse()}
+function partsPeriodRows(mode,key){return purchaseTxns().filter(x=>partsPeriodKey(x,mode)===key)}
+function partsDayName(d){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return'';
+  const names=_lang==='en'?['Sun','Mon','Tue','Wed','Thu','Fri','Sat']:_lang==='km'?['អាទិត្យ','ចន្ទ','អង្គារ','ពុធ','ព្រហស្បតិ៍','សុក្រ','សៅរ៍']:['日','一','二','三','四','五','六'];
+  return names[new Date(d+'T00:00:00').getDay()];
+}
+function partsPeriodLabel(mode,key){
+  if(mode==='day'){const dn=partsDayName(key);return key+'（'+(_lang==='zh'?'週':'')+dn+'）'}
+  if(mode==='week'){const r=partsWeekRange(key);return key+' · '+r[0]+' ～ '+r[1]}
+  if(mode==='month')return key;
+  return key;
+}
+function setPartsPeriod(mode){PART_PERIOD_MODE=mode;if(!partsPeriodKeys(mode).includes(PART_PERIOD_SELECTED[mode]))PART_PERIOD_SELECTED[mode]=partsPeriodKeys(mode)[0]||'';renderMonthly()}
+function selectPartsPeriod(v){PART_PERIOD_SELECTED[PART_PERIOD_MODE]=v;renderMonthly()}
+function navPartsPeriod(dir){const keys=partsPeriodKeys(PART_PERIOD_MODE);if(!keys.length)return;let idx=keys.indexOf(PART_PERIOD_SELECTED[PART_PERIOD_MODE]);if(idx<0)idx=0;const next=idx-dir;if(next>=0&&next<keys.length){PART_PERIOD_SELECTED[PART_PERIOD_MODE]=keys[next];renderMonthly()}}
 function renderMonthly(){
-  fillFilterSelects();ensurePurchasePartMaster();const year=Number(latestPurchaseYear())||new Date().getFullYear(),months=Array.from({length:12},(_,i)=>year+'-'+pad(i+1));
-  const rows=months.map(m=>{const xs=monthPurchases(m),st=purchaseStats(xs),prices=xs.filter(x=>Number(x.unitPrice)>0).map(x=>Number(x.unitPrice));return{m,...st,qtyText:purchaseQuantityText43(xs),avg:new Set(xs.map(x=>VRTData39.partUnit(x.unit))).size<=1&&prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0}});let totals={lines:0,qty:0,spend:0};
-  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${year} ${spL('採購月報','Purchase Monthly')}</div><div class="tw"><table><thead><tr><th>${spL('月份','Month')}</th><th class="num">${spL('採購筆數','Lines')}</th><th class="num">${spL('零件數','Parts')}</th><th class="num">${spL('採購數量','Qty')}</th><th class="num">${spL('發票數','Invoices')}</th><th class="num">${spL('平均單價','Avg Price')}</th><th class="num">${spL('採購金額','Spend')}</th></tr></thead><tbody>`;
-  h+=rows.map(r=>{totals.lines+=r.lines;totals.qty+=r.qty;totals.spend+=r.spend;return `<tr><td>${r.m}</td><td class="num">${num(r.lines)}</td><td class="num">${num(r.parts)}</td><td class="num">${r.qtyText}</td><td class="num">${num(r.invoices)}</td><td class="num">${r.avg?money(r.avg):'-'}</td><td class="num">${money(r.spend)}</td></tr>`}).join('');h+=`<tr style="font-weight:700;background:var(--soft)"><td>${spL('全年','Year Total')}</td><td class="num">${num(totals.lines)}</td><td class="num">-</td><td class="num">${purchaseQuantityText43(purchaseTxns().filter(x=>String(x.statementMonth||x.date).startsWith(String(year))))}</td><td class="num">-</td><td class="num">-</td><td class="num">${money(totals.spend)}</td></tr></tbody></table></div><div class="al al-i" style="margin-top:12px">${spL('這裡只比較採購，不計算發出與庫存。','Purchase comparison only; no issue/on-hand inventory calculation.')}</div></div></div>`;$('app').innerHTML=h;
+  fillFilterSelects();ensurePurchasePartMaster();
+  const mode=PART_PERIOD_MODE,keys=partsPeriodKeys(mode);if(!keys.includes(PART_PERIOD_SELECTED[mode]))PART_PERIOD_SELECTED[mode]=keys[0]||'';const key=PART_PERIOD_SELECTED[mode],xs=partsPeriodRows(mode,key),st=purchaseStats(xs);
+  const prices=xs.filter(x=>Number(x.unitPrice)>0).map(x=>Number(x.unitPrice)),sameUnit=new Set(xs.map(x=>VRTData39.partUnit(x.unit))).size<=1,avg=sameUnit&&prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
+  const modeName={day:spL('日','Day'),week:spL('週','Week'),month:spL('月','Month'),year:spL('年','Year')}[mode];
+  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${spL('採購 日／週／月／年','Purchase D / W / M / Y')}</div>
+    <div class="frow" style="align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:4px">
+        <button class="btn ${mode==='day'?'btn-y':'btn-g'}" onclick="setPartsPeriod('day')">D 日</button>
+        <button class="btn ${mode==='week'?'btn-y':'btn-g'}" onclick="setPartsPeriod('week')">W 週</button>
+        <button class="btn ${mode==='month'?'btn-y':'btn-g'}" onclick="setPartsPeriod('month')">M 月</button>
+        <button class="btn ${mode==='year'?'btn-y':'btn-g'}" onclick="setPartsPeriod('year')">Y 年</button>
+      </div>
+      <button class="btn btn-g" onclick="navPartsPeriod(-1)" title="上一期">◀</button>
+      <label style="font-size:13px;color:#6b7a9e">${modeName}</label>
+      <select id="partsPeriodSel43" onchange="selectPartsPeriod(this.value)">${keys.map(k=>`<option value="${escapeHtml(k)}" ${k===key?'selected':''}>${escapeHtml(partsPeriodLabel(mode,k))}</option>`).join('')}</select>
+      <button class="btn btn-g" onclick="navPartsPeriod(1)" title="下一期">▶</button>
+      <span class="small" style="margin-left:auto">${spL('只列實際有資料的期間；選擇後立即顯示。','Only periods with data are listed; selection renders immediately.')}</span>
+    </div>`;
+  if(!key){h+=`<div class="empty">${t('noData')}</div></div></div>`;$('app').innerHTML=h;return}
+  h+=`<div class="kpi-strip">
+    <div class="kpi k-blue"><div class="kpi-n">${num(st.lines)}</div><div class="kpi-l">${spL('採購筆數','Lines')}</div></div>
+    <div class="kpi k-green"><div class="kpi-n">${num(st.parts)}</div><div class="kpi-l">${spL('零件數','Parts')}</div></div>
+    <div class="kpi k-violet"><div class="kpi-n">${purchaseQuantityText43(xs)}</div><div class="kpi-l">${spL('採購數量','Qty')}</div></div>
+    <div class="kpi k-amber"><div class="kpi-n">${num(st.invoices)}</div><div class="kpi-l">${spL('發票數','Invoices')}</div></div>
+    <div class="kpi k-slate"><div class="kpi-n">${avg?money(avg):'-'}</div><div class="kpi-l">${spL('同單位平均單價','Avg Price')}</div></div>
+    <div class="kpi k-green"><div class="kpi-n">${money(st.spend)}</div><div class="kpi-l">${spL('採購金額','Spend')}</div></div>
+  </div>
+  <p><b>${escapeHtml(partsPeriodLabel(mode,key))}</b> · ${spL('選到哪一期，下面立即顯示該期資料。','The selected period is shown immediately below.')}</p>
+  <div class="tw"><table><thead><tr><th>${spL('日期','Date')}</th><th>${spL('發票','Invoice')}</th><th>${spL('料號','Part No.')}</th><th>${spL('品名','Name')}</th><th>${spL('數量／單位','Qty / Unit')}</th><th class="num">${spL('單價','Unit Price')}</th><th class="num">${spL('金額','Amount')}</th><th>${spL('供應商','Supplier')}</th></tr></thead><tbody>`;
+  h+=xs.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.invoiceNo||'').localeCompare(String(a.invoiceNo||''))).map(x=>`<tr><td>${escapeHtml(x.date||'')}</td><td>${escapeHtml(x.invoiceNo||x.invoice||'')}</td><td>${escapeHtml(x.partNo||'')}</td><td>${escapeHtml(x.name||PARTS.find(p=>p.partNo===x.partNo)?.name||'')}</td><td>${num(x.qty)} ${escapeHtml(VRTData39.partUnit(x.unit)||x.unit||'')}</td><td class="num">${money(x.unitPrice||0)}</td><td class="num">${money(purchaseAmount(x))}</td><td>${escapeHtml(x.supplier||'')}</td></tr>`).join('')||emptyRow(8);
+  h+=`</tbody></table></div><div class="al al-i" style="margin-top:12px">${spL('採購分析不把 PCS、YD、M、SET 等不同單位互相換算；數量按原單位分開。','Different units are kept separate; no automatic conversion.')}</div></div></div>`;$('app').innerHTML=h;
 }
 
 /* ========== PRICE ANALYSIS ========== */

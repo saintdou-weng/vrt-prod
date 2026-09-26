@@ -155,7 +155,7 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.4.1"></script>
+<script src="vrt-smart-sync-v3.js?v=4.6.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.1"></script>
 </head>
 <body>
@@ -164,7 +164,7 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
   <div class="logo">🧵</div>
   <div>
     <div class="h-title">VRT <b>Fabric Delivery & Greige Inventory</b> Summary Center</div>
-    <div class="h-sub" id="hSub">布料交期與胚布庫存分析中心 · Fabric Material Control Center</div>
+    <div class="h-sub" id="hSub">布料交期與胚布庫存分析中心 · Fabric Material Control Center · v1.1</div>
   </div>
   <div class="hgrow"></div>
   <div class="hstat"><div class="hstat-v" id="hsDemand">-</div><div class="hstat-l" data-i18n="totalDemand">總需求 yds</div></div>
@@ -1242,7 +1242,7 @@ function fdCloudRecords(){
   (S.greige||[]).forEach(x=>rows.push({...x,syncType:'greige'}));
   (S.tachiang||[]).forEach(x=>rows.push({...x,syncType:'tachiang'}));
   (S.outsource||[]).forEach(x=>rows.push({...x,syncType:'outsource'}));
-  (S.tombstones||[]).forEach(x=>rows.push({...x,syncType:'tombstone',deleted:true}));
+  (S.tombstones||[]).forEach(x=>rows.push({...x,syncType:'tombstone',deleted:true,_smartBucket:'00-tombstones'}));
   return rows;
 }
 function fdApplyRecords(rows,meta){
@@ -1254,8 +1254,20 @@ function fdApplyRecords(rows,meta){
 async function gasUpload(silent){
   if(!S.cfg.gasEndpoint)S.cfg.gasEndpoint=(VRTPlatform.getGasUrl()||'').trim();
   if(!S.cfg.gasEndpoint){if(!silent){toast(t('needCfg'));showTab('settings')}return false}
-  try{calcAll();const rows=fdCloudRecords(),meta={aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}};const res=await VRTSmartSync.push({url:S.cfg.gasEndpoint,tool:'fabricdelivery',records:rows,meta,onStatus:m=>toast('☁↑ '+m)});if(res&&res.needsPull){if(!silent)toast('⚠ 雲端有新資料，請先拉取差異');return false}if(!silent)toast(res.noChange?'☁↑ 已是最新':'☁↑ 智慧上傳完成 · '+(res.uploaded||0)+' 筆');return res}
-  catch(e){window.__fabricDeliveryLastSyncError=e.message||String(e);const pending=(S.tombstones||[]).length;if(!silent)toast('☁↑ 雲端待重試 · '+window.__fabricDeliveryLastSyncError+(pending?' · 待上傳 '+pending:''));try{VRTSmartSync.status('push','雲端待重試 · '+window.__fabricDeliveryLastSyncError+(pending?' · 待上傳 '+pending:''),'err')}catch(_){}return false}
+  try{
+    calcAll();const rows=fdCloudRecords(),meta={aliases:S.aliases,versionHistory:S.versions,summary:{orders:S.orders.length,greige:S.greige.length,tachiang:S.tachiang.length,outsource:S.outsource.length}};
+    const network={vrtTimeoutMs:90000,vrtRetryDelays:[5000,15000,45000],vrtOnRetry:(attempt,delay)=>{const sec=Math.round(delay/1000);toast('☁↑ 雲端忙碌，'+sec+' 秒後自動重試（'+attempt+'/3）')}};
+    const res=await VRTSmartSync.push({url:S.cfg.gasEndpoint,tool:'fabricdelivery',records:rows,meta,resumeBuckets:true,priorityBuckets:['p:00-tombstones'],network,onStatus:m=>toast('☁↑ '+m)});
+    if(res&&res.needsPull){if(!silent)toast('⚠ 雲端有新資料，請先拉取差異');return false}
+    if(!silent)toast(res.noChange?'☁↑ 已是最新':'☁↑ 智慧上傳完成 · '+(res.uploaded||0)+' 筆');return res
+  }
+  catch(e){
+    window.__fabricDeliveryLastSyncError=e.message||String(e);
+    let pending=0;try{const r=JSON.parse(sessionStorage.getItem('vrt_smart_sync_v42_resume_fabricdelivery')||'null'),changed=new Set(r?.changed||[]),done=r?.completed||{};if(r&&changed.size){for(const row of fdCloudRecords()){const k=VRTSmartSync.bucketKey(row);if(changed.has(k)&&!done[k])pending++}}}catch(_){}
+    const clean=/HTML|non-JSON|503|service busy|aborted|timeout/i.test(window.__fabricDeliveryLastSyncError)?'雲端忙碌，稍後自動重試':window.__fabricDeliveryLastSyncError;
+    if(!silent)toast('☁↑ 雲端待重試 · '+clean+(pending?' · 待上傳 '+pending:'')+' · 已成功批次不重送');
+    try{VRTSmartSync.status('push','雲端待重試 · '+clean+(pending?' · 待上傳 '+pending:'')+' · 已成功批次保留','err')}catch(_){}return false
+  }
 }
 window.gasUpload=gasUpload;
 async function gasDownload(silent){
