@@ -1,4 +1,4 @@
-/* VRT Smart Sync v4.2 — persistent incremental sync + universal cloud status
+/* VRT Smart Sync v4.5 — persistent incremental sync + universal cloud status
    Core rules:
    - Only changed buckets are uploaded/downloaded.
    - Successful sync baseline persists across page reloads (IndexedDB + tiny localStorage fallback).
@@ -8,8 +8,8 @@
 */
 (function(g){
   'use strict';
-  if(g.VRTSmartSync && /^4\.3(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.3.0';
+  if(g.VRTSmartSync && /^4\.5(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.5.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
   const RESUME_PREFIX='vrt_smart_sync_v42_resume_';
@@ -17,6 +17,7 @@
   const _nativeFetch=g.fetch.bind(g);
   const enc=s=>encodeURIComponent(String(s||''));
   const now=()=>new Date().toISOString();
+  function limitWait(p,ms,label){return Promise.race([Promise.resolve(p),new Promise((_,rej)=>setTimeout(()=>rej(new Error((label||'operation')+' timeout')),Number(ms)||8000))])}
 
   function stable(v){
     if(v===null||v===undefined)return 'null';
@@ -233,8 +234,13 @@
       deleted=Object.keys(remoteH).filter(k=>!localH[k]).sort();
       remoteChanged=[];conflicts=[];
     }
+    if(Array.isArray(opts.repairBuckets)&&opts.repairBuckets.length){
+      const wanted=new Set(opts.repairBuckets.map(String));
+      changed=Object.keys(localH).filter(k=>wanted.has(k)).sort();
+      deleted=[];remoteChanged=[];conflicts=[];
+    }
 
-    let metaChanged=!!rm.summaryNeedsRefresh||!!opts.forceBaseline,metaNeedsPull=false,metaConflict=false;
+    let metaChanged=!!rm.summaryNeedsRefresh||!!opts.forceBaseline||!!(Array.isArray(opts.repairBuckets)&&opts.repairBuckets.length),metaNeedsPull=false,metaConflict=false;
     if(localMH!==remoteMH&&!opts.forceBaseline){
       const haveMetaBaseline=!!(lastLMH||lastRMH);
       if(!haveMetaBaseline){
@@ -249,7 +255,7 @@
         else metaChanged=true;
       }
     }
-    if(!opts.forceBaseline&&(remoteChanged.length||conflicts.length||metaNeedsPull)){const msg=`雲端有新變更 ${remoteChanged.length} 區${metaNeedsPull?' + 設定/總表':''}，衝突 ${conflicts.length+(metaConflict?1:0)}；先拉取差異`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,remoteChanged,conflicts,metaNeedsPull,recordCount:records.length}}
+    if(!opts.forceBaseline&&!opts.repairBuckets&&(remoteChanged.length||conflicts.length||metaNeedsPull)){const msg=`雲端有新變更 ${remoteChanged.length} 區${metaNeedsPull?' + 設定/總表':''}，衝突 ${conflicts.length+(metaConflict?1:0)}；先拉取差異`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,remoteChanged,conflicts,metaNeedsPull,recordCount:records.length}}
     if(!changed.length&&!deleted.length&&!metaChanged){
       await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:localH,localCounts:localC,remoteMetaHash:remoteMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
       const msg=`已是最新｜上傳 0｜未變 ${records.length.toLocaleString()}`;status('push',msg,'ok');onStatus(msg);return{ok:true,recordCount:records.length,uploaded:0,deleted:0,unchanged:records.length,metaUpdated:false,noChange:true};
@@ -272,10 +278,19 @@
       const pendingCount=changed.slice(i+1).reduce((n,key)=>n+Number(local[key]?.count||0),0);onStatus(`已完成 ${sent}｜待上傳 ${pendingCount}`);
     }
     // PROD cloud transport only: do not create summary/approval reminder ledger entries.
-    const commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.forceBaseline||!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
+    status('push',`提交雲端索引／Manifest… · ${changed.length} 區`,'busy');onStatus(`提交雲端索引／Manifest… · ${changed.length} 區`);
+    let commit;
+    try{
+      commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.forceBaseline||!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
+    }catch(e){
+      const msg=/PRIOR_WRITE_NEEDS_RECONCILIATION|single writer|protected/i.test(String(e&&e.message||''))?'受保護，需由 Windows 任務上傳；最後 Manifest 未提交':('Manifest 提交失敗：'+String(e&&e.message||e));
+      status('push',msg,'err');onStatus(msg);throw e;
+    }
+    status('push','Manifest 已提交，正在記錄本機同步基準…','busy');onStatus('Manifest 已提交，正在記錄本機同步基準…');
     if(opts.resumeBuckets)resumeClear(tool);
-    try{await cacheSave(url,tool,'_metadata',localMH,[localMeta])}catch(_){}
-    await statePut(tool,{remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
+    try{await limitWait(cacheSave(url,tool,'_metadata',localMH,[localMeta]),5000,'local cache save')}catch(e){console.warn('[VRT SmartSync] cache save skipped',e)}
+    const statePayload={remoteHashes:localH,remoteCounts:localC,localHashes:localH,localCounts:localC,remoteMetaHash:localMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now(),bucketBaseline:true};
+    try{await limitWait(statePut(tool,statePayload),5000,'local baseline save')}catch(e){try{localStorage.setItem(lsKey(tool),JSON.stringify(Object.assign({version:VERSION,tool},statePayload)))}catch(_){} status('push','雲端完成｜本機基準改用 localStorage 保存','warn');onStatus('雲端已完成；IndexedDB 較慢，已改用 localStorage 保存同步基準')}
     const warnings=(commit.data&&commit.data.warnings)||[];
     const delCount=deleted.reduce((sum,k)=>sum+(Number(remoteC[k])||0),0),unchanged=Math.max(0,records.length-sent);
     const msg=`完成｜本機 ${records.length.toLocaleString()}｜上傳 ${sent.toLocaleString()}${metaChanged?'｜設定/總表已更新':''}｜刪除 ${delCount.toLocaleString()}｜未變 ${unchanged.toLocaleString()}`;status('push',msg+(warnings.length?'｜'+warnings.join('；'):''),warnings.length?'warn':'ok');onStatus(msg);return{ok:true,warnings,recordCount:records.length,uploaded:sent,deleted:delCount,unchanged,changedBuckets:changed.length,metaUpdated:metaChanged};
@@ -364,10 +379,10 @@
       const msg='偵測到雲端可能有本機缺少資料｜重新核對差異';status('pull',msg,'busy');onStatus(msg);
     }
 
-    const outBuckets={};let downloaded=0,same=0,pendingUpload=0,conflicts=metaConflict?1:0;const pendingBuckets=[];
+    const outBuckets={};let downloaded=0,same=0,pendingUpload=0,conflicts=metaConflict?1:0;const pendingBuckets=[],missingBuckets=[];
     const cloudKeys=Object.keys(remoteH).sort().reverse(); // recent periods first
     const needed=cloudKeys.filter(k=>{const lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';return !(lh===rh&&local[k])&&!((bl||br)&&rh===br&&local[k])});
-    const ready=new Map();let cursor=0,done=0,fetchFailure=null;
+    const ready=new Map();let cursor=0,done=0;
     async function fetchBucket(k){let cached=null;try{cached=await cacheRead(url,tool,k)}catch(_){}
       if(cached&&cached.hash===remoteH[k])return{rows:cached.records,cached:true};
       const bj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartBucket&tool='+enc(tool)+'&bucket='+enc(k)+'&hash='+enc(remoteH[k]),Object.assign({redirect:'follow'},net)),rows=(bj.data&&bj.data.records)||bj.records;
@@ -378,15 +393,20 @@
       await cacheSave(url,tool,k,remoteH[k],rows);return{rows,cached:false};
     }
     // A maximum of three simultaneous read requests; every completed bucket survives interruption.
-    await Promise.all(Array.from({length:Math.min(3,needed.length)},async()=>{while(cursor<needed.length&&!fetchFailure){const k=needed[cursor++];try{ready.set(k,await fetchBucket(k));done++;status('pull',`已接收／快取 ${done}/${needed.length} 區 · 本機 ${localRecords.length.toLocaleString()} 筆`,'busy');onStatus(`增量下載 ${done}/${needed.length} 區`)}catch(e){fetchFailure=e}}}));
-    if(fetchFailure)throw fetchFailure;
+    await Promise.all(Array.from({length:Math.min(3,needed.length)},async()=>{while(cursor<needed.length){const k=needed[cursor++];try{ready.set(k,await fetchBucket(k));done++;status('pull',`已接收／快取 ${done}/${needed.length} 區 · 本機 ${localRecords.length.toLocaleString()} 筆`,'busy');onStatus(`增量下載 ${done}/${needed.length} 區`)}catch(e){missingBuckets.push({bucket:k,error:String(e&&e.message||e),cloudCount:Number(remoteC[k]||0),localCount:Number(localC[k]||0)});status('pull',`缺少／無法讀取 ${k}，其餘區塊繼續`,'warn');onStatus(`缺少下載區塊 ${k}｜其餘區塊繼續`)}}}));
     for(let i=0;i<cloudKeys.length;i++){
       const k=cloudKeys[i],lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';
       if(lh===rh&&local[k]){outBuckets[k]=local[k].records;same+=local[k].count;continue}
       const haveBaseline=!!(bl||br);
       if(haveBaseline){const localChanged=lh!==bl,cloudChanged=rh!==br;if(!cloudChanged&&localChanged&&local[k]){outBuckets[k]=local[k].records;pendingUpload+=local[k].count;pendingBuckets.push({bucket:k,count:local[k].count,reason:'local-changed'});continue}}
       status('pull',`下載變更 ${i+1}/${cloudKeys.length} · ${k}`,'busy');onStatus(`下載變更 · ${k}`);
-      const received=ready.get(k);if(!received)throw new Error('缺少下載區塊 '+k);const remoteRows=received.rows;if(received.cached)same+=remoteRows.length;else downloaded+=remoteRows.length;
+      const received=ready.get(k);if(!received){
+        // Manifest may reference a bucket whose staged content never committed. Preserve local rows
+        // and continue reconciling every other bucket instead of failing the whole Pull.
+        if(local[k]){outBuckets[k]=local[k].records;pendingBuckets.push({bucket:k,count:local[k].count,reason:'cloud-bucket-missing'});pendingUpload+=local[k].count;}
+        continue;
+      }
+      const remoteRows=received.rows;if(received.cached)same+=remoteRows.length;else downloaded+=remoteRows.length;
       const localChanged=haveBaseline?(lh!==bl):!!lh,cloudChanged=haveBaseline?(rh!==br):true;
       if(haveBaseline&&!localChanged&&!cloudChanged&&local[k]&&lh!==rh){
         // A previous manifest-only check can leave a stale mismatch recorded as a baseline.
@@ -404,7 +424,7 @@
     let actual=merged;if(opts.apply){const applied=await opts.apply(merged,effectiveMeta);if(Array.isArray(applied))actual=applied}
     const mb=await buildBuckets(actual),mergedH=hashMap(mb),mergedC=countMap(mb),effMH=await metaHash(effectiveMeta);
     await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:mergedH,localCounts:mergedC,remoteMetaHash:remoteMH,localMetaHash:effMH,lastPullAt:now(),updatedAt:now()});
-    let msg=`完成｜本機 ${merged.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;status('pull',msg,conflicts?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:merged,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts};
+    let msg=`完成｜本機 ${merged.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;if(missingBuckets.length)msg+=`｜雲端缺區 ${missingBuckets.length}`;status('pull',(missingBuckets.length?'⚠ ':'')+msg,(conflicts||missingBuckets.length)?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:merged,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts,missingBuckets,partial:missingBuckets.length>0};
   }
 
   // Universal status for legacy/non-smart requests. Smart requests are handled above.

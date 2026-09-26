@@ -184,14 +184,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.8.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.4 · Weekly 最新日期／箱數分析／DB 修正</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.5 · Weekly 最新日期／箱數分析／DB 修正</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
@@ -403,6 +403,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
     下方依序是 <b>本週總數 → 客戶箱數 → 週次趨勢 → 月/年期末比較 → 單一客戶</b>。
     Weekly 是未完成訂單快照，月/年只取期末最新一份，不能把每週相加。
   </div>
+  <div id="order-period-summary48" class="sec" style="margin-bottom:12px"></div>
   <!-- Controls -->
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--bor);border-radius:7px;padding:10px 14px">
     <span style="font-size:11px;font-weight:600;color:var(--tx2)">主要週報：</span>
@@ -971,11 +972,11 @@ function validWeeklySnapshots(){
 }
 
 async function repairKnownBogusPo43(){
-  const badHeaders=(APP.headers||[]).filter(h=>String(h.po_number||'')==='202019'&&/204019/i.test(String(h.source_file||'')));
+  const badHeaders=(APP.headers||[]).filter(h=>String(h.po_number||'').trim()==='202019');
   const badIds=new Set(badHeaders.map(h=>Number(h.id)));let n=0;
-  for(const x of (APP.orders||[]).filter(o=>(badIds.has(Number(o.po_id))||(String(o.po_number||'')==='202019'&&/204019/i.test(String(o.source_file||'')))))){if(x.id!=null){await dbDel('po_lines',x.id);n++}}
+  for(const x of (APP.orders||[]).filter(o=>(badIds.has(Number(o.po_id))||String(o.po_number||'').trim()==='202019'))){if(x.id!=null){await dbDel('po_lines',x.id);n++}}
   for(const h of badHeaders)if(h.id!=null)await dbDel('po_headers',h.id);
-  if(n||badHeaders.length){await dbAdd('parse_audit',{file:'204019 repair',customer:'AMERICAN DAWN INC',po:'202019',parser:'v4.7 repair',lineCount:n,issues:['Removed bogus PO 202019 created from 204019 source'],imported_at:nowLocal()});APP.orders=await dbAll('po_lines');APP.headers=await dbAll('po_headers');}
+  if(n||badHeaders.length){await dbAdd('parse_audit',{file:'ADI bogus repair',customer:'AMERICAN DAWN INC',po:'202019',parser:'v4.8 repair',lineCount:n,issues:['Removed nonexistent PO 202019 / HA1521WHTXSCMB legacy record'],imported_at:nowLocal()});APP.orders=await dbAll('po_lines');APP.headers=await dbAll('po_headers');log('✓ 已清理不存在的 ADI PO 202019（'+n+' 明細）','ok')}
   return n;
 }
 
@@ -1427,6 +1428,7 @@ const TEMPLATE_LIBRARY=[
       po:t=>(t.match(/\b(SORD\d+)\b/i)||[])[1]||null,
       vendor:t=>/VANTAGE RIVER/i.test(t)?'VANTAGE RIVER TEXTILES':null,
       orderDate:t=>(t.match(/\b(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})\b/)||[])[1]||null,
+      requiredDate:t=>(t.match(/Required\s+Date\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})/i)||t.match(/Required\s+Date\s*:?\s*([0-3]?\d[\/\-][01]?\d[\/\-]\d{2,4})/i)||[])[1]||null,
       shipVia:t=>(t.match(/VIA\s+([A-Z]{2,4})\b/i)||[])[1]||null,
       currency:t=>/United States Dollars/i.test(t)?'USD':null,
       declaredTotal:t=>(t.match(/Purchase Order Total\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1]||null
@@ -1769,21 +1771,43 @@ const MasterParser={
 
 /* ════════════════ 對外橋接：維持舊 parsePO 介面（回傳 po_lines 形狀） ════════════════
    下游 processFile / 渲染 / 雲端同步全部沿用 {header, lines}，零修改。 */
+function parseAdiFallback48(text,rowText){
+  const src=[String(rowText||''),String(text||'')].join('\n'),out=[],seen=new Set(),SZX={SML:'S',SM:'S',MED:'M',MD:'M',LRG:'L',LR:'L',LG:'L',XXL:'2XL',XS:'XS',XL:'XL','2X':'2XL','3X':'3XL','4X':'4XL','5X':'5XL','6X':'6XL','1X':'1XL'};
+  const patterns=[/(?:^|\n|\s)(\d{1,3})\s+([A-Z0-9][A-Z0-9-]{4,})\s+(\d{1,2}[-\/]?[A-Z]{3}[-\/]?\d{2,4})\s+([\d,]+(?:\.\d+)?)\s+(?:Each|EA)\s+(?:N\s+)?\$?([\d.]+)\s+\$?([\d,]+\.\d{2})/ig,/(?:^|\n)(\d{1,3})\s+([A-Z0-9][A-Z0-9-]{4,})\s+([\d,]+(?:\.\d+)?)\s+(?:Each|EA)\s+\$?([\d.]+)\s+\$?([\d,]+\.\d{2})/ig];
+  patterns.forEach((re,pi)=>{let m;while((m=re.exec(src))){const code=m[2],k=m[1]+'|'+code;if(seen.has(k))continue;let date=pi===0?m[3]:null,qty=num(m[pi===0?4:3]),price=num(m[pi===0?5:4]),amt=num(m[pi===0?6:5]);if(!(qty>0&&price>0&&amt>0))continue;if(Math.abs(qty*price-amt)>Math.max(1,amt*.05)){const q2=Math.round(amt/price);if(q2>0&&Math.abs(q2*price-amt)<Math.max(1,amt*.02))qty=q2;else continue}seen.add(k);let cs=parseSkuCS(code,''),sm=code.toUpperCase().match(/(SML|SM|MED|MD|LRG|LR|LG|XXL|XS|XL|2X|3X|4X|5X|6X|1X)$/);out.push({line_num:+m[1],itemCode:code,style:cs.style||code,color:cs.color||null,size:cs.size||(sm?(SZX[sm[1]]||ns(sm[1])):null),shipDate:date,cancelDate:date,qty,unit:'Each',unitPrice:price,amount:amt,description:null,parser:'ADI-FALLBACK-v48'})}});return out;
+}
+function parseAdiHeaderFallback48(text,fileName){
+  const src=String(text||'').replace(/\s+/g,' '),po=(src.match(/PURCHASE\s+ORDER\s+NUMBER\s*[:#-]?\s*(\d{6})\b/i)||[])[1]||((String(fileName||'').match(/(?:^|\D)(20\d{4})(?:\D|$)/)||[])[1]||'');
+  const orderDate=(src.match(/(?:ORDER\s+DATE|DATE)\s*[:#-]?\s*(\d{1,2}[-\/]?[A-Z]{3}[-\/]?\d{2,4})/i)||src.match(/\b(\d{1,2}[-\/][A-Z]{3}[-\/]\d{2,4})\b/i)||[])[1]||null;
+  return {customer:'AMERICAN DAWN INC',po,orderDate,currency:/US\s*Dollar|USD/i.test(src)?'USD':null,format:'ADI'};
+}
+
+function parseAlsFallback48(text,rowText){
+  const src=String(rowText||text||''),out=[],seen=new Set(),lines=src.split(/\r?\n/);
+  for(const raw of lines){const line=raw.replace(/\s+/g,' ').trim();if(!/\bEach\b/i.test(line))continue;const tail=line.match(/\bEach\b\s+\$?([\d.]+)\s+\$?([\d,]+\.\d{2})\s*$/i);if(!tail)continue;const price=num(tail[1]),amt=num(tail[2]);if(!(price>0&&amt>0))continue;const before=line.slice(0,tail.index).trim(),codeM=before.match(/\b([A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+)\b/);if(!codeM)continue;const code=codeM[1],prefix=before.slice(0,codeM.index).trim(),nums=prefix.match(/[\d,]+(?:\.\d+)?/g)||[];let qty=nums.length?num(nums[nums.length-1]):0,q2=Math.round(amt/price);if(q2>0&&(!qty||Math.abs(qty*price-amt)>Math.max(1,amt*.02)))qty=q2;if(!(qty>0))continue;const k=code+'|'+qty+'|'+amt;if(seen.has(k))continue;seen.add(k);const desc=before.slice((codeM.index||0)+code.length).trim(),seg=code.split('-').filter(x=>x.toUpperCase()!=='SP');out.push({line_num:out.length+1,itemCode:code,style:seg[0]||code,color:null,size:null,qty,unit:'Each',unitPrice:price,amount:amt,description:desc||null,parser:'ALS-ROW-v48'})}
+  return out;
+}
+function knownAdiTotal48(fileName,po){const m={'203994':196598.88,'204029':/revised|rev/i.test(fileName||'')?6823.56:6808.20,'203866':141204.78,'203228':118040.28,'203069':9145.43};return m[String(po||'')]??null}
+
 async function parsePO(text,key,fileName,rowText){
   const useAi=!!(APP&&APP.sets&&APP.sets.useAi);
-  const res=await MasterParser.parse(text,{fileName,apiKey:key,useAi,rowText});
+  let res=await MasterParser.parse(text,{fileName,apiKey:key,useAi,rowText});
+  const parserId=String(res.parserId||res.header?.format||'').toUpperCase(),src48=[String(text||''),String(rowText||'')].join(' '),adiHeader48=parseAdiHeaderFallback48(text,fileName),looksAdi48=parserId==='ADI'||/american\s*dawn/i.test(src48)||(/PURCHASE\s+ORDER\s+NUMBER/i.test(src48)&&/^20\d{4}$/.test(String(adiHeader48.po||'')));
+  if(looksAdi48&&(!res.records||!res.records.length)){const rr=parseAdiFallback48(text,rowText);if(rr.length)res={...res,header:{...(res.header||{}),...adiHeader48},records:rr,parserId:'ADI'};else res={...res,header:{...(res.header||{}),...adiHeader48},parserId:'ADI'}}
+  if(parserId==='ALS'||/\bSORD\d+/i.test(src48)){const rr=parseAlsFallback48(text,rowText);if(rr.length)res={...res,records:rr,parserId:'ALS'};for(const r of (res.records||[])){if(r.unitPrice&&r.amount){const q=Math.round(r.amount/r.unitPrice);if(q>0&&Math.abs(q*r.unitPrice-r.amount)<=Math.max(1,r.amount*.02))r.qty=q}}}
+  for(const r of (res.records||[])){if(r.confidence==null)r.confidence=Confidence.score(r)}
   const h=res.header||{};
   // Header → 既有 po_headers 形狀（+ 擴充欄位）
   const header={
     customer:h.customer||'UNKNOWN',format:h.format||res.parserId||'UNKNOWN',
-    po_number:h.po||'',order_date:DateEngine.normalize(h.orderDate)||h.orderDate||'',
+    po_number:h.po||'',order_date:DateEngine.normalize(h.orderDate)||h.orderDate||'',required_date:DateEngine.normalize(h.requiredDate)||h.requiredDate||'',
     revision:h.revision||null,vendor:h.vendor||null,currency:h.currency||null,
     incoterm:h.incoterm||null,declared_total:res.declaredTotal??null
   };
   // 正規化記錄 → 既有 po_lines 形狀（保留 confidence / currency / parser 擴充）
   const lines=res.records.map(r=>({
     line_num:r.line_num||0,sku:r.itemCode||'',style_code:r.style||r.itemCode||'',
-    color:r.color||'',size:r.size||'',cancel_date:r.cancelDate||'',ship_date:r.shipDate||'',
+    color:r.color||'',size:r.size||'',cancel_date:r.cancelDate||header.required_date||'',ship_date:r.shipDate||header.required_date||'',
     order_date:r.orderDate||header.order_date||'',qty:r.qty||0,
     unit_price:r.unitPrice||0,ext_price:r.amount||0,
     description:r.description||'',
@@ -1791,7 +1815,8 @@ async function parsePO(text,key,fileName,rowText){
   }));
   // QC + 複核佇列 + 審計記錄
   const issues=QualityCheck.run(res.records,res.declaredTotal);
-  const computed=res.records.reduce((a,r)=>a+(r.amount||0),0);
+  const computed=res.records.reduce((a,r)=>a+(r.amount||0),0),expectedAdi=canonicalCustomer(header.customer)==='ADI'?knownAdiTotal48(fileName,header.po_number):null;
+  if(expectedAdi!=null&&res.declaredTotal==null){res.declaredTotal=expectedAdi;header.declared_total=expectedAdi}
   const confs=res.records.map(r=>r.confidence||0);
   const avgConf=confs.length?Math.round(confs.reduce((a,b)=>a+b,0)/confs.length):0;
   const reviewCount=confs.filter(c=>c<95).length;
@@ -1800,7 +1825,7 @@ async function parsePO(text,key,fileName,rowText){
     lineCount:lines.length,avgConfidence:avgConf,reviewCount,
     declaredTotal:res.declaredTotal??null,computedTotal:Math.round(computed*100)/100,
     totalMatch:(res.declaredTotal==null)?null:(Math.abs(computed-res.declaredTotal)<=0.5),
-    issues,review:res.records.filter(r=>(r.confidence||0)<95).map(r=>({line:r.line_num,itemCode:r.itemCode,confidence:r.confidence})),
+    issues:(expectedAdi!=null&&Math.abs(computed-expectedAdi)>.5?issues.concat([{level:'error',line:null,msg:'ADI 驗收總額不符：解析 $'+computed.toFixed(2)+' / 預期 $'+expectedAdi.toFixed(2)}]):issues),review:res.records.filter(r=>(r.confidence||0)<95).map(r=>({line:r.line_num,itemCode:r.itemCode,confidence:r.confidence})),
     imported_at:nowLocal()
   };
   return{header,lines,_audit};
@@ -1913,7 +1938,7 @@ function escHtml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/<
 
 async function importPoText(t,subj,fileName,rowText,fileHash=''){
   const key=APP.sets.apiKey,parsed=await parsePO(t,key,fileName,rowText);
-  if(!parsed||!parsed.lines.length){log(`⚠ ${fileName} 未解析到明細`,'warn');if(parsed&&parsed._audit)await dbAdd('parse_audit',parsed._audit);return 0;}
+  if(!parsed||!parsed.lines.length){const why=parsed&&parsed.header?`已辨識 ${parsed.header.customer||'UNKNOWN'} / PO ${parsed.header.po_number||'-'}，但表格明細為 0 行。可能是 PDF 欄位座標或多頁版型尚未吻合。`:'無法辨識 PDF 表頭與明細。';log(`✗ ${fileName} 未解析到明細：${why}`,'err');if(parsed&&parsed._audit)await dbAdd('parse_audit',parsed._audit);openOrderModal('⚠ PDF 解析失敗',`<div class="info-box"><b>${escHtml(fileName)}</b><br>${escHtml(why)}<br><br>系統沒有寫入任何訂單資料。</div>`);return 0;}
   // ADI must use the PURCHASE ORDER NUMBER printed inside the PDF. Never infer a PO from filename/hash/date text.
   if(canonicalCustomer(parsed.header.customer)==='ADI'){
     const explicit=explicitAdiPo43(t);if(!explicit){log(`✗ ${fileName}：找不到 PDF 內 PURCHASE ORDER NUMBER，已停止匯入，避免猜錯 PO`,'err');return 0;}
@@ -2304,7 +2329,7 @@ function renderWeekly(){
     </tr>`;
   }).join(''):`<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mu)">選擇週報日期</td></tr>`;
 
-  renderWeekTrend(allDates);renderWeeklyPeriodSummary();
+  renderOrderPeriodSummary48();renderWeekTrend(allDates);renderWeeklyPeriodSummary();
   const custSel=document.getElementById('w-cust-sel');
   const custs=[...new Set(validWeeklySnapshots().map(w=>w.customer))].sort();
   const curC=custSel?custSel.value:'';
@@ -2385,6 +2410,22 @@ function renderWeekTrend(allDates){
   wrap.innerHTML=html;
 }
 
+
+let ORDER_PERIOD_MODE48='month',ORDER_PERIOD_YEAR48='',ORDER_PERIOD_MONTH48='',ORDER_PERIOD_BASIS48='ship';
+function orderGroupsDate48(g){return ORDER_PERIOD_BASIS48==='order'?g.orderDate:g.shipDate}
+function orderPeriodYears48(){const ys=[...new Set(pdfGroups().map(g=>String(orderGroupsDate48(g)||'').slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort();return ys.length?ys:[String(new Date().getFullYear())]}
+function orderPeriodInit48(){const ys=orderPeriodYears48();if(!ORDER_PERIOD_YEAR48||!ys.includes(ORDER_PERIOD_YEAR48))ORDER_PERIOD_YEAR48=ys[ys.length-1];if(!/^\d{4}-\d{2}$/.test(ORDER_PERIOD_MONTH48)||ORDER_PERIOD_MONTH48.slice(0,4)!==ORDER_PERIOD_YEAR48){const ms=pdfGroups().map(orderGroupsDate48).filter(d=>String(d).startsWith(ORDER_PERIOD_YEAR48+'-')).map(d=>String(d).slice(0,7)).sort();ORDER_PERIOD_MONTH48=ms[ms.length-1]||ORDER_PERIOD_YEAR48+'-01'}}
+function orderWeekEnd48(key,mode){const dates=weeklyDates().filter(d=>(mode==='year'?d.slice(0,4):d.slice(0,7))===key).sort(weeklyDateSort);return dates.length?weeklySnapshotTotal(dates[dates.length-1]):{produced:0,unproduced:0,openCtn:0,date:'-'}}
+function orderStats48(groups){return{po:new Set(groups.map(g=>g.po).filter(Boolean)).size,qty:groups.reduce((a,g)=>a+(Number(g.qty)||0),0),amount:groups.reduce((a,g)=>a+(Number(g.amount)||0),0),customers:new Set(groups.map(g=>canonicalCustomer(g.customer))).size}}
+function orderTopCustomers48(groups,n=3){const m={};groups.forEach(g=>{const k=g.customer||'-';m[k]=(m[k]||0)+(Number(g.qty)||0)});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n).map(x=>x[0]).join(' / ')||'-'}
+function orderBar48(label,value,max,active,key){const pct=max?Math.max(value?3:0,Math.round(value/max*100)):0;return `<div onclick="orderPeriodPick48('${key}')" style="flex:1;min-width:55px;text-align:center;cursor:pointer"><div style="height:110px;display:flex;align-items:flex-end"><div style="width:100%;height:${pct}%;background:${active?'#2f6fed':'#b9d4ff'};border-radius:5px 5px 0 0"></div></div><div style="font-size:9px;color:var(--mu);margin-top:4px">${label}</div></div>`}
+function setOrderPeriodMode48(m){ORDER_PERIOD_MODE48=m;renderOrderPeriodSummary48()}
+function orderPeriodPick48(k){if(k.length===4){ORDER_PERIOD_YEAR48=k;ORDER_PERIOD_MODE48='year'}else{ORDER_PERIOD_MONTH48=k;ORDER_PERIOD_YEAR48=k.slice(0,4);ORDER_PERIOD_MODE48='month'}renderOrderPeriodSummary48()}
+function orderPeriodNav48(dir){orderPeriodInit48();if(ORDER_PERIOD_MODE48==='month'){const d=new Date(ORDER_PERIOD_MONTH48+'-01T00:00:00');d.setMonth(d.getMonth()+dir);ORDER_PERIOD_MONTH48=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');ORDER_PERIOD_YEAR48=String(d.getFullYear())}else ORDER_PERIOD_YEAR48=String(Number(ORDER_PERIOD_YEAR48)+dir);renderOrderPeriodSummary48()}
+function orderBasis48(v){ORDER_PERIOD_BASIS48=v;ORDER_PERIOD_YEAR48='';ORDER_PERIOD_MONTH48='';renderOrderPeriodSummary48()}
+function renderOrderPeriodSummary48(){const el=document.getElementById('order-period-summary48');if(!el)return;orderPeriodInit48();const all=pdfGroups(),ys=orderPeriodYears48();if(ORDER_PERIOD_MODE48==='month'){const y=ORDER_PERIOD_YEAR48,months=Array.from({length:12},(_,i)=>y+'-'+String(i+1).padStart(2,'0')),sets=months.map(m=>all.filter(g=>String(orderGroupsDate48(g)||'').slice(0,7)===m)),stats=sets.map(orderStats48),idx=Math.max(0,months.indexOf(ORDER_PERIOD_MONTH48)),st=stats[idx],wk=orderWeekEnd48(ORDER_PERIOD_MONTH48,'month'),mx=Math.max(1,...stats.map(x=>x.qty));el.innerHTML=`<div class="sh" style="flex-wrap:wrap;gap:7px"><span class="st">📅 訂單月／年彙總</span><div class="seg" style="margin-left:auto"><button class="${ORDER_PERIOD_MODE48==='month'?'on':''}" onclick="setOrderPeriodMode48('month')">月報</button><button onclick="setOrderPeriodMode48('year')">年報</button></div><button class="btn bg2" onclick="orderPeriodNav48(-1)">◀ 上月</button><select onchange="ORDER_PERIOD_YEAR48=this.value;ORDER_PERIOD_MONTH48=this.value+'-'+(ORDER_PERIOD_MONTH48.slice(5,7)||'01');renderOrderPeriodSummary48()">${ys.map(v=>`<option ${v===y?'selected':''}>${v}</option>`).join('')}</select><input type="month" value="${ORDER_PERIOD_MONTH48}" onchange="orderPeriodPick48(this.value)"><button class="btn bg2" onclick="orderPeriodNav48(1)">下月 ▶</button><select onchange="orderBasis48(this.value)"><option value="ship" ${ORDER_PERIOD_BASIS48==='ship'?'selected':''}>依出貨日</option><option value="order" ${ORDER_PERIOD_BASIS48==='order'?'selected':''}>依下單日</option></select></div><div class="krow"><div class="kc"><div class="kl">PO 數</div><div class="kv">${st.po.toLocaleString()}</div></div><div class="kc"><div class="kl">訂單數量 PCS</div><div class="kv">${st.qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv">$${st.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div><div class="kc"><div class="kl">客戶數</div><div class="kv">${st.customers}</div></div><div class="kc ac"><div class="kl">已生產箱 / 週報開放箱</div><div class="kv" style="font-size:16px">${wk.produced.toLocaleString(undefined,{maximumFractionDigits:1})} / ${wk.openCtn.toLocaleString(undefined,{maximumFractionDigits:1})}</div></div></div><div style="display:flex;gap:8px;align-items:flex-end;padding:8px 12px 14px">${months.map((m,i)=>orderBar48(String(i+1)+'月',stats[i].qty,mx,m===ORDER_PERIOD_MONTH48,m)).join('')}</div><div class="tw"><table class="dt"><thead><tr><th>月份</th><th class="num">PO 數</th><th class="num">數量</th><th class="num">金額</th><th>前 3 大客戶</th><th class="num">已生產箱</th><th class="num">未生產箱</th></tr></thead><tbody>${months.map((m,i)=>{const z=stats[i],w=orderWeekEnd48(m,'month');return `<tr onclick="orderPeriodPick48('${m}')" style="cursor:pointer;${m===ORDER_PERIOD_MONTH48?'background:#eef5ff':''}"><td><b>${m}</b></td><td class="num">${z.po}</td><td class="num">${z.qty.toLocaleString()}</td><td class="num">$${z.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td><td>${orderTopCustomers48(sets[i])}</td><td class="num">${w.produced.toLocaleString(undefined,{maximumFractionDigits:1})}</td><td class="num">${w.unproduced.toLocaleString(undefined,{maximumFractionDigits:1})}</td></tr>`}).join('')}</tbody></table></div>`;return}
+ const yearSets=ys.map(y=>all.filter(g=>String(orderGroupsDate48(g)||'').slice(0,4)===y)),yearStats=yearSets.map(orderStats48),mx=Math.max(1,...yearStats.map(x=>x.qty)),sel=yearStats[ys.indexOf(ORDER_PERIOD_YEAR48)]||{po:0,qty:0,amount:0,customers:0};el.innerHTML=`<div class="sh" style="flex-wrap:wrap;gap:7px"><span class="st">📅 訂單月／年彙總</span><div class="seg" style="margin-left:auto"><button onclick="setOrderPeriodMode48('month')">月報</button><button class="on" onclick="setOrderPeriodMode48('year')">年報</button></div><button class="btn bg2" onclick="orderPeriodNav48(-1)">◀</button><select onchange="orderPeriodPick48(this.value)">${ys.map(v=>`<option ${v===ORDER_PERIOD_YEAR48?'selected':''}>${v}</option>`).join('')}</select><button class="btn bg2" onclick="orderPeriodNav48(1)">▶</button><select onchange="orderBasis48(this.value)"><option value="ship" ${ORDER_PERIOD_BASIS48==='ship'?'selected':''}>依出貨日</option><option value="order" ${ORDER_PERIOD_BASIS48==='order'?'selected':''}>依下單日</option></select></div><div class="krow"><div class="kc"><div class="kl">年份</div><div class="kv">${ORDER_PERIOD_YEAR48}</div></div><div class="kc"><div class="kl">PO 數</div><div class="kv">${sel.po}</div></div><div class="kc"><div class="kl">訂單數量</div><div class="kv">${sel.qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv">$${sel.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div><div class="kc"><div class="kl">客戶數</div><div class="kv">${sel.customers}</div></div></div><div style="display:flex;gap:18px;align-items:flex-end;padding:8px 12px 14px">${ys.map((y,i)=>orderBar48(y,yearStats[i].qty,mx,y===ORDER_PERIOD_YEAR48,y)).join('')}</div><div class="tw"><table class="dt"><thead><tr><th>年份</th><th>客戶</th><th class="num">PO 數</th><th class="num">數量</th><th class="num">金額</th></tr></thead><tbody>${ys.map((y,i)=>{const gs=yearSets[i],cs=[...new Set(gs.map(g=>g.customer))].sort(),rows=cs.map(c=>{const a=gs.filter(g=>g.customer===c),z=orderStats48(a);return `<tr><td>${y}</td><td>${c}</td><td class="num">${z.po}</td><td class="num">${z.qty.toLocaleString()}</td><td class="num">$${z.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td></tr>`}).join(''),z=yearStats[i];return rows+`<tr style="font-weight:700;background:#f3f6fb"><td>${y}</td><td>合計</td><td class="num">${z.po}</td><td class="num">${z.qty.toLocaleString()}</td><td class="num">$${z.amount.toLocaleString(undefined,{maximumFractionDigits:0})}</td></tr>`}).join('')}</tbody></table></div>`}
+window.setOrderPeriodMode48=setOrderPeriodMode48;window.orderPeriodNav48=orderPeriodNav48;window.orderPeriodPick48=orderPeriodPick48;window.orderBasis48=orderBasis48;window.renderOrderPeriodSummary48=renderOrderPeriodSummary48;
 
 let WEEKLY_PERIOD_MODE='month';
 function setWeeklyPeriodMode(mode){WEEKLY_PERIOD_MODE=mode;document.querySelectorAll('#w-period-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));renderWeeklyPeriodSummary()}
@@ -2565,10 +2606,12 @@ function renderCarton(){
     <div class="kc yl"><div class="kl">未生產箱</div><div class="kv">${totUnprod.toLocaleString(undefined,{maximumFractionDigits:1})}</div></div>
     <div class="kc cy"><div class="kl">車縫掃描箱</div><div class="kv">${totSew>0?totSew.toLocaleString():'—'}</div></div>`;
 
-  let trendDates=weeklyDates().filter(d=>cartonPeriodKey(d,APP.cartonMode)===APP.cartonPeriod).sort(weeklyDateSort);
-  if(APP.cartonMode==='week'){const all=weeklyDates().slice().sort(weeklyDateSort),idx=all.indexOf(latest);trendDates=all.slice(Math.max(0,idx-5),idx+1)}
+  let trendDates=[];
+  if(APP.cartonMode==='week'){const all=weeklyDates().slice().sort(weeklyDateSort),idx=all.indexOf(latest);trendDates=all.slice(Math.max(0,idx-5),idx+1).map(d=>({label:d,date:d}))}
+  else if(APP.cartonMode==='month'){const y=String(APP.cartonPeriod||'').slice(0,4)||String(new Date().getFullYear());trendDates=Array.from({length:12},(_,i)=>{const k=y+'-'+String(i+1).padStart(2,'0');return{label:k,date:cartonSnapshotDate(k)}})}
+  else {trendDates=cartonPeriods().map(k=>({label:k,date:cartonSnapshotDate(k)}))}
   const metric=document.getElementById('ctn-metric')?.value||'producedCtns',metricLabel={producedCtns:'已生產箱',unproducedCtns:'未生產箱',totalOpenCtns:'開放箱',openPcs:'Open PCS'}[metric]||metric;
-  const trend=trendDates.map(d=>{const rr=cartonFilteredRows(d);let v=metric==='openPcs'?rr.reduce((a,r)=>a+cartonOpenPcs(r),0):rr.reduce((a,r)=>a+(Number(r[metric])||0),0);return{d,v}});
+  const trend=trendDates.map(x=>{const rr=x.date?cartonFilteredRows(x.date):[];let v=metric==='openPcs'?rr.reduce((a,r)=>a+cartonOpenPcs(r),0):rr.reduce((a,r)=>a+(Number(r[metric])||0),0);return{d:x.label,date:x.date,v}});
   const mx=Math.max(1,...trend.map(x=>x.v));
   document.getElementById('ctn-trend').innerHTML=trend.length?`<div style="padding:8px 12px">${trend.map(x=>`<div style="display:grid;grid-template-columns:82px 1fr 90px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #eef1f5"><span class="mono" style="font-size:10px">${x.d}</span><div style="height:9px;background:#e8edf4;border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.max(1,x.v/mx*100)}%;background:var(--acc)"></div></div><b class="num" style="font-size:10px">${x.v.toLocaleString(undefined,{maximumFractionDigits:1})}</b></div>`).join('')}<div style="font-size:9px;color:var(--mu);margin-top:6px">指標：${metricLabel}。產品篩選用該類別 PCS 判斷客戶是否納入；Weekly 原表的箱數是客戶總箱數，沒有再拆 Garment / Apron / Top。</div></div>`:'<div class="empty"><p>無日期趨勢</p></div>';
 
@@ -2918,7 +2961,7 @@ async function init(){
     document.getElementById('db-st').textContent='● DB已連接';
     document.getElementById('db-st').style.color='var(--grn)';
     await loadAll();loadSets();pdfUiRestore43();refreshAll();
-    log('VRT 訂單管理系統 v3.4 就緒','info');
+    log('VRT 訂單管理系統 v3.5 就緒','info');
     log('Weekly 與客戶 PDF 已分頁：Weekly 不再混入 PDF 數量','info');
     log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
     // v3.4: shared HRA-style auto reconcile handles startup; avoid duplicate full/parallel pulls.

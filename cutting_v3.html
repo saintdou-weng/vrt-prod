@@ -146,7 +146,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
 })();
 </script>
 <script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.8.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
@@ -156,7 +156,7 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   <div class="logo">✂️</div>
   <div>
     <div class="h-title">裁剪生產分析系統</div>
-    <div class="h-sub">CUTTING PRODUCTION · v3.7 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
+    <div class="h-sub">CUTTING PRODUCTION · v3.8 &nbsp;<span class="h-badge" id="connBadge">⚡ 同步車縫 DB</span></div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l">裁剪記錄</div></div>
@@ -2987,6 +2987,7 @@ async function scanAllFolders(silent=false){
   <div class="vcp-row">
     <button class="vcp-btn vcp-push" id="vcPushBtn" onclick="vcPush()">☁ 推送</button>
     <button class="vcp-btn vcp-pull" id="vcPullBtn" onclick="vcPull()">⬇ 拉取</button>
+    <button class="vcp-btn" id="vcRepairBtn" onclick="vcRepairBuckets48()">🩹 修復分桶</button>
   </div>
   <div>
     <div style="font-size:10px;color:#475569;margin-bottom:4px">GAS URL</div>
@@ -3005,6 +3006,7 @@ async function scanAllFolders(silent=false){
   const LS_META = 'vrt_cloud_cutting_meta';
   let gasUrl = '';
   let panelOpen = false;
+  let vcLastMissing48 = [];
 
   function vcInit(){
     gasUrl = localStorage.getItem(LS_GAS) || '';
@@ -3064,8 +3066,24 @@ async function scanAllFolders(silent=false){
     try{
       const local=(typeof CUT!=='undefined'&&CUT.length)?CUT:await vcIdbGetAll('CuttingProd',1,'cutting_records');
       const res=await VRTSmartSync.pull({url:gasUrl,tool:'cutting',localRecords:local,network:CUT_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i'),apply:async recs=>{await vcIdbPutAll('CuttingProd',1,'cutting_records',recs);if(typeof CUT!=='undefined'){CUT.length=0;recs.forEach(r=>CUT.push(r));}}});
-      if(!res.ok){if(res.noCloud)vcLog('雲端尚無裁剪資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取完成 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');if(res.pendingBuckets&&res.pendingBuckets.length)vcLog('待上傳區塊：'+res.pendingBuckets.map(x=>x.bucket+' '+x.count+'筆('+x.reason+')').join('；'),'i');vcShowStatus();
+      if(!res.ok){if(res.noCloud)vcLog('雲端尚無裁剪資料','err');return;}vcLastMissing48=Array.isArray(res.missingBuckets)?res.missingBuckets:[];localStorage.setItem('vrt_cutting_missing_buckets_v48',JSON.stringify(vcLastMissing48));localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:res.records.length,smart:true}));vcLog(`✓ 智慧拉取完成 · ${res.records.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}${vcLastMissing48.length?' · 雲端缺區 '+vcLastMissing48.length:''}`,vcLastMissing48.length?'err':'ok');if(res.pendingBuckets&&res.pendingBuckets.length)vcLog('待上傳區塊：'+res.pendingBuckets.map(x=>x.bucket+' '+x.count+'筆('+x.reason+')').join('；'),'i');if(vcLastMissing48.length)vcLog('缺少下載區塊：'+vcLastMissing48.map(x=>x.bucket+'（雲端應有 '+x.cloudCount+'，本機 '+x.localCount+'）').join('；')+'。其他完整分桶已照常拉取。','err');vcShowStatus();
     }catch(e){vcLog('✗ 拉取失敗：'+e.message,'err');}finally{vcSetBusy(false);}
+  };
+
+  window.vcRepairBuckets48 = async function(){
+    if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);
+    try{
+      if(!vcLastMissing48.length){try{vcLastMissing48=JSON.parse(localStorage.getItem('vrt_cutting_missing_buckets_v48')||'[]')}catch(_){vcLastMissing48=[]}}
+      if(!vcLastMissing48.length){vcLog('先執行一次拉取以檢查雲端分桶。','i');await window.vcPull();return;}
+      const local=(typeof CUT!=='undefined'&&CUT.length)?CUT:await vcIdbGetAll('CuttingProd',1,'cutting_records'),buckets=await VRTSmartSync.buildBuckets(local),repairable=[],insufficient=[];
+      vcLastMissing48.forEach(x=>{const b=buckets[x.bucket],lc=Number(b&&b.count||0),need=Number(x.cloudCount||0);if(b&&lc>=need&&need>0)repairable.push(x.bucket);else insufficient.push({bucket:x.bucket,local:lc,need})});
+      if(insufficient.length)vcLog('⚠ 本機也不完整，不能用較少資料修雲端：'+insufficient.map(x=>x.bucket+' 本機 '+x.local+' / 雲端索引 '+x.need).join('；')+'。請先由原始 Excel 補回缺少日期（目前已知 9/14、9/21、9/23）或在資料完整的電腦執行修復。','err');
+      if(!repairable.length)return;
+      vcLog('修復雲端分桶：'+repairable.join('、')+'…','i');
+      const res=await VRTSmartSync.push({url:gasUrl,tool:'cutting',records:local,meta:{summary:buildCuttingSummary(local),idbStore:{db:'CuttingProd',ver:1,store:'cutting_records'}},repairBuckets:repairable,network:CUT_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i')});
+      if(res&&res.ok){vcLog('✓ 雲端缺失分桶已重傳；請再按拉取確認。','ok');vcLastMissing48=[];localStorage.removeItem('vrt_cutting_missing_buckets_v48')}
+      else if(res&&res.needsPull)vcLog('修復被少覆多保護擋下：此本機資料不是完整來源，請換資料完整端修復。','err');
+    }catch(e){vcLog('✗ 修復分桶失敗：'+String(e&&e.message||e),'err')}finally{vcSetBusy(false)}
   };
 
   function buildCuttingSummary(recs){

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.7.0"></script>
-<script src="vrt-platform-v40.js?v=4.7.0"></script>
+<script src="vrt-deploy-config.js?v=4.8.0"></script>
+<script src="vrt-platform-v40.js?v=4.8.0"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 出貨分析儀表板</title>
@@ -227,9 +227,9 @@ tbody tr:hover td{background:#f8fafc}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.7.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.8.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.8.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.8.0"></script>
 </head>
 <body>
 
@@ -330,10 +330,12 @@ tbody tr:hover td{background:#f8fafc}
       <button class="tab-btn tab-abn" onclick="switchTab('abnormal',this)">
         🚨 異常分析 <span class="tab-count" id="cnt-abnormal">0</span>
       </button>
+      <button class="tab-btn" onclick="switchTab('trend',this)">📅 月年趨勢</button>
     </div>
 
+    <div id="shipTrend48" style="display:none"></div>
     <!-- TABLE -->
-    <div class="tbl-card">
+    <div class="tbl-card" id="shipDetailCard48">
       <div class="tbl-head">
         <span class="tbl-title" id="tblTitle">已出明細</span>
         <div style="display:flex;gap:8px;align-items:center">
@@ -685,10 +687,27 @@ function renderKPI(){
   document.getElementById('cnt-abnormal').textContent=abnormal.length;
 }
 
+let SHIP_TREND_MODE48='month',SHIP_TREND_YEAR48='',SHIP_TREND_MONTH48='';
+function shipTrendBase48(){const cust=document.getElementById('fCust')?.value||'',style=document.getElementById('fStyle')?.value||'',fab=document.getElementById('fFabric')?.value||'',q=(document.getElementById('fSearch')?.value||'').toLowerCase();return DATA.filter(r=>{if(cust&&r.cust!==cust)return false;if(style&&r.style!==style)return false;if(fab&&r.fabGroup!==fab)return false;if(q&&![r.cust,r.po,r.style,r.color,r.size,r.remark,r.desc,r.fabType].some(v=>v&&String(v).toLowerCase().includes(q)))return false;return true})}
+function shipTrendYears48(){const ys=[...new Set(shipTrendBase48().map(r=>String(r.etdYear||String(r.etd||'').slice(0,4))).filter(y=>/^\d{4}$/.test(y)))].sort();return ys.length?ys:[String(new Date().getFullYear())]}
+function shipTrendInit48(){const ys=shipTrendYears48();if(!SHIP_TREND_YEAR48||!ys.includes(SHIP_TREND_YEAR48))SHIP_TREND_YEAR48=ys[ys.length-1];if(!/^\d{4}-\d{2}$/.test(SHIP_TREND_MONTH48)||SHIP_TREND_MONTH48.slice(0,4)!==SHIP_TREND_YEAR48){const ms=shipTrendBase48().map(r=>String(r.etdMonth||String(r.etd||'').slice(0,7))).filter(m=>m.startsWith(SHIP_TREND_YEAR48+'-')).sort();SHIP_TREND_MONTH48=ms[ms.length-1]||SHIP_TREND_YEAR48+'-01'}}
+function shipTrendStats48(rows){const orig=rows.reduce((a,r)=>a+(Number(r.orig)||0),0),shipped=rows.reduce((a,r)=>a+(Number(r.shipped)||0),0),open=rows.reduce((a,r)=>a+(Number(r.open)||0),0);return{rows:rows.length,shipped,open,rate:orig?shipped/orig*100:0,abn:rows.filter(r=>r.status==='abnormal').length}}
+function shipTop48(rows){const m={};rows.forEach(r=>{m[r.cust||'-']=(m[r.cust||'-']||0)+(Number(r.shipped)||0)});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]).join(' / ')||'-'}
+function shipTrendNav48(dir){shipTrendInit48();if(SHIP_TREND_MODE48==='month'){const d=new Date(SHIP_TREND_MONTH48+'-01T00:00:00');d.setMonth(d.getMonth()+dir);SHIP_TREND_MONTH48=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');SHIP_TREND_YEAR48=String(d.getFullYear())}else SHIP_TREND_YEAR48=String(Number(SHIP_TREND_YEAR48)+dir);renderShipTrend48()}
+function shipTrendPick48(k){if(k.length===4){SHIP_TREND_YEAR48=k;SHIP_TREND_MODE48='year'}else{SHIP_TREND_MONTH48=k;SHIP_TREND_YEAR48=k.slice(0,4);SHIP_TREND_MODE48='month'}renderShipTrend48()}
+function shipTrendMode48(m){SHIP_TREND_MODE48=m;renderShipTrend48()}
+function shipBar48(label,value,max,active,key){const p=max?Math.max(value?3:0,Math.round(value/max*100)):0;return `<div onclick="shipTrendPick48('${key}')" style="flex:1;min-width:55px;text-align:center;cursor:pointer"><div style="height:115px;display:flex;align-items:flex-end"><div style="width:100%;height:${p}%;background:${active?'#3b82f6':'#bfdbfe'};border-radius:6px 6px 0 0"></div></div><div style="font-size:10px;color:#8695ad;margin-top:5px">${label}</div></div>`}
+function renderShipTrend48(){const el=document.getElementById('shipTrend48');if(!el)return;shipTrendInit48();const all=shipTrendBase48(),ys=shipTrendYears48();if(SHIP_TREND_MODE48==='month'){const months=Array.from({length:12},(_,i)=>SHIP_TREND_YEAR48+'-'+String(i+1).padStart(2,'0')),sets=months.map(m=>all.filter(r=>String(r.etdMonth||String(r.etd||'').slice(0,7))===m)),stats=sets.map(shipTrendStats48),idx=Math.max(0,months.indexOf(SHIP_TREND_MONTH48)),st=stats[idx],mx=Math.max(1,...stats.map(z=>z.shipped));el.innerHTML=`<div class="tbl-card"><div class="tbl-head"><span class="tbl-title">📅 出貨月／年趨勢</span><div style="display:flex;gap:7px;align-items:center"><button class="btn ${SHIP_TREND_MODE48==='month'?'btn-primary':'btn-ghost'}" onclick="shipTrendMode48('month')">月報</button><button class="btn btn-ghost" onclick="shipTrendMode48('year')">年報</button><button class="btn btn-ghost" onclick="shipTrendNav48(-1)">◀ 上月</button><select class="filter-sel" onchange="SHIP_TREND_YEAR48=this.value;SHIP_TREND_MONTH48=this.value+'-'+(SHIP_TREND_MONTH48.slice(5,7)||'01');renderShipTrend48()">${ys.map(y=>`<option ${y===SHIP_TREND_YEAR48?'selected':''}>${y}</option>`).join('')}</select><input class="filter-input" type="month" value="${SHIP_TREND_MONTH48}" onchange="shipTrendPick48(this.value)"><button class="btn btn-ghost" onclick="shipTrendNav48(1)">下月 ▶</button></div></div><div style="padding:14px"><div class="kpi-row"><div class="kpi green"><div class="kpi-label">已出數量</div><div class="kpi-value">${fmt(st.shipped)}</div></div><div class="kpi blue"><div class="kpi-label">筆數</div><div class="kpi-value">${st.rows.toLocaleString()}</div></div><div class="kpi purple"><div class="kpi-label">出貨率</div><div class="kpi-value">${st.rate.toFixed(1)}%</div></div><div class="kpi yellow"><div class="kpi-label">未出</div><div class="kpi-value">${fmt(st.open)}</div></div><div class="kpi red"><div class="kpi-label">異常筆數</div><div class="kpi-value">${st.abn}</div></div></div><div style="display:flex;gap:9px;align-items:flex-end;margin:14px 0 18px">${months.map((m,i)=>shipBar48(String(i+1)+'月',stats[i].shipped,mx,m===SHIP_TREND_MONTH48,m)).join('')}</div><div class="tbl-wrap"><table><thead><tr><th>月份</th><th class="num">已出</th><th class="num">未出</th><th class="num">出貨率</th><th>前 3 大客戶</th></tr></thead><tbody>${months.map((m,i)=>`<tr onclick="shipTrendPick48('${m}')" style="cursor:pointer;${m===SHIP_TREND_MONTH48?'background:#eef6ff':''}"><td><b>${m}</b></td><td class="num">${fmt(stats[i].shipped)}</td><td class="num">${fmt(stats[i].open)}</td><td class="num">${stats[i].rate.toFixed(1)}%</td><td>${shipTop48(sets[i])}</td></tr>`).join('')}</tbody></table></div></div></div>`;return}
+ const yearSets=ys.map(y=>all.filter(r=>String(r.etdYear||String(r.etd||'').slice(0,4))===y)),yearStats=yearSets.map(shipTrendStats48),mx=Math.max(1,...yearStats.map(z=>z.shipped)),sel=yearStats[ys.indexOf(SHIP_TREND_YEAR48)]||{rows:0,shipped:0,open:0,rate:0,abn:0};el.innerHTML=`<div class="tbl-card"><div class="tbl-head"><span class="tbl-title">📅 出貨月／年趨勢</span><div style="display:flex;gap:7px"><button class="btn btn-ghost" onclick="shipTrendMode48('month')">月報</button><button class="btn btn-primary" onclick="shipTrendMode48('year')">年報</button><button class="btn btn-ghost" onclick="shipTrendNav48(-1)">◀</button><select class="filter-sel" onchange="shipTrendPick48(this.value)">${ys.map(y=>`<option ${y===SHIP_TREND_YEAR48?'selected':''}>${y}</option>`).join('')}</select><button class="btn btn-ghost" onclick="shipTrendNav48(1)">▶</button></div></div><div style="padding:14px"><div class="kpi-row"><div class="kpi blue"><div class="kpi-label">年份</div><div class="kpi-value">${SHIP_TREND_YEAR48}</div></div><div class="kpi green"><div class="kpi-label">已出數量</div><div class="kpi-value">${fmt(sel.shipped)}</div></div><div class="kpi yellow"><div class="kpi-label">未出</div><div class="kpi-value">${fmt(sel.open)}</div></div><div class="kpi purple"><div class="kpi-label">出貨率</div><div class="kpi-value">${sel.rate.toFixed(1)}%</div></div></div><div style="display:flex;gap:20px;align-items:flex-end;margin:14px 0 18px">${ys.map((y,i)=>shipBar48(y,yearStats[i].shipped,mx,y===SHIP_TREND_YEAR48,y)).join('')}</div><div class="tbl-wrap"><table><thead><tr><th>年份</th><th>客戶</th><th class="num">已出</th><th class="num">未出</th><th class="num">出貨率</th></tr></thead><tbody>${ys.map((y,i)=>{const rs=yearSets[i],cs=[...new Set(rs.map(r=>r.cust))].sort(),body=cs.map(c=>{const z=shipTrendStats48(rs.filter(r=>r.cust===c));return `<tr><td>${y}</td><td>${c}</td><td class="num">${fmt(z.shipped)}</td><td class="num">${fmt(z.open)}</td><td class="num">${z.rate.toFixed(1)}%</td></tr>`}).join(''),z=yearStats[i];return body+`<tr style="font-weight:700;background:#f5f7fb"><td>${y}</td><td>合計</td><td class="num">${fmt(z.shipped)}</td><td class="num">${fmt(z.open)}</td><td class="num">${z.rate.toFixed(1)}%</td></tr>`}).join('')}</tbody></table></div></div></div>`}
+window.shipTrendMode48=shipTrendMode48;window.shipTrendNav48=shipTrendNav48;window.shipTrendPick48=shipTrendPick48;window.renderShipTrend48=renderShipTrend48;
+
 // ══════════════════════════════════════════════
 // TABLE RENDER
 // ══════════════════════════════════════════════
 function renderTab(){
+  const trend=document.getElementById('shipTrend48'),table=document.getElementById('shipDetailCard48'),kpi=document.getElementById('kpiRow');
+  if(TAB==='trend'){if(trend)trend.style.display='block';if(table)table.style.display='none';if(kpi)kpi.style.display='none';renderShipTrend48();return;}
+  if(trend)trend.style.display='none';if(table)table.style.display='block';if(kpi)kpi.style.display='grid';
   const rows=FILTERED.filter(r=>r.status===TAB);
   const total=rows.length;
   const totalPages=Math.max(1,Math.ceil(total/PER));

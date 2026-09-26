@@ -223,10 +223,10 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 })();
 </script>
 <script src="vrt-data-core-v39.js?v=4.4.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.7.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.8.0"></script>
 <script src="vrt-import-core-v40.js?v=4.4.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.8.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.8.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
@@ -240,7 +240,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="logo">🔧</div>
   <div>
     <div class="h-title" id="hTitle">Machine Parts & Needle Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v4.7 · Purchase / Stock / Needle Change</div>
+    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v4.8 · Purchase / Stock / Needle Change</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -629,7 +629,7 @@ function syncGlobalPeriodUi43(){
   const keys=partsPeriodOptions43(mode),wanted=FILTER.periodKey||currentPeriodKey43(mode);
   if(mode==='all'){FILTER.periodKey='all'}else if(keys.length&&!keys.includes(wanted)){FILTER.periodKey=keys[keys.length-1]}else FILTER.periodKey=wanted;
   if(sel){sel.disabled=mode==='all';sel.innerHTML=keys.map(k=>'<option value="'+escapeHtml(k)+'">'+escapeHtml(partsPeriodLabel43(mode,k))+'</option>').join('')||'<option value="">—</option>';if(keys.includes(FILTER.periodKey))sel.value=FILTER.periodKey}
-  document.querySelectorAll('.chip[data-dt]').forEach(c=>c.classList.toggle('on',c.dataset.dt===(FILTER.date||'all')));
+  document.querySelectorAll('.chip[data-dt]').forEach(c=>{const dt=c.dataset.dt,cm=partsDateMode(dt),selected=FILTER.periodKey||currentPeriodKey43(mode);let on=dt===(FILTER.date||'all');if(on&&cm!=='all')on=selected===currentPeriodKey43(cm);c.classList.toggle('on',!!on)});
 }
 function partsGlobalModeChange(mode){FILTER.date=mode==='day'?'today':mode;FILTER.periodKey=currentPeriodKey43(mode);syncGlobalPeriodUi43();renderTab(_curTab)}
 function partsGlobalPeriodChange(key){FILTER.periodKey=key;renderTab(_curTab)}
@@ -899,41 +899,66 @@ function partsPeriodLabel(mode,key){
   if(mode==='month')return key;
   return key;
 }
-function setPartsPeriod(mode){PART_PERIOD_MODE=mode;FILTER.date=mode==='day'?'today':mode;const ks=partsPeriodKeys(mode);if(!ks.includes(PART_PERIOD_SELECTED[mode]))PART_PERIOD_SELECTED[mode]=FILTER.periodKey&&ks.includes(FILTER.periodKey)?FILTER.periodKey:(ks[0]||'');FILTER.periodKey=PART_PERIOD_SELECTED[mode];syncGlobalPeriodUi43();renderMonthly()}
+function partsPurchaseFiltered48(){
+  return purchaseTxns().filter(x=>{
+    const p=PARTS.find(z=>z.partNo===x.partNo)||{};
+    if(FILTER.store&&p.location!==FILTER.store)return false;
+    if(FILTER.cat&&p.category!==FILTER.cat)return false;
+    if(FILTER.brand&&p.brand!==FILTER.brand)return false;
+    if(FILTER.q){const ss=(String(x.partNo||'')+' '+String(x.name||p.name||'')).toLowerCase();if(!ss.includes(FILTER.q))return false}
+    return true;
+  });
+}
+function partsRowsFor48(mode,key){return partsPurchaseFiltered48().filter(x=>partsPeriodKey(x,mode)===key)}
+function partsCategory48(x){
+  const p=PARTS.find(z=>z.partNo===x.partNo)||{},v=String(x.category||p.category||'Other').trim();return v||'Other';
+}
+function partsSupplier48(x){return String(x.supplier||x.vendor||'').trim()}
+function partsNeedleChanges48(mode,key){
+  try{const m=window.VRTParts39?.getState?.().maintenance||{};return (m.needleChanges||[]).filter(x=>partsKeyFromDate43(String(x.date||'').slice(0,10),mode)===key).length}catch(_){return 0}
+}
+function partsTopCats48(xs,n=3){const m={};xs.forEach(x=>{const k=partsCategory48(x);m[k]=(m[k]||0)+purchaseAmount(x)});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n).map(x=>x[0]).join(' / ')||'-'}
+function partsAllYears48(){const ys=[...new Set(partsPurchaseFiltered48().map(x=>partsPeriodKey(x,'year')).filter(Boolean))].sort();const cur=String(PART_PERIOD_SELECTED.year||FILTER.periodKey||'');if(/^\d{4}$/.test(cur)&&!ys.includes(cur))ys.push(cur);return ys.sort()}
+function setPartsPeriod(mode){
+  PART_PERIOD_MODE=mode;FILTER.date=mode==='day'?'today':mode;
+  const ks=partsPeriodKeys(mode);let wanted=PART_PERIOD_SELECTED[mode]||FILTER.periodKey||currentPeriodKey43(mode);
+  if(mode==='month'&&!/^\d{4}-\d{2}$/.test(wanted))wanted=(ks[0]||todayStr().slice(0,7));
+  if(mode==='year'&&!/^\d{4}$/.test(wanted))wanted=(ks[0]||todayStr().slice(0,4));
+  if((mode==='day'||mode==='week')&&!ks.includes(wanted))wanted=ks[0]||'';
+  PART_PERIOD_SELECTED[mode]=wanted;FILTER.periodKey=wanted;syncGlobalPeriodUi43();renderMonthly();
+}
 function selectPartsPeriod(v){PART_PERIOD_SELECTED[PART_PERIOD_MODE]=v;FILTER.date=PART_PERIOD_MODE==='day'?'today':PART_PERIOD_MODE;FILTER.periodKey=v;syncGlobalPeriodUi43();renderMonthly()}
-function navPartsPeriod(dir){const keys=partsPeriodKeys(PART_PERIOD_MODE);if(!keys.length)return;let idx=keys.indexOf(PART_PERIOD_SELECTED[PART_PERIOD_MODE]);if(idx<0)idx=0;const next=idx-dir;if(next>=0&&next<keys.length){PART_PERIOD_SELECTED[PART_PERIOD_MODE]=keys[next];FILTER.date=PART_PERIOD_MODE==='day'?'today':PART_PERIOD_MODE;FILTER.periodKey=PART_PERIOD_SELECTED[PART_PERIOD_MODE];syncGlobalPeriodUi43();renderMonthly()}}
+function navPartsPeriod(dir){
+  const mode=PART_PERIOD_MODE,cur=PART_PERIOD_SELECTED[mode]||FILTER.periodKey||currentPeriodKey43(mode);let next=cur;
+  if(mode==='year'&&/^\d{4}$/.test(cur))next=String(Number(cur)+dir);
+  else if(mode==='month'&&/^\d{4}-\d{2}$/.test(cur)){const d=new Date(cur+'-01T00:00:00');d.setMonth(d.getMonth()+dir);next=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+  else {const keys=partsPeriodKeys(mode).slice().sort(),i=keys.indexOf(cur);if(i>=0&&keys[i+dir])next=keys[i+dir]}
+  PART_PERIOD_SELECTED[mode]=next;FILTER.date=mode==='day'?'today':mode;FILTER.periodKey=next;syncGlobalPeriodUi43();renderMonthly();
+}
+function partsBar48(label,value,max,active,onclick){const pct=max>0?Math.max(1,Math.round(value/max*100)):0;return `<div style="display:flex;align-items:flex-end;gap:8px;min-width:66px;flex:1;cursor:${onclick?'pointer':'default'}" ${onclick?`onclick="${onclick}"`:''}><div style="width:100%;text-align:center"><div style="height:116px;display:flex;align-items:flex-end"><div style="width:100%;height:${pct}%;min-height:${value?4:0}px;background:${active?'#2f80ed':'#b8d6fb'};border-radius:6px 6px 0 0"></div></div><div class="small" style="margin-top:5px">${escapeHtml(label)}</div></div></div>`}
+function renderPartsMonthSummary48(key){
+  const year=(key||todayStr().slice(0,7)).slice(0,4),month=String(key||year+'-01').slice(5,7),xs=partsRowsFor48('month',key),st=purchaseStats(xs),prev=(()=>{const d=new Date(key+'-01T00:00:00');d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')})(),prevSpend=purchaseStats(partsRowsFor48('month',prev)).spend,mom=prevSpend?((st.spend-prevSpend)/prevSpend*100):null;
+  const months=Array.from({length:12},(_,i)=>year+'-'+String(i+1).padStart(2,'0')),vals=months.map(m=>purchaseStats(partsRowsFor48('month',m)).spend),mx=Math.max(1,...vals);
+  let h=`<div class="kpi-strip"><div class="kpi k-green"><div class="kpi-n">${money(st.spend)}</div><div class="kpi-l">${spL('採購金額','Purchase Spend')}</div></div><div class="kpi k-blue"><div class="kpi-n">${num(st.lines)}</div><div class="kpi-l">${spL('採購筆數','Lines')}</div></div><div class="kpi k-violet"><div class="kpi-n">${num(st.parts)}</div><div class="kpi-l">${spL('零件數','Parts')}</div></div><div class="kpi k-amber"><div class="kpi-n">${num(st.invoices)}</div><div class="kpi-l">${spL('發票數','Invoices')}</div></div><div class="kpi ${mom===null?'k-slate':mom>=0?'k-red':'k-green'}"><div class="kpi-n">${mom===null?'-':(mom>=0?'+':'')+mom.toFixed(1)+'%'}</div><div class="kpi-l">${spL('較上月增減','MoM')}</div></div></div>`;
+  h+=`<div class="card"><div class="ct">📊 ${year} ${spL('年度月別採購金額','Monthly Purchase Spend')}</div><div style="display:flex;gap:10px;align-items:flex-end;min-height:150px">${months.map((m,i)=>partsBar48(String(i+1)+spL('月',''),vals[i],mx,m===key,`selectPartsPeriod('${m}')`)).join('')}</div></div>`;
+  h+=`<div class="card"><div class="ct">📋 ${year} ${spL('各月份彙整','Monthly Summary')}</div><div class="tw"><table><thead><tr><th>${spL('月份','Month')}</th><th class="num">${spL('採購金額','Spend')}</th><th class="num">${spL('筆數','Lines')}</th><th class="num">${spL('零件數','Parts')}</th><th>${spL('前 3 大類別','Top 3 Categories')}</th><th class="num">${spL('換針次數','Needle Changes')}</th></tr></thead><tbody>${months.map(m=>{const a=partsRowsFor48('month',m),z=purchaseStats(a);return `<tr style="${m===key?'background:#eef6ff':''};cursor:pointer" onclick="selectPartsPeriod('${m}')"><td><b>${m}</b></td><td class="num">${money(z.spend)}</td><td class="num">${num(z.lines)}</td><td class="num">${num(z.parts)}</td><td>${escapeHtml(partsTopCats48(a))}</td><td class="num">${num(partsNeedleChanges48('month',m))}</td></tr>`}).join('')}</tbody></table></div></div>`;return h;
+}
+function renderPartsYearSummary48(key){
+  const xs=partsRowsFor48('year',key),st=purchaseStats(xs),suppliers=new Set(xs.map(partsSupplier48).filter(Boolean)).size,years=partsAllYears48(),vals=years.map(y=>purchaseStats(partsRowsFor48('year',y)).spend),mx=Math.max(1,...vals),cats=[...new Set(partsPurchaseFiltered48().map(partsCategory48))].sort();
+  let h=`<div class="kpi-strip"><div class="kpi k-green"><div class="kpi-n">${money(st.spend)}</div><div class="kpi-l">${spL('年採購金額','Annual Spend')}</div></div><div class="kpi k-blue"><div class="kpi-n">${num(st.lines)}</div><div class="kpi-l">${spL('採購筆數','Lines')}</div></div><div class="kpi k-violet"><div class="kpi-n">${num(st.parts)}</div><div class="kpi-l">${spL('零件數','Parts')}</div></div><div class="kpi k-amber"><div class="kpi-n">${num(suppliers)}</div><div class="kpi-l">${spL('供應商數','Suppliers')}</div></div></div>`;
+  h+=`<div class="card"><div class="ct">📊 ${spL('各年採購金額','Annual Purchase Spend')}</div><div style="display:flex;gap:18px;align-items:flex-end;min-height:150px">${years.map((y,i)=>partsBar48(y,vals[i],mx,y===key,`selectPartsPeriod('${y}')`)).join('')}</div></div>`;
+  h+=`<div class="card"><div class="ct">📋 ${spL('年別分類彙整','Year × Category Summary')}</div><div class="tw"><table><thead><tr><th>${spL('年份','Year')}</th><th>${spL('類別','Category')}</th><th class="num">${spL('金額','Spend')}</th><th class="num">${spL('筆數','Lines')}</th></tr></thead><tbody>${years.map(y=>{const yr=partsRowsFor48('year',y),rows=cats.map(c=>{const a=yr.filter(x=>partsCategory48(x)===c);if(!a.length)return'';const z=purchaseStats(a);return `<tr style="${y===key?'background:#f7fbff':''};cursor:pointer" onclick="selectPartsPeriod('${y}')"><td>${y}</td><td>${escapeHtml(c)}</td><td class="num">${money(z.spend)}</td><td class="num">${num(z.lines)}</td></tr>`}).join(''),tot=purchaseStats(yr);return rows+`<tr style="font-weight:700;background:#f5f7fb"><td>${y}</td><td>${spL('合計','Total')}</td><td class="num">${money(tot.spend)}</td><td class="num">${num(tot.lines)}</td></tr>`}).join('')}</tbody></table></div></div>`;return h;
+}
 function renderMonthly(){
   fillFilterSelects();ensurePurchasePartMaster();
-  const globalMode=partsDateMode(FILTER.date||'all');if(globalMode!=='all')PART_PERIOD_MODE=globalMode;const mode=PART_PERIOD_MODE,keys=partsPeriodKeys(mode);if(FILTER.periodKey&&keys.includes(FILTER.periodKey))PART_PERIOD_SELECTED[mode]=FILTER.periodKey;if(!keys.includes(PART_PERIOD_SELECTED[mode]))PART_PERIOD_SELECTED[mode]=keys[0]||'';const key=PART_PERIOD_SELECTED[mode],xs=partsPeriodRows(mode,key),st=purchaseStats(xs);
-  const prices=xs.filter(x=>Number(x.unitPrice)>0).map(x=>Number(x.unitPrice)),sameUnit=new Set(xs.map(x=>VRTData39.partUnit(x.unit))).size<=1,avg=sameUnit&&prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
-  const modeName={day:spL('日','Day'),week:spL('週','Week'),month:spL('月','Month'),year:spL('年','Year')}[mode];
-  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${spL('採購 日／週／月／年','Purchase D / W / M / Y')}</div>
-    <div class="frow" style="align-items:center;flex-wrap:wrap">
-      <div style="display:flex;gap:4px">
-        <button class="btn ${mode==='day'?'btn-y':'btn-g'}" onclick="setPartsPeriod('day')">D 日</button>
-        <button class="btn ${mode==='week'?'btn-y':'btn-g'}" onclick="setPartsPeriod('week')">W 週</button>
-        <button class="btn ${mode==='month'?'btn-y':'btn-g'}" onclick="setPartsPeriod('month')">M 月</button>
-        <button class="btn ${mode==='year'?'btn-y':'btn-g'}" onclick="setPartsPeriod('year')">Y 年</button>
-      </div>
-      <button class="btn btn-g" onclick="navPartsPeriod(-1)" title="上一期">◀</button>
-      <label style="font-size:13px;color:#6b7a9e">${modeName}</label>
-      <select id="partsPeriodSel43" onchange="selectPartsPeriod(this.value)">${keys.map(k=>`<option value="${escapeHtml(k)}" ${k===key?'selected':''}>${escapeHtml(partsPeriodLabel(mode,k))}</option>`).join('')}</select>
-      <button class="btn btn-g" onclick="navPartsPeriod(1)" title="下一期">▶</button>
-      <span class="small" style="margin-left:auto">${spL('只列實際有資料的期間；選擇後立即顯示。','Only periods with data are listed; selection renders immediately.')}</span>
-    </div>`;
-  if(!key){h+=`<div class="empty">${t('noData')}</div></div></div>`;$('app').innerHTML=h;return}
-  h+=`<div class="kpi-strip">
-    <div class="kpi k-blue"><div class="kpi-n">${num(st.lines)}</div><div class="kpi-l">${spL('採購筆數','Lines')}</div></div>
-    <div class="kpi k-green"><div class="kpi-n">${num(st.parts)}</div><div class="kpi-l">${spL('零件數','Parts')}</div></div>
-    <div class="kpi k-violet"><div class="kpi-n qty-multi">${purchaseQuantityCompact43(xs)}</div><div class="kpi-l">${spL('採購數量','Qty')}</div></div>
-    <div class="kpi k-amber"><div class="kpi-n">${num(st.invoices)}</div><div class="kpi-l">${spL('發票數','Invoices')}</div></div>
-    <div class="kpi k-slate"><div class="kpi-n">${avg?money(avg):'-'}</div><div class="kpi-l">${spL('同單位平均單價','Avg Price')}</div></div>
-    <div class="kpi k-green"><div class="kpi-n">${money(st.spend)}</div><div class="kpi-l">${spL('採購金額','Spend')}</div></div>
-  </div>
-  <p><b>${escapeHtml(partsPeriodLabel(mode,key))}</b> · ${spL('選到哪一期，下面立即顯示該期資料。','The selected period is shown immediately below.')}</p>
-  <div class="tw"><table><thead><tr><th>${spL('日期','Date')}</th><th>${spL('發票','Invoice')}</th><th>${spL('料號','Part No.')}</th><th>${spL('品名','Name')}</th><th>${spL('數量／單位','Qty / Unit')}</th><th class="num">${spL('單價','Unit Price')}</th><th class="num">${spL('金額','Amount')}</th><th>${spL('供應商','Supplier')}</th></tr></thead><tbody>`;
-  h+=xs.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.invoiceNo||'').localeCompare(String(a.invoiceNo||''))).map(x=>`<tr><td>${escapeHtml(x.date||'')}</td><td>${escapeHtml(x.invoiceNo||x.invoice||'')}</td><td>${escapeHtml(x.partNo||'')}</td><td>${escapeHtml(x.name||PARTS.find(p=>p.partNo===x.partNo)?.name||'')}</td><td>${num(x.qty)} ${escapeHtml(VRTData39.partUnit(x.unit)||x.unit||'')}</td><td class="num">${money(x.unitPrice||0)}</td><td class="num">${money(purchaseAmount(x))}</td><td>${escapeHtml(x.supplier||'')}</td></tr>`).join('')||emptyRow(8);
-  h+=`</tbody></table></div><div class="al al-i" style="margin-top:12px">${spL('採購分析不把 PCS、YD、M、SET 等不同單位互相換算；數量按原單位分開。','Different units are kept separate; no automatic conversion.')}</div></div></div>`;$('app').innerHTML=h;
+  const globalMode=partsDateMode(FILTER.date||'all');if(globalMode!=='all')PART_PERIOD_MODE=globalMode;let mode=PART_PERIOD_MODE;if(!['day','week','month','year'].includes(mode))mode=PART_PERIOD_MODE='month';
+  let key=PART_PERIOD_SELECTED[mode]||FILTER.periodKey||currentPeriodKey43(mode);const keys=partsPeriodKeys(mode);
+  if(mode==='day'||mode==='week'){if(!keys.includes(key))key=keys[0]||''}else if(mode==='month'&&!/^\d{4}-\d{2}$/.test(key))key=keys[0]||todayStr().slice(0,7);else if(mode==='year'&&!/^\d{4}$/.test(key))key=keys[0]||todayStr().slice(0,4);
+  PART_PERIOD_SELECTED[mode]=key;FILTER.date=mode==='day'?'today':mode;FILTER.periodKey=key;syncGlobalPeriodUi43();
+  let selector='';if(mode==='month'){const years=[...new Set(partsPurchaseFiltered48().map(x=>partsPeriodKey(x,'year')).filter(Boolean))].sort(),mm=(key.slice(5,7)||'01');selector=`<select onchange="selectPartsPeriod(this.value+'-${mm}')">${years.map(y=>`<option ${y===key.slice(0,4)?'selected':''}>${y}</option>`).join('')}</select><input type="month" value="${escapeHtml(key)}" onchange="selectPartsPeriod(this.value)">`}else if(mode==='year'){const years=partsAllYears48();selector=`<select onchange="selectPartsPeriod(this.value)">${years.map(y=>`<option ${y===key?'selected':''}>${y}</option>`).join('')}</select>`}else selector=`<select onchange="selectPartsPeriod(this.value)">${keys.map(k=>`<option value="${escapeHtml(k)}" ${k===key?'selected':''}>${escapeHtml(partsPeriodLabel(mode,k))}</option>`).join('')}</select>`;
+  let h=`<div class="sec on"><div class="card"><div class="ct">📆 ${spL('採購 日／週／月／年','Purchase D / W / M / Y')}</div><div class="frow" style="align-items:center;flex-wrap:wrap"><button class="btn ${mode==='day'?'btn-y':'btn-g'}" onclick="setPartsPeriod('day')">D 日</button><button class="btn ${mode==='week'?'btn-y':'btn-g'}" onclick="setPartsPeriod('week')">W 週</button><button class="btn ${mode==='month'?'btn-y':'btn-g'}" onclick="setPartsPeriod('month')">M 月</button><button class="btn ${mode==='year'?'btn-y':'btn-g'}" onclick="setPartsPeriod('year')">Y 年</button><button class="btn btn-g" onclick="navPartsPeriod(-1)">◀</button>${selector}<button class="btn btn-g" onclick="navPartsPeriod(1)">▶</button><span class="small" style="margin-left:auto">${spL('月／年只顯示彙總；逐筆資料請到採購記錄。','Month/year show summaries only; use Purchase History for details.')}</span></div></div>`;
+  if(mode==='month')h+=renderPartsMonthSummary48(key);else if(mode==='year')h+=renderPartsYearSummary48(key);else {const xs=partsRowsFor48(mode,key),st=purchaseStats(xs);h+=`<div class="kpi-strip"><div class="kpi k-green"><div class="kpi-n">${money(st.spend)}</div><div class="kpi-l">${spL('採購金額','Spend')}</div></div><div class="kpi k-blue"><div class="kpi-n">${num(st.lines)}</div><div class="kpi-l">${spL('採購筆數','Lines')}</div></div><div class="kpi k-violet"><div class="kpi-n">${num(st.parts)}</div><div class="kpi-l">${spL('零件數','Parts')}</div></div><div class="kpi k-amber"><div class="kpi-n">${num(st.invoices)}</div><div class="kpi-l">${spL('發票數','Invoices')}</div></div></div><div class="tw"><table><thead><tr><th>${spL('日期','Date')}</th><th>${spL('發票','Invoice')}</th><th>${spL('料號','Part No.')}</th><th>${spL('品名','Name')}</th><th>${spL('數量／單位','Qty / Unit')}</th><th class="num">${spL('金額','Amount')}</th></tr></thead><tbody>${xs.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map(x=>`<tr><td>${escapeHtml(x.date||'')}</td><td>${escapeHtml(x.invoiceNo||x.invoice||'')}</td><td>${escapeHtml(x.partNo||'')}</td><td>${escapeHtml(x.name||'')}</td><td>${num(x.qty)} ${escapeHtml(VRTData39.partUnit(x.unit)||x.unit||'')}</td><td class="num">${money(purchaseAmount(x))}</td></tr>`).join('')||emptyRow(6)}</tbody></table></div>`}
+  h+=`</div>`;$('app').innerHTML=h;
 }
 
 /* ========== PRICE ANALYSIS ========== */
