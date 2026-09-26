@@ -375,6 +375,7 @@ tbody tr:hover td{background:#f8fafc}
 
 <script>
 'use strict';
+// v4.10: resolved shipping-period dates (actual ship → ETD+year → PO date), undated reconciliation, KPI-consistent trend math.
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
@@ -463,6 +464,8 @@ async function loadFile(file){
       if(u==='ITEM #')ci.item=i;
       else if(u==='CUSTOMER')ci.cust=i;
       else if(u==='VRT SHIP DATE (ETD)')ci.etd=i;
+      else if(/^(ACTUAL\s+SHIP(?:PING)?\s+DATE|DATE\s+SHIPPED|SHIPPED\s+DATE)$/.test(u))ci.actualShip=i;
+      else if(/^(P\.?O\.?\s*DATE|PO\s+DATE|ORDER\s+DATE)$/.test(u))ci.poDate=i;
       else if(u==='P.O. #')ci.po=i;
       else if(u==='STYLE/ARTICLE#')ci.style=i;
       else if(u==='MODEL DESCRIPTION')ci.desc=i;
@@ -490,6 +493,8 @@ async function loadFile(file){
       const remark=nvs(r[ci.remark]);
       const etdRaw=ci.etd!==undefined?r[ci.etd]:null;
       const etd=xlDate(etdRaw);
+      const actualShipDate=ci.actualShip!==undefined?xlDate(r[ci.actualShip]):'';
+      const poDate=ci.poDate!==undefined?xlDate(r[ci.poDate]):'';
       const fabType=ci.fabType!==undefined?nvs(r[ci.fabType]):'';
       const fabGroup=parseFabGroup(fabType);
 
@@ -504,6 +509,7 @@ async function loadFile(file){
         color:nvs(r[ci.color]).trim(),
         size:nvs(r[ci.size]).trim(),
         orig,shipped,open,remark,etd,
+        ...(actualShipDate?{actualShipDate}:{}),...(poDate?{poDate}:{}),
         etdYear:etd?etd.slice(0,4):'',
         etdMonth:etd?parseInt(etd.slice(5,7)):0,
         status:classify(orig,shipped,open,remark),
@@ -688,17 +694,155 @@ function renderKPI(){
 }
 
 let SHIP_TREND_MODE48='month',SHIP_TREND_YEAR48='',SHIP_TREND_MONTH48='';
-function shipTrendBase48(){const cust=document.getElementById('fCust')?.value||'',style=document.getElementById('fStyle')?.value||'',fab=document.getElementById('fFabric')?.value||'',q=(document.getElementById('fSearch')?.value||'').toLowerCase();return ALL.filter(r=>{if(cust&&r.cust!==cust)return false;if(style&&r.style!==style)return false;if(fab&&r.fabGroup!==fab)return false;if(q&&![r.cust,r.po,r.style,r.color,r.size,r.remark,r.desc,r.fabType].some(v=>v&&String(v).toLowerCase().includes(q)))return false;return true})}
-function shipTrendYears48(){const ys=[...new Set(shipTrendBase48().map(r=>String(r.etdYear||String(r.etd||'').slice(0,4))).filter(y=>/^\d{4}$/.test(y)))].sort();return ys.length?ys:[String(new Date().getFullYear())]}
-function shipTrendInit48(){const ys=shipTrendYears48();if(!SHIP_TREND_YEAR48||!ys.includes(SHIP_TREND_YEAR48))SHIP_TREND_YEAR48=ys[ys.length-1];if(!/^\d{4}-\d{2}$/.test(SHIP_TREND_MONTH48)||SHIP_TREND_MONTH48.slice(0,4)!==SHIP_TREND_YEAR48){const ms=shipTrendBase48().map(r=>String(r.etdMonth||String(r.etd||'').slice(0,7))).filter(m=>m.startsWith(SHIP_TREND_YEAR48+'-')).sort();SHIP_TREND_MONTH48=ms[ms.length-1]||SHIP_TREND_YEAR48+'-01'}}
-function shipTrendStats48(rows){const orig=rows.reduce((a,r)=>a+(Number(r.orig)||0),0),shipped=rows.reduce((a,r)=>a+(Number(r.shipped)||0),0),open=rows.reduce((a,r)=>a+(Number(r.open)||0),0);return{rows:rows.length,shipped,open,rate:orig?shipped/orig*100:0,abn:rows.filter(r=>r.status==='abnormal').length}}
-function shipTop48(rows){const m={};rows.forEach(r=>{m[r.cust||'-']=(m[r.cust||'-']||0)+(Number(r.shipped)||0)});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]).join(' / ')||'-'}
-function shipTrendNav48(dir){shipTrendInit48();if(SHIP_TREND_MODE48==='month'){const d=new Date(SHIP_TREND_MONTH48+'-01T00:00:00');d.setMonth(d.getMonth()+dir);SHIP_TREND_MONTH48=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');SHIP_TREND_YEAR48=String(d.getFullYear())}else SHIP_TREND_YEAR48=String(Number(SHIP_TREND_YEAR48)+dir);renderShipTrend48()}
+let SHIP_PO_DATE_MAP50=new Map(),SHIP_PO_DATE_READY50=false,SHIP_PO_DATE_LOADING50=null;
+
+function shipNormPo50(v){return String(v==null?'':v).toUpperCase().replace(/\s+/g,'').trim()}
+function shipIsoDate50(v){
+  if(v===null||v===undefined||v==='')return'';
+  if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(0,10);
+  if(typeof v==='number'){
+    try{const d=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(d.getTime()))return d.toISOString().slice(0,10)}catch(_){}
+    return'';
+  }
+  const s=String(v).trim();let m;
+  if((m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/)))return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  if((m=s.match(/^(\d{4})[-\/](\d{1,2})$/)))return `${m[1]}-${String(+m[2]).padStart(2,'0')}-01`;
+  if((m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/))){
+    let a=+m[1],b=+m[2],mo=a,da=b;if(a>12){mo=b;da=a}
+    return `${m[3]}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}`;
+  }
+  if((m=s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/))){
+    const mon={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12}[m[2].toUpperCase()];
+    let y=+m[3];if(y<100)y+=2000;
+    if(mon)return `${y}-${String(mon).padStart(2,'0')}-${String(+m[1]).padStart(2,'0')}`;
+  }
+  const d=new Date(s);if(!isNaN(d.getTime())&&/\d{4}/.test(s))return d.toISOString().slice(0,10);
+  return'';
+}
+function shipMonthDay50(v){
+  const s=String(v==null?'':v).trim(),m=s.match(/^(\d{1,2})[\/-](\d{1,2})(?:\s.*)?$/);if(!m)return null;
+  let mo=+m[1],da=+m[2];if(mo>12&&da<=12){const t=mo;mo=da;da=t}
+  if(mo<1||mo>12||da<1||da>31)return null;
+  return{month:mo,day:da};
+}
+function shipCandidate50(r,names){for(const n of names){if(r&&r[n]!=null&&String(r[n]).trim()!=='')return r[n]}return''}
+
+async function shipLoadPoDateMap50(){
+  if(SHIP_PO_DATE_READY50)return SHIP_PO_DATE_MAP50;
+  if(SHIP_PO_DATE_LOADING50)return SHIP_PO_DATE_LOADING50;
+  SHIP_PO_DATE_LOADING50=new Promise(resolve=>{
+    try{
+      const req=indexedDB.open('FactoryDB');
+      req.onupgradeneeded=e=>{try{e.target.transaction.abort()}catch(_){}};
+      req.onsuccess=e=>{
+        const db=e.target.result;
+        if(!db.objectStoreNames.contains('po_headers')){db.close();SHIP_PO_DATE_READY50=true;resolve(SHIP_PO_DATE_MAP50);return}
+        const q=db.transaction('po_headers','readonly').objectStore('po_headers').getAll();
+        q.onsuccess=()=>{
+          for(const h of q.result||[]){
+            const po=shipNormPo50(h.po_number),d=shipIsoDate50(h.order_date||h.po_date||h.date);
+            if(po&&d){const old=SHIP_PO_DATE_MAP50.get(po);if(!old||d>old)SHIP_PO_DATE_MAP50.set(po,d)}
+          }
+          db.close();SHIP_PO_DATE_READY50=true;resolve(SHIP_PO_DATE_MAP50);
+        };
+        q.onerror=()=>{db.close();SHIP_PO_DATE_READY50=true;resolve(SHIP_PO_DATE_MAP50)};
+      };
+      req.onerror=()=>{SHIP_PO_DATE_READY50=true;resolve(SHIP_PO_DATE_MAP50)};
+    }catch(_){SHIP_PO_DATE_READY50=true;resolve(SHIP_PO_DATE_MAP50)}
+  });
+  return SHIP_PO_DATE_LOADING50;
+}
+
+function shipPoDate50(r){
+  const direct=shipCandidate50(r,['poDate','po_date','orderDate','order_date','purchaseOrderDate','purchase_order_date']);
+  let d=shipIsoDate50(direct);if(d)return d;
+  const pm=shipCandidate50(r,['poMonth','po_month','orderMonth','order_month']);d=shipIsoDate50(pm);if(d)return d;
+  return SHIP_PO_DATE_MAP50.get(shipNormPo50(r&&r.po))||'';
+}
+function shipResolvedDate50(r){
+  const actual=shipCandidate50(r,['actualShipDate','actual_ship_date','actualShippingDate','actual_shipping_date','dateShipped','date_shipped','shippedDate','shipped_date']);
+  let d=shipIsoDate50(actual);if(d)return{date:d,source:'actual'};
+  d=shipIsoDate50(r&&r.etd);if(d)return{date:d,source:'etd'};
+  const md=shipMonthDay50(r&&r.etd),poDate=shipPoDate50(r);
+  if(md){
+    let y=/^\d{4}$/.test(String(r&&r.etdYear||''))?+r.etdYear:(poDate?+poDate.slice(0,4):0);
+    if(y){
+      if(poDate){const pm=+poDate.slice(5,7);if(pm-md.month>=4)y+=1}
+      return{date:`${y}-${String(md.month).padStart(2,'0')}-${String(md.day).padStart(2,'0')}`,source:'etd+year'};
+    }
+  }
+  if(poDate)return{date:poDate,source:'po'};
+  return{date:'',source:'undated'};
+}
+function shipTrendDate50(r){return shipResolvedDate50(r).date}
+
+function shipTrendBase48(){
+  const cust=document.getElementById('fCust')?.value||'',style=document.getElementById('fStyle')?.value||'',fab=document.getElementById('fFabric')?.value||'',q=(document.getElementById('fSearch')?.value||'').toLowerCase();
+  return ALL.filter(r=>{
+    if(cust&&r.cust!==cust)return false;if(style&&r.style!==style)return false;if(fab&&r.fabGroup!==fab)return false;
+    if(q&&![r.cust,r.po,r.style,r.color,r.size,r.remark,r.desc,r.fabType].some(v=>v&&String(v).toLowerCase().includes(q)))return false;
+    return true;
+  });
+}
+function shipTrendYears48(){
+  const ys=[...new Set(shipTrendBase48().map(r=>shipTrendDate50(r).slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort();
+  return ys.length?ys:[String(new Date().getFullYear())];
+}
+function shipTrendInit48(){
+  const all=shipTrendBase48(),ys=shipTrendYears48();
+  if(!SHIP_TREND_YEAR48||!ys.includes(SHIP_TREND_YEAR48))SHIP_TREND_YEAR48=ys[ys.length-1];
+  const ms=[...new Set(all.map(r=>shipTrendDate50(r).slice(0,7)).filter(m=>/^\d{4}-\d{2}$/.test(m)))].sort();
+  if(!/^\d{4}-\d{2}$/.test(SHIP_TREND_MONTH48)||!ms.includes(SHIP_TREND_MONTH48)){
+    const sameYear=ms.filter(m=>m.startsWith(SHIP_TREND_YEAR48+'-'));
+    SHIP_TREND_MONTH48=sameYear[sameYear.length-1]||ms[ms.length-1]||SHIP_TREND_YEAR48+'-01';
+    SHIP_TREND_YEAR48=SHIP_TREND_MONTH48.slice(0,4);
+  }
+}
+function shipTrendStats48(rows){
+  const shippedRows=rows.filter(r=>r.status==='shipped'),outstandingRows=rows.filter(r=>r.status==='outstanding');
+  const orig=rows.reduce((a,r)=>a+(Number(r.orig)||0),0);
+  const shipped=shippedRows.reduce((a,r)=>a+(Number(r.shipped)||0),0);
+  const open=outstandingRows.reduce((a,r)=>a+(Number(r.open)||0),0);
+  return{rows:rows.length,shipped,open,rate:orig?shipped/orig*100:0,abn:rows.filter(r=>r.status==='abnormal').length,orig};
+}
+function shipTop48(rows){
+  const m={};rows.forEach(r=>{m[r.cust||'-']=(m[r.cust||'-']||0)+(Number(r.shipped)||0)});
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]).join(' / ')||'-';
+}
+function shipTrendNav48(dir){
+  shipTrendInit48();
+  if(SHIP_TREND_MODE48==='month'){
+    const d=new Date(SHIP_TREND_MONTH48+'-01T00:00:00');d.setMonth(d.getMonth()+dir);
+    SHIP_TREND_MONTH48=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');SHIP_TREND_YEAR48=String(d.getFullYear());
+  }else SHIP_TREND_YEAR48=String(Number(SHIP_TREND_YEAR48)+dir);
+  renderShipTrend48();
+}
 function shipTrendPick48(k){if(k.length===4){SHIP_TREND_YEAR48=k;SHIP_TREND_MODE48='year'}else{SHIP_TREND_MONTH48=k;SHIP_TREND_YEAR48=k.slice(0,4);SHIP_TREND_MODE48='month'}renderShipTrend48()}
 function shipTrendMode48(m){SHIP_TREND_MODE48=m;renderShipTrend48()}
-function shipBar48(label,value,max,active,key){const p=max?Math.max(value?3:0,Math.round(value/max*100)):0;return `<div onclick="shipTrendPick48('${key}')" style="flex:1;min-width:55px;text-align:center;cursor:pointer"><div style="height:115px;display:flex;align-items:flex-end"><div style="width:100%;height:${p}%;background:${active?'#3b82f6':'#bfdbfe'};border-radius:6px 6px 0 0"></div></div><div style="font-size:10px;color:#8695ad;margin-top:5px">${label}</div></div>`}
-function renderShipTrend48(){const el=document.getElementById('shipTrend48');if(!el)return;shipTrendInit48();const all=shipTrendBase48(),ys=shipTrendYears48();if(SHIP_TREND_MODE48==='month'){const months=Array.from({length:12},(_,i)=>SHIP_TREND_YEAR48+'-'+String(i+1).padStart(2,'0')),sets=months.map(m=>all.filter(r=>String(r.etdMonth||String(r.etd||'').slice(0,7))===m)),stats=sets.map(shipTrendStats48),idx=Math.max(0,months.indexOf(SHIP_TREND_MONTH48)),st=stats[idx],mx=Math.max(1,...stats.map(z=>z.shipped));el.innerHTML=`<div class="tbl-card"><div class="tbl-head"><span class="tbl-title">📅 出貨月／年趨勢</span><div style="display:flex;gap:7px;align-items:center"><button class="btn ${SHIP_TREND_MODE48==='month'?'btn-primary':'btn-ghost'}" onclick="shipTrendMode48('month')">月報</button><button class="btn btn-ghost" onclick="shipTrendMode48('year')">年報</button><button class="btn btn-ghost" onclick="shipTrendNav48(-1)">◀ 上月</button><select class="filter-sel" onchange="SHIP_TREND_YEAR48=this.value;SHIP_TREND_MONTH48=this.value+'-'+(SHIP_TREND_MONTH48.slice(5,7)||'01');renderShipTrend48()">${ys.map(y=>`<option ${y===SHIP_TREND_YEAR48?'selected':''}>${y}</option>`).join('')}</select><input class="filter-input" type="month" value="${SHIP_TREND_MONTH48}" onchange="shipTrendPick48(this.value)"><button class="btn btn-ghost" onclick="shipTrendNav48(1)">下月 ▶</button></div></div><div style="padding:14px"><div class="kpi-row"><div class="kpi green"><div class="kpi-label">已出數量</div><div class="kpi-value">${fmt(st.shipped)}</div></div><div class="kpi blue"><div class="kpi-label">筆數</div><div class="kpi-value">${st.rows.toLocaleString()}</div></div><div class="kpi purple"><div class="kpi-label">出貨率</div><div class="kpi-value">${st.rate.toFixed(1)}%</div></div><div class="kpi yellow"><div class="kpi-label">未出</div><div class="kpi-value">${fmt(st.open)}</div></div><div class="kpi red"><div class="kpi-label">異常筆數</div><div class="kpi-value">${st.abn}</div></div></div><div style="display:flex;gap:9px;align-items:flex-end;margin:14px 0 18px">${months.map((m,i)=>shipBar48(String(i+1)+'月',stats[i].shipped,mx,m===SHIP_TREND_MONTH48,m)).join('')}</div><div class="tbl-wrap"><table><thead><tr><th>月份</th><th class="num">已出</th><th class="num">未出</th><th class="num">出貨率</th><th>前 3 大客戶</th></tr></thead><tbody>${months.map((m,i)=>`<tr onclick="shipTrendPick48('${m}')" style="cursor:pointer;${m===SHIP_TREND_MONTH48?'background:#eef6ff':''}"><td><b>${m}</b></td><td class="num">${fmt(stats[i].shipped)}</td><td class="num">${fmt(stats[i].open)}</td><td class="num">${stats[i].rate.toFixed(1)}%</td><td>${shipTop48(sets[i])}</td></tr>`).join('')}</tbody></table></div></div></div>`;return}
- const yearSets=ys.map(y=>all.filter(r=>String(r.etdYear||String(r.etd||'').slice(0,4))===y)),yearStats=yearSets.map(shipTrendStats48),mx=Math.max(1,...yearStats.map(z=>z.shipped)),sel=yearStats[ys.indexOf(SHIP_TREND_YEAR48)]||{rows:0,shipped:0,open:0,rate:0,abn:0};el.innerHTML=`<div class="tbl-card"><div class="tbl-head"><span class="tbl-title">📅 出貨月／年趨勢</span><div style="display:flex;gap:7px"><button class="btn btn-ghost" onclick="shipTrendMode48('month')">月報</button><button class="btn btn-primary" onclick="shipTrendMode48('year')">年報</button><button class="btn btn-ghost" onclick="shipTrendNav48(-1)">◀</button><select class="filter-sel" onchange="shipTrendPick48(this.value)">${ys.map(y=>`<option ${y===SHIP_TREND_YEAR48?'selected':''}>${y}</option>`).join('')}</select><button class="btn btn-ghost" onclick="shipTrendNav48(1)">▶</button></div></div><div style="padding:14px"><div class="kpi-row"><div class="kpi blue"><div class="kpi-label">年份</div><div class="kpi-value">${SHIP_TREND_YEAR48}</div></div><div class="kpi green"><div class="kpi-label">已出數量</div><div class="kpi-value">${fmt(sel.shipped)}</div></div><div class="kpi yellow"><div class="kpi-label">未出</div><div class="kpi-value">${fmt(sel.open)}</div></div><div class="kpi purple"><div class="kpi-label">出貨率</div><div class="kpi-value">${sel.rate.toFixed(1)}%</div></div></div><div style="display:flex;gap:20px;align-items:flex-end;margin:14px 0 18px">${ys.map((y,i)=>shipBar48(y,yearStats[i].shipped,mx,y===SHIP_TREND_YEAR48,y)).join('')}</div><div class="tbl-wrap"><table><thead><tr><th>年份</th><th>客戶</th><th class="num">已出</th><th class="num">未出</th><th class="num">出貨率</th></tr></thead><tbody>${ys.map((y,i)=>{const rs=yearSets[i],cs=[...new Set(rs.map(r=>r.cust))].sort(),body=cs.map(c=>{const z=shipTrendStats48(rs.filter(r=>r.cust===c));return `<tr><td>${y}</td><td>${c}</td><td class="num">${fmt(z.shipped)}</td><td class="num">${fmt(z.open)}</td><td class="num">${z.rate.toFixed(1)}%</td></tr>`}).join(''),z=yearStats[i];return body+`<tr style="font-weight:700;background:#f5f7fb"><td>${y}</td><td>合計</td><td class="num">${fmt(z.shipped)}</td><td class="num">${fmt(z.open)}</td><td class="num">${z.rate.toFixed(1)}%</td></tr>`}).join('')}</tbody></table></div></div></div>`}
+function shipBar48(label,value,max,active,key){
+  const p=max?Math.max(value?3:0,Math.round(value/max*100)):0;
+  return `<div onclick="shipTrendPick48('${key}')" style="flex:1;min-width:55px;text-align:center;cursor:pointer"><div style="height:115px;display:flex;align-items:flex-end"><div style="width:100%;height:${p}%;background:${active?'#3b82f6':'#bfdbfe'};border-radius:6px 6px 0 0"></div></div><div style="font-size:10px;color:#8695ad;margin-top:5px">${label}</div></div>`;
+}
+function shipTrendCoverage50(all){
+  const dated=all.filter(r=>shipTrendDate50(r)),undated=all.filter(r=>!shipTrendDate50(r));
+  return{dated,undated,allStats:shipTrendStats48(all),undatedStats:shipTrendStats48(undated)};
+}
+function renderShipTrend48(){
+  const el=document.getElementById('shipTrend48');if(!el)return;
+  shipTrendInit48();
+  const all=shipTrendBase48(),ys=shipTrendYears48(),cov=shipTrendCoverage50(all);
+  const cover=`<div style="margin:0 14px 12px;padding:8px 10px;background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;font-size:11px;color:#526176">日期歸屬：有日期 ${cov.dated.length.toLocaleString()} 筆＋未填日期 ${cov.undated.length.toLocaleString()} 筆＝全部 ${all.length.toLocaleString()} 筆；全資料已出 ${fmt(cov.allStats.shipped)}／未出 ${fmt(cov.allStats.open)}。${cov.undated.length?`未填日期已出 ${fmt(cov.undatedStats.shipped)}／未出 ${fmt(cov.undatedStats.open)}。`:''}</div>`;
+  if(SHIP_TREND_MODE48==='month'){
+    const months=Array.from({length:12},(_,i)=>SHIP_TREND_YEAR48+'-'+String(i+1).padStart(2,'0'));
+    const sets=months.map(m=>all.filter(r=>shipTrendDate50(r).slice(0,7)===m)),stats=sets.map(shipTrendStats48);
+    const idx=Math.max(0,months.indexOf(SHIP_TREND_MONTH48)),st=stats[idx],mx=Math.max(1,...stats.map(z=>z.shipped));
+    el.innerHTML=`<div class="tbl-card"><div class="tbl-head"><span class="tbl-title">📅 出貨月／年趨勢</span><div style="display:flex;gap:7px;align-items:center"><button class="btn btn-primary" onclick="shipTrendMode48('month')">月報</button><button class="btn btn-ghost" onclick="shipTrendMode48('year')">年報</button><button class="btn btn-ghost" onclick="shipTrendNav48(-1)">◀ 上月</button><select class="filter-sel" onchange="SHIP_TREND_YEAR48=this.value;const ms=shipTrendBase48().map(r=>shipTrendDate50(r).slice(0,7)).filter(m=>m.startsWith(this.value+'-')).sort();SHIP_TREND_MONTH48=ms[ms.length-1]||this.value+'-01';renderShipTrend48()">${ys.map(y=>`<option ${y===SHIP_TREND_YEAR48?'selected':''}>${y}</option>`).join('')}</select><input class="filter-input" type="month" value="${SHIP_TREND_MONTH48}" onchange="shipTrendPick48(this.value)"><button class="btn btn-ghost" onclick="shipTrendNav48(1)">下月 ▶</button></div></div>${cover}<div style="padding:0 14px 14px"><div class="kpi-row"><div class="kpi green"><div class="kpi-label">已出數量</div><div class="kpi-value">${fmt(st.shipped)}</div></div><div class="kpi blue"><div class="kpi-label">筆數</div><div class="kpi-value">${st.rows.toLocaleString()}</div></div><div class="kpi purple"><div class="kpi-label">出貨率</div><div class="kpi-value">${st.rate.toFixed(1)}%</div></div><div class="kpi yellow"><div class="kpi-label">未出</div><div class="kpi-value">${fmt(st.open)}</div></div><div class="kpi red"><div class="kpi-label">異常筆數</div><div class="kpi-value">${st.abn}</div></div></div><div style="display:flex;gap:9px;align-items:flex-end;margin:14px 0 18px">${months.map((m,i)=>shipBar48(String(i+1)+'月',stats[i].shipped,mx,m===SHIP_TREND_MONTH48,m)).join('')}</div><div class="tbl-wrap"><table><thead><tr><th>月份</th><th class="num">已出</th><th class="num">未出</th><th class="num">出貨率</th><th>前 3 大客戶</th></tr></thead><tbody>${months.map((m,i)=>`<tr onclick="shipTrendPick48('${m}')" style="cursor:pointer;${m===SHIP_TREND_MONTH48?'background:#eef6ff':''}"><td><b>${m}</b></td><td class="num">${fmt(stats[i].shipped)}</td><td class="num">${fmt(stats[i].open)}</td><td class="num">${stats[i].rate.toFixed(1)}%</td><td>${shipTop48(sets[i])}</td></tr>`).join('')}${cov.undated.length?`<tr style="background:#fff7ed"><td><b>未填日期</b><div style="font-size:10px;color:#9a6b34">無法依月歸屬 · ${cov.undated.length} 筆</div></td><td class="num">${fmt(cov.undatedStats.shipped)}</td><td class="num">${fmt(cov.undatedStats.open)}</td><td class="num">${cov.undatedStats.rate.toFixed(1)}%</td><td>${shipTop48(cov.undated)}</td></tr>`:''}</tbody></table></div></div></div>`;
+    return;
+  }
+  const yearSets=ys.map(y=>all.filter(r=>shipTrendDate50(r).slice(0,4)===y)),yearStats=yearSets.map(shipTrendStats48);
+  const mx=Math.max(1,...yearStats.map(z=>z.shipped)),sel=yearStats[ys.indexOf(SHIP_TREND_YEAR48)]||{rows:0,shipped:0,open:0,rate:0,abn:0};
+  el.innerHTML=`<div class="tbl-card"><div class="tbl-head"><span class="tbl-title">📅 出貨月／年趨勢</span><div style="display:flex;gap:7px"><button class="btn btn-ghost" onclick="shipTrendMode48('month')">月報</button><button class="btn btn-primary" onclick="shipTrendMode48('year')">年報</button><button class="btn btn-ghost" onclick="shipTrendNav48(-1)">◀</button><select class="filter-sel" onchange="shipTrendPick48(this.value)">${ys.map(y=>`<option ${y===SHIP_TREND_YEAR48?'selected':''}>${y}</option>`).join('')}</select><button class="btn btn-ghost" onclick="shipTrendNav48(1)">▶</button></div></div>${cover}<div style="padding:0 14px 14px"><div class="kpi-row"><div class="kpi blue"><div class="kpi-label">年份</div><div class="kpi-value">${SHIP_TREND_YEAR48}</div></div><div class="kpi green"><div class="kpi-label">已出數量</div><div class="kpi-value">${fmt(sel.shipped)}</div></div><div class="kpi yellow"><div class="kpi-label">未出</div><div class="kpi-value">${fmt(sel.open)}</div></div><div class="kpi purple"><div class="kpi-label">出貨率</div><div class="kpi-value">${sel.rate.toFixed(1)}%</div></div><div class="kpi red"><div class="kpi-label">未填日期</div><div class="kpi-value">${cov.undated.length.toLocaleString()}</div></div></div><div style="display:flex;gap:20px;align-items:flex-end;margin:14px 0 18px">${ys.map((y,i)=>shipBar48(y,yearStats[i].shipped,mx,y===SHIP_TREND_YEAR48,y)).join('')}</div><div class="tbl-wrap"><table><thead><tr><th>年份</th><th>客戶</th><th class="num">已出</th><th class="num">未出</th><th class="num">出貨率</th></tr></thead><tbody>${ys.map((y,i)=>{const rs=yearSets[i],cs=[...new Set(rs.map(r=>r.cust))].sort(),body=cs.map(c=>{const z=shipTrendStats48(rs.filter(r=>r.cust===c));return `<tr><td>${y}</td><td>${c}</td><td class="num">${fmt(z.shipped)}</td><td class="num">${fmt(z.open)}</td><td class="num">${z.rate.toFixed(1)}%</td></tr>`}).join(''),z=yearStats[i];return body+`<tr style="font-weight:700;background:#f5f7fb"><td>${y}</td><td>合計</td><td class="num">${fmt(z.shipped)}</td><td class="num">${fmt(z.open)}</td><td class="num">${z.rate.toFixed(1)}%</td></tr>`}).join('')}${cov.undated.length?`<tr style="font-weight:700;background:#fff7ed"><td>未填日期</td><td>${cov.undated.length} 筆</td><td class="num">${fmt(cov.undatedStats.shipped)}</td><td class="num">${fmt(cov.undatedStats.open)}</td><td class="num">${cov.undatedStats.rate.toFixed(1)}%</td></tr>`:''}<tr style="font-weight:800;background:#eaf2ff"><td>全部</td><td>${all.length.toLocaleString()} 筆</td><td class="num">${fmt(cov.allStats.shipped)}</td><td class="num">${fmt(cov.allStats.open)}</td><td class="num">${cov.allStats.rate.toFixed(1)}%</td></tr></tbody></table></div></div></div>`;
+}
 window.shipTrendMode48=shipTrendMode48;window.shipTrendNav48=shipTrendNav48;window.shipTrendPick48=shipTrendPick48;window.renderShipTrend48=renderShipTrend48;
 
 // ══════════════════════════════════════════════
@@ -1080,7 +1224,7 @@ async function scanAndLoad(silent=false){
 // Init on page load
 initFolderScan();
 // 自動還原上次載入的出貨資料
-window.VRT_LOCAL_READY=shipRestore();
+window.VRT_LOCAL_READY=(async()=>{const ok=await shipRestore();await shipLoadPoDateMap50();if(TAB==='trend')renderShipTrend48();return ok})();
 </script>
 
 

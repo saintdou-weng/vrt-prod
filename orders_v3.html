@@ -2211,6 +2211,7 @@ function periodKey(asOf,gran){
   return iso;
 }
 function periodLabel(k,gran){
+  if(k===PDF_UNDATED_ORDER50)return '未填下單日';
   if(gran==='week'&&k.includes('-W')){const [y,w]=k.split('-W');return `${y} 第${w} 週`;}
   if(gran==='month')return k+' 月';
   if(gran==='year')return k+' 年';
@@ -2231,26 +2232,53 @@ window.onGranChange=onGranChange;window.periodNav=periodNav;window.setMasterGran
 
 // ══ RENDER: PDF ORDERS (客戶原始 PO，不混 Weekly) ══
 function headerMap(){const m={};(APP.headers||[]).forEach(h=>m[h.id]=h);return m}
+function normPo50(v){return String(v==null?'':v).toUpperCase().replace(/\s+/g,'').trim()}
+function normSource50(v){return String(v==null?'':v).trim().toLowerCase().replace(/\\/g,'/').split('/').pop()}
+function safeHeaderForLine50(o){
+  const hs=APP.headers||[],po=normPo50(o&&o.po_number),cust=canonicalCustomer((o&&o.customer)||''),src=normSource50(o&&o.source_file),hash=String((o&&o.source_hash)||'').trim();
+  const compatible=h=>{if(!h)return false;const hp=normPo50(h.po_number),hc=canonicalCustomer(h.customer||''),hh=String(h.source_hash||'').trim(),hsr=normSource50(h.source_file);if(po&&hp&&po!==hp)return false;if(cust&&hc&&cust!==hc&&po&&hp)return false;if(hash&&hh&&hash!==hh)return false;return !!((po&&hp&&po===hp)||(hash&&hh&&hash===hh)||(src&&hsr&&src===hsr));};
+  if(o&&o.po_id!=null){const byId=hs.find(h=>String(h.id)===String(o.po_id));if(compatible(byId))return byId;}
+  if(po){const exact=hs.filter(h=>normPo50(h.po_number)===po);const sameCust=exact.find(h=>!cust||!h.customer||canonicalCustomer(h.customer)===cust);if(sameCust)return sameCust;if(exact.length===1)return exact[0];}
+  if(hash){const h=hs.find(x=>String(x.source_hash||'').trim()===hash);if(h)return h;}
+  if(src){const matches=hs.filter(x=>normSource50(x.source_file)===src);if(matches.length===1)return matches[0];}
+  return {};
+}
 function uniquePdfOrders(){const seen=new Map();for(const o of APP.orders){const x=orderMetaRaw(o),k=(x.source_hash||'')?`${x.source_hash}|${x.sku||x.style_code||''}|${x.color||''}|${x.size||''}|${x.qty||0}|${x.ship_date||x.cancel_date||''}`:[x.customer,x.po_number,x.sku,x.style_code,x.color,x.size,x.qty,x.ship_date||x.cancel_date,x.ext_price].join('|');if(!seen.has(k))seen.set(k,o)}return [...seen.values()]}
-function orderMetaRaw(o){const h=headerMap()[o.po_id]||{};return{...o,order_date:o.order_date||h.order_date||'',source_file:o.source_file||h.source_file||'',source_email:o.source_email||h.source_email||'',source_hash:o.source_hash||h.source_hash||'',format:o.format||h.format||o.parser||'',customer:o.customer||h.customer||'UNKNOWN',po_number:o.po_number||h.po_number||''}}
+function orderMetaRaw(o){const h=safeHeaderForLine50(o);return{...o,order_date:o.order_date||h.order_date||'',source_file:o.source_file||h.source_file||'',source_email:o.source_email||h.source_email||'',source_hash:o.source_hash||h.source_hash||'',format:o.format||h.format||o.parser||'',customer:o.customer||h.customer||'UNKNOWN',po_number:o.po_number||h.po_number||''}}
 function orderMeta(o){const x=orderMetaRaw(o);return{...x,order_date:DateEngine.normalize(x.order_date)||x.order_date||''}}
 function pdfDate(o){const x=orderMeta(o);return APP.pdfBasis==='order'?(DateEngine.normalize(x.order_date)||''):(DateEngine.normalize(x.ship_date||x.cancel_date)||'')}
-function pdfPeriodKey(o,g){const d=pdfDate(o);if(!d)return null;return periodKey(d,g)}
-function pdfPeriods(){return [...new Set(uniquePdfOrders().map(o=>pdfPeriodKey(o,APP.pdfGran)).filter(Boolean))].sort()}
+const PDF_UNDATED_ORDER50='__UNDATED_ORDER__';
+function pdfPeriodKey(o,g){const d=pdfDate(o);if(!d)return APP.pdfBasis==='order'?PDF_UNDATED_ORDER50:null;return periodKey(d,g)}
+function pdfPeriods(){const vals=[...new Set(uniquePdfOrders().map(o=>pdfPeriodKey(o,APP.pdfGran)).filter(Boolean))];return vals.sort((a,b)=>a===PDF_UNDATED_ORDER50?-1:b===PDF_UNDATED_ORDER50?1:String(a).localeCompare(String(b)))}
 function setPdfGran(g){APP.pdfGran=g;APP.pdfPeriod='';pdfUiSave43();document.querySelectorAll('#pdf-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));renderPdfOrders()}
 function pdfBasisChange(){APP.pdfBasis=document.getElementById('pdf-date-basis').value;APP.pdfPeriod='';pdfUiSave43();renderPdfOrders()}
 function pdfPeriodNav(dir){const p=document.getElementById('pdf-period');if(!p||!p.options.length)return;let i=Math.max(0,Math.min(p.options.length-1,p.selectedIndex+dir));p.selectedIndex=i;APP.pdfPeriod=p.value;pdfUiSave43();renderPdfOrders()}
 function pdfLatest(){const p=document.getElementById('pdf-period');if(p&&p.options.length){p.selectedIndex=p.options.length-1;APP.pdfPeriod=p.value;pdfUiSave43();renderPdfOrders()}}
 function pdfGroups(){
-  const hm=headerMap(),m={};
-  uniquePdfOrders().forEach(o=>{const h=hm[o.po_id]||{},x=orderMeta(o),key=(o.po_id||'')+'|'+x.customer+'|'+x.po_number+'|'+(x.source_file||'');let g=m[key]||(m[key]={key,po_id:o.po_id,customer:x.customer,po:x.po_number,orderDates:[],shipDates:[],qty:0,amount:0,styles:new Set(),colors:new Set(),sizes:new Set(),lines:[],source:x.source_file||x.parser||'-',format:x.format||x.parser||'-'});if(x.order_date)g.orderDates.push(DateEngine.normalize(x.order_date)||x.order_date);let sd=DateEngine.normalize(x.ship_date||x.cancel_date);if(sd)g.shipDates.push(sd);g.qty+=Number(x.qty)||0;g.amount+=Number(x.ext_price)||0;if(x.style_code)g.styles.add(x.style_code);if(x.color)g.colors.add(x.color);if(x.size)g.sizes.add(x.size);g.lines.push(x)});
-  return Object.values(m).map(g=>({...g,orderDate:g.orderDates.filter(Boolean).sort()[0]||'',shipDate:g.shipDates.filter(Boolean).sort()[0]||'',styles:[...g.styles],colors:[...g.colors],sizes:[...g.sizes]}));
+  const m={};
+  uniquePdfOrders().forEach(o=>{
+    const x=orderMeta(o),poKey=normPo50(x.po_number),custKey=canonicalCustomer(x.customer||'UNKNOWN'),
+      fallback=x.source_hash||normSource50(x.source_file)||String(o.id||''),
+      key=poKey?`${custKey}|${poKey}`:`${custKey}|NOPO|${fallback}`;
+    let g=m[key]||(m[key]={key,po_id:o.po_id,customer:x.customer,po:x.po_number,orderDates:[],shipDates:[],qty:0,amount:0,styles:new Set(),colors:new Set(),sizes:new Set(),lines:[],sources:new Set(),formats:new Set()});
+    if(x.order_date)g.orderDates.push(DateEngine.normalize(x.order_date)||x.order_date);
+    const sd=DateEngine.normalize(x.ship_date||x.cancel_date);if(sd)g.shipDates.push(sd);
+    g.qty+=Number(x.qty)||0;g.amount+=Number(x.ext_price)||0;
+    if(x.style_code)g.styles.add(x.style_code);if(x.color)g.colors.add(x.color);if(x.size)g.sizes.add(x.size);
+    if(x.source_file)g.sources.add(x.source_file);if(x.format||x.parser)g.formats.add(x.format||x.parser);g.lines.push(x);
+  });
+  return Object.values(m).map(g=>({...g,
+    orderDate:[...new Set(g.orderDates.filter(Boolean))].sort()[0]||'',
+    shipDate:[...new Set(g.shipDates.filter(Boolean))].sort()[0]||'',
+    styles:[...g.styles],colors:[...g.colors],sizes:[...g.sizes],
+    source:[...g.sources].join(' / ')||'-',format:[...g.formats].join(' / ')||'-'
+  }));
 }
 function pdfGroupDate(g){return APP.pdfBasis==='order'?g.orderDate:g.shipDate}
 function renderPdfOrders(){
   const pe=document.getElementById('pdf-period');if(!pe)return;document.getElementById('pdf-date-basis').value=APP.pdfBasis;document.querySelectorAll('#pdf-gran-seg button').forEach(b=>b.classList.toggle('on',b.dataset.g===APP.pdfGran));const ps=pdfPeriods();if(!APP.pdfPeriod||!ps.includes(APP.pdfPeriod))APP.pdfPeriod=ps[ps.length-1]||'';pdfUiSave43();pe.innerHTML=ps.map(k=>`<option value="${k}" ${k===APP.pdfPeriod?'selected':''}>${periodLabel(k,APP.pdfGran)}</option>`).join('')||'<option>—</option>';pe.value=APP.pdfPeriod;
   const cust=document.getElementById('pdf-customer'),cv=cust.value,customers=[...new Set(uniquePdfOrders().map(o=>orderMeta(o).customer).filter(Boolean))].sort();cust.innerHTML='<option value="">全部客戶</option>'+customers.map(c=>`<option value="${c}" ${c===cv?'selected':''}>${c}</option>`).join('');
-  const q=(document.getElementById('pdf-search').value||'').toLowerCase();let gs=pdfGroups().filter(g=>{const d=pdfGroupDate(g),pk=d?periodKey(d,APP.pdfGran):null;if(APP.pdfPeriod&&pk!==APP.pdfPeriod)return false;if(cv&&g.customer!==cv)return false;if(q&&![g.customer,g.po,g.source,g.styles.join(' ')].join(' ').toLowerCase().includes(q))return false;return true}).sort((a,b)=>(pdfGroupDate(a)||'').localeCompare(pdfGroupDate(b)||''));
+  const q=(document.getElementById('pdf-search').value||'').toLowerCase();let gs=pdfGroups().filter(g=>{const d=pdfGroupDate(g),pk=d?periodKey(d,APP.pdfGran):(APP.pdfBasis==='order'?PDF_UNDATED_ORDER50:null);if(APP.pdfPeriod&&pk!==APP.pdfPeriod)return false;if(cv&&g.customer!==cv)return false;if(q&&![g.customer,g.po,g.source,g.styles.join(' ')].join(' ').toLowerCase().includes(q))return false;return true}).sort((a,b)=>(pdfGroupDate(a)||'').localeCompare(pdfGroupDate(b)||''));
   const qty=gs.reduce((a,g)=>a+g.qty,0),amt=gs.reduce((a,g)=>a+g.amount,0),undated=pdfGroups().filter(g=>!pdfGroupDate(g)).length;
   document.getElementById('pdf-kpis').innerHTML=`<div class="kc ac"><div class="kl">PDF PO</div><div class="kv">${gs.length}</div></div><div class="kc"><div class="kl">數量 pcs</div><div class="kv">${qty.toLocaleString()}</div></div><div class="kc gr"><div class="kl">金額</div><div class="kv">$${(amt/1000).toFixed(1)}K</div></div><div class="kc"><div class="kl">客戶</div><div class="kv">${new Set(gs.map(g=>g.customer)).size}</div></div><div class="kc yl"><div class="kl">無${APP.pdfBasis==='order'?'下單':'出貨'}日</div><div class="kv">${undated}</div></div>`;
   document.getElementById('pdf-count').textContent=`${gs.length} PO · 日期基準：${APP.pdfBasis==='order'?'下單日':'要求出貨日'}`;
