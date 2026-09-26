@@ -1,0 +1,249 @@
+{
+  "version": "1.1",
+  "updatedAt": "2026-09-26",
+  "routingStrategy": "outlook-folder-first",
+  "notes": [
+    "Customer PO attachments are routed by Outlook folder, not sender.",
+    "Sender folders are fallback only when no recognized Outlook business folder is available.",
+    "Do not treat VRT supplier/fabric procurement POs as customer buyer POs."
+  ],
+  "root": "Downloads\\08_EMAIL_郵件附件\\Daily_每日附件",
+  "routes": [
+    {
+      "outlookFolder": "buyer po_客戶訂單",
+      "target": "buyer po_客戶訂單\\_unclassified\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/adi purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\adi purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/alsco purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\alsco purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/australia linen purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\australia linen purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/deane purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\deane purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/dickson purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\dickson purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/lechner purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\lechner purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/magnus purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\magnus purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/nu purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\nu purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/vestis purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\vestis purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "buyer po_客戶訂單/wpl purchase_客戶訂單",
+      "target": "buyer po_客戶訂單\\wpl purchase_客戶訂單\\{YYYY-MM}",
+      "types": [
+        "pdf",
+        "xlsx",
+        "xls",
+        "msg"
+      ]
+    },
+    {
+      "outlookFolder": "total pur_訂單彙總",
+      "target": "total pur_訂單彙總\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "adi spreadsheet_客戶訂單表",
+      "target": "adi spreadsheet_客戶訂單表\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "shipping schedule_出貨排程",
+      "target": "shipping schedule_出貨排程\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "vestis spreadsheet_客戶訂單表",
+      "target": "vestis spreadsheet_客戶訂單表\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "weekly order",
+      "target": "weekly order_每週訂單\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "cutting",
+      "target": "cutting_裁剪\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "sewing",
+      "target": "sewing_車縫\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "qc",
+      "target": "qc_品質\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "IE-SMV",
+      "target": "IE-SMV\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "fabric",
+      "target": "fabric_布料\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "greige",
+      "target": "greige_胚布\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "BOM",
+      "target": "BOM\\{YYYY-MM}"
+    },
+    {
+      "outlookFolder": "spare parts",
+      "target": "spare parts_機修零件\\{YYYY-MM}"
+    }
+  ],
+  "exclusions": [
+    {
+      "pathContains": "prd_生產管理",
+      "filePattern": "PO#2603",
+      "reason": "VRT supplier/fabric procurement PO, not customer buyer PO"
+    },
+    {
+      "subjectContains": "Printed Main Label",
+      "reason": "Label/production attachment, not buyer PO unless Outlook folder is buyer po_客戶訂單"
+    }
+  ],
+  "backfill": {
+    "from": "2026-03-01",
+    "folders": [
+      "buyer po_客戶訂單/adi purchase_客戶訂單",
+      "buyer po_客戶訂單/alsco purchase_客戶訂單",
+      "buyer po_客戶訂單/australia linen purchase_客戶訂單",
+      "buyer po_客戶訂單/deane purchase_客戶訂單",
+      "buyer po_客戶訂單/dickson purchase_客戶訂單",
+      "buyer po_客戶訂單/lechner purchase_客戶訂單",
+      "buyer po_客戶訂單/magnus purchase_客戶訂單",
+      "buyer po_客戶訂單/nu purchase_客戶訂單",
+      "buyer po_客戶訂單/vestis purchase_客戶訂單",
+      "buyer po_客戶訂單/wpl purchase_客戶訂單"
+    ],
+    "attachmentTypes": [
+      "pdf",
+      "xlsx",
+      "xls",
+      "msg"
+    ],
+    "preserveOriginalEmail": true,
+    "sendMail": false,
+    "deleteMail": false,
+    "filenamePolicy": "preserve original filename; append short sha256 only on collision"
+  },
+  "ledger": {
+    "path": "work/email-downloads-ledger.json",
+    "fields": [
+      "downloadedAt",
+      "outlookFolder",
+      "sender",
+      "subject",
+      "attachmentFilename",
+      "savedPath",
+      "sha256"
+    ]
+  },
+  "continuousTitleClassifier": {
+    "priority": [
+      "continuous_title",
+      "person",
+      "yearly_correspondence"
+    ],
+    "sourceRuleBackup": "v2/outlook-rules-backup.json",
+    "ruleFilter": "enabled Condition Type 2 subject-keyword rules",
+    "destinationIdentity": "FolderID from backup; do not infer from renamed folder path",
+    "doNotReenableNativeOutlookRules": true,
+    "dryRun": {
+      "from": "2026-09-10",
+      "moveAfterPaulConfirmationOnly": true,
+      "delete": false
+    },
+    "knownSubjects": [
+      "FABRIC PO",
+      "ADI Spreadsheet",
+      "Vestis Spreadsheet",
+      "FABRIC STANDARD",
+      "LAB DIP",
+      "VRT Shipping Schedule",
+      "Outstanding Order"
+    ],
+    "fabricPoAttachmentTarget": "08_EMAIL_郵件附件\\prd_生產郵件\\fabric\\fabric PO"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "release": "4.4.0",
+  "backend": "4.2.0 (unchanged)",
+  "baselineZip": "VRT_PROD_v4.3_IMPORT_FABRIC_IE_FIX.zip",
+  "baselineSha256": "e955bddd32399432ee1cfa8aa914aa384604fc3347f669f9af5e2dcdfeb8c854",
+  "htmlCount": 21,
+  "tests": {
+    "pass": 121,
+    "fail": 0,
+    "liveDeploymentTested": false,
+    "physicalMobileDesktopTested": false
+  },
+  "costingImport": {
+    "files": 12,
+    "sourceBlocks": 38,
+    "sourceMaterialRows": 222,
+    "activeVariantsOnEmptyStore": 37,
+    "pendingVersionsOnEmptyStore": 1
+  },
+  "sourceFixtures": {
+    "Costing/Costing_01.xlsx": "b7d78e5ddfd5d3859655fb2c03c6fda9358d05318e05938950d8d3aff6deccd7",
+    "Costing/Costing_02.xlsx": "662b3859cc456fc634963ffb0df71ae7f2cdb96a62b40985271ca0f90eb210fd",
+    "Costing/Costing_03.xlsx": "a6bce07a272c078ff44620ca70ab4a1b7f43e268e9f6b3c01ba1483b7bb6f6f0",
+    "Costing/Costing_04.xlsx": "9817e49fda3ea824795d8ef1311ce28a1cfb7f62ab6699687a682202e30dbb26",
+    "Costing/Costing_05.xlsx": "3b23c8b7fdf163970bc6dd831175d79af903d035bb337afd49ac28d3f34846c2",
+    "Costing/Costing_06.xls": "c2ac23df07e18935bfeb29888b0a3bef7a1de97930f79f13992c25d02d2dd890",
+    "Costing/Costing_07.xls": "e4608de2b7340c7f03d93ec8e4678f4c8cd520145012c256e4e162e0e1eaf70e",
+    "Costing/Costing_08.xls": "fcc86a4ad79e2035e10a06f3fcf597fb4d7fadb4e5670603532c9017bf82f9c2",
+    "Costing/Costing_09.xls": "6b80e17c8cae9764b1a588316a12f11f126c5e8a98526d08dc297736728ddf8e",
+    "Costing/Costing_10.xlsx": "de148644cfc811342b956702608fece43004cc5a2b3bfbacb98b6ffe7246557c",
+    "Costing/Costing_11.xls": "fb14a395d0ecd7f44bc49ddef038c4566e5ac6515070c065003854cb4cf38eb8",
+    "Costing/Costing_12.xls": "e9edbb5f640f9988bb45ad519000f0b5ff6c9a9ef77e586c6849407b1df0cf05",
+    "Fabric_20260915.xlsx": "92e2d54faf0009da099c7bd62ed12b8f20e1e270b10140f69f69b0899e12c8a0",
+    "Fabric_Warehouse_Reference_EN_KM.xlsx": "7f3416dc44aa791c02cbd82d684e7080b4bacd87a597dcb13a5ca107aa4555fe",
+    "Final_QC_20260917.xlsx": "ac5a18d72c77764d4ae41a349cbafb3c8f11c5976277efa938265909b378a5a6",
+    "Final_QC_20260919.xlsx": "49ccfb7f86a7b81c4437c97ee4b58c4fae6cc1e3851d69ee6014e1eedc20c23d",
+    "Final_QC_20260922.xlsx": "723b5247eb8ec467f3befbba68edaaa9803396639d44b9c3957e36b1d03bea30",
+    "IE_Weekly_20260912.xlsx": "522307451a511f27e7e4c333f56a96d4879a79e73d267518a253cf094c2b8ac7",
+    "IE_Weekly_20260919.xlsx": "c24e8cdc41555864254b9777d108f2e99cdec9bfec9c9b8cc1f2e84ee652d938",
+    "Machine_Parts_Stock_20260901_10.xlsx": "0f5d87d4a44612a991b91f4b7f62cbf4b98fef641a44e11cdb942af88999d531",
+    "Needle_Change_202609.xlsx": "9162def907d99a7f2b49300270afecd000e18b4c0606e5ec158dbe98735f0bb6",
+    "Needle_Stock_202607.xlsx": "3eab4ab5e099683f132a3146a835bd2c913976bcf47ac413bd8c978b59ce9a48",
+    "OBD_0950G_pending.xls": "13642d92ef327d09afb0d720749562d274a17c7b7d747d42d6e404f9eb0ee616",
+    "OBD_5209_pending.xls": "7e454874029a0850fa2768dcb026cd46f80e55910ae03d9f36344fa88fab62c6",
+    "OBD_A2642K_pending.xls": "548e524a09e1f0cae27645fbb457d31409550de7a41e2aeb70764aeb69035861",
+    "Parts_Change_202609.xlsx": "a75ef07d93e912ed67aaa1ad2f9bcc9b3392e936481b956a4df0723e52e16382",
+    "Parts_Price_Benchmark_2026H1.xlsx": "c840c08d949a04a466fa47198908418bf61832017f1c47735149cb71587c1a09",
+    "Parts_Purchase_Benchmark_2024_2026.xlsx": "9a3ada20980c4b3f0de12dc0d8c41f32d91a293e1c0adb47747435f3d2150ee8",
+    "Parts_YoY_Linkage_2024_2026.xlsx": "905a37694fce30808b813c33b5d53261f6dd6e94f27b0e7a5f995014886c386f",
+    "QC_Weekly_20260914_19.xlsx": "f1ef277f8da364c80a7309f2aa50ca2185ab980da9b572b58b6a32996175bd89"
+  }
+}

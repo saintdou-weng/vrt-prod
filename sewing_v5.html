@@ -746,14 +746,16 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
     </div>
   </div>
   <div class="card" id="wrCard2" style="display:none"><div class="ct">&#128202; &#26399;&#38291;&#27604;&#36611;&#12288;Period Comparison</div><div class="wrscroll" id="wrCmp"></div></div>
+  <div class="card" id="wrCardSMV" style="display:none"><div class="ct">📐 SMV 版本變動　SMV Basis Changes</div><div class="wrscroll" id="wrSmvChanges"></div></div>
   <div class="card" id="wrCard3" style="display:none"><div class="ct">&#128200; &#36817;&#26399;&#36235;&#21218;&#12288;Recent Trend</div><div class="wrscroll" id="wrTrend"></div></div>
   <div class="card" id="wrCard4" style="display:none"><div class="ct">&#128197; &#27599;&#26085;&#29986;&#33021;&#12288;Daily Capacity</div><div class="wrscroll" id="wrDaily"></div></div>
   <div class="card" id="wrCard5" style="display:none"><div class="ct">&#127981; &#21508;&#32068;&#32318;&#25928;&#33287;&#21487;&#22238;&#25910;&#29986;&#33021;&#12288;Line Performance and Recoverable Capacity</div><div class="wrscroll" id="wrLines"></div></div>
+  <div class="card" id="wrCardQC" style="display:none"><div class="ct">✓ 品質交叉　Quality Cross-check</div><div class="wrscroll" id="wrQC"></div></div>
   <div class="card" id="wrCard9" style="display:none"><div class="ct">&#128203; &#35336;&#30059;&#22519;&#34892;&#65288;&#30452;&#35712;&#24179;&#33274;&#25490;&#21934;&#65289;&#12288;Plan Execution (reads the platform plan directly)</div><div class="wrscroll" id="wrPlan"></div></div>
   <div class="card" id="wrCard6" style="display:none"><div class="ct">&#9888;&#65039; &#33258;&#21205;&#21028;&#23450;&#30340;&#30064;&#24120;&#12288;Automatically Detected Exceptions</div><div id="wrFind"></div></div>
   <div class="card" id="wrCard7" style="display:none"><div class="ct">&#128269; &#36039;&#26009;&#26908;&#26680;&#12288;Data Audit</div><div class="wrscroll" id="wrAudit"></div></div>
   <div class="card" id="wrCard8" style="display:none;text-align:center">
-    <button onclick="wExport()" style="border:0;background:#548235;color:#fff;padding:12px 26px;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit">&#29986;&#29983; Word &#36913;&#22577;&#12288;Generate Word Report</button>
+    <button onclick="wExport()" style="border:0;background:#548235;color:#fff;padding:12px 26px;border-radius:9px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit">&#29986;&#29983; Word &#36913;&#22577;&#12288;Generate Word Report</button> <button onclick="wExportFactPack('json')" style="border:0;background:#1f3864;color:#fff;padding:12px 18px;border-radius:9px;font-weight:800;cursor:pointer">↓ Fact Pack JSON</button> <button onclick="wExportFactPack('xlsx')" style="border:0;background:#2563eb;color:#fff;padding:12px 18px;border-radius:9px;font-weight:800;cursor:pointer">↓ Fact Pack Excel</button>
     <div id="wrMsg" style="font-size:12px;margin-top:9px;min-height:16px"></div>
   </div>
 </div>
@@ -2287,12 +2289,15 @@ async function doImport(){
           <span style="font-size:13px;font-weight:600;color:#1e2640">📄 ${p.fname}</span>
           <span style="font-size:12px;color:#059669">✓ ${p.lines}條線，${p.totalPcs.toLocaleString()}件</span>
         </div>
-        <div style="font-size:12px;color:#6b7a9e;margin-top:4px">日期：<b>${p.date}</b>　Section：<b>${p.section}</b>${p.smvCompareRows?`　<span style="color:#7c3aed;font-weight:700">📐 SMV比較 ${p.smvCompareRows}筆</span>`:""}</div>
+        <div style="font-size:12px;color:#6b7a9e;margin-top:4px">日期：<b>${p.date}</b>　Section：<b>${p.section}</b>${p.smvCompareRows?`　<span style="color:#7c3aed;font-weight:700">📐 SMV比較 ${p.smvCompareRows}筆</span>`:""}${p.totalChecks?`　<span style="color:${p.sourceTotalMismatch?'#dc2626':'#059669'};font-weight:700">${p.sourceTotalMismatch?'⚠':'✓'} TOTAL核對 ${p.totalChecks.length-p.sourceTotalMismatch}/${p.totalChecks.length}</span>`:''}</div>
         ${p.debug?'<div style="font-size:10px;color:#9ca3af;margin-top:3px;font-family:monospace">📋 Sheet:"'+p.debug.sheet+'" Summary行:'+p.debug.summaryRow+'/'+p.debug.totalRows+' 人數:'+p.debug.workersFound+'條['+Object.entries(p.debug.workersMap||{}).map(([k,v])=>k+':'+v).join(',')+'] 效率:'+p.debug.effFound+'條</div>':""}
         <div class="preview-lines">${p.lineNames.map(ln=>`<span class="preview-line">${ln}</span>`).join("")}</div>
       </div>`;
     }).join("")+
       (previews.length>1?`<div class="al al-ok">✓ ${previews.filter(p=>!p._isEff).length} 個日報檔案，${pendingRecs.length} 筆記錄${previews.filter(p=>p._isEff).length?`・${previews.filter(p=>p._isEff).length} 個效率報表已自動存入`:""}</div>`:"");
+    if(previews.some(p=>!p._isEff && p.smvCompareRows>0)){
+      document.getElementById("previewContent").insertAdjacentHTML('beforeend',`<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding:10px 12px;border:1px solid #c4b5fd;border-radius:8px;background:#f5f3ff;font-size:12px"><input id="sewSaveSmvVersion" type="checkbox" style="margin-top:2px"><span><b>📐 同時儲存為正式 SMV 版本</b>（預設不勾選）<br><span style="color:#6b7a9e">Daily Output 內含 SMV 比較欄時才可使用；勾選後寫入 SMV Manager，本機先保存，SMV 頁再同步雲端。</span></span></label>`);
+    }
     msg.style.color="#6b7a9e";
     msg.textContent=`找到 ${pendingRecs.length} 筆記錄，請確認後存入`;
   } else {
@@ -2300,6 +2305,26 @@ async function doImport(){
     msg.style.color="#dc2626";
   }
   btn.disabled=false;
+}
+
+async function sewSaveSmvSnapshotFromImport(rows){
+  const src=(rows||[]).filter(r=>(r.smvCompareCurrent||r.smv)>0 && (r.styleNo||'').trim());
+  if(!src.length)return 0;
+  const groups=new Map();
+  src.forEach(r=>{const k=[normalizeDate(r.date),r.section||'Sewing'].join('|');if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r)});
+  const db=await new Promise((res,rej)=>{const q=indexedDB.open('VRT_SMV_Manager_v52');q.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('smv_snapshots'))d.createObjectStore('smv_snapshots',{keyPath:'id',autoIncrement:true})};q.onsuccess=e=>res(e.target.result);q.onerror=()=>rej(q.error)});
+  let saved=0;
+  for(const [k,rs] of groups){
+    const [day,section]=k.split('|'), m=new Map();
+    rs.forEach(r=>{const style=String(r.styleNo||'').trim();if(!style)return;const cur=Number(r.smvCompareCurrent||r.smv)||0,last=Number(r.smvLast||r.smvRecheck||cur)||cur;if(!(cur>0))return;m.set(style.toUpperCase(),{no:'',cust:r.customer||'',type:'',style,origSMV:last,curSMV:cur,newSMV:cur,pcsBox:r.pieces||null,remark:'Saved from Sewing Daily Output'})});
+    const items=[...m.values()]; if(!items.length)continue;
+    const id='SEW-DPO-'+day+'-'+String(section).replace(/\W+/g,'-').toUpperCase();
+    const snap={id,section,reportDate:day,effectiveDate:day,importedAt:new Date().toISOString(),fileName:'Sewing_Daily_Output_'+day+'_'+section,source:'SEWING_DAILY_OUTPUT',items};
+    await new Promise((res,rej)=>{const tx=db.transaction('smv_snapshots','readwrite');tx.objectStore('smv_snapshots').put(snap);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}); saved++;
+  }
+  db.close();
+  try{localStorage.setItem('vrt_smv_pending_sync','1')}catch(_){ }
+  return saved;
 }
 
 async function confirmImport(){
@@ -2310,12 +2335,21 @@ async function confirmImport(){
   // v5.16: replace only the same Date + Section + Source bucket.
   // Importing Garment alone must NOT delete Apron of the same day (and vice versa).
   const importScopes=new Set(pendingRecs.map(r=>[normalizeDate(r.date),r.section||"",r.tSrc||"norm"].join("|")));
-  DB=DB.filter(r=>!importScopes.has([normalizeDate(r.date),r.section||"",r.tSrc||"norm"].join("|")));
+  // v5.17: Daily Output replaces legacy rows that pre-date source tagging.
+  // Only rows with a genuinely blank tSrc are treated as legacy; target/weekly/normal tagged data is preserved.
+  const dpoLegacyScopes=new Set(pendingRecs.filter(r=>(r.tSrc||'')==='dpo').map(r=>[normalizeDate(r.date),r.section||""].join('|')));
+  DB=DB.filter(r=>{
+    const exact=importScopes.has([normalizeDate(r.date),r.section||"",r.tSrc||"norm"].join('|'));
+    const legacyDpo=dpoLegacyScopes.has([normalizeDate(r.date),r.section||""].join('|')) && !String(r.tSrc||'').trim();
+    return !(exact||legacyDpo);
+  });
   // Dedup within the new batch itself (date|lineNo|styleNo)
   const map=new Map();
   pendingRecs.forEach(r=>map.set([normalizeDate(r.date),r.section||"",r.lineNo||"",r.styleNo||"",r.po||"",r.selfKey||"",r.color||"",r.size||"",r.tSrc||""].join("|"),r));
   DB=[...DB,...map.values()];
   const _beforeRec=DB.length; DB=reconcileTgtSrc(DB); const _tgtMerged=_beforeRec-DB.length;
+  const _saveSmvNow=!!document.getElementById('sewSaveSmvVersion')?.checked;
+  if(_saveSmvNow){try{await sewSaveSmvSnapshotFromImport(pendingRecs);}catch(e){console.warn('[VRT] SMV snapshot save failed',e);}}
   saveDB(); updateHeader(); renderDBCard();
   // ★ Save full DB to cloudIDB so it always has complete history across all years
   saveToCloudIDB(DB).catch(e=>console.warn("[VRT] cloudIDB save failed:", e));
@@ -3756,7 +3790,8 @@ function populateWeekSel(){
   const sel=document.getElementById("wsel");
   const prev=sel.value;
   const weeks=[...new Set(DB.map(r=>getWeekKey(r.date)))].sort().reverse();
-  sel.innerHTML=weeks.map(w=>`<option value="${w}">${w}</option>`).join("");
+  const weekLabel=w=>{const m=String(w).match(/^(\d{4})-W(\d{2})$/);if(!m)return w;const y=+m[1],wn=+m[2],jan4=new Date(y,0,4),mon=new Date(jan4);mon.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(wn-1)*7);const sat=new Date(mon);sat.setDate(mon.getDate()+5);const ds=getWeekDates(w).length;return `${w} · ${mon.getMonth()+1}/${mon.getDate()}–${sat.getMonth()+1}/${sat.getDate()}（${ds} 日）`};
+  sel.innerHTML=weeks.map(w=>`<option value="${w}">${weekLabel(w)}</option>`).join("");
   if(prev&&weeks.includes(prev)) sel.value=prev;
 }
 
@@ -5990,7 +6025,7 @@ function parseDailyOutputReport(wb, fname){
     }
     if(!looks) return null;
 
-    const recs=[], daysWithData=[];
+    const recs=[], daysWithData=[], totalChecks=[];
     const pct=v=>{ let n=parseFloat(v); if(isNaN(n)) return 0; if(n<=3) n*=100; return Math.round(n*10)/10; };
 
     cand.forEach(sn=>{
@@ -6079,17 +6114,17 @@ function parseDailyOutputReport(wb, fname){
       if(sHdr<0) return;
       if(cmtCol<0) cmtCol=Math.max(sc.eff,sc.ach)+1;
 
-      let dayHas=false;
+      let dayHas=false,dayComputed=0,dayPrinted=null;
       for(let i=sHdr+1;i<rows.length;i++){
         const r=rows[i]||[];
         const raw=String(r[0]==null?"":r[0]).trim();
-        if(/^total|^合計/i.test(raw)) break;
+        if(/^total|^合計/i.test(raw)){const z=parseFloat(r[sc.act]);if(Number.isFinite(z))dayPrinted=z;break;}
         if(!raw || !LRE.test(raw)) continue;
         const target=parseFloat(r[sc.tgt])||0;
         const actual=parseFloat(r[sc.act])||0;
-        if(target<=0 && actual<=0) continue;      // 空線不入庫
-        const lineNo=normLineNo(raw);
         const ops=parseFloat(r[sc.ops])||0;
+        if(target<=0 && actual<=0 && ops<=0) continue;      // 真正空線才不入庫；有人但零產出仍保留
+        const lineNo=normLineNo(raw);
         const ctns=parseFloat(r[sc.ctn])||0;
         let ach=pct(r[sc.ach]); if(!ach && target>0) ach=Math.round(actual/target*1000)/10;
         const eff=Math.round(pct(r[sc.eff]));
@@ -6132,9 +6167,10 @@ function parseDailyOutputReport(wb, fname){
           styleCount:(d.styles?d.styles.size:0)||parseFloat(r[sc.styles])||0,
           issue, remark
         });
+        dayComputed+=Math.round(actual);
         dayHas=true;
       }
-      if(dayHas) daysWithData.push(date);
+      if(dayHas){daysWithData.push(date);totalChecks.push({date,computed:dayComputed,printed:dayPrinted,ok:dayPrinted==null||Math.abs(dayComputed-dayPrinted)<1});}
     });
 
     if(!recs.length) return null;
@@ -6147,7 +6183,8 @@ function parseDailyOutputReport(wb, fname){
         : daysWithData[0],
       section:`🎯 Daily Output（目標來源｜成衣 ${gT.toLocaleString()} / Apron ${aT.toLocaleString()}）`,
       lines:lineNames.length,
-      totalPcs: recs.reduce((s,r)=>s+r.pieces,0), lineNames
+      totalPcs: recs.reduce((s,r)=>s+r.pieces,0), lineNames,totalChecks,
+      sourceTotalMismatch:totalChecks.filter(x=>!x.ok).length
     }};
   }catch(e){ console.warn("[DailyOutputReport] parse error:", e); return null; }
 }
@@ -39810,45 +39847,26 @@ const wDate = s => { if (!s) return null; const m = String(s).match(/(\d{4})[-\/
 const wLbl = v => { const s = String(v == null ? '' : v).trim(); return s || '未標示 Unspecified'; };
 function wWeekKey(d) { const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dw = t.getDay(); t.setDate(t.getDate() - (dw === 0 ? 6 : dw - 1)); return wYmd(t); }
 function wWeekDays(k){const st=wDate(k);let n=0;for(let i=0;i<6;i++){const d=new Date(st.getFullYear(),st.getMonth(),st.getDate()+i);if(d.getDay()!==0)n++;}return n;}
-function wWeekLabel(k) { const s = wDate(k), e = new Date(s); e.setDate(e.getDate() + 5); return `${s.getMonth() + 1}/${s.getDate()}–${e.getMonth() + 1}/${e.getDate()}`; }
+function wIsoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())),day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=t.getUTCFullYear(),y0=new Date(Date.UTC(y,0,1)),n=Math.ceil((((t-y0)/86400000)+1)/7);return `${y}-W${String(n).padStart(2,'0')}`;}
+function wWeekLabel(k) { const s = wDate(k), e = new Date(s); e.setDate(e.getDate() + 5); return `${wIsoWeek(s)} · ${s.getMonth()+1}/${s.getDate()}–${e.getMonth()+1}/${e.getDate()}`; }
 function p75(arr) { if (!arr.length) return 0; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(a.length * 0.75))]; }
 
 let WS = { recs: [], weeks: [], months: [], ctx: null, audit: null, skipped: 0, plan: null };
 /* ---------- 讀取平台排單（產能規劃模組寫入的 localStorage） ----------
    Reads the plan the capacity module already stores — no import needed */
 const PLAN_KEYS = ['vrt_prodplan_v3_data', 'vrt_report_plan_bridge_v1'];
-function wLoadPlan() {
-  let raw = null, key = '';
-  for (const k of PLAN_KEYS) { try { const v = localStorage.getItem(k); if (v) { raw = JSON.parse(v); key = k; break; } } catch (e) {} }
-  if (!raw) return { ok: false, msg: '找不到平台排單資料（請先在「生產排單產能」模組匯入排單）/ No platform plan found; import it in the capacity module first', byDate: {}, rows: 0 };
-  const recs = raw.records || raw || [];
-  if (!recs.length) return { ok: false, msg: '平台排單資料為空 / The platform plan is empty', byDate: {}, rows: 0 };
-  const byDate = {}; let spread = 0, skipped = 0;
-  recs.forEach(r => {
-    const qty = wnum(r.sewingQty != null ? r.sewingQty : r.qty);
-    const L = wLine(r.line != null ? r.line : r.lineNo);
-    const s0 = wDate(r.startDate || r.start), e0 = wDate(r.endDate || r.end || r.finishDate) || s0;
-    if (!qty || !L || !s0) { skipped++; return; }
-    const days = [];
-    for (let d = new Date(s0); d <= e0 && days.length < 60; d.setDate(d.getDate() + 1)) if (d.getDay() !== 0) days.push(wYmd(d));
-    if (!days.length) days.push(wYmd(s0));
-    const per = qty / days.length;
-    const prod = String(r.product || r.productType || '').toUpperCase();
-    const smv = wnum(r.smv);
-    days.forEach(dt => {
-      const D = byDate[dt] || (byDate[dt] = { qty: 0, std: 0, lines: {}, products: {} });
-      D.qty += per; D.std += smv > 0 ? per * smv : 0;
-      const LL = D.lines[L] || (D.lines[L] = { qty: 0, std: 0, mp: 0 });
-      LL.qty += per; LL.std += smv > 0 ? per * smv : 0; LL.mp = Math.max(LL.mp, wnum(r.manpower));
-      const pk = /GARMENT|成衣/.test(prod) ? '成衣 Garment' : (/APRON|圍裙|围裙/.test(prod) ? '圍裙 Apron'
-        : (/NAPKIN|餐巾/.test(prod) ? '餐巾 Napkin' : (/TOP|上衣/.test(prod) ? '上衣 Top' : '其他 Other')));
-      D.products[pk] = (D.products[pk] || 0) + per;
-    });
-    spread++;
-  });
-  return { ok: true, key, rows: recs.length, spread, skipped, byDate,
-    msg: `已讀取平台排單 ${recs.length} 列（來源 ${key}），展開至 ${Object.keys(byDate).length} 個日期 / ${recs.length} plan rows read from ${key}, spread across ${Object.keys(byDate).length} dates` };
+async function wLoadPlan() {
+  let recs=[],key='';
+  try{recs=await new Promise(res=>{let created=false;const q=indexedDB.open('VRT_ProductionPlan');q.onupgradeneeded=e=>{created=true;try{e.target.transaction.abort()}catch(_){ }res([])};q.onerror=()=>res([]);q.onsuccess=e=>{const d=e.target.result;if(created||!d.objectStoreNames.contains('plan_records')){d.close();res([]);return}const x=d.transaction('plan_records','readonly').objectStore('plan_records').getAll();x.onsuccess=()=>{const a=x.result||[];d.close();res(a)};x.onerror=()=>{d.close();res([])}}})}catch(_){recs=[]}
+  if(recs.length)key='IndexedDB VRT_ProductionPlan/plan_records';
+  if(!recs.length){for(const k of PLAN_KEYS){try{const v=localStorage.getItem(k);if(v){const raw=JSON.parse(v);recs=raw.records||raw||[];key=k;break}}catch(_){}}}
+  if(!recs.length)return {ok:false,msg:'找不到平台排單資料 / No platform plan found',byDate:{},rows:0};
+  const byDate={};let spread=0,skipped=0;
+  recs.forEach(r=>{const qty=wnum(r.sewingQty!=null?r.sewingQty:r.qty),L=wLine(r.line!=null?r.line:r.lineNo),s0=wDate(r.startDate||r.start),e0=wDate(r.endDate||r.end||r.finishDate)||s0;if(!qty||!L||!s0){skipped++;return}const days=[];for(let d=new Date(s0);d<=e0&&days.length<90;d.setDate(d.getDate()+1))if(d.getDay()!==0)days.push(wYmd(d));if(!days.length)days.push(wYmd(s0));const per=qty/days.length,prod=String(r.product||r.productType||'').toUpperCase(),smv=wnum(r.smv);days.forEach(dt=>{const D=byDate[dt]||(byDate[dt]={qty:0,std:0,lines:{},products:{}});D.qty+=per;D.std+=smv>0?per*smv:0;const LL=D.lines[L]||(D.lines[L]={qty:0,std:0,mp:0});LL.qty+=per;LL.std+=smv>0?per*smv:0;LL.mp=Math.max(LL.mp,wnum(r.manpower));const pk=/GARMENT|成衣/.test(prod)?'成衣 Garment':(/APRON|圍裙|围裙/.test(prod)?'圍裙 Apron':(/NAPKIN|餐巾/.test(prod)?'餐巾 Napkin':(/TOP|上衣/.test(prod)?'上衣 Top':'其他 Other')));D.products[pk]=(D.products[pk]||0)+per});spread++});
+  return {ok:true,key,rows:recs.length,spread,skipped,byDate,msg:`已讀取平台排單 ${recs.length} 列（${key}） / ${recs.length} plan rows read from ${key}`};
 }
+async function wLoadQC(){try{return await new Promise(res=>{let created=false;const q=indexedDB.open('VRT_FinalQC');q.onupgradeneeded=e=>{created=true;try{e.target.transaction.abort()}catch(_){ }res([])};q.onerror=()=>res([]);q.onsuccess=e=>{const d=e.target.result;if(created||!d.objectStoreNames.contains('records')){d.close();res([]);return}const x=d.transaction('records','readonly').objectStore('records').getAll();x.onsuccess=()=>{const a=(x.result||[]).filter(r=>!r.deleted);d.close();res(a)};x.onerror=()=>{d.close();res([])}}})}catch(_){return[]}}
+function wQcFor(dates){const set=new Set(dates),rows=(WS.qc||[]).filter(r=>set.has(String(r.date||'').slice(0,10))),byDate={},byLine={};let inspected=0,rejected=0,sumRates=0,rateN=0;rows.forEach(r=>{const i=wnum(r.inspected),x=wnum(r.rejected);inspected+=i;rejected+=x;if(i>0){sumRates+=x/i;rateN++}const d=String(r.date||'').slice(0,10),L=wLine(r.line)||String(r.line||'');for(const [map,key] of [[byDate,d],[byLine,L]]){const o=map[key]||(map[key]={inspected:0,rejected:0,rows:0});o.inspected+=i;o.rejected+=x;o.rows++}});return{rows,inspected,rejected,weighted:inspected?rejected/inspected:null,unweighted:rateN?sumRates/rateN:null,byDate,byLine}}
 function wPlanFor(dates) {
   const P = { qty: 0, std: 0, lines: {}, products: {}, mp: 0 };
   dates.forEach(dt => { const D = WS.plan.byDate[dt]; if (!D) return;
@@ -39866,7 +39884,8 @@ function wPlanFor(dates) {
 function wBuild() {
   const src=(typeof DB!=='undefined'&&DB&&DB.length)?DB:[];
   const by={}; let skipped=0,noLabel=0,dupRaw=0;
-  const seen={};
+  const seen={},_daySources=new Map(),_sun=new Set();
+  src.forEach(r=>{const d=wDate(r.date);if(!d||!(wnum(r.pieces)>0||wnum(r.workers)>0))return;const ds=wYmd(d),L=wLine(r.lineNo)||String(r.lineNo||'');if(d.getDay()===0&&wnum(r.pieces)>0)_sun.add(ds+'|'+L);const ts=String(r.tSrc||'legacy').trim()||'legacy';if(!/^(target|weekly)$/i.test(ts)){if(!_daySources.has(ds))_daySources.set(ds,new Set());_daySources.get(ds).add(ts);}});
   src.forEach(r=>{
     const d=wDate(r.date),L=wLine(r.lineNo);
     if(!d||!L){skipped++;return}
@@ -39874,7 +39893,7 @@ function wBuild() {
     const k=wYmd(d)+'|'+L;
     if(seen[k])dupRaw++; seen[k]=1;
     const o=by[k]||(by[k]={date:wYmd(d),line:L,detailPcs:0,summaryPcs:0,tgtPcs:0,pieces:0,workers:0,cartons:0,target:0,
-      exactAtt:0,exactProd:0,effW:0,effNum:0,smvStd:0,stdMin:0,avail:0,products:{},remark:'',styleSet:new Set(),styles:0,srcRows:0});
+      exactAtt:0,exactProd:0,effW:0,effNum:0,smvStd:0,basisStd:0,basisQty:0,stdMin:0,pubStdMin:0,avail:0,products:{},remark:'',styleSet:new Set(),styles:0,srcRows:0});
     o.srcRows++;
     const pcs=wnum(r.pieces),hasDetail=!!(r.styleNo||r.po||r.selfKey||r.color||r.size||wnum(r.cartons)>0);
     if(typeof isTgtSrc==='function'&&isTgtSrc(r))o.tgtPcs+=pcs;
@@ -39891,6 +39910,8 @@ function wBuild() {
     const er=wnum(r.efficiency),wr=wnum(r.workers);
     if(er>0&&wr>0){const ep=er>1?er:er*100;o.effNum+=ep*wr;o.effW+=wr}
     if(wnum(r.smv)>0&&pcs>0&&hasDetail)o.smvStd+=wnum(r.smv)*pcs;
+    const _basisSmv=wnum(r.smvCompareCurrent)||wnum(r.smv);
+    if(_basisSmv>0&&pcs>0&&hasDetail){o.basisStd+=_basisSmv*pcs;o.basisQty+=pcs;}
 
     if(wnum(r.gPcs))o.products['成衣 Garment']=(o.products['成衣 Garment']||0)+wnum(r.gPcs);
     if(wnum(r.aPcs))o.products['圍裙 Apron']=(o.products['圍裙 Apron']||0)+wnum(r.aPcs);
@@ -39900,13 +39921,21 @@ function wBuild() {
   });
 
   WS.skipped=skipped;WS.noLabel=noLabel;
+  WS.sundayProduction=[..._sun];
+  WS.multiSourceDays=[..._daySources.entries()].filter(([,v])=>v.size>1).map(([date,v])=>({date,sources:[...v]}));
   WS.recs=Object.values(by).map(o=>{
     o.pieces=o.detailPcs>0?o.detailPcs:(o.summaryPcs>0?o.summaryPcs:o.tgtPcs);
     o.styles=o.styleSet.size;
     o.avail=o.exactAtt>0?o.exactAtt:o.workers*WCFG.minutesPerDay;
-    if(o.exactAtt>0)o.stdMin=o.exactProd;
-    else if(o.effW>0&&o.avail>0)o.stdMin=((o.effNum/o.effW)/100)*o.avail;
-    else if(o.smvStd>0)o.stdMin=o.smvStd;
+    if(o.exactAtt>0)o.pubStdMin=o.exactProd;
+    else if(o.effW>0&&o.avail>0)o.pubStdMin=((o.effNum/o.effW)/100)*o.avail;
+    else if(o.smvStd>0)o.pubStdMin=o.smvStd;
+    // Same-basis efficiency uses the current SMV carried by Daily Output when available.
+    // Any piece without a comparable SMV falls back proportionally to the published numerator,
+    // and basisCoverage exposes how much of the line-day was actually revalued.
+    o.basisCoverage=o.pieces>0?Math.min(1,o.basisQty/o.pieces):0;
+    o.stdMin=o.basisStd>0?(o.basisStd + o.pubStdMin*Math.max(0,1-o.basisCoverage)):o.pubStdMin;
+    o.publishedEff=o.avail?o.pubStdMin/o.avail:0;
     return o;
   }).filter(o=>o.workers>0||o.pieces>0)
     .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.line.localeCompare(b.line));
@@ -39919,13 +39948,13 @@ function wBuild() {
 
 /* ---------- 彙總 aggregate ---------- */
 function wAgg(recs) {
-  const A = { qty: 0, std: 0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [] };
+  const A = { qty: 0, std: 0, pubStd:0, basisQty:0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [] };
   recs.forEach(r => {
-    A.qty += r.pieces; A.std += r.stdMin; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target;
-    const D = A.days[r.date] || (A.days[r.date] = { date: r.date, qty: 0, std: 0, avail: 0, op: 0, ctn: 0, lines: 0 });
-    D.qty += r.pieces; D.std += r.stdMin; D.avail += r.avail; D.op += r.workers; D.ctn += r.cartons; if (r.workers) D.lines++;
-    const L = A.lines[r.line] || (A.lines[r.line] = { qty: 0, std: 0, avail: 0, op: 0, days: 0, zero: 0, styles: 0, remark: '', effs: [] });
-    L.qty += r.pieces; L.std += r.stdMin; L.avail += r.avail; L.op += r.workers; if (r.workers) L.days++;
+    A.qty += r.pieces; A.std += r.stdMin; A.pubStd += r.pubStdMin||r.stdMin; A.basisQty += r.basisQty||0; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target;
+    const D = A.days[r.date] || (A.days[r.date] = { date: r.date, qty: 0, std: 0, pubStd:0, avail: 0, op: 0, ctn: 0, lines: 0 });
+    D.qty += r.pieces; D.std += r.stdMin; D.pubStd += r.pubStdMin||r.stdMin; D.avail += r.avail; D.op += r.workers; D.ctn += r.cartons; if (r.workers) D.lines++;
+    const L = A.lines[r.line] || (A.lines[r.line] = { qty: 0, std: 0, pubStd:0, avail: 0, op: 0, days: 0, zero: 0, styles: 0, remark: '', effs: [] });
+    L.qty += r.pieces; L.std += r.stdMin; L.pubStd += r.pubStdMin||r.stdMin; L.avail += r.avail; L.op += r.workers; if (r.workers) L.days++;
     L.styles = Math.max(L.styles, r.styles);
     if (r.avail) L.effs.push(r.stdMin / r.avail);
     if (r.workers && !r.pieces) L.zero++;
@@ -39934,16 +39963,16 @@ function wAgg(recs) {
   });
   A.dayList = Object.values(A.days).sort((a, b) => a.date < b.date ? -1 : 1);
   A.dayList.forEach((d, i) => {
-    d.eff = d.avail ? d.std / d.avail : 0; d.perHead = d.op ? d.qty / d.op : 0;
+    d.eff = d.avail ? d.std / d.avail : 0; d.publishedEff=d.avail?d.pubStd/d.avail:0; d.perHead = d.op ? d.qty / d.op : 0;
     d.dod = i ? (d.qty - A.dayList[i - 1].qty) / (A.dayList[i - 1].qty || 1) : null;
     d.status = d.eff >= WCFG.greenEff ? 'GREEN' : (d.eff >= WCFG.amberEff ? 'AMBER' : 'RED');
   });
   Object.keys(A.lines).forEach(k => { const L = A.lines[k];
-    L.eff = L.avail ? L.std / L.avail : 0; L.avgOp = L.days ? L.op / L.days : 0;
+    L.eff = L.avail ? L.std / L.avail : 0; L.publishedEff=L.avail?L.pubStd/L.avail:0; L.avgOp = L.days ? L.op / L.days : 0;
     L.p75 = p75(L.effs); L.best = L.effs.length ? Math.max.apply(null, L.effs) : 0;
     L.gain = Math.max(0, (L.p75 - L.eff) * L.avail);          // 可回收標準工時 recoverable standard minutes
   });
-  A.nDays = A.dayList.length; A.eff = A.avail ? A.std / A.avail : 0;
+  A.nDays = A.dayList.length; A.eff = A.avail ? A.std / A.avail : 0; A.publishedEff=A.avail?A.pubStd/A.avail:0; A.basisCoverage=A.qty?Math.min(1,A.basisQty/A.qty):0;
   A.dailyAvg = A.nDays ? A.qty / A.nDays : 0; A.perHead = A.op ? A.qty / A.op : 0;
   A.avgOp = A.nDays ? A.op / A.nDays : 0; A.achieve = A.target ? A.qty / A.target : null;
   A.smv = A.qty ? A.std / A.qty : 0;
@@ -40000,6 +40029,11 @@ function wAudit(A) {
   out.push({ hard: false, ok: A.remarks.length > 0,
     zh: `備註記錄 ${A.remarks.length} 筆（異常原因來源）`,
     en: `${A.remarks.length} remark entries as the source of exception causes` });
+  const selectedDates=new Set(A.dayList.map(d=>d.date));
+  const sun=(WS.sundayProduction||[]).filter(x=>selectedDates.has(x.split('|')[0]));
+  out.push({hard:false,ok:sun.length===0,zh:`星期日有產量的線日：${sun.length}${sun.length?'（'+sun.slice(0,8).join('、')+(sun.length>8?'…':'')+'）':''}`,en:`${sun.length} line-day(s) show Sunday production; verify holiday/shift handling.`});
+  const ms=(WS.multiSourceDays||[]).filter(x=>selectedDates.has(x.date));
+  out.push({hard:false,ok:ms.length===0,zh:`同一天存在多種實績 source：${ms.length}${ms.length?'（'+ms.map(x=>x.date+':'+x.sources.join('/')).join('、')+'）':''}`,en:`${ms.length} day(s) contain multiple actual-data source types; verify legacy/duplicate overlap.`});
   const hardFail = out.filter(x => x.hard && !x.ok).length;
   return { items: out, hardFail, pass: hardFail === 0 };
 }
@@ -40131,6 +40165,16 @@ function wRules(c) {
   return R;
 }
 
+function wSmvChangesForDates(dates){
+  const ds=new Set(dates||[]),m=new Map(),src=(typeof DB!=='undefined'&&DB)?DB:[];
+  src.forEach(r=>{const d=normalizeDate(r.date),pcs=wnum(r.pieces),style=String(r.styleNo||'').trim();if(!ds.has(d)||!style||!(pcs>0))return;
+    const cur=wnum(r.smvCompareCurrent)||wnum(r.smv),old=wnum(r.smvLast)||wnum(r.smvRecheck)||wnum(r.smv);
+    if(!(cur>0&&old>0)||Math.abs(cur-old)<=0.005)return;
+    const k=style.toUpperCase(),o=m.get(k)||{style,oldSmv:old,newSmv:cur,pcs:0,stdChange:0};
+    o.pcs+=pcs;o.stdChange+=pcs*(cur-old);o.oldSmv=old;o.newSmv=cur;m.set(k,o);
+  });
+  return [...m.values()].sort((a,b)=>Math.abs(b.stdChange)-Math.abs(a.stdChange));
+}
 /* ---------- 計算 compute ---------- */
 function wCompute() {
   const i = parseInt(document.getElementById('wrWeek').value, 10);
@@ -40149,13 +40193,14 @@ function wCompute() {
   const weekDates = (function(){ const st = wDate(WS.weeks[i].key), o = []; for (let k = 0; k < 6; k++) { const d = new Date(st.getFullYear(), st.getMonth(), st.getDate() + k); if (d.getDay() !== 0) o.push(wYmd(d)); } return o; })();
   const planMatched = WS.plan && WS.plan.ok ? wPlanFor(actDates) : null;   // 只比對有實績的日期 matched days only
   const planWeek = WS.plan && WS.plan.ok ? wPlanFor(weekDates) : null;     // 整週計畫 full week
+  const qc=wQcFor(actDates),smvChanges=wSmvChangesForDates(actDates);
   WS.audit = wAudit(cur);
   WS.audit.items.unshift({ hard:false, ok:!partial,
     zh:`本週實際資料 ${cur.nDays} 日／應有 ${expDays} 個工作日${partial?'，屬未完成週':''}`,
     en:`${cur.nDays} of ${expDays} working days have data${partial?'; the week is incomplete':''}` });
   WS.ctx = { M: cur, prev, prevLabel: prev ? WS.weeks[i - 1].label : '', W: wCmp(cur, prev),
     mtd, lastMonth, lastMonthLabel: lastMonth ? WS.months[mi - 1].key : '', MM: wCmp(mtd, lastMonth),
-    trend, label: WS.weeks[i].label, monthKey: mk, expDays, partial, planMatched, planWeek, actDates, weekDates, notes: (document.getElementById('wrNotes').value || '').trim() };
+    trend, label: WS.weeks[i].label, monthKey: mk, expDays, partial, planMatched, planWeek, qc, smvChanges, actDates, weekDates, notes: (document.getElementById('wrNotes').value || '').trim() };
   WS.ctx.findings = wRules(WS.ctx);
   wRender();
 }
@@ -40163,10 +40208,10 @@ function wCompute() {
 /* ---------- 畫面 render ---------- */
 function wRender() {
   const c = WS.ctx, M = c.M;
-  const kp = [[wF(M.qty), '本期產出（件）', 'Output'], [wF(M.dailyAvg), '日均產量（件）', 'Daily average'],
-    [wP(M.eff), '加權效率', 'Weighted efficiency'], [M.perHead.toFixed(1), '人均產出（件）', 'Per operator-day'],
-    [c.W ? wD(c.W.effPP) + 'pp' : '—', '較上週效率', 'vs prior week'],
-    [wF(M.gainPcs), '可回收產能（件）', 'Recoverable pieces']];
+  const planAtt=c.planMatched&&c.planMatched.qty?M.qty/c.planMatched.qty:null;
+  const kp = [[wF(M.qty),'本期產出（件）','Output'],[wF(M.dailyAvg),'日均產量（件）','Daily average'],
+    [wP(M.eff),'同基準效率','Same-basis efficiency'],[planAtt==null?'—':wP(planAtt),'W 基準達成率','Plan attainment'],
+    [M.avgOp.toFixed(1),'平均人力','Average manpower'],[c.qc&&c.qc.weighted!=null?wP(c.qc.weighted):'—','加權不良記錄率','Weighted QC record rate']];
   document.getElementById('wrKpi').innerHTML = kp.map(k =>
     `<div style="background:#eef4fa;border-radius:8px;padding:12px 8px;text-align:center"><div style="font-size:21px;font-weight:800;color:#1f3864">${k[0]}</div><div style="font-size:11px;font-weight:700;margin-top:4px">${k[1]}</div><div style="font-size:10px;color:#64748b">${k[2]}</div></div>`).join('');
 
@@ -40183,7 +40228,7 @@ function wRender() {
     ['本月累計 Month to date', c.mtd, c.monthKey], ['上月 Last month', c.lastMonth, c.lastMonthLabel]].filter(x => x[1]);
   let h = `<table class="wrt"><thead><tr><th>指標 Metric</th>${cols.map(x => `<th>${x[0]}<br><span style="font-weight:400;font-size:10px">${x[2]}</span></th>`).join('')}</tr></thead><tbody>`;
   [['生產日數 Production days', a => a.nDays], ['總件數 Output', a => wF(a.qty)], ['日均件數 Daily average', a => wF(a.dailyAvg)],
-   ['加權效率 Weighted efficiency', a => wP(a.eff)], ['人均件數 Per operator-day', a => a.perHead.toFixed(1)],
+   ['同基準效率 Same-basis efficiency', a => wP(a.eff)], ['已發布效率 Published efficiency', a => wP(a.publishedEff)], ['同基準覆蓋 Coverage', a => wP(a.basisCoverage)], ['人均件數 Per operator-day', a => a.perHead.toFixed(1)],
    ['日均人力 Daily manpower', a => a.avgOp.toFixed(1)], ['平均SMV Average SMV', a => a.smv.toFixed(3)], ['箱數 Cartons', a => wF(a.ctn, 1)]]
     .forEach(r => { h += `<tr><td style="text-align:left">${r[0]}</td>${cols.map(x => `<td>${r[1](x[1])}</td>`).join('')}</tr>`; });
   document.getElementById('wrCmp').innerHTML = h + '</tbody></table>';
@@ -40196,19 +40241,21 @@ function wRender() {
     + `</tbody></table>`;
 
   const DOW = ['日', '一', '二', '三', '四', '五', '六'];
-  let d = `<table class="wrt"><thead><tr><th>日期</th><th>星期</th><th>組</th><th>人力</th><th>件數</th><th>效率</th><th>人均</th><th>箱數</th><th>日變</th><th>燈號</th></tr></thead><tbody>`;
+  let d = `<table class="wrt"><thead><tr><th>日期</th><th>星期</th><th>組</th><th>人力</th><th>件數</th><th>同基準效率</th><th>已發布效率</th><th>人均</th><th>箱數</th><th>QC檢驗</th><th>不良筆數</th><th>加權比率</th><th>日變</th><th>燈號</th></tr></thead><tbody>`;
   M.dayList.forEach(x => { const dt = wDate(x.date);
-    d += `<tr class="wr-${x.status}"><td>${dt.getMonth() + 1}/${dt.getDate()}</td><td>${DOW[dt.getDay()]}</td><td>${x.lines}</td><td>${x.op.toFixed(2)}</td><td>${wF(x.qty)}</td><td>${wP(x.eff)}</td><td>${x.perHead.toFixed(1)}</td><td>${wF(x.ctn, 1)}</td><td>${x.dod == null ? '—' : wD(x.dod) + '%'}</td><td>${x.status}</td></tr>`; });
-  d += `<tr style="background:#eef4fa;font-weight:700"><td colspan="3">合計/均</td><td>${M.avgOp.toFixed(2)}</td><td>${wF(M.qty)}</td><td>${wP(M.eff)}</td><td>${M.perHead.toFixed(1)}</td><td>${wF(M.ctn, 1)}</td><td>—</td><td>—</td></tr></tbody></table>`;
+    d += `<tr class="wr-${x.status}"><td>${dt.getMonth() + 1}/${dt.getDate()}</td><td>${DOW[dt.getDay()]}</td><td>${x.lines}</td><td>${x.op.toFixed(2)}</td><td>${wF(x.qty)}</td><td>${wP(x.eff)}</td><td>${wP(x.publishedEff)}</td><td>${x.perHead.toFixed(1)}</td><td>${wF(x.ctn, 1)}</td><td>${wF(c.qc?.byDate?.[x.date]?.inspected||0)}</td><td>${wF(c.qc?.byDate?.[x.date]?.rejected||0)}</td><td>${c.qc?.byDate?.[x.date]?.inspected?wP(c.qc.byDate[x.date].rejected/c.qc.byDate[x.date].inspected):'—'}</td><td>${x.dod == null ? '—' : wD(x.dod) + '%'}</td><td>${x.status}</td></tr>`; });
+  d += `<tr style="background:#eef4fa;font-weight:700"><td colspan="3">合計/均</td><td>${M.avgOp.toFixed(2)}</td><td>${wF(M.qty)}</td><td>${wP(M.eff)}</td><td>${wP(M.publishedEff)}</td><td>${M.perHead.toFixed(1)}</td><td>${wF(M.ctn, 1)}</td><td>${wF(c.qc?.inspected||0)}</td><td>${wF(c.qc?.rejected||0)}</td><td>${c.qc?.weighted!=null?wP(c.qc.weighted):'—'}</td><td>—</td><td>—</td></tr></tbody></table>`;
   document.getElementById('wrDaily').innerHTML = d;
 
   const mv = c.W ? Object.fromEntries(c.W.lines.map(l => [l.line, l.pp])) : {};
-  let l = `<table class="wrt"><thead><tr><th>組</th><th>日均人力</th><th>件數</th><th>標準工時</th><th>效率</th><th>較上週</th><th>本期p75</th><th>可回收(件)</th><th>零產</th><th>備註 Remark</th></tr></thead><tbody>`;
+  let l = `<table class="wrt"><thead><tr><th>組</th><th>日均人力</th><th>件數</th><th>標準工時</th><th>同基準效率</th><th>已發布效率</th><th>較上週</th><th>本期p75</th><th>可回收(件)</th><th>零產</th><th>備註 Remark</th></tr></thead><tbody>`;
   Object.keys(M.lines).sort((a, b) => M.lines[b].eff - M.lines[a].eff).forEach(k => { const L = M.lines[k], m = mv[k];
     const cls = L.eff >= WCFG.greenEff ? 'wr-GREEN' : (L.eff < WCFG.criticalLineEff ? 'wr-RED' : (L.eff < WCFG.lowLineEff ? 'wr-AMBER' : ''));
-    l += `<tr class="${cls}"><td>${k}</td><td>${L.avgOp.toFixed(1)}</td><td>${wF(L.qty)}</td><td>${wF(L.std)}</td><td><b>${wP(L.eff)}</b></td><td style="color:${m == null ? '#64748b' : (m >= 0 ? '#059669' : '#c00000')};font-weight:700">${m == null ? '—' : wD(m) + 'pp'}</td><td>${wP(L.p75)}</td><td>${L.gain > 0 ? wF(L.gain / (M.smv || 1)) : '—'}</td><td>${L.zero || ''}</td><td style="text-align:left;font-size:11px;color:#64748b">${L.remark || ''}</td></tr>`; });
+    l += `<tr class="${cls}"><td>${k}</td><td>${L.avgOp.toFixed(1)}</td><td>${wF(L.qty)}</td><td>${wF(L.std)}</td><td><b>${wP(L.eff)}</b></td><td>${wP(L.publishedEff)}</td><td style="color:${m == null ? '#64748b' : (m >= 0 ? '#059669' : '#c00000')};font-weight:700">${m == null ? '—' : wD(m) + 'pp'}</td><td>${wP(L.p75)}</td><td>${L.gain > 0 ? wF(L.gain / (M.smv || 1)) : '—'}</td><td>${L.zero || ''}</td><td style="text-align:left;font-size:11px;color:#64748b">${L.remark || ''}</td></tr>`; });
   document.getElementById('wrLines').innerHTML = l + '</tbody></table>';
 
+  const se=document.getElementById('wrSmvChanges');if(se){const rows=c.smvChanges||[];se.innerHTML=rows.length?`<div style="font-size:11.5px;color:#64748b;margin-bottom:7px">同基準比較使用 Daily Output 的 Current SMV；此表只列 Current 與 Previous/Last SMV 相差超過 0.005 的款式。版本重算不等於現場改善。</div><table class="wrt"><thead><tr><th>款號 Style</th><th>舊 SMV</th><th>新 SMV</th><th>件數</th><th>標準分鐘變化</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.style}</td><td>${x.oldSmv.toFixed(3)}</td><td>${x.newSmv.toFixed(3)}</td><td>${wF(x.pcs)}</td><td>${x.stdChange>=0?'+':''}${wF(x.stdChange,1)}</td></tr>`).join('')}<tr style="font-weight:700;background:#eef4fa"><td colspan="3">合計</td><td>${wF(rows.reduce((a,x)=>a+x.pcs,0))}</td><td>${rows.reduce((a,x)=>a+x.stdChange,0)>=0?'+':''}${wF(rows.reduce((a,x)=>a+x.stdChange,0),1)}</td></tr></tbody></table>`:`<div style="color:#64748b">本週沒有可識別的 SMV 版本變動款。</div>`;}
+  const qe=document.getElementById('wrQC');if(qe){const q=c.qc||{};const lineKeys=Object.keys(q.byLine||{}).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));qe.innerHTML=`<div style="font-size:12px;margin-bottom:8px">檢驗 <b>${wF(q.inspected||0)}</b>｜具名不良筆數 <b>${wF(q.rejected||0)}</b>｜加權不良記錄率 <b>${q.weighted!=null?wP(q.weighted):'—'}</b>｜各線百分比簡單平均 <b>${q.unweighted!=null?wP(q.unweighted):'—'}</b><br><span style="color:#64748b">不良記錄不是去重後不良件，不能換算一次合格率或損失件數。</span></div><table class="wrt"><thead><tr><th>組</th><th>檢驗件次</th><th>具名不良筆數</th><th>加權比率</th></tr></thead><tbody>${lineKeys.map(k=>{const z=q.byLine[k];return `<tr><td>${k}</td><td>${wF(z.inspected)}</td><td>${wF(z.rejected)}</td><td>${z.inspected?wP(z.rejected/z.inspected):'—'}</td></tr>`}).join('')||'<tr><td colspan="4">本週尚無 Final QC 線日資料</td></tr>'}</tbody></table>`;}
   // 計畫執行 plan execution
   const pe = document.getElementById('wrPlan');
   if (pe) {
@@ -40395,11 +40442,12 @@ function wExport() {
 }
 
 /* ---------- 進入分頁 ---------- */
-function initWReport() {
+async function initWReport() {
   wBuild();
-  WS.plan = wLoadPlan();
+  WS.plan = await wLoadPlan();
+  WS.qc = await wLoadQC();
   const sel = document.getElementById('wrWeek');
-  const cards = ['wrCard2', 'wrCard3', 'wrCard4', 'wrCard5', 'wrCard9', 'wrCard6', 'wrCard7', 'wrCard8'];
+  const cards = ['wrCard2','wrCardSMV','wrCard3','wrCard4','wrCard5','wrCardQC','wrCard9','wrCard6','wrCard7','wrCard8'];
   if (!WS.weeks.length) {
     document.getElementById('wrBody').style.display = 'none';
     document.getElementById('wrEmpty').style.display = 'block';
@@ -40410,11 +40458,17 @@ function initWReport() {
   document.getElementById('wrEmpty').style.display = 'none';
   cards.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'block'; });
   const keep = sel.value;
-  sel.innerHTML = WS.weeks.map((w, i) => `<option value="${i}">${w.label}（${new Set(w.recs.map(r => r.date)).size} 日）</option>`).join('');
-  sel.value = (keep !== '' && WS.weeks[keep]) ? keep : String(WS.weeks.length - 1);
+  const opts=WS.weeks.map((w,i)=>({w,i,days:new Set(w.recs.map(r=>r.date)).size})).sort((a,b)=>b.w.key.localeCompare(a.w.key));
+  sel.innerHTML=opts.map(o=>`<option value="${o.i}">${o.w.label}（${o.days} 日）</option>`).join('');
+  let def=opts.find(o=>o.days>=6)?.i ?? (opts[0]?.i??0);
+  sel.value=(keep!==''&&WS.weeks[keep])?keep:String(def);
   document.getElementById('wrSrc').textContent = `資料來源：本系統 ${WS.recs.length} 筆線日記錄，涵蓋 ${WS.weeks[0].label} 至 ${WS.weeks[WS.weeks.length - 1].label}${WS.skipped ? `；另有 ${WS.skipped} 筆來源列無法判讀日期或組別已略過` : ''}。${WS.plan && WS.plan.ok ? WS.plan.msg.split(' / ')[0] : '未讀到平台排單'}　/　Source: ${WS.recs.length} line-day records from ${WS.weeks[0].label} to ${WS.weeks[WS.weeks.length - 1].label}${WS.skipped ? `; ${WS.skipped} source rows were skipped as unreadable` : ''}`;
   wCompute();
 }
+
+function wFactPack(){const c=WS.ctx,M=c?.M;if(!c||!M)return null;return{schema:'VRT_WEEKLY_FACT_PACK_v1',generatedAt:new Date().toISOString(),week:{label:c.label,workdays:c.expDays,dataDays:M.nDays,partial:c.partial,dates:c.actDates},kpi:{output:M.qty,dailyAverage:M.dailyAvg,sameBasisEfficiency:M.eff,publishedEfficiency:M.publishedEff,sameBasisCoverage:M.basisCoverage,planAttainment:c.planMatched&&c.planMatched.qty?M.qty/c.planMatched.qty:null,averageManpower:M.avgOp,weightedQcRecordRate:c.qc?.weighted??null,qcSimpleAverage:c.qc?.unweighted??null},daily:M.dayList.map(d=>({...d,qc:c.qc?.byDate?.[d.date]||null})),lines:Object.entries(M.lines).map(([line,v])=>({line,...v,qc:c.qc?.byLine?.[line]||null})),plan:{source:WS.plan?.key||'',matched:c.planMatched,fullWeek:c.planWeek},smvChanges:c.smvChanges||[],quality:{inspected:c.qc?.inspected||0,rejected:c.qc?.rejected||0,weightedRate:c.qc?.weighted??null,unweightedAverage:c.qc?.unweighted??null,note:'Named defect records are not de-duplicated defective pieces and are not FPY/lost pieces.'},findings:c.findings,audit:WS.audit,notes:c.notes,sources:[{id:'S1',source:'VRT_SewingProduction/daily_records'},{id:'S2',source:'VRT_ProductionPlan/plan_records'},{id:'S3',source:'VRT_FinalQC/records'},{id:'S4',source:'SMV fields carried by Sewing Daily Output'},{id:'S5',source:'daily report remarks/issues'}],writingRules:['先數字後結論 / numbers before conclusions','區分已記錄/試算/未證實','不把品質相關性寫成單一因果','箱數不是出貨量','生產調整由工廠負責人統籌']};}
+function wExportFactPack(kind='json'){const p=wFactPack();if(!p)return;const base='VRT_Weekly_FactPack_'+String(p.week.label).replace(/[^0-9A-Za-z-]+/g,'_');if(kind==='xlsx'&&window.XLSX){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([p.kpi]),'KPI');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(p.daily),'Daily');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(p.lines.map(x=>({line:x.line,qty:x.qty,eff:x.eff,avgOp:x.avgOp,zeroDays:x.zero,qcInspected:x.qc?.inspected||0,qcRejected:x.qc?.rejected||0}))), 'Lines');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(p.sources),'Sources');XLSX.writeFile(wb,base+'.xlsx');return}const blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=base+'.json';a.click();URL.revokeObjectURL(a.href)}
+window.wExportFactPack=wExportFactPack;
 
 window.initWReport = initWReport;
 window.wCompute = wCompute;

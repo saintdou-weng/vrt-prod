@@ -1,0 +1,23 @@
+{
+  "release": "4.7",
+  "date": "2026-09-26",
+  "base": "4.6",
+  "appsScript": "unchanged VRT_Production_v4.2.gs",
+  "changedModules": [
+    "Spare Parts period UI and period-aware dashboard",
+    "IE/SMV incremental bucket sync and cloud baseline",
+    "Shipping resumable baseline sync",
+    "Cutting pull reconciliation",
+    "Sewing/Monthly Shipping network retry",
+    "Orders customer PDF preview and strict PO parsing",
+    "Shared Smart Sync v4.3 transport",
+    "Outlook routing specification"
+  ],
+  "notChanged": [
+    "Final QC validation rules",
+    "Fabric stock business rules already passed in v4.6",
+    "Greige business rules already passed in v4.6",
+    "BOM"
+  ],
+  "notes": "v4.7 addresses period controls on every maintenance tab and the v4.6 post-test sync/order issues from the 2026-09-26 instruction file."
+}

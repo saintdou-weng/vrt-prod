@@ -187,6 +187,7 @@ tr:hover td{background:#eff6ff}
     <div><div class="hs-v" id="hSewing">–</div><div class="hs-l">車縫記錄</div></div>
   </div>
 </div>
+<div id="smvFreshness517" style="margin:8px 16px 0;padding:9px 12px;border:1px solid #dbe4f0;border-radius:8px;background:#f8fafc;font-size:12px;color:#526176">📅 最新 SMV 版本：讀取中…</div>
 <div class="tabs">
   <div class="tab on"  onclick="goTab('import',this)">📥 匯入 SMV</div>
   <div class="tab"     onclick="goTab('style',this)">👗 款式 SMV 對比</div>
@@ -788,6 +789,7 @@ function sbadge(s){const c=s==='Garment'?'bg':s==='Cutting'?'bc':'ba';return`<sp
 function updateHeader(){
   document.getElementById('hSnaps').textContent=allSnaps.length;
   document.getElementById('hStyles').textContent=new Set(allSnaps.flatMap(s=>s.items.map(i=>i.style.toUpperCase()))).size;
+  const latest=(allSnaps||[]).map(x=>String(x.reportDate||'')).filter(Boolean).sort().pop()||'';const box=document.getElementById('smvFreshness517');if(box){let stale=false,age='';if(latest){const a=new Date(latest+'T12:00:00'),b=new Date();let wd=0;for(let d=new Date(a);d<b;d.setDate(d.getDate()+1))if(d.getDay()!==0)wd++;stale=wd>7;age=` · ${wd} 個工作日`;}box.style.background=stale?'#fff7ed':'#ecfdf5';box.style.borderColor=stale?'#fdba74':'#a7f3d0';box.innerHTML=`📅 最新 SMV 版本：<b>${latest||'尚無資料'}</b>${age}${stale?'　⚠ 超過 7 個工作日未更新':''} <span style="margin-left:10px;color:#64748b">SMV snapshots 已納入 VRTDomain39 雲端同步；${localStorage.getItem('vrt_smv_pending_sync')?'本機有 Sewing 來源版本待同步':'目前無 Sewing 待同步標記'}。</span>`;}
   loadSewingData(); // async, non-blocking
 }
 
@@ -1581,7 +1583,7 @@ async function scanAllFolders(silent=false){
   function vsMergeIe(local,remote){
     if(!local)return remote;if(!remote)return local;const out=JSON.parse(JSON.stringify(local));out.schemaVersion=Math.max(Number(local.schemaVersion)||2,Number(remote.schemaVersion)||2);out.generatedAt=new Date().toISOString();for(const k of ['updates','styles','operations','importLog']){const a=Array.isArray(local[k])?local[k]:[],b=Array.isArray(remote[k])?remote[k]:[],m=new Map();a.concat(b).forEach((r,i)=>{const key=r.id||[r.detailId,r.style,r.module,r.testDate,r.no,r.description,r.sourceFile].join('|')||String(i);const old=m.get(key);if(!old||JSON.stringify(r).length>=JSON.stringify(old).length)m.set(key,r)});out[k]=[...m.values()]}out.settings=Object.assign({},remote.settings||{},local.settings||{});return out;
   }
-  window.vsPush=async function(){gasUrl=localStorage.getItem(LS_GAS)||gasUrl;if(!gasUrl){vsLog('請先填入 GAS URL','err');return}vsBusy(true);try{const r=await VRTDomain39.sync('smv','push',gasUrl,m=>vsLog(m,'i'));vsLog('Push · '+(r.uploaded||0)+' uploaded · '+(r.unchanged||0)+' unchanged',r.needsPull?'err':'ok');return r}catch(e){vsLog(e.message,'err');throw e}finally{vsBusy(false)}};
+  window.vsPush=async function(){gasUrl=localStorage.getItem(LS_GAS)||gasUrl;if(!gasUrl){vsLog('請先填入 GAS URL','err');return}vsBusy(true);try{const r=await VRTDomain39.sync('smv','push',gasUrl,m=>vsLog(m,'i'));if(!r.needsPull)try{localStorage.removeItem('vrt_smv_pending_sync')}catch(_){};updateHeader();vsLog('Push · '+(r.uploaded||0)+' uploaded · '+(r.unchanged||0)+' unchanged',r.needsPull?'err':'ok');return r}catch(e){vsLog(e.message,'err');throw e}finally{vsBusy(false)}};
   window.vsPull=async function(){gasUrl=localStorage.getItem(LS_GAS)||gasUrl;if(!gasUrl){vsLog('請先填入 GAS URL','err');return}vsBusy(true);try{const r=await VRTDomain39.sync('smv','pull',gasUrl,m=>vsLog(m,'i'));allSnaps=await dbAll();updateHeader();renderScenario();vsLog('Pull · '+(r.downloaded||0)+' downloaded · '+(r.unchanged||0)+' unchanged',r.ok?'ok':'err');return r}catch(e){vsLog(e.message,'err');throw e}finally{vsBusy(false)}};
 
   window.vsMobileRepair = async function(){

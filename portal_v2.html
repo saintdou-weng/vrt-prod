@@ -504,6 +504,13 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
     </div>
   </div>
 
+
+  <div class="gtitle">🕒 資料新鮮度 DATA FRESHNESS</div>
+  <div class="mcard" style="margin-bottom:18px">
+    <div class="mc-head"><div class="mc-icon">🕒</div><div class="mc-info"><div class="mc-title">資料新鮮度稽核</div><div class="mc-sub">最新資料日 · 缺漏日期 · 雲端狀態；超過 3 個工作日未更新標黃</div></div><button class="btn-open" onclick="refreshFreshness514()" style="flex:none">↻ 更新</button></div>
+    <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;padding:7px">模組</th><th style="padding:7px">最新資料日</th><th style="padding:7px">距今工作日</th><th style="text-align:left;padding:7px">本月缺漏（Mon–Sat）</th><th style="text-align:left;padding:7px">雲端狀態</th></tr></thead><tbody id="freshnessBody514"><tr><td colspan="5" style="padding:12px;color:#64748b">讀取中…</td></tr></tbody></table></div>
+  </div>
+
   <!-- Log -->
   <div class="log-wrap">
     <div class="log-hd">操作紀錄</div>
@@ -879,6 +886,20 @@ function pad(n) { return String(n).padStart(2,'0'); }
 init();
 </script>
 
+
+
+<script>
+/* v4.11 data freshness: local authoritative stores only; never mutates source data. */
+async function frIdbAll514(dbName,store){return new Promise(res=>{let made=false,q;try{q=indexedDB.open(dbName)}catch(_){res([]);return}q.onupgradeneeded=e=>{made=true;try{e.target.transaction.abort()}catch(_){};res([])};q.onerror=()=>res([]);q.onsuccess=e=>{const d=e.target.result;if(made||!d.objectStoreNames.contains(store)){d.close();res([]);return}const x=d.transaction(store,'readonly').objectStore(store).getAll();x.onsuccess=()=>{const a=x.result||[];d.close();res(a)};x.onerror=()=>{d.close();res([])}}})}
+function frDate514(v){const m=String(v||'').match(/(20\d{2})[-\/]?(\d{1,2})[-\/](\d{1,2})/);if(m)return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;const z=String(v||'').match(/^(20\d{2})-(\d{2})-(\d{2})/);return z?z[0]:''}
+function frWorkAge514(day){if(!day)return null;const a=new Date(day+'T12:00:00'),b=new Date();let n=0;for(let d=new Date(a);d<b;d.setDate(d.getDate()+1))if(d.getDay()!==0)n++;return Math.max(0,n-1)}
+function frMissing514(days){const ds=[...new Set((days||[]).filter(Boolean))].sort();if(!ds.length)return[];const latest=ds[ds.length-1],ld=new Date(latest+'T12:00:00'),start=new Date(ld.getFullYear(),ld.getMonth(),1),have=new Set(ds),out=[];for(let d=new Date(start);d<=ld;d.setDate(d.getDate()+1)){if(d.getDay()===0)continue;const y=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;if(!have.has(y))out.push(y.slice(5))}return out}
+async function refreshFreshness514(){const el=document.getElementById('freshnessBody514');if(!el)return;el.innerHTML='<tr><td colspan="5" style="padding:12px">讀取中…</td></tr>';const defs=[
+ ['車縫 Sewing','VRT_SewingProduction','daily_records','date','sewing'],['裁剪 Cutting','CuttingProd','cutting_records','date','cutting'],['Final QC','VRT_FinalQC','records','date','qc'],['SMV 管理','VRT_SMV_Manager_v52','smv_snapshots','reportDate','smv'],['訂單 PDF','FactoryDB','po_headers','orderDate','orders']];
+ const rows=[];for(const [name,db,store,fld,tool] of defs){const a=await frIdbAll514(db,store),dates=a.map(r=>frDate514(r[fld]||r.poDate||r.date)).filter(Boolean),latest=dates.sort().pop()||'',age=frWorkAge514(latest),miss=frMissing514(dates),cloud=document.getElementById('st-'+tool)?.textContent||'由模組頁面管理';rows.push({name,latest,age,miss,cloud})}
+ el.innerHTML=rows.map(r=>`<tr style="background:${r.age!=null&&r.age>3?'#fff7ed':'transparent'}"><td style="padding:7px;font-weight:700">${r.name}</td><td style="padding:7px;text-align:center">${r.latest||'—'}</td><td style="padding:7px;text-align:center">${r.age==null?'—':r.age}${r.age!=null&&r.age>3?' ⚠':''}</td><td style="padding:7px">${r.miss.length?r.miss.slice(0,18).join('、')+(r.miss.length>18?`… +${r.miss.length-18}`:''):'—'}</td><td style="padding:7px">${r.cloud}</td></tr>`).join('')}
+window.refreshFreshness514=refreshFreshness514;window.addEventListener('load',()=>setTimeout(refreshFreshness514,700),{once:true});
+</script>
 
 <script>
 /* PROD v3.4 portal policy: do not auto-run every module in parallel. Owner modules reconcile when opened; manual Push All / Pull All remains. */

@@ -33407,7 +33407,8 @@ const rLine = v => { const m = String(v == null ? '' : v).match(/\d+/); return m
 const rYmd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const rDate = s => { if (!s) return null; if (s instanceof Date) return s; const m = String(s).match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
 const rWeekKey = d => { const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const w = t.getDay(); t.setDate(t.getDate() - (w === 0 ? 6 : w - 1)); return rYmd(t); };
-const rWeekLabel = k => { const s = rDate(k), e = new Date(s); e.setDate(e.getDate() + 5); return `${s.getMonth() + 1}/${s.getDate()}–${e.getMonth() + 1}/${e.getDate()}`; };
+const rIsoWeek=d=>{const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())),day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=t.getUTCFullYear(),y0=new Date(Date.UTC(y,0,1)),n=Math.ceil((((t-y0)/86400000)+1)/7);return `${y}-W${String(n).padStart(2,'0')}`};
+const rWeekLabel = k => { const s = rDate(k), e = new Date(s); e.setDate(e.getDate() + 5); return `${rIsoWeek(s)} · ${s.getMonth()+1}/${s.getDate()}–${e.getMonth()+1}/${e.getDate()}`; };
 const rWorkDays = k => { const s = rDate(k), o = []; for (let i = 0; i < 6; i++) { const d = new Date(s.getFullYear(), s.getMonth(), s.getDate() + i); if (d.getDay() !== 0) o.push(rYmd(d)); } return o; };
 const pctile = (a, q) => { if (!a.length) return 0; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * q))]; };
 const prodKey = v => { const s = String(v || '').toUpperCase();
@@ -33458,28 +33459,13 @@ function planFor(dates) {
 }
 
 /* ---------- 實績：讀車縫系統的 localStorage read sewing actuals ---------- */
-function loadActuals() {
-  let raw = null;
-  try { raw = localStorage.getItem(RCFG.actualsKey) || localStorage.getItem(RCFG.actualsAlt); } catch (e) {}
-  if (!raw) return { ok: false, msg: '找不到車縫實績（localStorage sewing_prod_v1）。請先在車縫系統匯入日報，兩者需在同一網域。', byDate: {}, rows: 0 };
-  let arr = []; try { arr = JSON.parse(raw) || []; } catch (e) { return { ok: false, msg: '車縫實績格式無法解析', byDate: {}, rows: 0 }; }
-  if (!arr.length) return { ok: false, msg: '車縫實績為空', byDate: {}, rows: 0 };
-  const by = {}; let skipped = 0;
-  arr.forEach(r => {
-    const d = rDate(r.date), L = rLine(r.lineNo); if (!d || !L) { skipped++; return; }
-    const dt = rYmd(d), k = dt + '|' + L;
-    const o = by[k] || (by[k] = { date: dt, line: L, pieces: 0, workers: 0, cartons: 0, target: 0, stdMin: 0, remark: '', styles: 0 });
-    o.pieces += rn(r.pieces); o.workers = Math.max(o.workers, rn(r.workers));
-    o.cartons += rn(r.cartons); o.target += rn(r.target); o.styles = Math.max(o.styles, rn(r.styleCount));
-    if (rn(r.smv) > 0 && rn(r.pieces) > 0) o.stdMin += rn(r.smv) * rn(r.pieces);
-    else if (rn(r.efficiency) > 0 && rn(r.workers) > 0) { const e = rn(r.efficiency) > 1 ? rn(r.efficiency) / 100 : rn(r.efficiency); o.stdMin += e * rn(r.workers) * RCFG.minutesPerDay; }
-    const rm = [r.remark, r.issue].filter(x => x && String(x).trim()).join('；');
-    if (rm && !o.remark) o.remark = String(rm).replace(/\s+/g, ' ').trim();
-  });
-  const list = Object.values(by).filter(o => o.workers > 0 || o.pieces > 0).map(o => { o.avail = o.workers * RCFG.minutesPerDay; return o; });
-  const byDate = {}; list.forEach(o => (byDate[o.date] = byDate[o.date] || []).push(o));
-  return { ok: true, rows: arr.length, lineDays: list.length, skipped, byDate, list,
-    msg: `車縫實績 ${arr.length} 筆 → ${list.length} 個線日${skipped ? `（${skipped} 筆略過）` : ''}` };
+async function loadActuals() {
+  let arr=[];
+  try{arr=await new Promise(res=>{let created=false;const q=indexedDB.open('VRT_SewingProduction');q.onupgradeneeded=e=>{created=true;try{e.target.transaction.abort()}catch(_){ }res([])};q.onerror=()=>res([]);q.onsuccess=e=>{const d=e.target.result;if(created||!d.objectStoreNames.contains('daily_records')){d.close();res([]);return}const x=d.transaction('daily_records','readonly').objectStore('daily_records').getAll();x.onsuccess=()=>{const a=x.result||[];d.close();res(a)};x.onerror=()=>{d.close();res([])}}})}catch(_){arr=[]}
+  if(!arr.length){let raw=null;try{raw=localStorage.getItem(RCFG.actualsKey)||localStorage.getItem(RCFG.actualsAlt)}catch(_){};if(raw)try{arr=JSON.parse(raw)||[]}catch(_){}}
+  if(!arr.length)return {ok:false,msg:'找不到車縫實績（VRT_SewingProduction/daily_records）',byDate:{},rows:0};
+  const by={};let skipped=0;arr.forEach(r=>{const d=rDate(r.date),L=rLine(r.lineNo);if(!d||!L){skipped++;return}const dt=rYmd(d),k=dt+'|'+L,o=by[k]||(by[k]={date:dt,line:L,pieces:0,workers:0,cartons:0,target:0,stdMin:0,remark:'',styles:0});o.pieces+=rn(r.pieces);o.workers=Math.max(o.workers,rn(r.workers));o.cartons+=rn(r.cartons);o.target+=rn(r.target);o.styles=Math.max(o.styles,rn(r.styleCount));const p=rn(r.pieces),smv=rn(r.smvCompareCurrent||r.smv);if(smv>0&&p>0)o.stdMin+=smv*p;else if(rn(r.efficiency)>0&&rn(r.workers)>0){const e=rn(r.efficiency)>1?rn(r.efficiency)/100:rn(r.efficiency);o.stdMin+=e*rn(r.workers)*RCFG.minutesPerDay}const rm=[r.remark,r.issue].filter(x=>x&&String(x).trim()).join('；');if(rm&&!o.remark)o.remark=String(rm).replace(/\s+/g,' ').trim()});
+  const list=Object.values(by).filter(o=>o.workers>0||o.pieces>0).map(o=>{o.avail=o.workers*RCFG.minutesPerDay;return o}),byDate={};list.forEach(o=>(byDate[o.date]=byDate[o.date]||[]).push(o));return{ok:true,rows:arr.length,lineDays:list.length,skipped,byDate,list,msg:`車縫實績 ${arr.length} 筆 → ${list.length} 個線日（IndexedDB）`};
 }
 function actFor(dates) {
   const A = { qty: 0, std: 0, avail: 0, op: 0, ctn: 0, target: 0, lines: {}, days: [], remarks: [] };
@@ -33759,7 +33745,7 @@ window.rptExport = function () {
   RS.audit.items.forEach(x => ars.push(dr(aw, [x.zh + '\n' + x.en, x.hard ? '必要 Hard' : '提醒 Soft', x.ok ? '正常 OK' : '需確認 Check'], { fill: x.ok ? undefined : (x.hard ? LRED : LYEL) })));
   add(tb(aw, ars));
   add(PP(T('')));
-  add(PP(T(`排單來源：本模組現有資料（${RS.plan.rows} 列）。實績來源：車縫系統 localStorage（${RS.act.ok ? RS.act.rows + ' 筆' : '未讀到'}）。排單依上線日至完成日平均攤至工作日；加權效率＝Σ標準工時÷Σ可用人時；週別以週一至週六切分。 / Plan: this module's current data, ${RS.plan.rows} rows. Actuals: the sewing system's localStorage, ${RS.act.ok ? RS.act.rows + ' records' : 'not available'}. Plan quantities are spread evenly across working days between start and finish; weighted efficiency = Σ standard minutes ÷ Σ available minutes; weeks run Monday to Saturday.`, { size: 15, color: GRAY, i: true }), { before: 40 }));
+  add(PP(T(`排單來源：本模組現有資料（${RS.plan.rows} 列）。實績來源：車縫系統 IndexedDB（${RS.act.ok ? RS.act.rows + ' 筆' : '未讀到'}）。排單依上線日至完成日平均攤至工作日；加權效率＝Σ標準工時÷Σ可用人時；週別以週一至週六切分。 / Plan: this module's current data, ${RS.plan.rows} rows. Actuals: the sewing system's IndexedDB, ${RS.act.ok ? RS.act.rows + ' records' : 'not available'}. Plan quantities are spread evenly across working days between start and finish; weighted efficiency = Σ standard minutes ÷ Σ available minutes; weeks run Monday to Saturday.`, { size: 15, color: GRAY, i: true }), { before: 40 }));
   add(PP(T('')), PP(T('')));
   add(tb([3233, 3233, 3234], [dr([3233, 3233, 3234], ['製表 / Prepared\n\n____________________', '覆核 / Reviewed\n\n____________________', '核准 / Approved\n\n____________________'], { all: true })]));
 
@@ -33779,11 +33765,10 @@ window.rptExport = function () {
 };
 
 /* ---------- 進入分頁 ---------- */
-window.renderReport = function () {
-  RS.plan = loadPlan(); RS.act = loadActuals(); buildWeeks();
+window.renderReport = async function () {
+  RS.plan = loadPlan(); RS.act = await loadActuals(); buildWeeks();
   RS.weeks.forEach(w => { w.hasAct = RS.act.ok && w.dates.some(d => RS.act.byDate[d]); });
-  let defIdx = RS.weeks.length - 1;
-  for (let i = RS.weeks.length - 1; i >= 0; i--) if (RS.weeks[i].hasAct) { defIdx = i; break; }
+  let defIdx=RS.weeks.length-1;for(let i=RS.weeks.length-1;i>=0;i--){const dataDays=RS.act.ok?RS.weeks[i].dates.filter(d=>RS.act.byDate[d]).length:0;if(RS.weeks[i].hasAct&&dataDays>=6){defIdx=i;break}}
   const host = document.getElementById('report');
   const style = `<style>
     .rt{width:100%;border-collapse:collapse;font-size:12px}
@@ -33808,7 +33793,7 @@ window.renderReport = function () {
     <div style="display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start;margin:12px 0">
       <div><label style="display:block;font-size:11px;font-weight:700;color:#1f3864;margin-bottom:4px">選擇週別 Select week</label>
         <select id="rptWeek" onchange="rptCompute()" style="width:100%;padding:7px 9px;border:1px solid #d7e0e9;border-radius:7px;font-family:inherit">
-          ${RS.weeks.map((w, i) => `<option value="${i}"${i === defIdx ? ' selected' : ''}>${w.label}${w.hasAct ? '' : '（無實績 no actuals）'}</option>`).join('')}
+          ${RS.weeks.map((w,i)=>({w,i,days:RS.act.ok?w.dates.filter(d=>RS.act.byDate[d]).length:0})).sort((a,b)=>b.w.key.localeCompare(a.w.key)).map(o=>`<option value="${o.i}"${o.i===defIdx?' selected':''}>${o.w.label}（${o.days} 日）${o.w.hasAct?'':' · 無實績'}</option>`).join('')}
         </select></div>
       <div><label style="display:block;font-size:11px;font-weight:700;color:#1f3864;margin-bottom:4px">補充說明 Notes（每行一則，會寫進報告摘要）</label>
         <textarea id="rptNotes" oninput="clearTimeout(window._rptT);window._rptT=setTimeout(rptCompute,400)" style="width:100%;min-height:52px;padding:8px 10px;border:1px solid #d7e0e9;border-radius:7px;font-family:inherit;font-size:12px;resize:vertical"></textarea></div>

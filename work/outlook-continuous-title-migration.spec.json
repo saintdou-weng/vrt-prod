@@ -1,0 +1,103 @@
+{
+  "version": "2026-09-27",
+  "priority": [
+    "continuous_title",
+    "person",
+    "yearly_correspondence"
+  ],
+  "source_of_truth": {
+    "rules_backup": "v2/outlook-rules-backup.json",
+    "status": "v2/daily-task-status.json",
+    "classifier": "v2/outlook-classifier.mjs",
+    "people_router": "mail-people/core.mjs"
+  },
+  "known_rules": [
+    {
+      "backup_rule": 98,
+      "subject_keywords": [
+        "FABRIC PO"
+      ],
+      "destination_path": "pc\\fabric\\fabric PO",
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "backup_rule": 37,
+      "sender_or_name": [
+        "Och Chanmalen"
+      ],
+      "subject_keywords": [
+        "PO#"
+      ],
+      "destination_path": "pc\\fabric\\fabric PO",
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "backup_rule": 100,
+      "subject_keywords": [
+        "ADI Spreadsheet"
+      ],
+      "destination_path": "pc\\order\\adi spreadsheet",
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "backup_rule": 80,
+      "subject_keywords": [
+        "Vestis Spreadsheet"
+      ],
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "backup_rule": 46,
+      "subject_keywords": [
+        "FABRIC STANDARD"
+      ],
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "backup_rule": 63,
+      "subject_keywords": [
+        "LAB DIP"
+      ],
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "backup_rule": 99,
+      "subject_keywords": [
+        "VRT Shipping Schedule"
+      ],
+      "folder_id": "READ_FROM_BACKUP"
+    },
+    {
+      "subject_keywords": [
+        "Outstanding Order"
+      ],
+      "folder_id": "READ_FROM_BACKUP"
+    }
+  ],
+  "migration_rule": "Import every enabled Condition Type 2 subject-keyword -> folder rule from backup; destination must use FolderID.",
+  "dry_run": {
+    "from": "2026-09-10",
+    "to": "NOW",
+    "columns": [
+      "received_time",
+      "subject",
+      "sender",
+      "current_folder",
+      "proposed_folder",
+      "matched_rule",
+      "folder_id"
+    ],
+    "move_after_user_confirmation_only": true,
+    "delete": false
+  },
+  "attachment_routing": {
+    "pattern": "NEW PO#0xx-26.xlsx",
+    "destination": "08_EMAIL_郵件附件\\prd_生產郵件\\fabric\\fabric PO",
+    "keep_original_filename": true
+  },
+  "safety": {
+    "reenable_native_outlook_rules": false,
+    "delete_messages": false,
+    "move_before_confirmation": false
+  }
+}
