@@ -173,7 +173,7 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
 
 <div class="header">
   <div class="logo">🏭</div>
-  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.18 · AUTO SYNC</div></div>
+  <div><div class="h-title" data-i18n="sysTitle">車縫生產分析系統</div><div class="h-sub">SEWING PRODUCTION · v5.19 · AUTO SYNC</div></div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hRecs">0</div><div class="hstat-l" data-zh="總記錄" data-en="Records" data-km="កំណត់ត្រា">總記錄</div></div>
     <div class="hstat"><div class="hstat-v" id="hDays">0</div><div class="hstat-l" data-zh="天數" data-en="Days" data-km="ថ្ងៃ">天數</div></div>
@@ -1165,7 +1165,7 @@ async function connectDataFile(){
     if(data?.daily){ DB=dedupAndNorm(data.daily); EFF_DB=data.eff||[]; }
     else if(Array.isArray(data)){ DB=dedupAndNorm(data); }
   }
-  saveDB(); updateHeader(); renderDBCard();
+  saveDB(); sewSaveImportHashes512(); updateHeader(); renderDBCard();
   alert("✓ 已連結資料檔案："+h.name+"\n\n之後所有資料自動儲存到此檔案，可放在 Google Drive 同步資料夾中實現雲端同步。");
 }
 
@@ -2135,6 +2135,15 @@ async function extractFromMSG(file) {
 
 // ═══════════════════════ FILE HANDLING ════════════════════════════════════════
 let pendingFiles=[], pendingRecs=[];
+let pendingImportFileHashes512=[], pendingImportAudit512={rows:[],hasConflict:false,duplicateFiles:[]};
+const SEW_IMPORT_HASH_KEY512='vrt_sewing_import_hashes_v512';
+async function sewFileHash512(f){try{const b=await f.arrayBuffer(),h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('')}catch(_){return [f.name,f.size,f.lastModified].join('|')}}
+function sewImportHashRegistry512(){try{return JSON.parse(localStorage.getItem(SEW_IMPORT_HASH_KEY512)||'{}')||{}}catch(_){return{}}}
+function sewSaveImportHashes512(){try{const m=sewImportHashRegistry512();for(const x of pendingImportFileHashes512)if(x.hash)m[x.hash]={name:x.name,size:x.size,importedAt:new Date().toISOString()};localStorage.setItem(SEW_IMPORT_HASH_KEY512,JSON.stringify(m))}catch(_){}}
+function sewSource512(r){return String(r?.tSrc||'norm').trim()||'norm'}
+function sewPiecesByDateSource512(rows){const m=new Map();for(const r of (rows||[])){const d=normalizeDate(r.date);if(!d)continue;const k=d+'|'+sewSource512(r),o=m.get(k)||{date:d,source:sewSource512(r),pieces:0,rows:0};o.pieces+=Number(r.pieces)||0;o.rows++;m.set(k,o)}return m}
+function sewBuildImportAudit512(incoming){const inc=sewPiecesByDateSource512(incoming),ex=sewPiecesByDateSource512(DB||[]),dates=[...new Set([...inc.values()].map(x=>x.date))].sort(),rows=[];for(const d of dates){const ii=[...inc.values()].filter(x=>x.date===d),ee=[...ex.values()].filter(x=>x.date===d);const incomingTotal=ii.reduce((a,x)=>a+x.pieces,0),existingTotal=ee.reduce((a,x)=>a+x.pieces,0),incSources=ii.map(x=>x.source),other=ee.filter(x=>!incSources.includes(x.source));let sameMismatch=false;for(const x of ii){const old=ex.get(d+'|'+x.source);if(old&&Math.abs(old.pieces-x.pieces)>0.5)sameMismatch=true}const conflict=other.some(x=>x.pieces>0)||sameMismatch;rows.push({date:d,incomingTotal,existingTotal,incoming:ii,existing:ee,conflict})}return{rows,hasConflict:rows.some(x=>x.conflict)}}
+function sewAuditHtml512(a){if(!a?.rows?.length)return'';const reg=sewImportHashRegistry512(),dups=pendingImportFileHashes512.filter(x=>reg[x.hash]);a.duplicateFiles=dups;const danger=a.hasConflict||dups.length;return `<div style="margin-top:12px;border:1px solid ${danger?'#fca5a5':'#a7f3d0'};background:${danger?'#fef2f2':'#ecfdf5'};border-radius:8px;padding:10px"><b>${danger?'⚠ 匯入對帳確認':'✓ 匯入對帳'}</b>${dups.length?`<div style="color:#b91c1c;margin-top:6px">同一檔案 hash 已匯入過：${dups.map(x=>x.name).join('、')}</div>`:''}<div style="overflow:auto;margin-top:8px"><table class="wrt"><thead><tr><th>日期</th><th>現有件數（按來源）</th><th>本次匯入</th><th>結果</th></tr></thead><tbody>${a.rows.map(x=>`<tr style="background:${x.conflict?'#fee2e2':'transparent'}"><td>${x.date}</td><td>${x.existing.length?x.existing.map(y=>`${y.source}: ${Math.round(y.pieces).toLocaleString()}`).join('<br>'):'—'}</td><td>${x.incoming.map(y=>`${y.source}: ${Math.round(y.pieces).toLocaleString()}`).join('<br>')}</td><td>${x.conflict?'<b style="color:#b91c1c">需確認</b>':'OK'}</td></tr>`).join('')}</tbody></table></div>${danger?'<label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input id="sewImportConflictConfirm512" type="checkbox">我已核對紅色差異／重複檔，仍要以本次匯入處理相同來源範圍。</label>':''}</div>`}
 
 function dzOver(e){ e.preventDefault(); document.getElementById("dz").classList.add("drag"); }
 function dzOut(){ document.getElementById("dz").classList.remove("drag"); }
@@ -2191,10 +2200,11 @@ async function doImport(){
   const btn=document.getElementById("btnImport");
   const msg=document.getElementById("importMsg");
   btn.disabled=true; msg.textContent="解析中..."; msg.style.color="#6b7a9e";
-  pendingRecs=[];
+  pendingRecs=[]; pendingImportFileHashes512=[]; pendingImportAudit512={rows:[],hasConflict:false,duplicateFiles:[]};
   const previews=[], errors=[];
 
   for(const f of pendingFiles){
+    const fh=await sewFileHash512(f); pendingImportFileHashes512.push({name:f.name,size:f.size,hash:fh});
     const ext = f.name.split('.').pop().toLowerCase();
     try{
       if (ext === 'eml') {
@@ -2298,6 +2308,8 @@ async function doImport(){
     if(previews.some(p=>!p._isEff && p.smvCompareRows>0)){
       document.getElementById("previewContent").insertAdjacentHTML('beforeend',`<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding:10px 12px;border:1px solid #c4b5fd;border-radius:8px;background:#f5f3ff;font-size:12px"><input id="sewSaveSmvVersion" type="checkbox" style="margin-top:2px"><span><b>📐 同時儲存為正式 SMV 版本</b>（預設不勾選）<br><span style="color:#6b7a9e">Daily Output 內含 SMV 比較欄時才可使用；勾選後寫入 SMV Manager，本機先保存，SMV 頁再同步雲端。</span></span></label>`);
     }
+    pendingImportAudit512=sewBuildImportAudit512(pendingRecs);
+    document.getElementById("previewContent").insertAdjacentHTML('beforeend',sewAuditHtml512(pendingImportAudit512));
     msg.style.color="#6b7a9e";
     msg.textContent=`找到 ${pendingRecs.length} 筆記錄，請確認後存入`;
   } else {
@@ -2329,6 +2341,9 @@ async function sewSaveSmvSnapshotFromImport(rows){
 
 async function confirmImport(){
   if(!pendingRecs.length) return;
+  if((pendingImportAudit512.hasConflict||(pendingImportAudit512.duplicateFiles||[]).length)&&!document.getElementById('sewImportConflictConfirm512')?.checked){
+    const m=document.getElementById('importMsg');if(m){m.textContent='⚠ 請先勾選確認紅色差異／重複檔';m.style.color='#b91c1c'}return;
+  }
   // Remove ALL old records for any date covered by this import, then add new
   // ★ v5.1: target 記錄（tSrc='target'）與一般日報記錄分開覆蓋，匯入目標報表不會刪除既有日報，反之亦然
   // ★ 三種來源各自獨立覆蓋：一般日報(norm)／VRT 目標報表(target)／Daily Output 報表(dpo)
@@ -2353,7 +2368,7 @@ async function confirmImport(){
   saveDB(); updateHeader(); renderDBCard();
   // ★ Save full DB to cloudIDB so it always has complete history across all years
   saveToCloudIDB(DB).catch(e=>console.warn("[VRT] cloudIDB save failed:", e));
-  pendingFiles=[]; pendingRecs=[]; renderFileList();
+  pendingFiles=[]; pendingRecs=[]; pendingImportFileHashes512=[]; pendingImportAudit512={rows:[],hasConflict:false,duplicateFiles:[]}; renderFileList();
   document.getElementById("previewArea").style.display="none";
   document.getElementById("importMsg").textContent=`✓ ${DB.length.toLocaleString()} ${t("importedRecs")} | ${getMinDate(DB)} ~ ${getMaxDate(DB)}`
     +(_tgtMerged>0?`（已合併 ${_tgtMerged} 筆重複目標資料，以 VRT 目標報表為準）`:"");
@@ -6047,7 +6062,7 @@ function parseDailyOutputReport(wb, fname){
 
       // ── 2. 明細區：依線別統計 成衣 / Apron 件數與箱數（GARMENT 以外皆歸 Apron 部門）──
       const detail={};
-      let dHdr=-1, dc={line:0,qty:7,ctn:8,type:9,style:3};
+      let dHdr=-1, dc={line:0,qty:7,ctn:8,type:9,style:3,smv:-1,customer:-1,po:-1};
       for(let i=0;i<Math.min(12,rows.length);i++){
         const r=rows[i]||[];
         const joined=r.map(c=>String(c==null?"":c)).join("|");
@@ -6060,6 +6075,9 @@ function parseDailyOutputReport(wb, fname){
             else if(/total\s*ctns|carton/.test(s)) dc.ctn=ci;
             else if(/type\s*of\s*product/.test(s)) dc.type=ci;
             else if(/^style/.test(s)) dc.style=ci;
+            else if(/^smv$|standard\s*minute/.test(s)) dc.smv=ci;
+            else if(/customer/.test(s)) dc.customer=ci;
+            else if(/customer\s*p\.?o\.?|^po$/.test(s)) dc.po=ci;
           });
           break;
         }
@@ -6074,11 +6092,12 @@ function parseDailyOutputReport(wb, fname){
           if(qty<=0) continue;
           const key=normLineNo(raw);
           const typ=String(r[dc.type]==null?"":r[dc.type]).trim().toUpperCase();
-          if(!detail[key]) detail[key]={g:0,a:0,styles:new Set(),types:{}};
+          if(!detail[key]) detail[key]={g:0,a:0,styles:new Set(),types:{},items:[]};
           if(/GARMENT/.test(typ)) detail[key].g+=qty; else detail[key].a+=qty;
           if(typ) detail[key].types[typ]=(detail[key].types[typ]||0)+qty;
           const st=String(r[dc.style]==null?"":r[dc.style]).trim();
           if(st) detail[key].styles.add(st);
+          if(st&&qty>0)detail[key].items.push({style:st,qty,smv:dc.smv>=0?(parseFloat(r[dc.smv])||0):0,customer:dc.customer>=0?String(r[dc.customer]??'').trim():'',po:dc.po>=0?String(r[dc.po]??'').trim():'',type:typ});
         }
       }
 
@@ -6119,7 +6138,7 @@ function parseDailyOutputReport(wb, fname){
         const r=rows[i]||[];
         const raw=String(r[0]==null?"":r[0]).trim();
         if(/^total|^合計/i.test(raw)){const z=parseFloat(r[sc.act]);if(Number.isFinite(z))dayPrinted=z;break;}
-        if(!raw || !LRE.test(raw)) continue;
+        if(!raw || !(/^(?:LINE\s*[A-Z]?\d+|L\s*\d+|\d+)$/i.test(raw))) continue;
         const target=parseFloat(r[sc.tgt])||0;
         const actual=parseFloat(r[sc.act])||0;
         const ops=parseFloat(r[sc.ops])||0;
@@ -6132,7 +6151,7 @@ function parseDailyOutputReport(wb, fname){
         const remark=String(cmt||"").replace(/\s+/g," ").trim();
 
         // 成衣／Apron 分流：以明細為準，並依實際產量等比校正
-        const d=detail[lineNo]||{g:0,a:0,styles:new Set()};
+        const d=detail[lineNo]||{g:0,a:0,styles:new Set(),items:[]};
         let gP=d.g, aP=d.a; const dTot=gP+aP;
         if(dTot>0 && actual>0 && Math.abs(dTot-actual)>1){
           gP=Math.round(gP/dTot*actual); aP=Math.max(0,Math.round(actual)-gP);
@@ -6155,11 +6174,16 @@ function parseDailyOutputReport(wb, fname){
         };
         if(remark && !Object.keys(issue).some(k=>issue[k])) issue.others=true;
 
+        const workHours=parseFloat(r[sc.hr])||0;
+        const attendedMinutes=ops>0&&workHours>0?ops*workHours*60:0;
+        const producedMinutes=attendedMinutes>0&&eff>0?attendedMinutes*(eff/100):0;
         recs.push({
           id:uid(), date, section, lineNo:lineKey,
           selfKey:"", po:"", styleNo:"", color:"", size:"",
           pieces:Math.round(actual), workers:Math.round(ops*100)/100, efficiency:eff,
+          hours:workHours, attendedMinutes, producedMinutes,
           cartons:Math.round(ctns*10)/10, smv:0, normalPcs:0, otPcs:0, workersOT:0, hoursOT:0,
+          styleBreakdown:(d.items||[]).map(x=>({...x})),
           tSrc:"dpo",
           target:Math.round(target),
           achievement:ach,
@@ -39851,7 +39875,7 @@ function wIsoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.ge
 function wWeekLabel(k) { const s = wDate(k), e = new Date(s); e.setDate(e.getDate() + 5); return `${wIsoWeek(s)} · ${s.getMonth()+1}/${s.getDate()}–${e.getMonth()+1}/${e.getDate()}`; }
 function p75(arr) { if (!arr.length) return 0; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(a.length * 0.75))]; }
 
-let WS = { recs: [], weeks: [], months: [], ctx: null, audit: null, skipped: 0, plan: null };
+let WS = { recs: [], weeks: [], months: [], ctx: null, audit: null, skipped: 0, plan: null, qc: [], smvSnaps: [] };
 /* ---------- 讀取平台排單（產能規劃模組寫入的 localStorage） ----------
    Reads the plan the capacity module already stores — no import needed */
 const PLAN_KEYS = ['vrt_prodplan_v3_data', 'vrt_report_plan_bridge_v1'];
@@ -39866,6 +39890,12 @@ async function wLoadPlan() {
   return {ok:true,key,rows:recs.length,spread,skipped,byDate,msg:`已讀取平台排單 ${recs.length} 列（${key}） / ${recs.length} plan rows read from ${key}`};
 }
 async function wLoadQC(){try{return await new Promise(res=>{let created=false;const q=indexedDB.open('VRT_FinalQC');q.onupgradeneeded=e=>{created=true;try{e.target.transaction.abort()}catch(_){ }res([])};q.onerror=()=>res([]);q.onsuccess=e=>{const d=e.target.result;if(created||!d.objectStoreNames.contains('records')){d.close();res([]);return}const x=d.transaction('records','readonly').objectStore('records').getAll();x.onsuccess=()=>{const a=(x.result||[]).filter(r=>!r.deleted);d.close();res(a)};x.onerror=()=>{d.close();res([])}}})}catch(_){return[]}}
+async function wLoadSmvSnapshots512(){try{return await new Promise(res=>{let made=false;const q=indexedDB.open('VRT_SMV_Manager_v52');q.onupgradeneeded=e=>{made=true;try{e.target.transaction.abort()}catch(_){ }res([])};q.onerror=()=>res([]);q.onsuccess=e=>{const d=e.target.result;if(made||!d.objectStoreNames.contains('smv_snapshots')){d.close();res([]);return}const x=d.transaction('smv_snapshots','readonly').objectStore('smv_snapshots').getAll();x.onsuccess=()=>{const a=(x.result||[]).slice();d.close();res(a)};x.onerror=()=>{d.close();res([])}}})}catch(_){return[]}}
+function wStyleKey512(v){return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function wSmvMapAt512(day){const out=new Map(),sn=(WS.smvSnaps||[]).slice().sort((a,b)=>String(a.effectiveDate||a.reportDate||a.importedAt||'').localeCompare(String(b.effectiveDate||b.reportDate||b.importedAt||'')));for(const s of sn){const sd=String(s.effectiveDate||s.reportDate||s.importedAt||'').slice(0,10);if(day&&sd&&sd>day)continue;for(const it of (s.items||[])){const k=wStyleKey512(it.style||it.styleNo||it.article);const v=wnum(it.curSMV||it.newSMV||it.currentSmv||it.smv);if(k&&v>0)out.set(k,{smv:v,date:sd,source:s.fileName||s.source||s.id||''})}}return out}
+function wRebase512(recs,basisDay){const mp=wSmvMapAt512(basisDay);return (recs||[]).map(r=>{const z={...r};let matchedQty=0,basisStd=0;for(const it of (r.styleBreakdown||[])){const q=wnum(it.qty),m=mp.get(wStyleKey512(it.style));if(q>0&&m&&m.smv>0){matchedQty+=q;basisStd+=q*m.smv}}const cov=r.pieces>0?Math.min(1,matchedQty/r.pieces):0;z.basisQty=matchedQty;z.basisCoverage=cov;z.stdMin=basisStd>0?(basisStd+(r.pubStdMin||0)*Math.max(0,1-cov)):(r.pubStdMin||r.stdMin||0);return z})}
+function wSmvChanges512(recs,basisDay){const mp=wSmvMapAt512(basisDay),m=new Map();for(const r of (recs||[])){const oldMp=wSmvMapAt512(r.date);for(const it of (r.styleBreakdown||[])){const q=wnum(it.qty),key=wStyleKey512(it.style),om=oldMp.get(key),old=wnum((om&&om.smv)||it.smv),bm=mp.get(key),cur=bm&&bm.smv;if(!(q>0&&old>0&&cur>0)||Math.abs(cur-old)<=0.005)continue;const o=m.get(key)||{style:it.style,oldSmv:old,newSmv:cur,pcs:0,stdChange:0,effectiveDate:bm.date};o.pcs+=q;o.stdChange+=q*(cur-old);o.oldSmv=old;o.newSmv=cur;m.set(key,o)}}return [...m.values()].sort((a,b)=>Math.abs(b.stdChange)-Math.abs(a.stdChange))}
+
 function wQcFor(dates){const set=new Set(dates),rows=(WS.qc||[]).filter(r=>set.has(String(r.date||'').slice(0,10))),byDate={},byLine={};let inspected=0,rejected=0,sumRates=0,rateN=0;rows.forEach(r=>{const i=wnum(r.inspected),x=wnum(r.rejected);inspected+=i;rejected+=x;if(i>0){sumRates+=x/i;rateN++}const d=String(r.date||'').slice(0,10),L=wLine(r.line)||String(r.line||'');for(const [map,key] of [[byDate,d],[byLine,L]]){const o=map[key]||(map[key]={inspected:0,rejected:0,rows:0});o.inspected+=i;o.rejected+=x;o.rows++}});return{rows,inspected,rejected,weighted:inspected?rejected/inspected:null,unweighted:rateN?sumRates/rateN:null,byDate,byLine}}
 function wPlanFor(dates) {
   const P = { qty: 0, std: 0, lines: {}, products: {}, mp: 0 };
@@ -39893,7 +39923,7 @@ function wBuild() {
     const k=wYmd(d)+'|'+L;
     if(seen[k])dupRaw++; seen[k]=1;
     const o=by[k]||(by[k]={date:wYmd(d),line:L,detailPcs:0,summaryPcs:0,tgtPcs:0,pieces:0,workers:0,cartons:0,target:0,
-      exactAtt:0,exactProd:0,effW:0,effNum:0,smvStd:0,basisStd:0,basisQty:0,stdMin:0,pubStdMin:0,avail:0,products:{},remark:'',styleSet:new Set(),styles:0,srcRows:0});
+      exactAtt:0,exactProd:0,effW:0,effNum:0,smvStd:0,basisStd:0,basisQty:0,stdMin:0,pubStdMin:0,avail:0,products:{},remark:'',styleSet:new Set(),styles:0,srcRows:0,styleBreakdown:[]});
     o.srcRows++;
     const pcs=wnum(r.pieces),hasDetail=!!(r.styleNo||r.po||r.selfKey||r.color||r.size||wnum(r.cartons)>0);
     if(typeof isTgtSrc==='function'&&isTgtSrc(r))o.tgtPcs+=pcs;
@@ -39904,6 +39934,7 @@ function wBuild() {
     if(hasDetail)o.cartons+=wnum(r.cartons);
     o.target=Math.max(o.target,wnum(r.target));
     if(r.styleNo)o.styleSet.add(String(r.styleNo));
+    if(Array.isArray(r.styleBreakdown))for(const it of r.styleBreakdown){if(it&&it.style&&(wnum(it.qty)>0)){o.styleBreakdown.push({...it,qty:wnum(it.qty),smv:wnum(it.smv)});o.styleSet.add(String(it.style))}}
 
     const att=wnum(r.attendedMinutes),prod=wnum(r.producedMinutes);
     if(att>o.exactAtt){o.exactAtt=att;o.exactProd=prod}
@@ -39948,11 +39979,11 @@ function wBuild() {
 
 /* ---------- 彙總 aggregate ---------- */
 function wAgg(recs) {
-  const A = { qty: 0, std: 0, pubStd:0, basisQty:0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [] };
+  const A = { qty: 0, qtyForPerHead:0, std: 0, pubStd:0, basisQty:0, avail: 0, op: 0, ctn: 0, target: 0, days: {}, lines: {}, products: {}, remarks: [] };
   recs.forEach(r => {
-    A.qty += r.pieces; A.std += r.stdMin; A.pubStd += r.pubStdMin||r.stdMin; A.basisQty += r.basisQty||0; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target;
-    const D = A.days[r.date] || (A.days[r.date] = { date: r.date, qty: 0, std: 0, pubStd:0, avail: 0, op: 0, ctn: 0, lines: 0 });
-    D.qty += r.pieces; D.std += r.stdMin; D.pubStd += r.pubStdMin||r.stdMin; D.avail += r.avail; D.op += r.workers; D.ctn += r.cartons; if (r.workers) D.lines++;
+    A.qty += r.pieces; if(r.workers>0)A.qtyForPerHead+=r.pieces; A.std += r.stdMin; A.pubStd += r.pubStdMin||r.stdMin; A.basisQty += r.basisQty||0; A.avail += r.avail; A.op += r.workers; A.ctn += r.cartons; A.target += r.target;
+    const D = A.days[r.date] || (A.days[r.date] = { date: r.date, qty: 0, qtyForPerHead:0, std: 0, pubStd:0, avail: 0, op: 0, ctn: 0, lines: 0 });
+    D.qty += r.pieces; if(r.workers>0)D.qtyForPerHead+=r.pieces; D.std += r.stdMin; D.pubStd += r.pubStdMin||r.stdMin; D.avail += r.avail; D.op += r.workers; D.ctn += r.cartons; if (r.workers) D.lines++;
     const L = A.lines[r.line] || (A.lines[r.line] = { qty: 0, std: 0, pubStd:0, avail: 0, op: 0, days: 0, zero: 0, styles: 0, remark: '', effs: [] });
     L.qty += r.pieces; L.std += r.stdMin; L.pubStd += r.pubStdMin||r.stdMin; L.avail += r.avail; L.op += r.workers; if (r.workers) L.days++;
     L.styles = Math.max(L.styles, r.styles);
@@ -39963,7 +39994,7 @@ function wAgg(recs) {
   });
   A.dayList = Object.values(A.days).sort((a, b) => a.date < b.date ? -1 : 1);
   A.dayList.forEach((d, i) => {
-    d.eff = d.avail ? d.std / d.avail : 0; d.publishedEff=d.avail?d.pubStd/d.avail:0; d.perHead = d.op ? d.qty / d.op : 0;
+    d.eff = d.avail ? d.std / d.avail : 0; d.publishedEff=d.avail?d.pubStd/d.avail:0; d.perHead = d.op ? d.qtyForPerHead / d.op : 0;
     d.dod = i ? (d.qty - A.dayList[i - 1].qty) / (A.dayList[i - 1].qty || 1) : null;
     d.status = d.eff >= WCFG.greenEff ? 'GREEN' : (d.eff >= WCFG.amberEff ? 'AMBER' : 'RED');
   });
@@ -39973,7 +40004,7 @@ function wAgg(recs) {
     L.gain = Math.max(0, (L.p75 - L.eff) * L.avail);          // 可回收標準工時 recoverable standard minutes
   });
   A.nDays = A.dayList.length; A.eff = A.avail ? A.std / A.avail : 0; A.publishedEff=A.avail?A.pubStd/A.avail:0; A.basisCoverage=A.qty?Math.min(1,A.basisQty/A.qty):0;
-  A.dailyAvg = A.nDays ? A.qty / A.nDays : 0; A.perHead = A.op ? A.qty / A.op : 0;
+  A.dailyAvg = A.nDays ? A.qty / A.nDays : 0; A.perHead = A.op ? A.qtyForPerHead / A.op : 0;
   A.avgOp = A.nDays ? A.op / A.nDays : 0; A.achieve = A.target ? A.qty / A.target : null;
   A.smv = A.qty ? A.std / A.qty : 0;
   A.gain = Object.keys(A.lines).reduce((s, k) => s + A.lines[k].gain, 0);
@@ -39997,7 +40028,7 @@ function wCmp(cur, prev) {
 }
 
 /* ---------- 自我檢核 self-audit ---------- */
-function wAudit(A) {
+function wAudit(A, selectedRecs) {
   const out = [];
   const sumLines = Object.keys(A.lines).reduce((s, k) => s + A.lines[k].qty, 0);
   const sumDays = A.dayList.reduce((s, d) => s + d.qty, 0);
@@ -40015,11 +40046,12 @@ function wAudit(A) {
   out.push({ hard: true, ok: WS.skipped === 0,
     zh: `無法判讀日期或組別而略過的來源列：${WS.skipped} 筆`,
     en: `${WS.skipped} source rows skipped because the date or line could not be read` });
-  const noStd = WS.recs.filter(r => r.workers > 0 && !r.stdMin).length;
+  const _auditRows=Array.isArray(selectedRecs)?selectedRecs:[];
+  const noStd = _auditRows.filter(r => r.workers > 0 && !r.stdMin).length;
   out.push({ hard: false, ok: noStd === 0,
     zh: `有人上班但無標準工時的線日：${noStd} 筆（效率無法計算）`,
     en: `${noStd} staffed line-days without standard minutes, where efficiency cannot be computed` });
-  const oddOp = WS.recs.filter(r => r.pieces > 0 && !r.workers).length;
+  const oddOp = _auditRows.filter(r => r.pieces > 0 && !r.workers).length;
   out.push({ hard: true, ok: oddOp === 0,
     zh: `有產出但人力為零的線日：${oddOp} 筆`,
     en: `${oddOp} line-days with output but zero manpower` });
@@ -40179,13 +40211,15 @@ function wSmvChangesForDates(dates){
 function wCompute() {
   const i = parseInt(document.getElementById('wrWeek').value, 10);
   if (isNaN(i) || !WS.weeks[i]) return;
-  const cur = wAgg(WS.weeks[i].recs);
-  const prev = i > 0 ? wAgg(WS.weeks[i - 1].recs) : null;
+  const _wkStart=wDate(WS.weeks[i].key),_wkEnd=new Date(_wkStart);_wkEnd.setDate(_wkEnd.getDate()+5);const basisDay=wYmd(_wkEnd);
+  const curRows=wRebase512(WS.weeks[i].recs,basisDay), prevRows=i>0?wRebase512(WS.weeks[i-1].recs,basisDay):null;
+  const cur = wAgg(curRows);
+  const prev = prevRows ? wAgg(prevRows) : null;
   const mk = WS.weeks[i].recs[0].date.slice(0, 7);
   const mi = WS.months.findIndex(x => x.key === mk);
-  const mtd = mi >= 0 ? wAgg(WS.months[mi].recs) : null;
-  const lastMonth = mi > 0 ? wAgg(WS.months[mi - 1].recs) : null;
-  const trend = WS.weeks.slice(Math.max(0, i - WCFG.trendWeeks + 1), i + 1).map(w => { const a = wAgg(w.recs);
+  const mtd = mi >= 0 ? wAgg(wRebase512(WS.months[mi].recs,basisDay)) : null;
+  const lastMonth = mi > 0 ? wAgg(wRebase512(WS.months[mi - 1].recs,basisDay)) : null;
+  const trend = WS.weeks.slice(Math.max(0, i - WCFG.trendWeeks + 1), i + 1).map(w => { const a = wAgg(wRebase512(w.recs,basisDay));
     return { label: w.label, eff: a.eff, qty: a.qty, op: a.avgOp, days: a.nDays, perHead: a.perHead }; });
   const expDays = wWeekDays(WS.weeks[i].key);
   const partial = cur.nDays < expDays;
@@ -40193,14 +40227,14 @@ function wCompute() {
   const weekDates = (function(){ const st = wDate(WS.weeks[i].key), o = []; for (let k = 0; k < 6; k++) { const d = new Date(st.getFullYear(), st.getMonth(), st.getDate() + k); if (d.getDay() !== 0) o.push(wYmd(d)); } return o; })();
   const planMatched = WS.plan && WS.plan.ok ? wPlanFor(actDates) : null;   // 只比對有實績的日期 matched days only
   const planWeek = WS.plan && WS.plan.ok ? wPlanFor(weekDates) : null;     // 整週計畫 full week
-  const qc=wQcFor(actDates),smvChanges=wSmvChangesForDates(actDates);
-  WS.audit = wAudit(cur);
+  const qc=wQcFor(actDates),smvChanges=wSmvChanges512(WS.weeks[i].recs,basisDay);
+  WS.audit = wAudit(cur, curRows);
   WS.audit.items.unshift({ hard:false, ok:!partial,
     zh:`本週實際資料 ${cur.nDays} 日／應有 ${expDays} 個工作日${partial?'，屬未完成週':''}`,
     en:`${cur.nDays} of ${expDays} working days have data${partial?'; the week is incomplete':''}` });
   WS.ctx = { M: cur, prev, prevLabel: prev ? WS.weeks[i - 1].label : '', W: wCmp(cur, prev),
     mtd, lastMonth, lastMonthLabel: lastMonth ? WS.months[mi - 1].key : '', MM: wCmp(mtd, lastMonth),
-    trend, label: WS.weeks[i].label, monthKey: mk, expDays, partial, planMatched, planWeek, qc, smvChanges, actDates, weekDates, notes: (document.getElementById('wrNotes').value || '').trim() };
+    trend, label: WS.weeks[i].label, monthKey: mk, expDays, partial, planMatched, planWeek, qc, smvChanges, basisDay, actDates, weekDates, notes: (document.getElementById('wrNotes').value || '').trim() };
   WS.ctx.findings = wRules(WS.ctx);
   wRender();
 }
