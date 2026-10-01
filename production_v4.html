@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 生產進度總表 v4.3</title>
 <style>
@@ -167,10 +167,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
-<script src="vrt-data-core-v39.js?v=4.4.0"></script>
+<script src="vrt-data-core-v39.js?v=4.14.0"></script>
 </head>
 <body>
 
@@ -1169,7 +1169,9 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
       {name:'訂單',key:'orders',local:()=>ORDERS,meta:()=>({}),write:async(recs,meta)=>writeOrders({records:recs,idbData:{...(meta&&meta.idbData||{}),po_lines:recs},lsKeys:meta&&meta.lsKeys||{}})}
     ];
     let ok=false,changed=0;
-    for(const x of tools){try{const res=await VRTSmartSync.pull({url:gasUrl,tool:x.key,localRecords:x.local()||[],onStatus:m=>VRTSmartSync.status('pull',x.name+' · '+m,'busy'),apply:async(recs,meta)=>{await x.write(recs,meta)}});if(res&&res.ok){ok=true;changed+=Number(res.downloaded||0)}}catch(e){console.warn('[Overview auto '+x.key+']',e)}}
+    // v4.14: use the owner module's tab lock (sewing / cutting / orders) so this read-only dashboard never syncs while that module is syncing
+    const A=window.VRTProdAutoSync;
+    for(const x of tools){if(A&&A.lock&&!A.lock(x.key)){console.warn('[Overview auto '+x.key+'] owner module is syncing in another tab; skipped');continue}try{const res=await VRTSmartSync.pull({url:gasUrl,tool:x.key,localRecords:x.local()||[],onStatus:m=>VRTSmartSync.status('pull',x.name+' · '+m,'busy'),apply:async(recs,meta)=>{await x.write(recs,meta)}});if(res&&res.ok){ok=true;changed+=Number(res.downloaded||0)}}catch(e){console.warn('[Overview auto '+x.key+']',e)}finally{if(A&&A.unlock)A.unlock(x.key)}}
     // Important: identical cloud data must NOT trigger a second full 72k/18k DB reload.
     if(changed>0)await refresh();else document.getElementById('updated').textContent='雲端已檢查：無新資料 · '+new Date().toLocaleTimeString('zh-TW');
     return ok;
@@ -1235,7 +1237,11 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
   }
 
   async function writeOrders(data) {
-    const recs=Array.isArray(data?.records)?data.records:[];
+    // v4.14 orders cloud layout: po_lines are plain rows; headers / weekly / imports / audit arrive as envelope rows
+    const all=Array.isArray(data?.records)?data.records:[],recs=all.filter(r=>r&&!r._vrtEntity);
+    const ENT={'orders.header':'po_headers','orders.weekly':'weekly_snapshots','orders.import':'order_imports','orders.audit':'parse_audit'},side={};
+    for(const r of all){const st=r&&ENT[r._vrtEntity];if(st&&r._vrtValue&&!r.deleted)(side[st]=side[st]||[]).push(r._vrtValue)}
+    if(data&&data.idbData){data.idbData={...data.idbData};delete data.idbData.po_lines;for(const st of Object.keys(side))data.idbData[st]=side[st]}
     try{
       const stores={
         po_headers:{keyPath:'id',autoIncrement:true},po_lines:{keyPath:'id',autoIncrement:true},
@@ -1250,7 +1256,7 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
       if(recs.length)await write('po_lines',recs);
       const extra=data?.idbData||{};for(const [name,rows] of Object.entries(extra))if(name!=='po_lines')await write(name,rows);
       d.close();
-      if(data?.lsKeys?.orderSetsV3)localStorage.setItem('orderSetsV3',data.lsKeys.orderSetsV3);
+      if(data?.lsKeys?.orderSetsV3){try{const cloud=JSON.parse(data.lsKeys.orderSetsV3)||{},local=JSON.parse(localStorage.getItem('orderSetsV3')||'{}');localStorage.setItem('orderSetsV3',JSON.stringify({...local,...cloud,apiKey:local.apiKey||cloud.apiKey||''}))}catch(_){}}
       return recs.length;
     }catch(e){console.warn('Orders write failed',e);return 0;}
   }

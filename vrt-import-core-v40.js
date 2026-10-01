@@ -1,31 +1,110 @@
-/* Shared, deterministic parsers. Report dates come from the file, never today's date. */
+/* Shared, deterministic parsers. Report dates come from the file, never today's date.
+   v4.13 (2026-09-30): Daily Needle / Spare Part Change importer now detects the sheet schema
+   from header text and numeric relationships (old J:U and new K:V layouts, Received column,
+   reversed Opening/Closing headers) and classifies change reasons. */
 (function(g){'use strict';const C=g.VRTData39,X=g.XLSX,n=C.number,txt=x=>String(x??'').trim(),norm=C.norm,hash=C.hash;
  const date=(y,m,d)=>{const v=new Date(Date.UTC(+y,+m-1,+d));return v.getUTCFullYear()===+y&&v.getUTCMonth()===+m-1&&v.getUTCDate()===+d?v.toISOString().slice(0,10):''};
  function aoa(s){return X.utils.sheet_to_json(s,{header:1,raw:true,defval:null,blankrows:true})}
  function reportDate(v){if(typeof v==='number'||v instanceof Date)return C.ymd(v);let m=txt(v).match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|20\d{2})$/);if(m)return date(m[3].length===2?'20'+m[3]:m[3],m[2],m[1]);return C.ymd(v)}
- function dailyChanges(wb,filename){const out={parts:[],txns:[],stockReports:[],needleChanges:[],partChanges:[],warnings:[],source:filename};
-  const names=wb.SheetNames.filter(sn=>/Daily (Needles|Spare Part) Change/i.test(aoa(wb.Sheets[sn]).slice(0,2).flat().join(' ')));
-  if(!names.length){for(const sn of wb.SheetNames){const rows=X.utils.sheet_to_json(wb.Sheets[sn],{defval:''});for(const r of rows){if(!r['Part Type']||!r.Date)continue;const rec={id:r['Record ID']||'PC-'+hash([r.Date,r['Part Type'],r.Size,r.Line]),date:reportDate(r.Date),partType:txt(r['Part Type']),size:txt(r.Size),line:txt(r.Line),qty:n(r.Qty),machine:txt(r.Machine),operator:txt(r.Operator),reason:txt(r.Reason),returned:n(r.Returned),remark:txt(r.Remark)};if(!rec.date||!(rec.qty>0)||!Number.isInteger(rec.qty))throw new Error('換零件需有效日期及正整數數量');out.partChanges.push(rec)}}return out.partChanges.length?out:null;}
-  // Repeated M-D tabs plus explicit D/M/Y text establish the workbook's reporting calendar.
-  const corroboration=names.map(sn=>{let m=sn.trim().match(/^(\d{1,2})-(\d{1,2})$/),a=aoa(wb.Sheets[sn]),d=reportDate(a[0]?.[6]);return {m,d}});
-  const verifiedMonths=new Set(corroboration.filter(x=>x.m&&x.d&&+x.d.slice(5,7)===+x.m[1]&&+x.d.slice(8)===+x.m[2]&&+x.m[2]>12).map(x=>+x.m[1]));
-  for(const sn of names){const a=aoa(wb.Sheets[sn]),needle=/Daily Needles/i.test(a.slice(0,2).flat().join(' ')),raw=a[0]?.[6],m=sn.trim().match(/^(\d{1,2})-(\d{1,2})$/);let d=reportDate(raw),year=(d||txt(raw)).match(/20\d{2}/)?.[0]||(/\/(\d{2})$/.exec(txt(raw))?.[1]?2000+ +/\/(\d{2})$/.exec(txt(raw))[1]:null);
-   if(!year)year=corroboration.find(x=>x.d)?.d.slice(0,4);const sheetDate=m&&year?date(year,m[1],m[2]):'';
-   if(sheetDate&&d!==sheetDate&&verifiedMonths.has(+m[1])){out.warnings.push(sn+'：原日期 '+txt(raw)+' → '+sheetDate+'（依本簿連續日報分頁及明確日期校正）');d=sheetDate}
-   if(!d||sheetDate&&d!==sheetDate)throw new Error(sn+' 日期與分頁不一致，請先在 Excel 確認日期');
-   const items=[],changes=[];
-   for(let i=2;i<a.length;i++){const r=a[i];if(n(r[0])==null||!txt(r[1]))continue;const name=txt(r[1]),size=txt(r[2]),issued=n(r[4]),opening=n(r[3]),balance=n(r[5]);
-    if([issued,opening,balance].some(x=>x!=null&&x<0))out.warnings.push(sn+' 第 '+(i+1)+' 列有負數，保留原值供核對');
-    const id='DS-'+hash([needle,name,size,n(r[0])]);items.push({id,no:r[0],name,size,machine:txt(r[6]),stockLeft:opening,used:issued,balance,orderQty:null,unitPrice:null,totalPrice:null,daily:[],raw:C.copy(r),sourceRow:i+1});
-    const allocations=[];for(let j=9;j<=20;j++){const qty=n(r[j]);if(qty>0)allocations.push({line:'Line '+(j-8),qty})}
-    const sum=allocations.reduce((s,x)=>s+x.qty,0);if(issued>sum)allocations.push({line:'未分線 / Unassigned',qty:issued-sum});
-    if(issued!=null&&sum>issued)out.warnings.push(sn+' '+name+'：線別 '+sum+' 大於發放 '+issued+'，保留線別數量供核對');
-    if(opening!=null&&issued!=null&&balance!=null&&Math.abs(opening-issued-balance)>1e-8)out.warnings.push(sn+' '+name+'：期初－發放與結存不符');
-    for(const x of allocations){const rec={id:(needle?'NC-':'PC-')+hash([d,id,x.line]),date:d,needleType:needle?name:undefined,partType:needle?undefined:name,size,line:x.line,qty:x.qty,machine:'',operator:'',reason:txt(r[6]),returned:null,remark:'',sourceFile:filename,sourceSheet:sn,sourceRow:i+1,sourceDate:txt(raw)};changes.push(rec)}
+ /* ── v4.13 Daily Needle / Spare Part Change importer ─────────────────────────────
+    Schema detection by header text + numeric relationship, never fixed column indexes.
+    Supports the old layout (Stock Left | Issued | Balance | Remark, lines J:U) and the
+    new layout (Opening | Received | Issued | Closing | Remark, lines K:V), including
+    sheets whose Opening/Closing header text is reversed. Source values are preserved;
+    every doubt becomes a warning, never a silent correction. Same IDs as v4.0 so a
+    re-import of the same source is idempotent. */
+ const CHANGE_TITLE=/Daily\s*(Needles?|Spare\s*Parts?)\s*Change|ដូរម្ជុល|ដូរ​?បន្លាស់|每日备件更换|每日换针|換針日報|換零件日報/i;
+ const cellText=v=>String(v??'').replace(/[​﻿]/g,' ').replace(/\s+/g,' ').trim();
+ const cellNorm=v=>cellText(v).toUpperCase();
+ function sheetTop(a,n){return a.slice(0,n||4).map(r=>r.map(cellText).join(' ')).join(' ')}
+ // SheetJS cellDates:true builds local Dates a few seconds before midnight (e.g. 23:59:56 UTC+7); snap to the intended day.
+ function cellYmd(v){if(v instanceof Date&&!isNaN(v))return C.ymd(new Date(v.getTime()+5*60000));return C.ymd(v)}
+ function excelYear(v){const s=cellText(v);let m=s.match(/20\d{2}/);if(m)return +m[0];m=s.match(/[\/.-](\d{2})\s*$/);if(m)return 2000+ +m[1];return null}
+ // Every candidate date in the rows above the header: Date objects, Excel serials, D/M/Y or Y-M-D text.
+ function titleDates(a,hi){const out=[];for(let i=0;i<hi;i++)for(const v of a[i]||[]){if(v==null||v==='')continue;
+   if(v instanceof Date||typeof v==='number'){const d=cellYmd(v);if(d)out.push({ymd:d,raw:d,year:+d.slice(0,4)});continue}
+   const s=cellText(v);if(!s)continue;
+   let m=s.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](20\d{2}|\d{2})\b/);if(m){const y=m[3].length===2?2000+ +m[3]:+m[3];out.push({ymd:date(y,m[2],m[1])||date(y,m[1],m[2]),raw:s,year:y,d:+m[1],m:+m[2]});continue}
+   m=s.match(/(20\d{2})[.\/-](\d{1,2})[.\/-](\d{1,2})/);if(m){out.push({ymd:date(m[1],m[2],m[3]),raw:s,year:+m[1]});continue}
+   m=s.match(/^\/?\s*(\d{1,2})\s*\/\s*(20\d{2})\s*$/);if(m)out.push({ymd:'',raw:s,year:+m[2],m:+m[1]});
+ }return out}
+ function findChangeHeader(a){for(let i=0;i<Math.min(a.length,8);i++){const r=(a[i]||[]).map(cellNorm),hasNo=r.some(v=>/^(លរ\s*)?NO\.?(\s|$)|^NO\.?\s*\d*$|^លរ/.test(v)),hasSize=r.some(v=>/SIZE|ទំហំ|尺寸/.test(v)),hasQty=r.some(v=>/ISSUED|BALANCE|STOCK\s*LEFT|OPENING|CLOSING|ផ្តល់|តុល្យភាព|នៅសល់/.test(v));if(hasNo&&hasSize&&hasQty)return i}return -1}
+ function detectChangeColumns(a,hi){const head=(a[hi]||[]).map(cellNorm),find=re=>head.findIndex(v=>re.test(v)),ix={no:0,name:-1,size:-1,remark:-1,received:-1,issued:-1,lines:{}};
+   ix.name=find(/NEEDLE\s*TYPE|SPARE\s*PARTS?\s*TYPE|PART\s*TYPE|ប្រភេទ|针型|备件类型/);if(ix.name<0)ix.name=1;
+   ix.size=find(/\bSIZE\b|ទំហំ|尺寸/);if(ix.size<0)ix.size=ix.name+1;
+   ix.remark=find(/REMARK|សំគាល់|评论|備註|备注/);
+   ix.received=find(/RECEIVED|ទទួល|已收到|收貨|收货/);
+   ix.issued=find(/ISSUED|ផ្តល់ជូន|已发放|發放|发放/);
+   // Numeric stock columns between SIZE and REMARK that are neither Received nor Issued.
+   const end=ix.remark>0?ix.remark:head.length,stock=[];for(let j=ix.size+1;j<end;j++){if(j===ix.received||j===ix.issued)continue;const h=head[j];if(/OPENING|CLOSING|STOCK\s*LEFT|BALANCE|តុល្យភាព|នៅសល់|余额|結存|库存|庫存/.test(h))stock.push(j)}
+   ix.stock=stock;
+   // Line columns: "# 1", "Line# 1", "LINE 1", "L1" in the header row or the row above it.
+   for(const row of [hi,hi-1]){if(row<0)continue;(a[row]||[]).forEach((v,j)=>{const m=cellNorm(v).match(/^(?:LINE\s*#?\s*|#\s*|L)(\d{1,2})$/);if(m&&ix.lines[j]==null)ix.lines[j]=+m[1]})}
+   return {head,ix}}
+ function changeOrientation(rows,ix){
+   // Decide which stock column is opening and which is closing from the numbers, not the label.
+   const [L,R]=ix.stock,score={LR:0,RL:0,rule:{plain:0,recv:0}},close=(x,y)=>x!=null&&y!=null&&Math.abs(x-y)<1e-6;
+   for(const r of rows){const l=n(r[L]),rt=n(r[R]),iss=n(r[ix.issued])||0,rcv=ix.received>=0?n(r[ix.received])||0:0;if(l==null||rt==null)continue;if(!iss&&!rcv)continue;
+     if(close(l-iss,rt)){score.LR++;score.rule.plain++}else if(close(l+rcv-iss,rt)){score.LR++;score.rule.recv++}
+     if(close(rt-iss,l)||close(rt+rcv-iss,l))score.RL++;}
+   const reversed=score.RL>score.LR;return {opening:reversed?R:L,closing:reversed?L:R,evidence:score,reversed,decided:score.LR!==score.RL}}
+ function reasonClass(text){const s=cellNorm(text);if(!s)return 'unknown';if(/CHANGE\s*STYLE|ប្តូរម៉ូដ|更改样式|換款|换款|CHANGEOVER/.test(s))return 'changeover';if(/BROKEN|បាក់|破碎|斷針|断针|BREAK/.test(s))return 'broken';if(/DAMAGE|ខូច|损害|損壞|损坏|BENT|彎針|弯针/.test(s))return 'damage';if(/LOST|បាត់|迷失|遺失|丢失/.test(s))return 'lost';return 'other'}
+ function dailyChanges(wb,filename){const out={parts:[],txns:[],stockReports:[],needleChanges:[],partChanges:[],warnings:[],source:filename,schemaVersion:413};
+  const sheets=wb.SheetNames.map(sn=>({sn,a:aoa(wb.Sheets[sn])})).map(x=>({...x,hi:findChangeHeader(x.a)})).filter(x=>x.hi>=0&&(CHANGE_TITLE.test(sheetTop(x.a,x.hi+1))||/NEEDLE\s*TYPE|SPARE\s*PARTS?\s*TYPE/i.test((x.a[x.hi]||[]).map(cellText).join(' '))));
+  if(!sheets.length){// Native Needle/Part Change export (Record ID / Date / Part Type ... ) round-trip.
+   for(const sn of wb.SheetNames){const rows=X.utils.sheet_to_json(wb.Sheets[sn],{defval:''});for(const r of rows){if(!r['Part Type']||!r.Date)continue;const rec={id:r['Record ID']||'PC-'+hash([r.Date,r['Part Type'],r.Size,r.Line]),date:reportDate(r.Date),partType:txt(r['Part Type']),size:txt(r.Size),line:txt(r.Line),qty:n(r.Qty),machine:txt(r.Machine),operator:txt(r.Operator),reason:txt(r.Reason),reasonClass:reasonClass(r.Reason),returned:n(r.Returned),remark:txt(r.Remark)};if(!rec.date||!(rec.qty>0)||!Number.isInteger(rec.qty))throw new Error('換零件需有效日期及正整數數量');out.partChanges.push(rec)}}return out.partChanges.length?out:null;}
+  // Workbook calendar: sheet tabs named M-D plus any explicit year found in titles or the file name.
+  const fileYear=excelYear(filename.replace(/\d{6,8}/g,m=>m.length===8?m.slice(0,4)+'-'+m.slice(4,6)+'-'+m.slice(6):m.slice(0,4)+'-'+m.slice(4)));
+  const info=sheets.map(x=>{const m=x.sn.trim().match(/^(\d{1,2})[-\/.](\d{1,2})$/),dates=titleDates(x.a,x.hi);return {...x,tab:m?{m:+m[1],d:+m[2]}:null,dates,year:dates.map(d=>d.year).find(Boolean)||null}});
+  const years=info.map(x=>x.year).filter(Boolean),yearVotes={};years.forEach(y=>yearVotes[y]=(yearVotes[y]||0)+1);const bookYear=+Object.keys(yearVotes).sort((p,q)=>yearVotes[q]-yearVotes[p])[0]||fileYear||null;
+  const tabMonths={};info.forEach(x=>{if(x.tab)tabMonths[x.tab.m]=(tabMonths[x.tab.m]||0)+1});const bookMonth=+Object.keys(tabMonths).sort((p,q)=>tabMonths[q]-tabMonths[p])[0]||null;
+  for(const x of info){const {sn,a,hi}=x,needle=/Needles?\s*Change|ដូរម្ជុល|NEEDLE\s*TYPE|换针|針型|针型/i.test(sheetTop(a,hi+1)),rawDate=x.dates[0]?.raw??'';
+   // ── date ──────────────────────────────────────────────────────────────────
+   let d='',year=x.year||bookYear||fileYear;if(!year){year=new Date().getFullYear();out.warnings.push(sn+'：原表與檔名都沒有年份，暫以今年 '+year+' 解讀，請核對')}
+   const tabDate=x.tab?date(year,x.tab.m,x.tab.d):'',first=x.dates.find(t=>t.ymd);
+   if(tabDate){d=tabDate;
+     if(first&&first.ymd!==tabDate){const swapped=first.d!=null&&first.m!=null&&first.d===x.tab.m&&first.m===x.tab.d||(first.ymd&&+first.ymd.slice(5,7)===x.tab.d&&+first.ymd.slice(8)===x.tab.m);
+       out.warnings.push(sn+'：原表日期 '+cellText(first.raw)+(swapped?'（日／月互換）':'')+' → 依分頁名稱採 '+tabDate)}}
+   else if(tabDate&&!first&&x.dates.length&&x.dates[0].raw)out.warnings.push(sn+'：原表日期「'+cellText(x.dates[0].raw)+'」不完整，依分頁名稱採 '+tabDate);
+   else if(first){d=first.ymd;if(bookMonth&&first.d!=null&&first.m!=null&&first.m!==bookMonth&&first.d===bookMonth){d=date(first.year||year,first.d,first.m)||d;out.warnings.push(sn+'：原表日期 '+cellText(first.raw)+' 依本簿月份解讀為 '+d)}}
+   if(!d){out.warnings.push(sn+'：找不到報表日期，此分頁略過');continue}
+   // ── columns ───────────────────────────────────────────────────────────────
+   const {head,ix}=detectChangeColumns(a,hi);
+   if(ix.issued<0)out.warnings.push(sn+'：表頭沒有 Issued／發放欄，發放數以 0 計，請核對原表');
+   const dataRows=[];let totalsRow=null;for(let i=hi+1;i<a.length;i++){const r=a[i]||[];const hasNo=n(r[ix.no])!=null,name=cellText(r[ix.name]);if(!hasNo&&!name){if(r.some((v,j)=>j>ix.size&&n(v)!=null&&n(v)!==0)&&!totalsRow)totalsRow={row:r,index:i};continue}if(!name)continue;if(!hasNo&&![...ix.stock,ix.issued,ix.received].some(j=>j>=0&&n(r[j])!=null))continue;dataRows.push({r,i})}
+   if(ix.stock.length<2){if(ix.stock.length===1)ix.stock.push(-1);else ix.stock=[-1,-1];out.warnings.push(sn+'：只辨識到 '+Math.max(0,ix.stock.filter(j=>j>=0).length)+' 個庫存欄，期初／結存可能不完整')}
+   const orient=changeOrientation(dataRows.map(x=>x.r),ix),opCol=orient.opening,clCol=orient.closing;
+   const opHead=cellText(head[opCol]),clHead=cellText(head[clCol]);
+   // Header text is only a hint: when the numbers prove the labels are swapped, say so and keep every source value.
+   const headerTextReversed=/CLOSING|期末|BALANCE(?!.*(OPENING|STOCK))/.test(cellNorm(opHead))&&/OPENING|STOCK\s*LEFT|期初|未结/.test(cellNorm(clHead));
+   if(headerTextReversed&&orient.decided)out.warnings.push(sn+'：表頭「'+opHead+'」依數字關係（期初－發放＝結存）判定為期初、「'+clHead+'」為結存；原值保留未改，請通知製表人');
+   else if(orient.reversed)out.warnings.push(sn+'：右側庫存欄「'+opHead+'」實為期初、左側「'+clHead+'」為結存（依數字關係判定），原值保留未改');
+   const layout={header:hi+1,opening:opCol,received:ix.received,issued:ix.issued,closing:clCol,remark:ix.remark,lines:ix.lines,rule:orient.evidence.rule.recv>orient.evidence.rule.plain?'opening+received-issued':'opening-issued',headerTextReversed,columnsSwapped:orient.reversed,evidence:orient.evidence};
+   if(!Object.keys(ix.lines).length)out.warnings.push(sn+'：找不到 # 1～# 12 線別欄，換件只記總數，未分線');
+   const items=[],changes=[];let sumOpen=0,sumIssued=0,sumRecv=0,sumClose=0;
+   for(const {r,i} of dataRows){const name=cellText(r[ix.name]),size=cellText(r[ix.size]),remark=ix.remark>=0?cellText(r[ix.remark]):'';
+    const opening=opCol>=0?n(r[opCol]):null,received=ix.received>=0?n(r[ix.received]):null,issuedRaw=ix.issued>=0?n(r[ix.issued]):null,closing=clCol>=0?n(r[clCol]):null;
+    if([opening,received,issuedRaw,closing].some(v=>v!=null&&v<0))out.warnings.push(sn+' 第 '+(i+1)+' 列有負數，保留原值供核對');
+    const allocations=[];for(const [j,ln] of Object.entries(ix.lines)){const q=n(r[j]);if(q!=null&&q>0)allocations.push({line:'Line '+ln,qty:q})}
+    const allocated=allocations.reduce((s,z)=>s+z.qty,0),issued=issuedRaw==null&&allocated>0?allocated:issuedRaw;
+    if(issuedRaw==null&&allocated>0)out.warnings.push(sn+' '+name+'：發放欄空白，線別合計 '+allocated+' 視為發放數');
+    let unassigned=0;if(issued!=null&&allocated>issued)out.warnings.push(sn+' '+name+'：線別合計 '+allocated+' 大於發放 '+issued+'，保留線別數量供核對');
+    if(issued!=null&&issued>allocated){unassigned=issued-allocated;if(allocated>0||Object.keys(ix.lines).length)out.warnings.push(sn+' '+name+'：發放 '+issued+' 只分到 '+allocated+'，未分線 '+unassigned)}
+    let arithmetic='n/a';if(opening!=null&&issued!=null&&closing!=null){const plain=Math.abs(opening-issued-closing)<1e-6,recv=received!=null&&Math.abs(opening+received-issued-closing)<1e-6;arithmetic=plain?'opening-issued':recv?'opening+received-issued':'mismatch';if(arithmetic==='mismatch')out.warnings.push(sn+' '+name+'：期初 '+opening+(received?' ＋收 '+received:'')+' － 發放 '+issued+' ≠ 結存 '+closing+'，原值保留')}
+    sumOpen+=opening||0;sumIssued+=issued||0;sumRecv+=received||0;sumClose+=closing||0;
+    // Same identity as v4.0 (raw trimmed text) so previously imported rows are updated, never duplicated.
+    const rawName=txt(r[ix.name]),rawSize=txt(r[ix.size]),id='DS-'+hash([needle,rawName,rawSize,n(r[ix.no])]);
+    items.push({id,no:r[ix.no],name:rawName,size:rawSize,machine:remark,stockLeft:opening,used:issued,balance:closing,orderQty:null,unitPrice:null,totalPrice:null,daily:[],raw:C.copy(r),sourceRow:i+1,
+      itemName:name,needleType:needle?name:'',partType:needle?'':name,openingQty:opening,receivedQty:received,issuedQty:issued,closingQty:closing,reason:remark,reasonClass:reasonClass(remark),remark,lineAllocations:allocations,unassignedQty:unassigned,arithmetic});
+    const recs=allocations.slice();if(unassigned>0)recs.push({line:'未分線 / Unassigned',qty:unassigned,unassigned:true});
+    for(const z of recs){changes.push({id:(needle?'NC-':'PC-')+hash([d,id,z.line]),date:d,needleType:needle?rawName:undefined,partType:needle?undefined:rawName,size:rawSize,line:z.line,qty:z.qty,machine:'',operator:'',reason:remark,reasonClass:reasonClass(remark),returned:null,remark:'',unassigned:!!z.unassigned,sourceFile:filename,sourceSheet:sn,sourceRow:i+1,sourceDate:cellText(rawDate)})}
    }
-   out.stockReports.push({id:(needle?'NEEDLE-':'PARTS-')+d+'_'+d,kind:needle?'needle':'machine',start:d,end:d,sourceFile:filename,sourceSheet:sn,sourceDate:txt(raw),items,fingerprint:hash(items)});
+   if(totalsRow){const t=totalsRow.row,chk=[[opCol,sumOpen,'期初'],[ix.issued,sumIssued,'發放'],[ix.received,sumRecv,'收貨'],[clCol,sumClose,'結存']];for(const [col,sum,label] of chk){if(col<0)continue;const v=n(t[col]);if(v!=null&&Math.abs(v-sum)>1e-6)out.warnings.push(sn+'：原表合計列 '+label+' '+v+' 與明細加總 '+sum+' 不同，採明細')}}
+   out.stockReports.push({id:(needle?'NEEDLE-':'PARTS-')+d+'_'+d,kind:needle?'needle':'machine',start:d,end:d,sourceFile:filename,sourceSheet:sn,sourceDate:cellText(rawDate),layout,items,fingerprint:hash(items)});
    out[needle?'needleChanges':'partChanges'].push(...changes);
-  }return out;
+  }
+  if(!out.stockReports.length)throw new Error('找不到可讀的換針／換零件分頁（需有 No.／SIZE／Issued 或 Balance 表頭）');
+  return out;
  }
  function fabric(wb,filename){const out={current:[],old:[],accessory:[],warnings:[]};
   const fileDate=filename.match(/(\d{1,2})[._ -](JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[._ -](20\d{2})/i),fallback=fileDate?date(fileDate[3],1+['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'].indexOf(fileDate[2].toUpperCase()),fileDate[1]):reportDate(filename.match(/\d{1,2}[./-]\d{1,2}[./-]20\d{2}/)?.[0]||'');
@@ -61,5 +140,5 @@
  function validateQC(r){if(!reportDate(r.date)||!txt(r.line))throw new Error('請填寫日期及線別');for(const k of ['inspected','rejected','output'])if(n(r[k])==null||r[k]<0||!Number.isInteger(+r[k]))throw new Error('數量須為零或正整數');if(r.rejected>r.inspected)throw new Error('Reject 不可大於檢驗量');for(const k of ['attendanceMinutes','producedMinutes','workers','totalWorkers','normalMinutes','overtimeMinutes','overtimeWorkers'])if(r[k]!=null&&(n(r[k])==null||+r[k]<0))throw new Error(k+' 須為有效非負數')}
  function qcTotals(rows){const active=rows.filter(r=>!r.deleted),sum=k=>active.reduce((s,r)=>s+(n(r[k])||0),0),a={records:active.length,lines:new Set(active.filter(r=>r.inspected>0).map(r=>r.line)).size,inspected:sum('inspected'),rejected:sum('rejected'),output:sum('output'),attendanceMinutes:sum('attendanceMinutes'),producedMinutes:sum('producedMinutes'),workers:sum('workers')};a.rejectRate=a.inspected?a.rejected/a.inspected:null;a.efficiency=a.attendanceMinutes?a.producedMinutes/a.attendanceMinutes:null;return a}
  function qcMerge(old,incoming){const m=new Map((old||[]).map(r=>[r.id,C.copy(r)]));let added=0,updated=0,unchanged=0;const content=r=>Object.fromEntries(Object.entries(r).filter(([k])=>!['updatedAt','createdAt','history','sourceFile','sourceSheet'].includes(k)));for(const raw of incoming){const r=C.copy(raw),prior=m.get(r.id);if(prior?.deleted){unchanged++;continue}if(prior&&C.stable(content(prior))===C.stable(content(r))){unchanged++;continue}if(prior){r.history=[...(prior.history||[]),{...prior,history:undefined}];updated++}else added++;r.updatedAt=new Date().toISOString();m.set(r.id,r)}return{records:[...m.values()],added,updated,unchanged}}
- g.VRTImport40={dailyChanges,fabric,fabricId,mergeFabric,qc,validateQC,qcTotals,qcMerge,reportDate};
+ g.VRTImport40={version:'4.13.0',dailyChanges,fabric,fabricId,mergeFabric,qc,validateQC,qcTotals,qcMerge,reportDate,reasonClass,detectChangeColumns,findChangeHeader};
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>車縫生產分析系統</title>
 <style>
@@ -165,8 +165,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -2857,8 +2857,8 @@ function renderChangeover(){
     {v:events.length,l:t("coChangeovers"),c:"#f59e0b",u:""},
     {v:Math.round(totalLostMins).toLocaleString(),l:t("coLostMins"),c:"#dc2626",u:"min"},
     {v:totalLostPcs.toLocaleString(),l:t("coLostPcs"),c:"#7c3aed",u:"pcs"},
-    {v:avgRecov.toFixed(1),l:t("coRecovery"),c:"#0369a1",u:_lang==="en"?"days":"天"},
-    {v:lostOrders.toFixed(1),l:t("coLostOrders"),c:"#be123c",u:_lang==="en"?"orders":"張"},
+    {v:avgRecov.toFixed(1),l:t("coRecovery"),c:"#0369a1",u:_lang==="zh"?"天":_lang==="km"?"ថ្ងៃ":"days"},
+    {v:lostOrders.toFixed(1),l:t("coLostOrders"),c:"#be123c",u:_lang==="zh"?"張":_lang==="km"?"ការបញ្ជាទិញ":"orders"},
   ].map(k=>`<div style="background:#fff;border-radius:10px;padding:14px;text-align:center;border:2px solid #e2e6f0;box-shadow:0 2px 8px rgba(0,0,0,.06)">
     <div style="font-size:28px;font-weight:800;font-family:monospace;color:${k.c}">${k.v}<span style="font-size:14px;color:#9ca3af;font-weight:400"> ${k.u}</span></div>
     <div style="font-size:11px;color:#6b7a9e;margin-top:4px;font-weight:600">${k.l}</div></div>`).join("");
@@ -3152,12 +3152,12 @@ function applyLang(){
   if(ht) ht.textContent = t('sysTitle');
   // Tabs: use data-zh / data-en
   document.querySelectorAll('.tab[data-zh]').forEach(el=>{
-    el.textContent = isEn ? el.dataset.en : el.dataset.zh;
+    el.textContent = _lang==='km' ? (el.dataset.km||el.dataset.en) : isEn ? el.dataset.en : el.dataset.zh;   /* v4.14: km no longer falls back to Chinese */
   });
   // data-zh / data-en pattern (header stats, etc.)
   document.querySelectorAll('[data-zh][data-en]').forEach(el=>{
     if(!el.classList.contains('tab'))
-      el.textContent = isEn ? el.dataset.en : el.dataset.zh;
+      el.textContent = _lang==='km' ? (el.dataset.km||el.dataset.en) : isEn ? el.dataset.en : el.dataset.zh;
   });
   // data-i18n pattern
   document.querySelectorAll('[data-i18n]').forEach(el=>{
@@ -4493,7 +4493,10 @@ async function restoreData(event){
     const bk=backup.daily; const bMin=getMinDate(bk); const bMax=getMaxDate(bk);
     if(!confirm(`Preparing Restore\n\nBackup Records: ${bk.length.toLocaleString()}\nDate Range: ${bMin} ~ ${bMax}\n\n⚠️ 目前所有資料將被覆蓋，確定還原？`)) return;
     await clearMainIDB();
-    DB=dedupAndNorm(bk); EFF_DB=backup.eff||[];
+    // v4.13: a backup without efficiency rows must not wipe the efficiency records already on this device.
+    const keepEff=!(Array.isArray(backup.eff)&&backup.eff.length)&&Array.isArray(EFF_DB)&&EFF_DB.length;
+    DB=dedupAndNorm(bk); EFF_DB=keepEff?EFF_DB:(backup.eff||[]);
+    if(keepEff)console.log('[VRT restore] backup has no eff rows; kept '+EFF_DB.length+' local efficiency records');
     await saveToMainIDB();
     saveToCloudIDB(DB).catch(e=>{});
     if(_fileHandle) writeToFile(_fileHandle,{daily:DB,eff:EFF_DB,saved:new Date().toISOString()});
@@ -5600,7 +5603,8 @@ async function scanAllFolders(silent=false){
     vcSetBusy(true);vcLog('智慧拉取：只下載雲端有變更的月份/區塊...','i');
     try{
       const local=(typeof DB!=='undefined'&&DB.length)?DB:[];
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,meta:{eff:(typeof EFF_DB!=='undefined'?EFF_DB:[])},network:SEW_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
+      // v4.13: same meta shape as vcPush (eff + summary) so every auto-sync no longer re-commits the meta.
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,meta:{eff:(typeof EFF_DB!=='undefined'?EFF_DB:[]),summary:buildSewingSummary(local)},network:SEW_SYNC_NET43,resumeBuckets:true,onStatus:m=>vcLog(m,'i'),apply:async(recs,meta)=>{
         const eff=meta&&Array.isArray(meta.eff)?meta.eff:((typeof EFF_DB!=='undefined')?EFF_DB:[]);
         if(typeof window.vcApplyCloudRecs==='function')await window.vcApplyCloudRecs(recs,eff);
       }});
@@ -40515,6 +40519,12 @@ window.wExport = wExport;
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'sewing',lockKey:'sewing',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto sewing]',e)}},0)},{once:true});
+</script>
+<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
+<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script>
+/* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
+try{VRTTelegram.init({kind:"sewing",tool:"sewing",getData:()=>DB})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
 </body>
 </html>

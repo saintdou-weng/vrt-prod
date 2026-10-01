@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 機修零件管理系統</title>
+<title>VRT 機修零件與機針管理 · Spare Parts &amp; Needle v4.13</title>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -222,12 +222,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.4.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.8.0"></script>
-<script src="vrt-import-core-v40.js?v=4.4.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.8.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.8.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-data-core-v39.js?v=4.14.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.14.0"></script>
+<script src="vrt-import-core-v40.js?v=4.14.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
 #app .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.v39-table{min-width:1000px}.v39-table td{min-width:75px}.v39-table td:nth-child(2),.v39-table td:nth-child(4){min-width:150px}.toolbar input,.toolbar select{max-width:100%;min-height:38px}.toolbar .tb-group{min-width:0}.tabs .tab{min-height:44px}
@@ -239,8 +239,8 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 <div class="header">
   <div class="logo">🔧</div>
   <div>
-    <div class="h-title" id="hTitle">Machine Parts & Needle Management</div>
-    <div class="h-sub" id="hSub">VRT ADMIN CENTER · PURCHASE & PRICE · v4.8 · Purchase / Stock / Needle Change</div>
+    <div class="h-title" id="hTitle">機修採購與零件管理</div>
+    <div class="h-sub" id="hSub" data-zh="VRT 行政中心 · 採購／庫存／換針換件 · v4.13" data-en="VRT ADMIN CENTER · PURCHASE / STOCK / NEEDLE &amp; PART CHANGE · v4.13" data-km="VRT ADMIN CENTER · ការទិញ / ស្តុក / ដូរម្ជុល · v4.13">VRT 行政中心 · 採購／庫存／換針換件 · v4.13</div>
   </div>
   <div class="h-stats">
     <div class="hstat"><div class="hstat-v" id="hParts">0</div><div class="hstat-l" data-zh="零件數" data-en="Parts" data-km="គ្រឿងបន្លាស់">零件數</div></div>
@@ -248,8 +248,8 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
     <div class="hstat"><div class="hstat-v" id="hLow">$0</div><div class="hstat-l" data-zh="最新月採購" data-en="Latest Month" data-km="ខែចុងក្រោយ">最新月採購</div></div>
   </div>
   <div class="h-tools">
-    <div class="htool" onclick="cloudUpload()" title="Cloud Upload">☁️⬆</div>
-    <div class="htool" onclick="cloudDownload()" title="Cloud Download">☁️⬇</div>
+    <div class="htool" onclick="cloudUpload()" title="☁↑ Push" data-zh="☁️⬆" data-en="☁️⬆" data-km="☁️⬆">☁️⬆</div>
+    <div class="htool" onclick="cloudDownload()" title="☁↓ Pull">☁️⬇</div>
     <div class="htool" onclick="openTelegram()" title="Telegram">📨</div>
     <div class="htool" onclick="goTab('settings',null)" title="Settings">⚙️</div>
     <div class="htool" onclick="saveAll(true)" title="Save">💾</div>
@@ -267,25 +267,27 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
     <span class="chip" data-dt="month" onclick="setDate('month',this)" data-zh="本月" data-en="Month" data-km="ខែ">本月</span>
     <span class="chip" data-dt="year" onclick="setDate('year',this)" data-zh="今年" data-en="Year" data-km="ឆ្នាំ">今年</span>
     <span class="chip on" data-dt="all" onclick="setDate('all',this)" data-zh="全部" data-en="All" data-km="ទាំងអស់">全部</span>
-    <button class="btn btn-g btn-sm" type="button" onclick="partsGlobalNav(-1)" title="上一期">◀</button>
+    <button class="btn btn-g btn-sm" type="button" onclick="partsGlobalNav(-1)" title="◀">◀</button>
     <select id="partsGlobalMode43" aria-label="日週月年" onchange="partsGlobalModeChange(this.value)" style="min-width:78px">
-      <option value="day">D 日</option><option value="week">W 週</option><option value="month" selected>M 月</option><option value="year">Y 年</option><option value="all">全部</option>
+      <option value="day" data-zh="D 日" data-en="D Day" data-km="D ថ្ងៃ">D 日</option><option value="week" data-zh="W 週" data-en="W Week" data-km="W សប្ដាហ៍">W 週</option><option value="month" selected data-zh="M 月" data-en="M Month" data-km="M ខែ">M 月</option><option value="year" data-zh="Y 年" data-en="Y Year" data-km="Y ឆ្នាំ">Y 年</option><option value="all" data-zh="全部" data-en="All" data-km="ទាំងអស់">全部</option>
     </select>
     <select id="partsGlobalPeriodSel43" aria-label="期間" onchange="partsGlobalPeriodChange(this.value)" style="min-width:170px"></select>
-    <button class="btn btn-g btn-sm" type="button" onclick="partsGlobalNav(1)" title="下一期">▶</button>
+    <button class="btn btn-g btn-sm" type="button" onclick="partsGlobalNav(1)" title="▶">▶</button>
   </div>
 
-<div class="tb-group" style="flex-wrap:wrap"><select id="fStore" aria-label="倉庫" onchange="applyFilters()"></select><select id="fCat" aria-label="分類" onchange="applyFilters()"></select><select id="fBrand" aria-label="品牌" onchange="applyFilters()"></select><input id="fSearch" placeholder="搜尋名稱／料號／機針" oninput="applyFilters()"></div>
-<div class="tb-group"><button class="btn btn-g" onclick="VRTParts39.loadIncluded()">📎 匯入本版隨附零件／機針</button><button class="btn btn-y" onclick="document.getElementById('maintenanceImport').click()">📥 匯入 Excel／CSV</button><input id="maintenanceImport" type="file" accept=".xlsx,.xls,.csv" hidden onchange="importExcel(this.files[0]);this.value='' "><button class="btn btn-g" onclick="exportExcel()">📤 匯出</button><button class="btn btn-g" onclick="backupLocal()">完整備份</button></div>
+<div class="tb-group" style="flex-wrap:wrap"><select id="fStore" aria-label="倉庫" onchange="applyFilters()"></select><select id="fCat" aria-label="分類" onchange="applyFilters()"></select><select id="fBrand" aria-label="品牌" onchange="applyFilters()"></select><input id="fSearch" placeholder="🔍" oninput="applyFilters()"></div>
+<div class="tb-group"><button class="btn btn-g" onclick="VRTParts39.loadIncluded()" data-zh="📎 匯入本版隨附零件／機針" data-en="📎 Import bundled parts / needle files" data-km="📎 នាំចូលឯកសារភ្ជាប់">📎 匯入本版隨附零件／機針</button><button class="btn btn-y" onclick="document.getElementById('maintenanceImport').click()" data-zh="📥 匯入 Excel／CSV" data-en="📥 Import Excel / CSV" data-km="📥 នាំចូល Excel / CSV">📥 匯入 Excel／CSV</button><input id="maintenanceImport" type="file" accept=".xlsx,.xls,.csv" hidden onchange="importExcel(this.files[0]);this.value='' "><button class="btn btn-g" onclick="exportExcel()" data-zh="📤 匯出" data-en="📤 Export" data-km="📤 នាំចេញ">📤 匯出</button><button class="btn btn-g" onclick="backupLocal()" data-zh="完整備份" data-en="Full backup" data-km="បម្រុងទុកពេញ">完整備份</button></div>
 </div>
 <!-- ══════════ TABS ══════════ -->
 <div class="tabs" id="tabBar">
   <div class="tab on" onclick="goTab('dashboard',this)" data-zh="📊 儀錶板" data-en="📊 Dashboard" data-km="📊 ផ្ទាំង">📊 儀錶板</div>
   <div class="tab" onclick="goTab('inventory',this)" data-zh="🔧 零件清單" data-en="🔧 Parts" data-km="🔧 បញ្ជីគ្រឿង">🔧 零件清單</div>
   <div class="tab" onclick="goTab('history',this)" data-zh="🧾 採購記錄" data-en="🧾 Purchases" data-km="🧾 ការទិញ">🧾 採購記錄</div>
-  <div class="tab" onclick="goTab('machine',this)">🔩 Sewing Machine Parts</div>
-  <div class="tab" onclick="goTab('needle',this)">🪡 Needle Stock</div>
-  <div class="tab" onclick="goTab('partchange',this)">🔧 換零件日報</div><div class="tab" onclick="goTab('needlechange',this)">🪡 Needle Change</div>
+  <div class="tab" onclick="goTab('machine',this)" data-zh="🔩 機台零件庫存" data-en="🔩 Machine Parts Stock" data-km="🔩 ស្តុកគ្រឿងម៉ាស៊ីន">🔩 機台零件庫存</div>
+  <div class="tab" onclick="goTab('needle',this)" data-zh="🪡 機針庫存" data-en="🪡 Needle Stock" data-km="🪡 ស្តុកម្ជុល">🪡 機針庫存</div>
+  <div class="tab" onclick="goTab('needlechange',this)" data-zh="🪡 換針紀錄" data-en="🪡 Needle Change" data-km="🪡 ដូរម្ជុល">🪡 換針紀錄</div>
+  <div class="tab" onclick="goTab('partchange',this)" data-zh="🔧 換零件紀錄" data-en="🔧 Part Change" data-km="🔧 ដូរគ្រឿង">🔧 換零件紀錄</div>
+  <div class="tab" onclick="goTab('changeanalysis',this)" data-zh="📈 換件分析" data-en="📈 Change Analytics" data-km="📈 វិភាគការដូរ">📈 換件分析</div>
   <div class="tab" onclick="goTab('monthly',this)" data-zh="📅 日週月年" data-en="📅 Period" data-km="📅 រយៈពេល">📅 日週月年</div>
   <div class="tab" onclick="goTab('price',this)" data-zh="💲 價格分析" data-en="💲 Price" data-km="💲 តម្លៃ">💲 價格分析</div>
   <div class="tab" onclick="goTab('reports',this)" data-zh="📤 報表" data-en="📤 Reports" data-km="📤 របាយការណ៍">📤 報表</div>
@@ -469,6 +471,9 @@ function applyLang(){
   document.querySelectorAll('[data-zh][data-en][data-km]').forEach(el=>{
     el.textContent = _lang==='en'?el.dataset.en : _lang==='km'?el.dataset.km : el.dataset.zh;
   });
+  try{updateCloudDot()}catch(_){}
+  const fs=$('fSearch');if(fs)fs.placeholder=_lang==='en'?'Search name / part no. / needle':_lang==='km'?'ស្វែងរកឈ្មោះ / លេខកូដ / ម្ជុល':'搜尋名稱／料號／機針';
+  document.title=(_lang==='en'?'VRT Spare Parts & Needle':_lang==='km'?'VRT គ្រឿងបន្លាស់ និងម្ជុល':'VRT 機修零件與機針管理')+' · v4.13';
   renderTab(_curTab);
 }
 function toggleLang(){_lang=_lang==='zh'?'en':_lang==='en'?'km':'zh';localStorage.setItem('vrt_sp_lang',_lang);applyLang();}
@@ -681,7 +686,7 @@ function goTab(name,el){
   _curTab=name;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   if(el)el.classList.add('on');
-  else{const m={dashboard:0,inventory:1,history:2,monthly:3,price:4,stock:5,reports:6,ocr:7,settings:8};
+  else{const m={dashboard:0,inventory:1,history:2,machine:3,needle:4,needlechange:5,partchange:6,changeanalysis:7,monthly:8,price:9,reports:10,ocr:11,settings:12};
        document.querySelectorAll('.tab')[m[name]]?.classList.add('on');}
   renderTab(name);
 }
@@ -1758,6 +1763,12 @@ window.VRT_LOCAL_READY=(async function init(){
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'spareparts',lockKey:'spareparts',pull:async function(){return await (window.cloudDownload&&window.cloudDownload(true));},push:async function(){return await (window.cloudUpload&&window.cloudUpload(true));},canSync:function(){return !!((window.SET&&SET.gasUrl)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto spareparts]',e)}},0)},{once:true});
+</script>
+<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
+<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script>
+/* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
+try{VRTTelegram.init({kind:"spareparts",tool:"spareparts",getData:()=>{const s=VRTParts39.getState();const m=s.maintenance||{};return {needle:m.needleChanges||[],part:m.partChanges||[],txns:s.txns||[]}}})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
 </body>
 </html>

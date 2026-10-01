@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMV 管理系統 v5.7 · Official SMV</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -172,15 +172,15 @@ tr:hover td{background:#eff6ff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.4.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.4.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-data-core-v39.js?v=4.14.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 </head>
 <body><div style="padding:12px 20px;background:#eaf2ff;color:#173760">IE Weekly Update、OBD 工序檔請至 <a href="ie_smv_report_v2_1.html?v=4.4.0" style="font-weight:700">📐 IE 工程／SMV 改善</a>。本頁管理正式 SMV 與分析。</div>
 <div class="hdr">
   <div class="hdr-logo">📐</div>
-  <div><h1>正式 SMV 管理系統 v5.7</h1><small>Standard Minute Value · Mobile Safe · IE / SMV 獨立管理 · Editable Official SMV · Scenario -10/-15/-20/-35</small></div>
+  <div><h1>正式 SMV 管理系統 v5.7</h1><small>Standard Minute Value · Mobile Safe · IE / SMV 獨立管理 · Editable Official SMV · Scenario -10/-15/-20/-35 · v4.14</small></div>
   <div class="hdr-stats">
     <div><div class="hs-v" id="hSnaps">0</div><div class="hs-l">版本數</div></div>
     <div><div class="hs-v" id="hStyles">0</div><div class="hs-l">款式數</div></div>
@@ -1631,6 +1631,22 @@ async function scanAllFolders(silent=false){
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'smv',lockKey:'smv',pull:async function(){return await (window.vsPull&&window.vsPull());},push:async function(){return await (window.vsPush&&window.vsPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto smv]',e)}},0)},{once:true});
+</script>
+<script src="vrt-io-v1.js?v=4.14.0"></script>
+<script>
+/* v4.13 統一 JSON 備份／還原（所有模組同格式：{tool, format:'vrt-backup', formatVersion, exportedAt, ...}） */
+function vrtIoButtons413(container,before,cls){if(!container||document.getElementById('vrtIoBackup413'))return;const b=document.createElement('button'),r=document.createElement('button'),inp=document.createElement('input');b.id='vrtIoBackup413';b.className=cls;b.textContent='💾 備份 JSON';b.title='下載本模組完整資料（JSON） / Download a full JSON backup';b.onclick=()=>vrtBackup413();r.className=cls;r.textContent='📥 還原 JSON';r.title='從 JSON 備份還原 / Restore from a JSON backup';r.onclick=()=>inp.click();inp.type='file';inp.accept='.json';inp.style.display='none';inp.onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)vrtRestore413(f)};if(before&&before.parentNode===container){container.insertBefore(b,before.nextSibling);container.insertBefore(r,b.nextSibling)}else{container.appendChild(b);container.appendChild(r)}container.appendChild(inp)}
+function vrtIoMsg413(m,bad){try{if(typeof toast==='function')toast(m);else if(typeof showToast==='function')showToast(m);else alert(m)}catch(_){alert(m)}}
+
+function vrtBackup413(){const name=VRTIO.backupJSON('smv',{snapshots:allSnaps});vrtIoMsg413('已下載備份 '+name)}
+async function vrtRestore413(file){try{const d=await VRTIO.readJSON(file);const snaps=d.snapshots||(Array.isArray(d)?d:null);if(!Array.isArray(snaps)||!snaps.every(s=>s&&s.id&&Array.isArray(s.items)))throw new Error('不是正式 SMV 備份 / Not an official-SMV backup');
+  const have=new Set(allSnaps.map(s=>s.id)),add=snaps.filter(s=>!have.has(s.id));
+  if(!confirm(VRTIO.confirmText('還原正式 SMV 備份？備份 '+snaps.length+' 個版本，其中 '+add.length+' 個是本機沒有的（只新增，不刪除現有版本）','Restore official SMV? '+add.length+' missing versions will be added; existing ones are kept.')))return;
+  if(!add.length){vrtIoMsg413('本機已有全部版本 / nothing to add');return}
+  // a version deleted earlier is protected by a tombstone in the IE state; clear those tombstones so cloud sync does not remove the restored version again
+  try{const st=await VRTDomain39.read('vrt_ie_smv_integrated_v2','state','main');if(st&&Array.isArray(st.tombstones)){const ids=new Set(add.map(s=>'snapshot:'+s.id));const keep=st.tombstones.filter(t=>!ids.has(t.id));if(keep.length!==st.tombstones.length){st.tombstones=keep;await VRTDomain39.write('vrt_ie_smv_integrated_v2',{state:{key:'main',value:st}})}}}catch(_){}
+  await dbReplaceAll(allSnaps.concat(add));allSnaps=await dbAll();allSnaps.sort((a,b)=>String(b.reportDate||'').localeCompare(String(a.reportDate||''))||String(b.importedAt||'').localeCompare(String(a.importedAt||'')));updateHeader();if(typeof renderScenario==='function')renderScenario();vrtIoMsg413('已新增 '+add.length+' 個版本 / restored')}catch(e){alert('還原失敗 / Restore failed: '+e.message)}}
+(function(){const h=document.querySelector('.hdr');if(!h)return;const box=document.createElement('div');box.style.cssText='display:flex;gap:6px;align-items:center;margin-left:8px';h.appendChild(box);vrtIoButtons413(box,null,'btn btn-b btn-sm')})();
 </script>
 </body>
 </html>

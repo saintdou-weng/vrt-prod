@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.1"></script>
-<script src="vrt-platform-v40.js?v=4.4.1"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>VRT 布料庫存管理 · Fabric Stock</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -98,8 +98,8 @@ table.old-list col:nth-child(1){width:17%}table.old-list col:nth-child(2){width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.6.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.1"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 <style>.movement-tools{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}#sec-movements input{min-height:44px;max-width:100%;padding:10px;font-size:16px}#sec-movements .tw{overflow:auto}#movementError43{color:#b91c1c}.detailgrid input,.detailgrid select{min-height:44px;max-width:100%}</style></head><body>
 <div class="header">
   <div class="logo">🧶</div><div><div class="h-title" data-i="title">布料／輔料庫存管理</div><div class="h-sub">FABRIC + ACCESSORY STOCK · v4.2</div></div>
@@ -113,7 +113,7 @@ table.old-list col:nth-child(1){width:17%}table.old-list col:nth-child(2){width:
  <div class="card"><div class="ct" data-i="importTitle">匯入布料／舊布／輔料 Excel</div><div class="g3" style="margin-bottom:12px"><div class="al al-i"><b>FABRIC OLD STOCK USING.xlsx</b><br><span data-i="oldHelp">依實際使用日期讀取，可日／週／月／年分析。</span></div><div class="al al-i"><b>FABRIC STOCK UPDATE....xlsx</b><br><span data-i="curHelp">每次匯入保留庫存快照日期，可查看布號、年份、庫位。</span></div><div class="al al-i"><b>Stock Assessory *.xls</b><br><span data-i="accHelp">讀取上月結存、入庫、出庫、調整、結存；PCS／YD／CONE 等單位分開統計。</span></div></div>
   <div class="drop" id="dz" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropFiles(event)"><input type="file" multiple accept=".xlsx,.xls,.csv" onchange="selectFiles(event)"><div style="font-size:34px">📥</div><div style="font-weight:700;margin:6px 0" data-i="drop">兩個 Excel 可一起拖進來，也可一個個匯入</div><div class="small">.xlsx · .xls · .csv</div></div>
   <div id="fileList" style="margin-top:10px"></div><div style="margin-top:12px"><button id="btnImport" class="btn btn-y" onclick="doImport()" disabled data-i="parse">🔍 解析並匯入</button> <span id="msg" class="small"></span></div></div>
- <div class="card"><div class="ct" data-i="saved">已儲存資料</div><div id="dbInfo"></div><div style="margin-top:10px"><button class="btn btn-g" onclick="exportAll()" data-i="export">⬇ 匯出整合 Excel</button> <button class="btn btn-r" onclick="clearData()" data-i="clear">🗑 清除資料</button></div></div>
+ <div class="card"><div class="ct" data-i="saved">已儲存資料</div><div id="dbInfo"></div><div style="margin-top:10px"><button class="btn btn-g" onclick="exportAll()" data-i="export">⬇ 匯出整合 Excel</button> <span id="vrtIoSlot413"></span> <button class="btn btn-r" onclick="clearData()" data-i="clear">🗑 清除資料</button></div></div>
 </section>
 <section class="sec" id="sec-dashboard"><div id="dashKpi" class="kpi-strip"></div><div id="accDashKpi" class="kpi-strip"></div><div class="g2"><div class="card"><div class="ct" data-i="byLocation">現有庫存 Location</div><div id="locationTop"></div></div><div class="card"><div class="ct" data-i="oldByMonth">舊庫存使用依月份</div><div id="monthTable"></div></div></div><div class="card"><div class="ct" data-i="alerts">管理提示</div><div id="alerts"></div></div></section>
 <section class="sec" id="sec-movements"></section>
@@ -232,9 +232,27 @@ window.addEventListener('load',async()=>{window.VRT_LOCAL_READY=window.VRT_LOCAL
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricstock',lockKey:'fabricstock',pull:async function(){return await (window.cloudPull&&window.cloudPull(true));},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!(VRTPlatform.getGasUrl()||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricstock]',e)}},0)},{once:true});
 </script>
-<script src="vrt-data-core-v39.js?v=4.4.1"></script>
-<script src="vrt-import-core-v40.js?v=4.4.1"></script>
-<script src="vrt-fabric-movement-v43.js?v=4.6.0"></script>
-<script src="vrt-fabric-v40.js?v=4.4.1"></script>
-<script src="vrt-fabric-ui-v43.js?v=4.6.0"></script>
+<script src="vrt-data-core-v39.js?v=4.14.0"></script>
+<script src="vrt-import-core-v40.js?v=4.14.0"></script>
+<script src="vrt-fabric-movement-v43.js?v=4.14.0"></script>
+<script src="vrt-fabric-v40.js?v=4.14.0"></script>
+<script src="vrt-fabric-ui-v43.js?v=4.14.0"></script>
+<script src="vrt-io-v1.js?v=4.14.0"></script>
+<script>
+/* v4.13 統一 JSON 備份／還原（所有模組同格式：{tool, format:'vrt-backup', formatVersion, exportedAt, ...}） */
+function vrtIoButtons413(container,before,cls){if(!container||document.getElementById('vrtIoBackup413'))return;const b=document.createElement('button'),r=document.createElement('button'),inp=document.createElement('input');b.id='vrtIoBackup413';b.className=cls;b.textContent='💾 備份 JSON';b.title='下載本模組完整資料（JSON） / Download a full JSON backup';b.onclick=()=>vrtBackup413();r.className=cls;r.textContent='📥 還原 JSON';r.title='從 JSON 備份還原 / Restore from a JSON backup';r.onclick=()=>inp.click();inp.type='file';inp.accept='.json';inp.style.display='none';inp.onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)vrtRestore413(f)};if(before&&before.parentNode===container){container.insertBefore(b,before.nextSibling);container.insertBefore(r,b.nextSibling)}else{container.appendChild(b);container.appendChild(r)}container.appendChild(inp)}
+function vrtIoMsg413(m,bad){try{if(typeof toast==='function')toast(m);else if(typeof showToast==='function')showToast(m);else alert(m)}catch(_){alert(m)}}
+
+function vrtBackup413(){const name=VRTIO.backupJSON('fabricstock',{db:DB});vrtIoMsg413('已下載備份 '+name)}
+async function vrtRestore413(file){try{const d=await VRTIO.readJSON(file);const db=d.db||(Array.isArray(d.current)?d:null);if(!db||!Array.isArray(db.current))throw new Error('不是布料庫存備份 / Not a fabric-stock backup');
+  if(!confirm(VRTIO.confirmText('還原布料庫存備份？目前資料會被取代（現有 '+db.current.length+' · 舊布 '+(db.old||[]).length+' · 輔料 '+(db.accessory||[]).length+'）','Restore fabric stock? Current data will be replaced.')))return;
+  DB=db;normalizeFabricDB();DB.movements=Array.isArray(DB.movements)?DB.movements:[];DB.tombstones=Array.isArray(DB.tombstones)?DB.tombstones:[];DB.editHistory=Array.isArray(DB.editHistory)?DB.editHistory:[];await save(true);renderDash();renderAccessory();if(typeof movementRender43==='function')try{movementRender43()}catch(_){}vrtIoMsg413('已還原 / restored')}catch(e){alert('還原失敗 / Restore failed: '+e.message)}}
+vrtIoButtons413(document.getElementById('vrtIoSlot413'),null,'btn btn-g');
+</script>
+<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
+<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script>
+/* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
+try{VRTTelegram.init({kind:"fabricstock",tool:"fabricstock",getData:()=>DB})}catch(e){console.warn("VRTTelegram init",e)}
+</script>
 </body></html>

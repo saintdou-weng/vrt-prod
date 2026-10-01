@@ -57,5 +57,5 @@
     }
     return st;
   }
-  g.VRTProdAutoSync={version:VERSION,install,schedule:(k,r,e,d)=>C[k]?C[k].schedule(r,e,d):false,markDirty:(k,r,e,d)=>C[k]&&!C[k].busy?C[k].schedule(r||'change',e,d):false,run:(k,r,e)=>C[k]?C[k].run(r,e):Promise.resolve(false),flush:(k,r,e)=>C[k]?C[k].run(r,e):Promise.resolve(false),pending:k=>read(k),state:k=>C[k]||null};
+  g.VRTProdAutoSync={version:VERSION,install,schedule:(k,r,e,d)=>C[k]?C[k].schedule(r,e,d):false,markDirty:(k,r,e,d)=>C[k]&&!C[k].busy?C[k].schedule(r||'change',e,d):false,run:(k,r,e)=>C[k]?C[k].run(r,e):Promise.resolve(false),flush:(k,r,e)=>C[k]?C[k].run(r,e):Promise.resolve(false),pending:k=>read(k),state:k=>C[k]||null,lock:k=>lockAcquire(String(k)),unlock:k=>lockRelease(String(k))};/* v4.14: exported for production_v4 / cutting_v3 read-only pulls */
 })(window);

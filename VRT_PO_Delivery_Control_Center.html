@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT PO Delivery Control Center</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -215,8 +215,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 </head>
 <body data-theme="light">
 
@@ -662,7 +662,7 @@ function confirmImport(){
 }
 function cancelImport(){ pendingRecs=[]; pendingSummaries=[]; const pa=document.getElementById('previewArea'); if(pa)pa.style.display='none'; const m=document.getElementById('impMsg'); if(m)m.textContent=''; }
 function clearDB(){ if(!confirm(t('confirm_clear')))return; DATA=[]; saveData(true); renderTabs(); render(); toast(t('msg_cleared'),'warn'); }
-function resetSample(){ DATA=SEED.slice(); saveData(true); renderTabs(); render(); toast(t('msg_reset'),'ok'); }
+function resetSample(){ DATA=SEED.map(r=>({...r,_demo:true})); saveData(true); renderTabs(); render(); toast(t('msg_reset'),'ok'); }
 
 /* ===================== DASHBOARD ===================== */
 function kpiCard(cls,lab,val,meta){ return `<div class="kpi ${cls}"><div class="bar"></div><div class="lab">${lab}</div><div class="val">${val}</div>${meta?`<div class="meta">${meta}</div>`:''}</div>`; }
@@ -929,9 +929,13 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
 /* ===================== boot ===================== */
 (async function init(){
   const th=localStorage.getItem('vrt_pocc_theme'); if(th)document.body.dataset.theme=th;
-  if(SET.lang)LANG=SET.lang;
+  LANG=localStorage.getItem('vrt_pocc_lang')||SET.lang||LANG;   /* v4.14: header switch no longer overridden by an old settings value */
   let loaded=await dbLoadAll();
-  if(!loaded||!loaded.length){ DATA=SEED.slice(); await dbSaveAll(DATA); } else DATA=loaded;
+  // v4.14: sample rows are shown only when no shared GAS connection exists, are never saved, and exact demo copies left by
+  // older versions are dropped on load — so a fresh browser can no longer push the SEED rows into the cloud.
+  const seedById=new Map(SEED.map(r=>[r.id,JSON.stringify(r)]));const isDemo=r=>r&&(r._demo||seedById.get(r.id)===JSON.stringify(r));
+  loaded=(loaded||[]).filter(r=>!isDemo(r));
+  if(!loaded.length){ DATA=(window.VRTPlatform&&VRTPlatform.getGasUrl&&VRTPlatform.getGasUrl())?[]:SEED.map(r=>({...r,_demo:true})); } else DATA=loaded;
   renderActions(); setLang(LANG); goTab(DATA.length?'dashboard':'import');
 })();
 
@@ -986,7 +990,7 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
   document.getElementById('vcPushBtn2').onclick=async function(){
     const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}vcBusy(true);
     try{
-      const res=await VRTSmartSync.push({url,tool:'podelivery',records:DATA||[],meta:{summary:{count:(DATA||[]).length}},onStatus:m=>vcLog(m,'i')});
+      const live=(DATA||[]).filter(r=>!r._demo);const res=await VRTSmartSync.push({url,tool:'podelivery',records:live,meta:{summary:{count:live.length}},onStatus:m=>vcLog(m,'i')});
       if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:(DATA||[]).length,smart:true}));vcLog(`✓ 智慧推送 · 傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');vcStat();
     }catch(e){vcLog('✗ 推送失敗：'+(e.message||e),'err');}finally{vcBusy(false);}
@@ -995,7 +999,7 @@ Object.assign(window,{goTab,setFilter,setSort,toggleSel,toggleAll,newRecord,addR
   document.getElementById('vcPullBtn2').onclick=async function(){
     const url=getUrl();if(!url){vcLog('請先填入 GAS URL','err');return;}vcBusy(true);vcLog('智慧拉取：比對差異...','i');
     try{
-      const res=await VRTSmartSync.pull({url,tool:'podelivery',localRecords:DATA||[],onStatus:m=>vcLog(m,'i'),apply:async recs=>{DATA=recs;await dbSaveAll(DATA);vcStat();if(typeof renderTabs==='function')renderTabs();if(typeof render==='function')render();}});
+      const live=(DATA||[]).filter(r=>!r._demo);const res=await VRTSmartSync.pull({url,tool:'podelivery',localRecords:live,meta:{summary:{count:live.length}},onStatus:m=>vcLog(m,'i'),apply:async recs=>{DATA=recs;await dbSaveAll(DATA);vcStat();if(typeof renderTabs==='function')renderTabs();if(typeof render==='function')render();}});
       if(!res.ok){vcLog('雲端尚無 PO 交期資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:DATA.length,smart:true}));vcLog(`✓ 智慧拉取 · ${DATA.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');
     }catch(e){vcLog('✗ 拉取失敗：'+(e.message||e),'err');}finally{vcBusy(false);}
   };
@@ -1046,7 +1050,7 @@ window.addEventListener('load',()=>fabPoLoad511().then(()=>{if(VIEW==='fabric')r
 
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
-window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'podelivery',lockKey:'podelivery',pull:async function(){return await (document.getElementById('vcPullBtn2')&&document.getElementById('vcPullBtn2').onclick&&document.getElementById('vcPullBtn2').onclick());},push:async function(){return await (document.getElementById('vcPushBtn2')&&document.getElementById('vcPushBtn2').onclick&&document.getElementById('vcPushBtn2').onclick());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto podelivery]',e)}},0)},{once:true});
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'podelivery',lockKey:'podelivery',pull:async function(){const r=await (document.getElementById('vcPullBtn2')&&document.getElementById('vcPullBtn2').onclick&&document.getElementById('vcPullBtn2').onclick());try{if(window.fabPoCloudPull512)await window.fabPoCloudPull512()}catch(_){}return r;},push:async function(){return await (document.getElementById('vcPushBtn2')&&document.getElementById('vcPushBtn2').onclick&&document.getElementById('vcPushBtn2').onclick());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto podelivery]',e)}},0)},{once:true});
 
 
 /* ═════════════ v4.12 Fabric PO: source hierarchy, cross-module PO mapping, optional 2025, Domain Sync ═════════════ */
@@ -1065,7 +1069,8 @@ async function fabPoCloudPull512(){try{const url=fabGasUrl512();if(!url||!window
 async function fabPoConfirm511(){if(!FABPO_PENDING511.length)return;const m=new Map(FABPO511.map(r=>[r.id,r]));FABPO_PENDING511.forEach(r=>m.set(r.id,fabMergeRow512(m.get(r.id),r)));FABPO511=[...m.values()];await fabPoSave511();const n=FABPO_PENDING511.length;FABPO_PENDING511=[];toast(`✓ 布料 PO 已寫入 ${n} 列；正在同步雲端`,'ok');await fabPoCloudPush512(true);render()}
 viewImport=function(){return _viewImport511()+`<div class="panel" style="margin-top:18px"><h3>🧵 布料 PO 匯入 · Fabric Purchasing List</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px">數量順序：QTY/YDS → Fabric Order Required → Suggest to Buy (+3%) → Total Fabric Shortage。各 PO 分頁會補 ETA／Expected／Actual Arrival；Customer PO 同時對照 PO Control 與 Orders FactoryDB。</div><label style="display:inline-flex;gap:7px;align-items:center;margin:6px 0 10px"><input id="fabInclude2025" type="checkbox">包含年度頁 2025（預設不匯入）</label><br><input type="file" accept=".xlsx,.xls" multiple onchange="fabPoFiles511(this.files);this.value=''"><div id="fabPoPreview511" style="margin-top:10px"></div></div>`};
 window.fabPoFiles511=fabPoFiles511;window.fabPoConfirm511=fabPoConfirm511;window.fabPoCloudPush512=fabPoCloudPush512;
-window.addEventListener('load',()=>setTimeout(()=>fabPoCloudPull512(),1200),{once:true});
+/* v4.14: the fabric-PO pull rides on the module's own auto-sync pull (below) instead of a second unlocked pull 1.2 s after load */
+window.fabPoCloudPull512=fabPoCloudPull512;
 </script>
 </body>
 </html>
