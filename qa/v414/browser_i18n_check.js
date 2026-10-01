@@ -1,0 +1,30 @@
+/* Run: serve the repo root (python3 -m http.server 8765), then: node qa/v414/browser_i18n_check.js  (needs the playwright package) */
+/* Real browser i18n check: seed real data, then open every page in EN and KM and count visible Chinese text nodes left.
+   Also checks: 中文 mode loads no dictionary; one switch changes the language on every page; alert/confirm are translated. */
+const { chromium } = require('playwright');const fs=require('fs');
+const path=require('path');const DL=process.env.VRT_DL||'/mnt/user-data/uploads/Downloads/',UP=process.env.VRT_UP||'/root/.claude/uploads/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/',ROOT=path.resolve(__dirname,'../..')+'/',BASE=process.env.VRT_BASE_URL||BASE+'';
+const PAGES=fs.readdirSync(ROOT).filter(f=>/\.html$/.test(f)).sort();
+const COLLECT=`(()=>{const CJK=/[\\u3400-\\u9fff]/;const out=[];const w=document.createTreeWalker(document.body,4);let n;while((n=w.nextNode())){const v=n.nodeValue;if(!v||!CJK.test(v))continue;let e=n.parentElement,skip=false;for(;e;e=e.parentElement){if(/^(SCRIPT|STYLE|TEXTAREA|PRE|CODE|NOSCRIPT)$/.test(e.tagName)||e.hasAttribute('data-no-i18n')){skip=true;break}}if(skip)continue;const p=n.parentElement;const st=p&&getComputedStyle(p);if(!p||st.display==='none'||st.visibility==='hidden'||!(p.offsetWidth||p.offsetHeight||p.getClientRects().length))continue;out.push(v.trim().slice(0,60))}
+  const attrs=[];document.querySelectorAll('[placeholder],[title]').forEach(el=>{for(const a of ['placeholder','title']){const v=el.getAttribute(a);if(v&&CJK.test(v)&&el.offsetParent)attrs.push(a+':'+v.slice(0,40))}});return {text:out,attrs,total:document.createTreeWalker(document.body,4)&&[...document.querySelectorAll('body *')].length}})()`;
+(async()=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM||undefined}).catch(()=>chromium.launch());
+ const ctx=await browser.newContext({viewport:{width:1440,height:1000}});const page=await ctx.newPage();
+ const errors=[];page.on('pageerror',e=>errors.push(page.url().split('/').pop()+': '+e.message));page.on('dialog',d=>{d.accept()});
+ // seed real data (中文 mode)
+ await page.goto(BASE+'production_plan_capacity_v1.html',{waitUntil:'load'});await page.waitForTimeout(800);await page.setInputFiles('#fileInput',DL+'Production  Plan From July Until  Dec_2026 (1).xlsx');await page.waitForTimeout(2500);await page.evaluate(()=>confirmPlanImport512());await page.waitForTimeout(800);
+ await page.goto(BASE+'sewing_v5.html',{waitUntil:'load'});await page.waitForTimeout(1000);await page.setInputFiles('input[type=file][accept=".json"]',DL+'sewing_backup_2026-09-28.json');await page.waitForTimeout(3500);
+ await page.goto(BASE+'vrt_spare_parts_v2.html',{waitUntil:'load'});await page.waitForTimeout(1000);await page.setInputFiles('#maintenanceImport',UP+'91490ff4-Daily_Needles_Change_Report_24_to28_Sept.xlsx');await page.waitForTimeout(2500);await page.click('#modalBox button.btn-y');await page.waitForTimeout(1500);
+ await page.goto(BASE+'vrt_final_qc_v1.html',{waitUntil:'load'});await page.waitForTimeout(1000);const b64=[['VRT_Weekly_Top_3_defect_KPI_每周质量会议报告_21_25_SEP_2026.xlsx',fs.readFileSync(UP+'a727f1ff-VRT_Weekly_Top_3_defect_KPI__________21_25_SEP_2026.xlsx').toString('base64')],['Final_QC_20260919.xlsx',fs.readFileSync(ROOT+'release_sources/Final_QC_20260919.xlsx').toString('base64')]];await page.evaluate(async list=>{const files=list.map(([n,b])=>{const bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new File([u],n)});await QC.importFiles(files);await QC.commit()},b64);await page.waitForTimeout(1000);
+ // 中文 mode: no dictionary loaded
+ await page.goto(BASE+'portal_v2.html',{waitUntil:'load'});await page.waitForTimeout(1500);const zh=await page.evaluate(()=>({lang:VRTI18n.lang,en:typeof window.VRT_I18N_EN,km:typeof window.VRT_I18N_KM}));console.log('zh mode',JSON.stringify(zh));
+ // switch once on the portal → EN everywhere
+ await page.click('#vrtLangSw button[data-l="en"]');await page.waitForTimeout(2500);
+ const report={};
+ for(const L of ['en','km']){if(L==='km'){await page.goto(BASE+'cutting_v3.html',{waitUntil:'load'});await page.waitForTimeout(1500);await page.click('#vrtLangSw button[data-l="km"]');await page.waitForTimeout(2000)}
+  for(const f of PAGES){await page.goto(BASE+''+f,{waitUntil:'load'});await page.waitForTimeout(f==='sewing_v5.html'||f==='cutting_v3.html'?4500:3000);const r=await page.evaluate(COLLECT);const lang=await page.evaluate(()=>window.VRTI18n&&VRTI18n.lang);const uniq=[...new Set(r.text)];report[L+':'+f]={lang,left:r.text.length,uniq:uniq.length,sample:uniq.slice(0,12),attrs:r.attrs.slice(0,5)};console.log(L,f.padEnd(50),'lang',lang,'CJK nodes left',r.text.length,'unique',uniq.length);if(L==='en'&&(f==='sewing_v5.html'||f==='portal_v2.html'||f==='vrt_final_qc_v1.html'||f==='cutting_v3.html'||f==='orders_v3.html'||f==='production_plan_capacity_v1.html'))await page.screenshot({path:'shot_i18n_'+L+'_'+f.replace('.html','')+'.png'});if(L==='km'&&(f==='vrt_spare_parts_v2.html'||f==='sewing_v5.html'||f==='portal_v2.html'))await page.screenshot({path:'shot_i18n_'+L+'_'+f.replace('.html','')+'.png'})}}
+ // alert / confirm translated
+ const dlg=[];page.removeAllListeners('dialog');page.on('dialog',d=>{dlg.push(d.message());d.accept()});await page.goto(BASE+'vrt_monthly_shipping_control_center_v1.html',{waitUntil:'load'});await page.waitForTimeout(2000);await page.evaluate(()=>{VRTI18n.set('en')});await page.waitForTimeout(1500);await page.evaluate(()=>{alert('已儲存');confirm('確定刪除這筆 Production Plan？')});console.log('dialogs',JSON.stringify(dlg));
+ // back to 中文 restores
+ await page.evaluate(()=>VRTI18n.set('zh'));await page.waitForTimeout(800);const zhText=await page.evaluate(()=>document.body.innerText.slice(0,200));console.log('restored zh:',zhText.replace(/\s+/g,' ').slice(0,120));
+ fs.writeFileSync('i18n_browser_report.json',JSON.stringify(report,null,1));console.log('errors:',JSON.stringify(errors.slice(0,10)));await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

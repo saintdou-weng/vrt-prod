@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="zh-TW"><head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script><meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Monthly Shipping v3.7</title><script src="vendor/xlsx.full.min.js"></script><style>
 *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
 .header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -85,11 +85,11 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.7.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 </head><body>
-<div class="header"><div class="logo">🚢</div><div><div class="htitle">VRT <span style="color:#fbbf24">Monthly Shipping</span> 控制中心</div><div class="hsub">Monthly Shipping Schedule only · v3.7 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hPieces">0</b><span>Pieces</span></div><div class="hstat"><b id="hCartons">0</b><span>Cartons</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="newShipment()">＋新增</button><button class="hbtn" onclick="exportXlsx()">匯出</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
+<div class="header"><div class="logo">🚢</div><div><div class="htitle">VRT <span style="color:#fbbf24">Monthly Shipping</span> 控制中心</div><div class="hsub">Monthly Shipping Schedule only · v3.7 · v4.14 · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hPieces">0</b><span>Pieces</span></div><div class="hstat"><b id="hCartons">0</b><span>Cartons</span></div></div><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="cloudPull()">☁↓</button><button class="hbtn" onclick="newShipment()">＋新增</button><button class="hbtn" onclick="exportXlsx()">匯出</button><button class="hbtn" onclick="goTab('import')">匯入</button></div>
 <div class="tabs"><div class="tab on" data-tab="dashboard" onclick="goTab('dashboard')">📊 儀錶板</div><div class="tab" data-tab="schedule" onclick="goTab('schedule')">🗓 月出貨排程</div><div class="tab" data-tab="trend" onclick="goTab('trend')">📆 月年趨勢</div><div class="tab" data-tab="revision" onclick="goTab('revision')">🔄 本月版本變更</div><div class="tab" data-tab="import" onclick="goTab('import')">📥 匯入</div></div>
 <div class="wrap"><div id="dashboard" class="pane on"></div><div id="schedule" class="pane"></div><div id="trend" class="pane"></div><div id="revision" class="pane"></div><div id="import" class="pane"></div></div>
 <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" hidden><button class="cloud" onclick="cloudPull()">☁</button><div class="toast" id="toast"></div>
@@ -140,5 +140,23 @@ $('fileInput').addEventListener('change',e=>{if(e.target.files[0])importFile(e.t
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'monthship',lockKey:'monthship',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush(true));},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto monthship]',e)}},0)},{once:true});
+</script>
+<script src="vrt-io-v1.js?v=4.14.0"></script>
+<script>
+/* v4.13 統一 JSON 備份／還原（所有模組同格式：{tool, format:'vrt-backup', formatVersion, exportedAt, ...}） */
+function vrtIoButtons413(container,before,cls){if(!container||document.getElementById('vrtIoBackup413'))return;const b=document.createElement('button'),r=document.createElement('button'),inp=document.createElement('input');b.id='vrtIoBackup413';b.className=cls;b.textContent='💾 備份 JSON';b.title='下載本模組完整資料（JSON） / Download a full JSON backup';b.onclick=()=>vrtBackup413();r.className=cls;r.textContent='📥 還原 JSON';r.title='從 JSON 備份還原 / Restore from a JSON backup';r.onclick=()=>inp.click();inp.type='file';inp.accept='.json';inp.style.display='none';inp.onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)vrtRestore413(f)};if(before&&before.parentNode===container){container.insertBefore(b,before.nextSibling);container.insertBefore(r,b.nextSibling)}else{container.appendChild(b);container.appendChild(r)}container.appendChild(inp)}
+function vrtIoMsg413(m,bad){try{if(typeof toast==='function')toast(m);else if(typeof showToast==='function')showToast(m);else alert(m)}catch(_){alert(m)}}
+
+function vrtBackup413(){const name=VRTIO.backupJSON('monthship',{data:DATA,versions:VERS});vrtIoMsg413('已下載備份 '+name)}
+async function vrtRestore413(file){try{const d=await VRTIO.readJSON(file);const data=d.data||(Array.isArray(d.records)?d:null);if(!data||!Array.isArray(data.records))throw new Error('不是月出貨備份 / Not a monthly-shipping backup');
+  if(!confirm(VRTIO.confirmText('還原月出貨備份？目前資料會被取代（'+data.records.length+' 筆）','Restore monthly shipping? Current data will be replaced.')))return;
+  DATA=Object.assign({records:[],source:'',qa:[]},data);DATA.savedAt=new Date().toISOString();if(Array.isArray(d.versions))VERS=d.versions.slice(-12);const ms=months();MONTH=ms.length?ms[ms.length-1]:MONTH;await save();renderAll();vrtIoMsg413('已還原 '+DATA.records.length+' 筆 / restored')}catch(e){alert('還原失敗 / Restore failed: '+e.message)}}
+vrtIoButtons413(document.querySelector('.header'),[...document.querySelectorAll('.header .hbtn')].pop(),'hbtn');
+</script>
+<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
+<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script>
+/* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
+try{VRTTelegram.init({kind:"monthship",tool:"monthship",getData:()=>DATA.records})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
 </body></html>

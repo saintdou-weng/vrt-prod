@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>成品倉庫管理系統 · FG Inventory</title>
 <!--
@@ -240,8 +240,8 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.4.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 </head>
 <body>
 
@@ -2511,10 +2511,11 @@ window.tgSendDaily=async function(){
     }
     if(!gasUrl){ el.textContent+=' · ⚠ 未設定 GAS URL'; el.className='vcp-status err'; }
   }
+  function fgCloudMeta414(){const bal=unshipped().reduce((s,r)=>s+(Number(r.pcs)||0),0),recv=FG.map(r=>String(r.receiveDate||'')).filter(Boolean).sort(),ship=FG.map(r=>String(r.shipmentDate||'')).filter(Boolean).sort();return {summary:{balance:bal,records:FG.length,cartons:unshipped().length,lastReceiveDate:recv[recv.length-1]||'',lastShipmentDate:ship[ship.length-1]||''}}}
   window.vcPush=async function(){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);
     try{
-      const res=await VRTSmartSync.push({url:gasUrl,tool:'fg',records:FG,meta:{summary:{today:TODAY,balance:unshipped().reduce((s,r)=>s+r.pcs,0),todayRecv:FG.filter(r=>r.receiveDate===TODAY).reduce((s,r)=>s+r.pcs,0),todayShip:FG.filter(r=>r.shipmentDate===TODAY).reduce((s,r)=>s+r.pcs,0)}},onStatus:m=>vcLog(m,'i')});
+      const res=await VRTSmartSync.push({url:gasUrl,tool:'fg',records:FG,meta:fgCloudMeta414(),onStatus:m=>vcLog(m,'i')});/* v4.14: data-derived meta, identical on pull (the old 'today' fields changed every day) */
       if(res&&res.needsPull){vcLog('⚠ 雲端有較新資料，請先拉取','err');return;}
       localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:FG.length,smart:true}));vcLog(`✓ 智慧推送 · 本機 ${FG.length} · 傳送 ${res.uploaded||0} · 未變 ${res.unchanged||0}`,'ok');vcShowStatus();
     }catch(e){vcLog('✗ 推送失敗：'+e.message,'err');}finally{vcSetBusy(false);}
@@ -2522,7 +2523,7 @@ window.tgSendDaily=async function(){
   window.vcPull=async function(){
     if(!gasUrl){vcLog('請先填入 GAS URL','err');return;}vcSetBusy(true);vcLog('智慧拉取：比對差異...','i');
     try{
-      const res=await VRTSmartSync.pull({url:gasUrl,tool:'fg',localRecords:FG,onStatus:m=>vcLog(m,'i'),apply:async recs=>{FG=dedupFG(recs.map(r=>({...r,id:r.id||uid()})));await saveFG();updateHeader();renderDashboard();renderDbCard();}});
+      const res=await VRTSmartSync.pull({url:gasUrl,tool:'fg',localRecords:FG,meta:fgCloudMeta414(),onStatus:m=>vcLog(m,'i'),apply:async recs=>{FG=dedupFG(recs.map(r=>({...r,id:r.id||uid()})));await saveFG();updateHeader();renderDashboard();renderDbCard();}});
       if(!res.ok){vcLog('雲端尚無 FG 資料','err');return;}localStorage.setItem(LS_META,JSON.stringify({ts:Date.now(),count:FG.length,smart:true}));vcLog(`✓ 智慧拉取 · ${FG.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');vcShowStatus();
     }catch(e){vcLog('✗ 拉取失敗：'+e.message,'err');}finally{vcSetBusy(false);}
   };

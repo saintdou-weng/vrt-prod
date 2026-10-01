@@ -1,8 +1,8 @@
-/* QC-specific report parsing. Shared Sewing/IE/fabric parsers are unchanged. */
+/* QC-specific report parsing (v4.9: + sewing-line Top-3 defect KPI workbook). Shared Sewing/IE/fabric parsers are unchanged. */
 (function(g){'use strict';
-  const I=g.VRTImport40,C=g.VRTData39,X=g.XLSX,n=C.number,baseQC=I.qc,baseValidate=I.validateQC;
+  const I=g.VRTImport40,C=g.VRTData39,X=g.XLSX,n=C.number,baseQC=I.qc,baseValidate=I.validateQC,baseMerge=I.qcMerge;
   const text=v=>String(v??'').trim(),norm=v=>text(v).toUpperCase().replace(/[\s_-]+/g,''),copy=C.copy;
-  function line(v){const s=norm(v),m=s.match(/^(?:LINE|A)?0*(\d+)$/);return m?'Line '+Number(m[1]):/^(SAMPLE|SAMPIE)LINE$/.test(s)?'SAMPLELINE':text(v)}
+  function line(v){const s=norm(v),m=s.match(/^(?:LINE|A|L)?0*(\d+)$/);return m?'Line '+Number(m[1]):/^(SAMPLE|SAMPIE)LINE$/.test(s)?'SAMPLELINE':text(v)}
   const id=r=>'QC-'+C.hash([r.date,C.norm(line(r.line))]);
   function rows(sheet){return X.utils.sheet_to_json(sheet,{header:1,raw:true,defval:null,blankrows:true,range:0})}
   function validate(r){baseValidate(r);if(r.output>r.inspected-r.rejected)throw new Error('實際產出不可大於檢驗量減不良件數');const gap=r.inspected-r.rejected-r.output;
@@ -37,7 +37,43 @@
     warnings.push('週報未提供出勤／產出分鐘，保留各線原報效率；不將百分比平均值當作加權效率。');
     return {records,warnings,kind:'weekly',period:[dates[0].date,dates.at(-1).date]};
   }
-  function parse(wb,filename){const w=weekly(wb,filename);if(w)return w;const p=baseQC(wb,filename);
+  /* ── v4.9 Sewing-line Top-3 defect KPI workbook (QC 每周质量会议报告) ────────────────────────
+     Sheets SEP21… hold a defect-kind × line matrix with Total Defect / Sewing Output / Percentage;
+     sheet "week N" holds the weekly sum plus TOP 3. These are end-line sewing defects, not Final QC
+     inspection, so they are stored as a separate kind (sewingkpi) and only compared with Final QC. */
+  const MONTHS={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,SEPT:9,OCT:10,NOV:11,DEC:12};
+  const kpiId=r=>'QK-'+C.hash([r.date,C.norm(line(r.line))]);
+  function kpiCellDate(v){if(v instanceof Date&&!isNaN(v))return C.ymd(new Date(v.getTime()+5*60000));return I.reportDate(v)}
+  function defectKpi(wb,filename){const daily=[],weekly=[],warnings=[];
+    const fileRange=filename.match(/(\d{1,2})[_ -](\d{1,2})[_ -]([A-Z]{3,4})[_ -](20\d{2})/i),fileYear=(filename.match(/20\d{2}/)||[])[0]||'';
+    for(const sn of wb.SheetNames){const a=rows(wb.Sheets[sn]);const hi=a.findIndex(r=>r.some(v=>/total\s*defect/i.test(text(v)))&&r.some(v=>/sewing\s*output/i.test(text(v))));if(hi<0)continue;
+      const head=a[hi],cTotal=head.findIndex(v=>/total\s*defect/i.test(text(v))),cOut=head.findIndex(v=>/sewing\s*output/i.test(text(v))),cPct=head.findIndex(v=>/pe?r?centage|percent|%/i.test(text(v))),kinds=head.map((v,c)=>({name:text(v).replace(/\s+/g,' '),c})).filter(x=>x.c>0&&x.c<cTotal&&x.name);
+      if(!kinds.length||cTotal<0||cOut<0){warnings.push(sn+'：找不到缺點種類欄');continue}
+      // Date: a cell under a "DATE" label, else the sheet name (SEP21) with the workbook year.
+      let date='';for(let i=0;i<hi;i++){const r=a[i];for(let c=0;c<r.length;c++){if(/^date$/i.test(text(r[c]))){for(let j=i+1;j<=hi;j++){const d=kpiCellDate(a[j]?.[c]);if(d){date=d;break}}}}if(date)break}
+      const sm=sn.trim().match(/^([A-Z]{3,4})\s*(\d{1,2})$/i),isWeek=/^week\b/i.test(sn.trim());
+      if(!date&&sm&&MONTHS[sm[1].toUpperCase()]){const y=fileYear||(fileRange&&fileRange[4])||String(new Date().getFullYear());date=y+'-'+String(MONTHS[sm[1].toUpperCase()]).padStart(2,'0')+'-'+String(+sm[2]).padStart(2,'0');warnings.push(sn+'：分頁沒有日期欄，依分頁名稱採 '+date)}
+      if(!isWeek&&!date){warnings.push(sn+'：找不到報告日期，略過');continue}
+      const recs=[];for(let i=hi+1;i<a.length;i++){const r=a[i],lab=text(r[0]);if(!lab)continue;if(/^(ttl|total)/i.test(lab))break;if(!/^(L|LINE|A)\s*\d+$/i.test(lab.replace(/\s+/g,'')))continue;
+        const defects=kinds.map(k=>({name:k.name,qty:n(r[k.c])||0})).filter(d=>d.qty>0),totalDefect=n(r[cTotal]),output=n(r[cOut]),sumD=defects.reduce((s,d)=>s+d.qty,0);
+        if(!(totalDefect>0||output>0||sumD>0))continue; // empty template rows (e.g. a blank SEP26 sheet) carry no information
+        const rec={id:'',date,line:line(lab),reportKind:'sewingkpi',defects,totalDefect:totalDefect??sumD,sewingOutput:output??0,reportedRate:cPct>=0?n(r[cPct]):null,sourceFile:filename,sourceSheet:sn,sourceRow:i+1,issues:[],history:[]};
+        if(totalDefect!=null&&sumD!==totalDefect)rec.issues.push('缺點加總 '+sumD+' 與 Total Defect '+totalDefect+' 不符，採 Total Defect');
+        if(rec.sewingOutput>0&&rec.totalDefect>rec.sewingOutput)rec.issues.push('缺點數大於車縫產出，請核對');
+        recs.push(rec)}
+      if(isWeek){const top=[];for(const r of a.slice(hi+1)){const m=text(r[1]).match(/^TOP\s*(\d)/i);if(m&&n(r[2])!=null&&text(r[3]))top.push({rank:+m[1],qty:n(r[2]),name:text(r[3])})}weekly.push({sheet:sn,lines:recs,top,label:text(head[cTotal+0])});continue}
+      recs.forEach(r=>{r.id=kpiId(r);warnings.push(...r.issues.map(x=>sn+' '+r.line+'：'+x))});daily.push(...recs)}
+    if(!daily.length&&!weekly.length)return null;
+    if(!daily.length)throw new Error('只有週彙總分頁，沒有每日分頁；請提供含 SEP21… 日分頁的檔案');
+    // Weekly sheet is a cross-check only: it never adds a second set of quantities.
+    for(const w of weekly){for(const wl of w.lines){const ds=daily.filter(r=>r.line===wl.line),d=ds.reduce((s,r)=>s+r.totalDefect,0),o=ds.reduce((s,r)=>s+r.sewingOutput,0);if(ds.length&&(d!==wl.totalDefect||o!==wl.sewingOutput))warnings.push(w.sheet+' '+wl.line+'：週表缺點／產出 '+wl.totalDefect+'／'+wl.sewingOutput+' 與日分頁加總 '+d+'／'+o+' 不同，採日分頁')}}
+    const dates=[...new Set(daily.map(r=>r.date))].sort();
+    return {records:[],kpi:daily,weeklyTop:weekly.map(w=>({sheet:w.sheet,top:w.top})),warnings,kind:'sewingkpi',period:[dates[0],dates.at(-1)]};
+  }
+  // KPI rows keep their own QK- identity (never rewritten to QC-), so cloud rows of the two kinds cannot collide.
+  function kpiMerge(old,incoming){const fixed=(incoming||[]).map(r=>{const x=copy(r);x.line=line(x.line);x.reportKind='sewingkpi';if(!/^QK-/.test(String(x.id||'')))x.id=kpiId(x);return x});return baseMerge(old,fixed)}
+  function kpiTotals(rs){const a=rs.filter(r=>!r.deleted),out=a.reduce((s,r)=>s+(n(r.sewingOutput)||0),0),def=a.reduce((s,r)=>s+(n(r.totalDefect)||0),0);return {records:a.length,lines:new Set(a.map(r=>r.line)).size,output:out,defects:def,rate:out?def/out:null,days:new Set(a.map(r=>r.date)).size}}
+  function parse(wb,filename){const k=defectKpi(wb,filename);if(k)return k;const w=weekly(wb,filename);if(w)return w;const p=baseQC(wb,filename);
     for(const r of p.records){r.line=line(r.line);r.id=id(r);r.reportKind=r.reportKind||'daily';r.reconciliationGap=r.inspected-r.rejected-r.output;validate(r)}return {...p,kind:p.records.some(r=>r.reportKind==='weekly')?'export':'daily'};
   }
   const rank=r=>r.reportKind==='manual'?3:r.reportKind==='weekly'?1:2;
@@ -54,5 +90,5 @@
       r.updatedAt=new Date().toISOString();m.set(r.id,r);
     }return {records:[...m.values()],added,updated,unchanged,protected:protectedCount};
   }
-  Object.assign(I,{qc:parse,validateQC:validate,qcTotals:totals,qcMerge:merge,qcLine:line,qcId:id,qcWeekly:weekly});
+  Object.assign(I,{qc:parse,validateQC:validate,qcTotals:totals,qcMerge:merge,qcLine:line,qcId:id,qcWeekly:weekly,qcDefectKpi:defectKpi,qcKpiId:kpiId,qcKpiTotals:kpiTotals,qcKpiMerge:kpiMerge});
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,4 +1,4 @@
-/* One incremental transport for SMV/IE and Maintenance, with bulk objects in IDB. */
+/* One incremental transport for SMV/IE and Maintenance, with bulk objects in IDB. v4.13: multi-record cloud buckets for Spare Parts. */
 (function(g){'use strict';
   const C=g.VRTData39;
   const defs={VRT_SMV_Manager_v52:{smv_snapshots:{keyPath:'id',autoIncrement:true}},vrt_ie_smv_integrated_v2:{state:null},vrt_spareparts:{parts:{keyPath:'id'},txns:{keyPath:'id'},versions:{keyPath:'id'},meta:{keyPath:'k'},suppliers:{keyPath:'id'},invoices:{keyPath:'id'},ocrhist:{keyPath:'id'},images:{keyPath:'id'}}};
@@ -19,9 +19,24 @@
     else if(entity==='ie.importLog')row._smartBucket='ie_importlog_'+syncPart43(id,2);
     else if(entity==='ie.tombstones')row._smartBucket='ie_tombstones';
     else if(entity==='ie.sourceDocuments')row._smartBucket='ie_source_'+syncPart43(id,8);
+    else if(entity==='ie.balancing')row._smartBucket='ie_balancing'; // v4.13: line-balancing settings / aliases / master / assignments / links
+    // v4.13: the same for Spare Parts. Without these every change row, stock sheet, source Excel
+    // and history entry was its own cloud bucket (one HTTP request each), which is why a spare
+    // parts upload took minutes. Change rows and stock sheets follow the business date so a new
+    // daily import only touches the current month / week bucket.
+    else if(entity==='maintenance.needleChanges'||entity==='maintenance.partChanges'){const m=String(value.date||'').slice(0,7);row._smartBucket=(entity==='maintenance.needleChanges'?'maint_needle_':'maint_part_')+(/^20\d{2}-\d{2}$/.test(m)?m:'undated')}
+    else if(entity==='maintenance.stockReports'){const d=String(value.start||value.end||'').slice(0,10),w=isoWeek49(d);row._smartBucket='maint_stock_'+(w||'undated')}
+    else if(entity==='maintenance.sourceDocuments')row._smartBucket='maint_source_'+syncPart43(id,8);
+    else if(entity==='maintenance.editHistory')row._smartBucket='maint_history_'+syncPart43(id,8);
+    else if(entity==='maintenance.tombstones')row._smartBucket='maintenance_tombstones';
+    else if(entity==='maintenance.invoiceSummaries')row._smartBucket='maint_invoice_'+syncPart43(id,4);
+    else if(entity==='parts.parts')row._smartBucket='parts_master_'+syncPart43(id,4);
+    else if(entity==='parts.versions')row._smartBucket='parts_versions_'+syncPart43(id,4);
+    else if(/^parts\./.test(entity))row._smartBucket='parts_'+entity.slice(6)+'_'+syncPart43(id,2);
     return row
   }
-  function pack(tool,d){const rows=[];if(tool==='smv'){(d.snaps||[]).forEach(r=>rows.push(r));for(const k of ['updates','styles','operations','sourceDocuments','tombstones','importLog'])(d.ie?.[k]||[]).forEach(r=>rows.push(envelope('ie.'+k,r,r.id||C.hash(r))));}
+  function isoWeek49(d){if(!/^\d{4}-\d{2}-\d{2}$/.test(d||''))return '';const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+3-((x.getDay()+6)%7));const y=x.getFullYear(),w=1+Math.round((x-new Date(y,0,4)+(new Date(y,0,4).getDay()+6)%7*86400000)/604800000);return y+'-W'+String(w).padStart(2,'0')}
+  function pack(tool,d){const rows=[];if(tool==='smv'){(d.snaps||[]).forEach(r=>rows.push(r));for(const k of ['updates','styles','operations','sourceDocuments','tombstones','importLog','balancing'])(d.ie?.[k]||[]).forEach(r=>rows.push(envelope('ie.'+k,r,r.id||C.hash(r))));}
     else{(d.txns||[]).forEach(r=>rows.push(r));for(const k of ['parts','versions','suppliers','invoices','ocrhist'])(d[k]||[]).forEach(r=>rows.push(envelope('parts.'+k,r,r.id||C.hash(r))));for(const k of ['stockReports','needleChanges','partChanges','sourceDocuments','tombstones','editHistory','invoiceSummaries'])(d.maintenance?.[k]||[]).forEach(r=>rows.push(envelope('maintenance.'+k,r,r.id||C.hash(r))));}return rows}
   function unpack(tool,rows,meta){const d=tool==='smv'?{snaps:[],ie:C.initIE({})}:{txns:[],parts:[],versions:[],suppliers:[],invoices:[],ocrhist:[],maintenance:emptyMaintenance()};
     if(tool==='smv'&&meta?.ieSmvState)d.ie=C.mergeIE(d.ie,meta.ieSmvState);

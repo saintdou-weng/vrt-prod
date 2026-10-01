@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.4.0"></script>
-<script src="vrt-platform-v40.js?v=4.4.0"></script>
-<meta charset="UTF-8">
+<script src="vrt-deploy-config.js?v=4.14.0"></script>
+<script src="vrt-platform-v40.js?v=4.14.0"></script>
+<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>裁剪生產分析系統 v2</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -145,9 +145,9 @@ select,input[type=date],input[type=month],input[type=text]{background:#fff;borde
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=3.7.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.8.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.4.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -708,7 +708,8 @@ async function loadSew(opts){
   window._sewLastErr=null;
   try{
     const local=Array.isArray(SEW)?SEW:[];
-    const res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,onStatus:m=>{if(!opts.silent)_sewPullStatus('☁️ '+m)},apply:async recs=>{SEW=recs.map(r=>({...r,id:r.id||uid()}));_sewLoadedThisSession=true;try{await saveSew()}catch(ie){console.warn('[cutting] saveSew IDB failed:',ie)}}});
+    const A=window.VRTProdAutoSync;if(A&&A.lock&&!A.lock('sewing'))throw new Error('車縫模組正在另一分頁同步，稍後再讀');   // v4.14: never pull sewing while the sewing tab is syncing
+    let res;try{res=await VRTSmartSync.pull({url:gasUrl,tool:'sewing',localRecords:local,onStatus:m=>{if(!opts.silent)_sewPullStatus('☁️ '+m)},apply:async recs=>{SEW=recs.map(r=>({...r,id:r.id||uid()}));_sewLoadedThisSession=true;try{await saveSew()}catch(ie){console.warn('[cutting] saveSew IDB failed:',ie)}}})}finally{if(A&&A.unlock)A.unlock('sewing')}
     if(res.ok&&SEW.length)return 'cloud';
     throw new Error('雲端無車縫資料（0筆）');
   }catch(e){
@@ -2724,15 +2725,15 @@ async function editR(id){const old=CUT.find(r=>r.id===id)||{},date=prompt('日�
 
 // ── Excel export ────────────────────────────────────────────
 function xls(type){
-  const wb2=XLSX.utils.book_new();
+  const wbOut=XLSX.utils.book_new(); // v4.13: was `wb2`, which shadowed the global week-range helper wb2(d) and crashed the weekly export
   if(type==="styles"){
     const ws=XLSX.utils.aoa_to_sheet([
       ["SELFKEY","PO","款號(STYLE)","顏色(COLOR)","尺寸(SIZE)","每箱件數(PCS/BOX)"],
       ...STYLES.sort((a,b)=>a.styleNo.localeCompare(b.styleNo)).map(r=>[r.selfkey,r.po,r.styleNo,r.color,r.size,r.pcsPerBox])
     ]);
     ws["!cols"]=[{wch:12},{wch:10},{wch:18},{wch:14},{wch:8},{wch:12}];
-    XLSX.utils.book_append_sheet(wb2,ws,"款式資料庫");
-    XLSX.writeFile(wb2,`款式資料庫_${TODAY}.xlsx`);return;
+    XLSX.utils.book_append_sheet(wbOut,ws,"款式資料庫");
+    XLSX.writeFile(wbOut,`款式資料庫_${TODAY}.xlsx`);return;
   }
   if(type==="query"){
     const sec=document.getElementById("qSec").value;
@@ -2750,13 +2751,13 @@ function xls(type){
       });
       const ws=XLSX.utils.aoa_to_sheet([["品號(Item)","布規格","總裁量(件)","總用量(Yds)","款號數","Table數"],...Object.values(grp).sort((a,b)=>b.yds-a.yds).map(g=>[g.item,g.type,g.pcs,Math.round(g.yds*10)/10,g.styles.size,g.tables.size])]);
       ws["!cols"]=[{wch:12},{wch:40},{wch:10},{wch:12},{wch:8},{wch:8}];
-      XLSX.utils.book_append_sheet(wb2,ws,"布料品號彙整");
+      XLSX.utils.book_append_sheet(wbOut,ws,"布料品號彙整");
     } else if(qV==="mo"){
       const grp={};
       rows.forEach(r=>{const k=`${r.date.slice(0,7)}|${r.section}`,g=grp[k]||(grp[k]={month:r.date.slice(0,7),section:r.section,pcs:0,yds:0,styles:new Set(),pos:new Set(),days:new Set()});g.pcs+=r.pieces||0;g.yds+=r.totalYds||0;if(r.styleNo)g.styles.add(r.styleNo);if(r.po)g.pos.add(r.po);g.days.add(r.date)});
       const ws=XLSX.utils.aoa_to_sheet([["月份","Section","總裁量(件)","總用量(Yds)","款號數","PO數","工作天"],...Object.values(grp).sort((a,b)=>b.month.localeCompare(a.month)||a.section.localeCompare(b.section)).map(g=>[g.month,g.section,g.pcs,Math.round(g.yds*10)/10,g.styles.size,g.pos.size,g.days.size])]);
       ws["!cols"]=[{wch:10},{wch:10},{wch:12},{wch:14},{wch:10},{wch:8},{wch:8}];
-      XLSX.utils.book_append_sheet(wb2,ws,"月份彙整");
+      XLSX.utils.book_append_sheet(wbOut,ws,"月份彙整");
     } else {
       const grp={};
       rows.filter(r=>r.styleNo).forEach(r=>{
@@ -2766,9 +2767,9 @@ function xls(type){
       });
       const ws=XLSX.utils.aoa_to_sheet([["款號","PO","顏色","尺寸","品號(Item)","總裁量(件)","總用量(Yds)","Yds/Pcs","工作天"],...Object.values(grp).sort((a,b)=>b.pcs-a.pcs).map(g=>[g.style,g.po||"",g.color||"",[...g.sizes].sort().join("/"),g.item,g.pcs,Math.round(g.yds*10)/10,g.ydsPerPcs,g.days?.size||0])]);
       ws["!cols"]=[{wch:18},{wch:12},{wch:14},{wch:12},{wch:14},{wch:12},{wch:14},{wch:10},{wch:8}];
-      XLSX.utils.book_append_sheet(wb2,ws,"款號彙整");
+      XLSX.utils.book_append_sheet(wbOut,ws,"款號彙整");
     }
-    XLSX.writeFile(wb2,`裁剪${qV==="fab"?'布料':qV==="mo"?'月份':'款號'}彙整_${TODAY}.xlsx`);return;
+    XLSX.writeFile(wbOut,`裁剪${qV==="fab"?'布料':qV==="mo"?'月份':'款號'}彙整_${TODAY}.xlsx`);return;
   }
   if(type==="wip"){
     // ★ v3.7：依目前檢視（週/月/年）匯出對應期間
@@ -2790,8 +2791,8 @@ function xls(type){
     const ws=XLSX.utils.aoa_to_sheet(data);
     ws["!cols"]=[{wch:16},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10}];
     const tag=wipView==="yr"?"年度":wipView==="mo"?"月度":"週度";
-    XLSX.utils.book_append_sheet(wb2,ws,`裁縫${tag}比對`);
-    XLSX.writeFile(wb2,`裁縫${tag}比對_${wipView==="yr"?"各年":yr+(mo||"")}.xlsx`);return;
+    XLSX.utils.book_append_sheet(wbOut,ws,`裁縫${tag}比對`);
+    XLSX.writeFile(wbOut,`裁縫${tag}比對_${wipView==="yr"?"各年":yr+(mo||"")}.xlsx`);return;
   }
   let rows=[],h=[],fn="";
   if(type==="daily"){const d=document.getElementById("dDate").value||TODAY;rows=CUT.filter(r=>r.date===d);h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪日報_${d}.xlsx`;}
@@ -2832,7 +2833,7 @@ function xls(type){
   else{rows=[...CUT].sort((a,b)=>b.date.localeCompare(a.date));h=["日期","Section","線別","款號","品號(Item)","布規格","顏色","Yds/Pcs","總用量(Yds)","裁量","人數","效率%"];fn=`裁剪全記錄_${TODAY}.xlsx`;}
   const ws=XLSX.utils.aoa_to_sheet([h,...rows.map(r=>[r.date,r.section,r.lineNo,r.styleNo,r.fabricItem||'',r.fabricType||'',r.color||'',r.ydsPerPcs||'',r.totalYds||'',r.pieces,r.workers,r.efficiency])]);
   ws["!cols"]=[{wch:12},{wch:10},{wch:10},{wch:16},{wch:10},{wch:35},{wch:12},{wch:8},{wch:10},{wch:8},{wch:6},{wch:7}];
-  XLSX.utils.book_append_sheet(wb2,ws,"裁剪資料");XLSX.writeFile(wb2,fn);
+  XLSX.utils.book_append_sheet(wbOut,ws,"裁剪資料");XLSX.writeFile(wbOut,fn);
 }
 
 function backup(){const blob=new Blob([JSON.stringify({version:2,date:new Date().toISOString(),cutting:CUT})],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`cutting_backup_${TODAY}.json`;a.click();}
@@ -3183,6 +3184,12 @@ async function scanAllFolders(silent=false){
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'cutting',lockKey:'cutting',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto cutting]',e)}},0)},{once:true});
+</script>
+<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
+<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script>
+/* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
+try{VRTTelegram.init({kind:"cutting",tool:"cutting",getData:()=>CUT})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
 </body>
 </html>

@@ -12,12 +12,12 @@
   {
     "name": "Daily maintenance imports render and persist without stock double deduction",
     "status": "PASS",
-    "detail": "280 needle / 35 parts / 27 daily snapshots; five-file included button also retains 86 parts, 152 purchases and 2 older stock reports"
+    "detail": "453 needle / 67 parts / 38 daily snapshots (v4.13 fixtures = newest Sept reports); five-file included button also retains 86 parts, 152 purchases and 1 older stock report"
   },
   {
     "name": "Fabric 7090 records render, reload, partial merge and export/reimport",
-    "status": "PASS",
-    "detail": "7090 records, latest stock day visible, 5 views execute, native Excel headers recognized"
+    "status": "FAIL",
+    "detail": "AssertionError [ERR_ASSERTION]: 0 == 7090\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/run_attachment_checks.js:7:340\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/run_attachment_checks.js:2:281)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/run_attachment_checks.js:7:1"
   },
   {
     "name": "QC actual workbook, correct totals, every tab, repeat/partial imports, export, delete",
