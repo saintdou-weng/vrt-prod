@@ -1,6 +1,6 @@
 /* Executes the supplied, modified GS in memory. No Google or Telegram network access. */
 const fs=require('fs'),path=require('path'),vm=require('vm'),crypto=require('crypto');
-const gsPath=process.env.VRT_GS||[path.resolve(__dirname,'../../AppsScript/VRT_Production_v4.2.gs'),path.resolve(__dirname,'../../../AppsScript/VRT_Production_v4.2.gs')].find(p=>fs.existsSync(p))||path.resolve(__dirname,'../../AppsScript/VRT_Production_v4.2.gs');
+const gsPath=process.env.VRT_GS||[path.resolve(__dirname,'../../../gas/out/VRT_Production_v4.5.gs'),path.resolve(__dirname,'../../../gas/VRT_Production_v4.2.gs'),path.resolve(__dirname,'../../AppsScript/VRT_Production_v4.2.gs'),path.resolve(__dirname,'../../../AppsScript/VRT_Production_v4.2.gs')].find(p=>fs.existsSync(p))||path.resolve(__dirname,'../../AppsScript/VRT_Production_v4.2.gs'); // v4.15: .gs files are kept outside the repo
 const digest=s=>crypto.createHash('sha256').update(s).digest('hex').slice(0,24);
 function createGas(opts){opts=opts||{};const gsFile=opts.gsPath||gsPath;
   let tick=Date.now(),seq=0,locked=false,busy=false;const files=[],props=new Map(),sheets=new Map(),events=[],calls=[];

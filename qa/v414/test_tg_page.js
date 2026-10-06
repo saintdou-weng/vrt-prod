@@ -2,7 +2,7 @@
    sends through the GAS proxy (HTML, default group), falls back to plain text, and the shared builders are HTML-safe. */
 const fs=require('fs'),path=require('path'),assert=require('assert');
 const {seedAll,runtime,jfile,ev,wait,ROOT,DL,UP,url}=require('./seed_gas');const {createGas}=require(ROOT+'/qa/v41/gas_harness');
-const GS=path.resolve(__dirname,'../../AppsScript/VRT_Production_v4.4.gs');
+const GS=process.env.VRT_GS||[path.resolve(__dirname,'../../../gas/out/VRT_Production_v4.5.gs'),path.resolve(__dirname,'../../AppsScript/VRT_Production_v4.5.gs')].find(p=>require('fs').existsSync(p)); // v4.15: GS kept outside the repo
 const out=[];async function test(name,fn){try{out.push({name,status:'PASS',detail:await fn()});console.log('PASS',name,'·',out.at(-1).detail)}catch(e){out.push({name,status:'FAIL',detail:e.stack});console.log('FAIL',name,'·',e.message)}}
 function htmlOk(t){const s=t.replace(/<\/?b>/g,'');assert(!/[<>]/.test(s.replace(/&lt;|&gt;/g,'')),'stray tag: '+(s.match(/.{0,30}[<>].{0,30}/)||[])[0]);assert.equal((t.match(/<b>/g)||[]).length,(t.match(/<\/b>/g)||[]).length,'unbalanced <b>');assert(t.length<=4096)}
 const hasZhEn=t=>/[一-鿿]/.test(t)&&/[A-Za-z]{3,}/.test(t);

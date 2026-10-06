@@ -32,6 +32,7 @@
     custstats  :{icon:'📊',zh:'客戶統計',    en:'Customer statistics',   anchor:'today', tool:'custstats'},
     fabricstock:{icon:'🧶',zh:'布料庫存',    en:'Fabric stock',          anchor:'today', tool:'fabricstock'},
     ie         :{icon:'📐',zh:'IE／SMV',     en:'IE / SMV updates',      anchor:'latest',tool:'smv'},
+    erplink    :{icon:'🔗',zh:'ERP 對照',    en:'ERP link',              anchor:'latest',tool:'erplink'},   // v4.15: ERP export files ↔ PROD read-only comparison
   };
   const REASON_ZH={changeover:'換款（計畫）',damage:'損壞',broken:'斷針／破損',lost:'遺失',other:'其他',unknown:'未填'};
   const REASON_EN={changeover:'Change style (planned)',damage:'Damaged',broken:'Broken',lost:'Lost',other:'Other',unknown:'Not filled'};
@@ -241,10 +242,30 @@
     if(Object.keys(c.cust).length){L.push('');L.push('👤 客戶 Customers: '+(top(c.cust,4,(k,v)=>esc(k)+' '+N(v))||'—').replace(/\n/g,' · '))}
     return {text:L.join('\n'),stats:c};
   }
-  const BUILDERS={sewing,cutting,qc,spareparts,prodplan,monthship,orders,shipping,custstats,fabricstock,ie};
+  /* ── 🔗 ERP link (v4.15): ERP order lines (delivery in period) + ERP shipment lines (ship date in period) + the comparison states of
+     the rows whose ERP delivery / last ship date falls in the period. data = {orders:[erp order lines], ship:[erp shipment lines],
+     compare:{orders:{rows,summary}, ship:{rows,summary}}, asOf:{erp,prod}}. Demo rows (is_demo) are excluded. ── */
+  const erpDate=r=>r&&(r.business_date||r.delivery||r.ship_date||r.order_date)||'';
+  function erplink(data,P,prev){
+    data=data||{};const live=rs=>(rs||[]).filter(r=>!r.is_demo);const ord=filterPeriod(live(data.orders),P,erpDate),shp=filterPeriod(live(data.ship),P,erpDate),cmp=data.compare||{};
+    const co=cmp.orders&&cmp.orders.rows?cmp.orders.rows.filter(r=>r.erp&&r.erp.delivery&&inP(r.erp.delivery,P)):[],cs=cmp.ship&&cmp.ship.rows?cmp.ship.rows.filter(r=>r.erp&&r.erp.lastShip&&inP(r.erp.lastShip,P)):[];
+    if(!ord.length&&!shp.length&&!co.length&&!cs.length)return {text:noData(P),empty:true};
+    const ST={match:'相符 match',diff:'差異 diff',timing:'時間差 timing',missing:'缺 missing',ambiguous:'待對應 unmatched',incomparable:'不可比 n/a'};
+    const cnt=rows=>{const o={};rows.forEach(r=>o[r.state]=(o[r.state]||0)+1);return Object.keys(ST).filter(k=>o[k]).map(k=>ST[k]+' '+N(o[k])).join(' · ')||'—'};
+    const L=[];const asOf=data.asOf||{};
+    L.push('ERP 快照 snapshot: '+esc(asOf.erp||'—')+' · PROD 資料至 data to: '+esc(asOf.prod||'—'));
+    L.push('📦 ERP 訂單（交期在本期）orders due in period: <b>'+N(ord.length)+'</b> 行 lines · '+N(ord.reduce((s,r)=>s+(Number(r.qty)||0),0))+' pcs'+(co.length?'\n　對照 check: '+cnt(co):''));
+    L.push('🚢 ERP 出貨（本期）shipments: <b>'+N(shp.length)+'</b> 行 lines · '+N(shp.reduce((s,r)=>s+(Number(r.qty)||0),0))+' pcs'+(cs.length?'\n　對照 check: '+cnt(cs):''));
+    const bad=co.filter(r=>r.state==='diff').slice(0,5);if(bad.length){L.push('');L.push('⚠️ 訂單差異 Order differences (Top '+bad.length+'):');bad.forEach(r=>L.push('• '+esc(r.erp.my||r.erp.po||r.key)+' '+esc(r.erp.style||'')+' — '+esc((r.reasons||[])[0]||'')))}
+    const badS=cs.filter(r=>r.state!=='match').slice(0,5);if(badS.length){L.push('');L.push('⚠️ 出貨待查 Shipment items to check (Top '+badS.length+'):');badS.forEach(r=>L.push('• '+esc(r.erp.my||r.erp.po||r.key)+' — '+esc(ST[r.state]||r.state)+(r.reasons&&r.reasons[0]?'：'+esc(r.reasons[0]):'')))}
+    if(cmp.orders&&cmp.orders.summary&&cmp.orders.summary.unmatchedProd)L.push('PROD 有、ERP 檔沒有的自編單號 self keys only in PROD: '+N(cmp.orders.summary.unmatchedProd));
+    L.push('（唯讀對照，不改任何一邊 read-only, neither side is changed）');
+    return {text:L.join('\n'),stats:{orders:ord.length,ship:shp.length,compare:{orders:co.length,ship:cs.length}}};
+  }
+  const BUILDERS={sewing,cutting,qc,spareparts,prodplan,monthship,orders,shipping,custstats,fabricstock,ie,erplink};
   // date accessor used by periodOptions / latestDate per kind (rows or shape)
-  function rowsOf(kind,data){switch(kind){case 'qc':return (data&&data.records||[]).concat(data&&data.kpi||[]);case 'spareparts':return (data&&data.needle||[]).concat(data&&data.part||[],data&&data.txns||[]);case 'orders':return data&&data.lines||[];case 'custstats':return data&&data.details||[];case 'fabricstock':return (data&&data.old||[]).concat(data&&data.movements||[]);case 'ie':return data&&data.updates||[];default:return data||[]}}
-  function dateFnOf(kind){switch(kind){case 'monthship':return shipDate;case 'orders':return r=>anyDate(r.cancel_date||r.ship_date);case 'shipping':return r=>anyDate(r.etd);case 'custstats':return r=>anyDate(r.etd||r.poDate);case 'fabricstock':return r=>r.useDate||r.date;case 'ie':return ieDate;default:return null}}
+  function rowsOf(kind,data){switch(kind){case 'qc':return (data&&data.records||[]).concat(data&&data.kpi||[]);case 'spareparts':return (data&&data.needle||[]).concat(data&&data.part||[],data&&data.txns||[]);case 'orders':return data&&data.lines||[];case 'custstats':return data&&data.details||[];case 'fabricstock':return (data&&data.old||[]).concat(data&&data.movements||[]);case 'ie':return data&&data.updates||[];case 'erplink':return (data&&data.orders||[]).concat(data&&data.ship||[]).filter(r=>!r.is_demo);default:return data||[]}}
+  function dateFnOf(kind){switch(kind){case 'monthship':return shipDate;case 'orders':return r=>anyDate(r.cancel_date||r.ship_date);case 'shipping':return r=>anyDate(r.etd);case 'custstats':return r=>anyDate(r.etd||r.poDate);case 'fabricstock':return r=>r.useDate||r.date;case 'ie':return ieDate;case 'erplink':return erpDate;default:return null}}
   function header(kind,P,meta){const K=KINDS[kind]||{icon:'',zh:kind,en:''};meta=meta||{};
     return K.icon+' <b>'+esc(K.zh)+' '+esc(K.en)+'</b> · '+esc(PERIOD_LABEL[P.period].zh+' '+PERIOD_LABEL[P.period].en)+' <b>'+esc(P.label)+'</b>'+(meta.line?'\n'+meta.line:'')}
   /* build(kind, data, period, anchor, opts) → {text (full HTML message), head, body, P, prev, empty} */
@@ -258,5 +279,5 @@
   }
   const clip=(text,max)=>{text=String(text||'');max=max||4000;if(text.length<=max)return text;let cut=text.lastIndexOf('\n',max-100);if(cut<1000)cut=max-100;return text.slice(0,cut)+'\n… ✂️ 訊息過長已截短 / message truncated（Telegram 4096 限制）'};
   const plain=html=>String(html||'').replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-  g.VRTTgSummary={version:'1.0',PERIODS,PERIOD_LABEL,KINDS,REASON_ZH,REASON_EN,esc,N,pct,delta,top,periodOf,monthsIn,isoWeekKey,addDays,localToday,filterPeriod,latestDate,periodOptions,rowsOf,dateFnOf,build,header,clip,plain,anyDate,builders:BUILDERS,agg:{sewAgg,cutAgg,qcAgg,kpiAgg,chgAgg,qcPick,cutDaily}};
+  g.VRTTgSummary={version:'1.1',PERIODS,PERIOD_LABEL,KINDS,REASON_ZH,REASON_EN,esc,N,pct,delta,top,periodOf,monthsIn,isoWeekKey,addDays,localToday,filterPeriod,latestDate,periodOptions,rowsOf,dateFnOf,build,header,clip,plain,anyDate,builders:BUILDERS,agg:{sewAgg,cutAgg,qcAgg,kpiAgg,chgAgg,qcPick,cutDaily}};
 })(typeof globalThis!=='undefined'?globalThis:this);

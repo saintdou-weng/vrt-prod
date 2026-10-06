@@ -1,0 +1,341 @@
+<!DOCTYPE html><html lang="zh-TW"><head>
+<script src="vrt-deploy-config.js?v=4.15.0"></script>
+<script src="vrt-platform-v40.js?v=4.15.0"></script><meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.15.0"></script><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT ERP 對照中心 v1.0</title><script src="vendor/xlsx.full.min.js"></script><style>
+*{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
+.header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);display:grid;place-items:center;font-size:23px;box-shadow:0 4px 16px #0003}
+.htitle{font-size:18px;font-weight:700;color:#fff}.hsub{font-size:11px;color:#8b95b8;margin-top:2px}.grow{flex:1}
+.hstats{display:flex;gap:18px}.hstat{text-align:right}.hstat b{display:block;color:#c4b5fd;font:700 18px ui-monospace,monospace}.hstat span{font-size:10px;color:#8b95b8}
+.hbtn{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:8px;padding:8px 10px;cursor:pointer;font-weight:700;text-decoration:none;font-size:12px}.hbtn.erp{background:#1d3557;border-color:#2a5298;color:#bfdbfe}
+.tabs{display:flex;overflow:auto;background:#fff;border-bottom:2px solid #e2e6f0;padding:0 14px;position:sticky;top:0;z-index:20}
+.tab{padding:12px 14px;white-space:nowrap;cursor:pointer;color:#6b7a9e;border-bottom:2px solid transparent;margin-bottom:-2px}.tab.on{color:#6d28d9;border-bottom-color:#8b5cf6;background:#f5f3ff;font-weight:700}
+.wrap{max-width:1500px;margin:auto;padding:16px 14px 90px}.pane{display:none}.pane.on{display:block}
+.card{background:#fff;border:1px solid #e2e6f0;border-radius:11px;padding:15px;margin-bottom:13px;box-shadow:0 1px 4px rgba(30,38,64,.05)}
+.ct{font-size:11px;font-weight:700;color:#6b7a9e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.ct:before{content:"";width:3px;height:12px;background:#8b5cf6;border-radius:2px}.ct .sp{flex:1}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:13px}
+.kpi{background:#fff;border:1px solid #e2e6f0;border-radius:9px;padding:11px 12px;border-left:3px solid #cbd2e6;cursor:default}.kpi.b{border-left-color:#3b82f6}.kpi.g{border-left-color:#10b981}.kpi.a{border-left-color:#f59e0b}.kpi.p{border-left-color:#8b5cf6}.kpi.r{border-left-color:#ef4444}.kpi.n{border-left-color:#94a3b8}.kpi.sel{outline:2px solid #8b5cf6}.kpi.click{cursor:pointer}
+.kn{font:700 22px ui-monospace,monospace}.ku{font-size:10px;color:#6b7a9e;margin-left:3px}.kl{font-size:10px;color:#6b7a9e;margin-top:5px}
+.btnrow,.frow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.btn{border:0;border-radius:7px;padding:8px 13px;font-weight:700;cursor:pointer;font-size:12px}.bp{background:#8b5cf6;color:#fff}.bg{background:#fff;border:1px solid #d0d5e8;color:#4a5578}.bb{background:#2563eb;color:#fff}.br{background:#fff1f2;color:#b91c1c;border:1px solid #fecaca}.btn:disabled{opacity:.5;cursor:not-allowed}
+select,input,textarea{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;background:#fff;font:inherit;color:#1e2640}.search{min-width:220px;flex:1}
+.tbl{overflow:auto;border:1px solid #e2e6f0;border-radius:9px;max-height:70vh}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f7f8fc;color:#6b7a9e;font-size:10px;text-transform:uppercase;padding:8px 9px;text-align:left;border-bottom:2px solid #e2e6f0;white-space:nowrap;position:sticky;top:0}td{padding:7px 9px;border-bottom:1px solid #eef0f6;vertical-align:top}.num{text-align:right;font-family:ui-monospace,monospace}.mono{font-family:ui-monospace,monospace}.link{color:#1d4ed8;font-weight:700;cursor:pointer;text-decoration:underline dotted}.subtxt{font-size:10px;color:#6b7a9e;margin-top:2px}tr.click{cursor:pointer}tr.click:hover td{background:#f5f3ff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}.drop{border:2px dashed #c5c9d8;border-radius:12px;padding:34px 18px;text-align:center;background:#fafbfc;cursor:pointer}.drop:hover{border-color:#8b5cf6;background:#f5f3ff}
+.al{padding:10px 12px;border-radius:8px;background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;margin-bottom:10px;line-height:1.5}.alw{background:#fffbeb;border-color:#fcd34d;color:#92400e}.ale{background:#fff1f2;border-color:#fca5a5;color:#991b1b}.alg{background:#ecfdf5;border-color:#6ee7b7;color:#065f46}
+.empty{text-align:center;padding:40px 20px;color:#8b95b8}.seg{display:flex;border:1px solid #d0d5e8;border-radius:8px;overflow:hidden}.seg button{border:0;background:#fff;color:#4a5578;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px}.seg button.on{background:#8b5cf6;color:#fff}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#e0e7ff;color:#3730a3;white-space:nowrap}.badge.ok{background:#d1fae5;color:#065f46}.badge.warn{background:#fef3c7;color:#92400e}.badge.bad{background:#fee2e2;color:#991b1b}.badge.na{background:#e5e7eb;color:#374151}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:9999;padding:20px;overflow:auto}.modal.on{display:flex;align-items:flex-start;justify-content:center}.modalbox{width:min(100%,960px);background:#fff;border-radius:14px;padding:18px;margin-top:4vh;box-shadow:0 20px 60px #0006}
+.mtitle{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:17px;font-weight:700;margin-bottom:14px}.x{font-size:24px;color:#6b7a9e;cursor:pointer}
+.cloud{position:fixed;right:18px;bottom:18px;width:48px;height:48px;border-radius:50%;border:0;background:#1e2640;color:#c4b5fd;font-size:20px;cursor:pointer;box-shadow:0 4px 18px #0005;z-index:100}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1e2640;color:#fff;border-radius:8px;padding:10px 18px;display:none;z-index:12000;max-width:90vw}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:12px}.kv dt{color:#6b7a9e}.kv dd{margin:0}
+.demo-banner{display:none;background:#fef3c7;color:#92400e;border-bottom:1px solid #fcd34d;padding:8px 18px;font-weight:700}.demo-banner.on{display:block}
+pre.rep{white-space:pre-wrap;font:12.5px/1.6 "Microsoft JhengHei","Noto Sans TC",monospace;background:#f8fafc;border:1px solid #e2e6f0;border-radius:9px;padding:12px;margin:0}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}.map label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:#4a5578}.map label.req b{color:#b91c1c}.map select{width:100%}
+.steps{display:flex;gap:6px;flex-wrap:wrap;font-size:11px;margin-bottom:10px}.steps span{background:#f1f5f9;border-radius:6px;padding:3px 8px;color:#64748b}.steps span.on{background:#8b5cf6;color:#fff}
+small.hint{color:#6b7a9e}
+@media(max-width:760px){.hstats{display:none}.wrap{padding:12px 8px 90px}.grid2{grid-template-columns:1fr}.card{padding:12px}.tabs{padding:0 6px}.tab{padding:11px 10px}.kpis{grid-template-columns:repeat(2,1fr)}.tbl{overflow-x:auto}.search{min-width:100%}th,td{padding:7px 6px}.modal{padding:8px}.modalbox{margin-top:2vh}}
+</style></head><body>
+<div class="header">
+  <div class="logo">🔗</div>
+  <div><div class="htitle">ERP 對照中心 <span style="font-size:12px;font-weight:400;color:#c4b5fd">ERP LINK · v1.0</span></div><div class="hsub">ERP 匯出檔 ↔ PROD 唯讀對照 · 訂單／出貨 · 日報草稿 · 不寫回 ERP、不改 PROD 資料</div></div>
+  <div class="grow"></div>
+  <div class="hstats"><div class="hstat"><b id="hsOrders">0</b><span>ERP 訂單行</span></div><div class="hstat"><b id="hsShip">0</b><span>ERP 出貨行</span></div><div class="hstat"><b id="hsAsOf">—</b><span>ERP 快照</span></div></div>
+  <a class="hbtn" href="portal_v2.html?v=4.15.0">🏭 入口</a>
+  <a class="hbtn erp" href="https://saintdou-weng.github.io/vrt-asset/" target="_blank" rel="noopener">🏢 VRT ERP ↗</a>
+  <button class="hbtn" onclick="cloudPull()">☁↓ 拉取</button><button class="hbtn" onclick="cloudPush()">☁↑ 推送</button>
+</div>
+<div class="demo-banner" id="demoBanner">🧪 目前顯示的是「隔離測試資料」：只在記憶體，不存本機、不上雲、不進日報正式版。按「清除測試資料」即可離開。</div>
+<div class="tabs" id="tabs">
+  <div class="tab on" data-t="status">📊 狀態</div><div class="tab" data-t="import">📥 匯入 ERP 檔</div><div class="tab" data-t="orders">📦 訂單對照</div><div class="tab" data-t="ship">🚢 出貨對照</div><div class="tab" data-t="daily">📝 日報草稿</div><div class="tab" data-t="log">🗂 紀錄與備份</div>
+</div>
+<div class="wrap">
+
+<!-- ═══ 狀態 ═══ -->
+<div class="pane on" id="pane-status">
+  <div class="al">階段 1（規格書「最小可用連結」）：這裡只做<b>唯讀對照</b>。ERP 資料來自你手動匯入的 ERP 匯出檔（欄位對照需你確認，不猜欄名）；PROD 資料直接讀各模組自己的瀏覽器資料，不複製、不改寫。還沒有真實 ERP 匯出檔之前，所有對照結果狀態都是「待驗收」。</div>
+  <div class="kpis" id="srcKpis"></div>
+  <div class="grid2">
+    <div class="card"><div class="ct">資料責任表 DATASET AUTHORITY（規格書第三節，階段 1 範圍）</div>
+      <div class="tbl"><table><thead><tr><th>主題</th><th>作準方</th><th>ERP 來源候選</th><th>PROD 對應</th><th>本頁核對方式</th></tr></thead><tbody>
+        <tr><td>訂單與 PO</td><td>Legacy ERP（正式訂單量、交期）</td><td class="mono">W_COD700 / W_COD690（畫面代號，非表名）</td><td>orders_v3（客戶 PO 行）、排產、車縫 selfKey</td><td>自編單號對自編單號；其次 PO＋款＋色唯一；量不同列「有差異」，不改任何一邊</td></tr>
+        <tr><td>排程與產量</td><td>PROD（Production Plan 唯一排程來源；車縫日報為現場產量）</td><td class="mono">ERP 訂單進度（裁剪／入庫累計）</td><td>production_plan_capacity、sewing_v5</td><td>車縫累計對 ERP 訂單量只算「進度」；計劃 vs 實績不比數量（不可直接比較）</td></tr>
+        <tr><td>出貨</td><td>Legacy ERP（實際出貨）／PROD（預計 ETD 與排程）</td><td class="mono">W_CBL300 / W_CBL510 / W_CBL520</td><td>shipping_v2（ERP SELFKEY# 欄）</td><td>ERP 已出 vs 排程已出；ETD、已出、未出三欄分開，不混成一個數字</td></tr>
+        <tr><td>QC／裁剪（日報用）</td><td>PROD</td><td>—（手冊未確認對應）</td><td>vrt_final_qc、cutting_v3</td><td>只進日報草稿，不與 ERP 比對</td></tr>
+      </tbody></table></div>
+      <p class="subtxt">「作準」只針對同一欄位、同一業務意義。有差異時顯示兩邊原值、日期、來源與原因；不以「比較新」或「筆數較多」自動改掉另一邊。<code>W_…</code> 是 clothes.exe 畫面代號，不是 SQL 表名，本頁不做任何 SQL。</p>
+    </div>
+    <div class="card"><div class="ct">本頁做什麼／不做什麼</div>
+      <dl class="kv">
+        <dt>讀取</dt><dd>ERP 匯出檔（CSV／TXT／XLSX／JSON 契約）、PROD 車縫／裁剪／QC／排產／訂單／出貨排程（IndexedDB 唯讀，不建庫、不升版）</dd>
+        <dt>寫入</dt><dd>只寫本頁自己的資料庫 <code>VRT_ERPLink</code>（ERP 快照行、匯入批次、欄位範本、對照鍵）與雲端工具 <code>erplink</code></dd>
+        <dt>絕不</dt><dd>寫回 clothes.exe／SQL、改 PROD 任何模組資料、用 API 連得上當成資料已同步、拿示範資料充當正式資料</dd>
+        <dt>去重</dt><dd>同檔重匯／改名重匯不增量（檔案雜湊＋業務鍵＋內容雜湊）；少量檔不抹掉完整資料；更正保留舊版本</dd>
+        <dt>雲端</dt><dd>沿用 Smart Sync（manifest／分桶／revision／防少覆多）；自動同步可在下方關閉</dd>
+        <dt>關閉方式</dt><dd>本頁是獨立新增模組：不開本頁或從入口移除卡片即關閉；其他模組不依賴本頁。還原：匯出備份 JSON 後可清除本頁資料庫</dd>
+      </dl>
+      <div class="btnrow" style="margin-top:10px"><label><input type="checkbox" id="autoSyncSw" onchange="setAutoSync(this.checked)"> 自動同步（開頁／匯入後自動 Pull → Push）</label><button class="btn bg" onclick="loadDemo()">🧪 載入隔離測試資料</button><button class="btn bg" onclick="clearDemo()">清除測試資料</button><button class="btn bg" onclick="refreshProd()">↻ 重新讀取 PROD</button></div>
+    </div>
+  </div>
+  <div class="card"><div class="ct">最小缺件（要做到真實資料驗收，還需要）</div>
+    <ol style="margin:0;padding-left:18px;line-height:1.7">
+      <li>ERP 訂單匯出檔（含 <b>訂單編號、序、自編單號、客戶、款、色、PO、交期、數量</b>），一份近 1–3 個月即可；另一個對話窗擷取完成後直接丟進「匯入 ERP 檔」。</li>
+      <li>同期間的 ERP 出貨明細（出貨單號、序、自編單號／訂單編號、數量、出貨日）。</li>
+      <li>PROD 這台瀏覽器已拉取同期間的車縫／排產／出貨排程（入口頁「智慧拉取全部」）。</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══ 匯入 ═══ -->
+<div class="pane" id="pane-import">
+  <div class="card"><div class="ct">匯入 ERP 匯出檔 <span class="sp"></span><small class="hint">CSV／TXT（Tab、逗號、分號）、XLSX、或 JSON 契約 {dataset, as_of, rows:[…]}</small></div>
+    <div class="steps" id="impSteps"><span class="on">1 選檔</span><span>2 確認欄位對照</span><span>3 預覽差異</span><span>4 確認匯入</span></div>
+    <div class="drop" id="drop">📂 拖入或點此選擇 ERP 匯出檔<br><small class="hint">原檔只讀；匯入後本頁保存欄位對照範本，下次同格式自動帶出（仍需按確認）</small></div>
+    <input type="file" id="fileIn" accept=".csv,.txt,.tsv,.xlsx,.xls,.json" hidden>
+    <div class="frow" style="margin-top:10px"><label>編碼 <select id="encSel"><option value="auto">自動（BOM → UTF-8 → Big5）</option><option value="utf-8">UTF-8</option><option value="big5">Big5（繁中 Windows）</option><option value="utf-16le">UTF-16</option></select></label><label>確認人 <input id="confirmBy" placeholder="例：Paul" style="width:120px"></label></div>
+  </div>
+  <div class="card" id="mapCard" style="display:none"><div class="ct">2 · 欄位對照（請逐欄確認，<b style="color:#b91c1c">紅色＝必填</b>）<span class="sp"></span><span id="mapTpl" class="badge"></span></div>
+    <div class="frow" style="margin-bottom:10px">
+      <label>資料集 <select id="dsSel" onchange="onDataset()"><option value="order_line">ERP 訂單明細</option><option value="shipment_line">ERP 出貨明細</option></select></label>
+      <label>工作表 <select id="sheetSel" onchange="onSheet()"></select></label>
+      <label>日期格式（a/b/yyyy 時） <select id="dateOrder"><option value="YMD">年/月/日（預設）</option><option value="MDY">月/日/年</option><option value="DMY">日/月/年</option></select></label>
+      <label>ERP 快照截止 as_of <input type="date" id="asOf"></label>
+    </div>
+    <div class="map" id="mapGrid"></div>
+    <div class="btnrow" style="margin-top:10px"><button class="btn bp" onclick="previewImport()">3 · 預覽差異</button><button class="btn bg" onclick="resetImport()">取消</button></div>
+  </div>
+  <div class="card" id="prevCard" style="display:none"><div class="ct">3 · 預覽差異（尚未寫入）</div>
+    <div id="prevSummary"></div>
+    <div class="tbl" style="max-height:360px"><table id="prevTbl"></table></div>
+    <div class="btnrow" style="margin-top:10px"><button class="btn bp" id="commitBtn" onclick="commitImport()">4 · 確認匯入</button><button class="btn bg" onclick="resetImport()">取消</button></div>
+  </div>
+  <div class="card"><div class="ct">JSON 契約（給擷取 ERP 資料的另一個對話窗／Bridge 用）</div>
+    <pre class="rep" style="font-size:11.5px">{ "dataset": "order_line" | "shipment_line",
+  "source_system": "LEGACY_ERP",
+  "as_of": "2026-10-03 15:30",          // ERP 快照截止時間（不是檔案產生時間）
+  "source": "W_COD700 export 2026-10-03.txt",
+  "rows": [ { "od_no": "…", "od_seq": "1", "my_no": "…", "cust": "…", "style": "…", "clr": "…", "size": "…", "po_no": "…",
+             "order_date": "2026-08-01", "delivery": "2026-09-30", "qty": 960, "closed": "N" }, … ] }
+// shipment_line rows: bl_no, bl_seq, od_no, my_no, cust, po_no, style, clr, size, qty, ship_date, invoice, container
+// 字串鍵原樣保留（前導零、連字號）；日期 yyyy-mm-dd；來源沒有的欄位用 null，不要補造。</pre>
+  </div>
+</div>
+
+<!-- ═══ 訂單對照 ═══ -->
+<div class="pane" id="pane-orders">
+  <div class="card"><div class="ct">ERP 訂單 ↔ PROD（客戶 PO 行／排產／車縫累計／出貨排程）<span class="sp"></span><span id="ordAsOf" class="subtxt"></span></div>
+    <div class="frow" style="margin-bottom:10px">
+      <div class="seg" id="ordPeriod"><button data-p="90" class="on">交期 ±90 天</button><button data-p="month">本月</button><button data-p="year">本年</button><button data-p="all">全部</button></div>
+      <label><input type="checkbox" id="ordOpenOnly"> 只看未結案</label>
+      <input class="search" id="ordQ" placeholder="搜尋 自編單號／訂單編號／PO／款／客戶…">
+      <button class="btn bg" onclick="exportCompare('orders')">⬇ 匯出 CSV</button><button class="btn bg" onclick="runCompare(true)">↻ 重算</button>
+    </div>
+    <div class="kpis" id="ordKpis"></div>
+    <div class="tbl"><table id="ordTbl"></table></div>
+    <div id="ordUnmatched" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ═══ 出貨對照 ═══ -->
+<div class="pane" id="pane-ship">
+  <div class="card"><div class="ct">ERP 實際出貨 ↔ PROD 出貨排程（ETD／已出／未出分開看）<span class="sp"></span><span id="shipAsOf" class="subtxt"></span></div>
+    <div class="frow" style="margin-bottom:10px">
+      <div class="seg" id="shipPeriod"><button data-p="90" class="on">出貨日 ±90 天</button><button data-p="month">本月</button><button data-p="year">本年</button><button data-p="all">全部</button></div>
+      <input class="search" id="shipQ" placeholder="搜尋 自編單號／出貨單號／PO／客戶…">
+      <button class="btn bg" onclick="exportCompare('ship')">⬇ 匯出 CSV</button><button class="btn bg" onclick="runCompare(true)">↻ 重算</button>
+    </div>
+    <div class="kpis" id="shipKpis"></div>
+    <div class="tbl"><table id="shipTbl"></table></div>
+    <div id="shipUnmatched" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ═══ 日報草稿 ═══ -->
+<div class="pane" id="pane-daily">
+  <div class="card"><div class="ct">固定期間日報草稿（規格書 10.3／11.3 模板）<span class="sp"></span><small class="hint">沒有的段落保留「未齊／不適用」，不補假數字；本頁不排程、不自動發送</small></div>
+    <div class="frow" style="margin-bottom:10px"><label>業務日 <input type="date" id="dailyDate" onchange="renderDaily()"></label><button class="btn bg" onclick="dailyPrev()">◀ 前一工作日</button><button class="btn bg" onclick="dailyNext()">下一工作日 ▶</button><button class="btn bg" onclick="dailyLatest()" title="跳到最近一天有車縫日報的業務日">📍 最近已齊日</button><span class="grow"></span><button class="btn bg" onclick="copyDaily()">📋 複製</button><button class="btn bg" onclick="saveDailyVersion()">💾 存成版本</button><button class="btn bg" onclick="exportDaily()">⬇ 匯出 JSON</button><button class="btn bp" onclick="sendDaily()">✈️ 傳送 Telegram</button></div>
+    <pre class="rep" id="dailyText">—</pre>
+    <div class="subtxt" id="dailyMeta" style="margin-top:8px"></div>
+  </div>
+  <div class="card"><div class="ct">已存版本</div><div class="tbl"><table id="repTbl"></table></div></div>
+</div>
+
+<!-- ═══ 紀錄 ═══ -->
+<div class="pane" id="pane-log">
+  <div class="card"><div class="ct">匯入批次</div><div class="tbl"><table id="impTbl"></table></div></div>
+  <div class="grid2">
+    <div class="card"><div class="ct">欄位對照範本（依表頭簽章）</div><div class="tbl"><table id="mapTbl"></table></div></div>
+    <div class="card"><div class="ct">人工對照鍵（ERP 自編單號 ⇄ PROD 鍵）</div><div class="tbl"><table id="cwTbl"></table></div><div class="frow" style="margin-top:8px"><input id="cwErp" placeholder="ERP 自編單號" style="width:140px"><input id="cwProd" placeholder="PROD selfKey 或 PO|款|色" style="width:180px"><select id="cwDs"><option value="order_line">訂單</option><option value="shipment_line">出貨</option></select><button class="btn bg" onclick="addCrosswalk()">＋ 加入</button></div></div>
+  </div>
+  <div class="card"><div class="ct">曾被更正的 ERP 行（保留舊版本）</div><div class="tbl" style="max-height:300px"><table id="verTbl"></table></div></div>
+  <div class="card"><div class="ct">備份與還原</div><div class="btnrow"><button class="btn bg" onclick="backupAll()">⬇ 匯出本頁全部資料 JSON</button><label class="btn bg" style="display:inline-block">⬆ 還原 JSON <input type="file" id="restoreIn" accept=".json" hidden></label><button class="btn br" onclick="clearAll()">🗑 清除本頁資料庫</button></div><p class="subtxt">清除前會先要求匯出備份。清除只影響 <code>VRT_ERPLink</code>；PROD 其他模組與雲端 erplink 資料不受影響（雲端要同步清除需再推送一次並確認「少覆多」）。</p></div>
+</div>
+
+</div>
+<div class="modal" id="modal"><div class="modalbox"><div class="mtitle"><span id="modalTitle"></span><span class="x" onclick="closeModal()">×</span></div><div id="modalBody"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="vrt-prod-storage-vnext.js?v=4.15.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.15.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.15.0"></script>
+<script src="vrt-erp-link-core-v1.js?v=4.15.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.15.0"></script>
+<script src="vrt-telegram-v1.js?v=4.15.0"></script>
+<script>
+'use strict';
+/* ═══ VRT ERP 對照中心 v1.0 (2026-10-05) — UI over vrt-erp-link-core-v1.js. Own store: IndexedDB VRT_ERPLink. PROD stores are opened read-only (no create / upgrade). ═══ */
+const $=id=>document.getElementById(id),C=()=>window.VRTErpLink,esc=s=>C().esc(s),N=n=>C().N(n),pct=(v,d)=>C().pct(v,d);
+const DBN='VRT_ERPLink',TOOL='erplink',STORES={erp_orders:{keyPath:'id'},erp_ship:{keyPath:'id'},imports:{keyPath:'id'},mappings:{keyPath:'id'},crosswalk:{keyPath:'id'},kv:{}};
+let DB={orders:[],ship:[],imports:[],mappings:[],crosswalk:[],reports:[]},DEMO=null,PROD={ready:false},CMP={orders:null,ship:null},IMP=null,SETTINGS={};
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const nowIso=()=>new Date().toISOString().slice(0,19);
+function toast(m,ms){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',ms||2600)}
+function openModal(t,b){$('modalTitle').textContent=t;$('modalBody').innerHTML=b;$('modal').classList.add('on')}function closeModal(){$('modal').classList.remove('on')}
+const S=()=>window.VRTProdStorage;
+async function load(){for(const k of ['erp_orders','erp_ship','imports','mappings','crosswalk'])await S().ensure(DBN,{[k]:STORES[k]});await S().ensure(DBN,{kv:{}});
+  DB.orders=await S().all(DBN,'erp_orders');DB.ship=await S().all(DBN,'erp_ship');DB.imports=(await S().all(DBN,'imports')).sort((a,b)=>b.at.localeCompare(a.at));DB.mappings=await S().all(DBN,'mappings');DB.crosswalk=await S().all(DBN,'crosswalk');
+  SETTINGS=(await S().get(DBN,'kv','settings'))||{};DB.reports=(await S().get(DBN,'kv','reports'))||[];
+  try{$('confirmBy').value=SETTINGS.confirmBy||''}catch(_){}}
+async function saveSettings(){await S().put(DBN,'kv',SETTINGS,'settings')}
+/* ── read-only PROD readers (same rule as the portal overview: never create or upgrade a module database) ── */
+function openRO(name){return new Promise(res=>{let q;try{q=indexedDB.open(name)}catch(e){return res(null)}let created=false;q.onupgradeneeded=e=>{created=true;try{e.target.transaction.abort()}catch(_){}};q.onsuccess=()=>{if(created){try{q.result.close()}catch(_){}return res(null)}res(q.result)};q.onerror=()=>res(null);q.onblocked=()=>res(null)})}
+async function readAll(name,store,key){const db=await openRO(name);if(!db)return key===undefined?[]:null;try{if(!db.objectStoreNames.contains(store))return key===undefined?[]:null;return await new Promise((res,rej)=>{const t=db.transaction(store,'readonly'),o=t.objectStore(store),r=key===undefined?o.getAll():o.get(key);r.onsuccess=()=>res(r.result==null?(key===undefined?[]:null):r.result);r.onerror=()=>rej(r.error)})}catch(_){return key===undefined?[]:null}finally{try{db.close()}catch(_){}}}
+const maxDate=(rows,fn)=>{let b='';for(const r of rows||[]){const d=String((fn?fn(r):r&&r.date)||'').slice(0,10);if(/^\d{4}-\d{2}-\d{2}$/.test(d)&&d>b)b=d}return b};
+async function readProd(){const sewing=await readAll('VRT_SewingProduction','daily_records'),cutting=await readAll('CuttingProd','cutting_records'),qc=(await readAll('VRT_FinalQC','records')).filter(r=>!r.deleted),plan=await readAll('VRT_ProductionPlan','plan_records'),orders=await readAll('FactoryDB','po_lines'),shipping=await readAll('VRT_Shipping','shipping_records'),shipMeta=await readAll('VRT_Shipping','shipping_meta','state');
+  const T=today();const latest=maxDate(sewing);PROD={ready:true,sewing,cutting,qc,plan,orders,shipping,readAt:nowIso(),asOf:latest&&latest<=T?latest:T,latest:{sewing:latest,cutting:maxDate(cutting.filter(r=>r.src!=='ref'&&r.src!=='summary')),qc:maxDate(qc),plan:plan.length?[...new Set(plan.map(r=>r.month).filter(Boolean))].sort().pop():'',orders:orders.length,shipping:String(shipMeta&&shipMeta.savedAt||'').slice(0,10)}}}
+/* ── live rows (persisted + optional in-memory demo) ── */
+const liveOrders=()=>DEMO?DB.orders.concat(DEMO.orders):DB.orders,liveShip=()=>DEMO?DB.ship.concat(DEMO.ship):DB.ship;
+const erpAsOf=()=>{let b='';liveOrders().concat(liveShip()).forEach(r=>{if(r.as_of&&r.as_of>b)b=r.as_of});return b};
+/* ── tabs ── */
+$('tabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;showTab(t.dataset.t)});
+function showTab(k){document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.t===k));document.querySelectorAll('.pane').forEach(x=>x.classList.toggle('on',x.id==='pane-'+k));try{localStorage.setItem('vrt_erplink_tab',k)}catch(_){}if(k==='orders'||k==='ship')runCompare();if(k==='daily')renderDaily();if(k==='log')renderLog()}
+/* ── status ── */
+function renderStatus(){const o=liveOrders(),s=liveShip();$('hsOrders').textContent=N(o.length);$('hsShip').textContent=N(s.length);$('hsAsOf').textContent=erpAsOf()||'—';
+  const lastImp=DB.imports[0];const age=d=>{if(!d)return '無資料';const a=Math.round((new Date(today())-new Date(d))/864e5);return a<=0?'今天':a+' 天前'};
+  const cards=[['p','ERP 訂單行',N(o.length),(o.length?'快照 '+(erpAsOf()||'—')+' · 最後匯入 '+(lastImp?lastImp.at.slice(0,16).replace('T',' '):'—'):'尚未匯入')],['p','ERP 出貨行',N(s.length),s.length?'檔 '+(DB.imports.find(i=>i.dataset==='shipment_line')||{}).file||'':'尚未匯入'],
+    ['b','PROD 車縫日報',N((PROD.sewing||[]).length),'最新 '+(PROD.latest&&PROD.latest.sewing||'—')+' · '+age(PROD.latest&&PROD.latest.sewing)],['b','PROD 排產',N((PROD.plan||[]).length),'至 '+(PROD.latest&&PROD.latest.plan||'—')],['b','PROD 客戶 PO 行',N((PROD.orders||[]).length),'orders_v3'],['b','PROD 出貨排程',N((PROD.shipping||[]).length),'儲存 '+(PROD.latest&&PROD.latest.shipping||'—')],['b','PROD 裁剪／QC',N((PROD.cutting||[]).length)+' / '+N((PROD.qc||[]).length),'最新 '+(PROD.latest&&PROD.latest.cutting||'—')+' / '+(PROD.latest&&PROD.latest.qc||'—')],
+    [DEMO?'a':'n','測試資料',DEMO?'隔離中':'無',DEMO?'記憶體，不存不傳':'正式查詢不含 is_demo']];
+  $('srcKpis').innerHTML=cards.map(([c,l,v,sub])=>'<div class="kpi '+c+'"><div class="kl">'+esc(l)+'</div><div class="kn">'+esc(v)+'</div><div class="kl">'+esc(sub)+'</div></div>').join('');
+  $('demoBanner').classList.toggle('on',!!DEMO);$('autoSyncSw').checked=autoSyncOn()}
+function autoSyncOn(){try{return localStorage.getItem('vrt_erplink_autosync')!=='0'}catch(_){return true}}
+function setAutoSync(on){try{localStorage.setItem('vrt_erplink_autosync',on?'1':'0')}catch(_){}toast(on?'自動同步：開':'自動同步：關（手動 ☁ 按鈕仍可用）')}
+async function refreshProd(){await readProd();renderStatus();CMP={orders:null,ship:null};toast('已重新讀取 PROD 模組資料')}
+/* ── demo isolation (規格書 2.2.1 / T01): synthetic rows live in memory only ── */
+function loadDemo(){const f=C().sampleFiles(),mk=(ds,file)=>{const p=C().parseText(file.text);return C().normalizeRows(ds,p.rows,C().suggestMapping(p.headers,ds),{is_demo:true,as_of:'2026-10-03',source_file:file.name,import_batch_id:'DEMO',ingested_at:nowIso()}).records.map(r=>Object.assign(r,{versions:[]}))};
+  DEMO={orders:mk('order_line',f.orders),ship:mk('shipment_line',f.ship)};CMP={orders:null,ship:null};renderStatus();toast('已載入隔離測試資料（4 筆訂單行、2 筆出貨行）');showTab('orders')}
+function clearDemo(){DEMO=null;CMP={orders:null,ship:null};renderStatus();toast('已清除測試資料')}
+/* ── import ── */
+$('drop').onclick=()=>$('fileIn').click();$('drop').ondragover=e=>{e.preventDefault()};$('drop').ondrop=e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)importFile(f)};$('fileIn').onchange=e=>{const f=e.target.files[0];if(f)importFile(f);e.target.value=''};
+function step(n){[...$('impSteps').children].forEach((s,i)=>s.classList.toggle('on',i===n-1))}
+async function importFile(file){try{const buf=await file.arrayBuffer();const hash=await C().fileHash(buf);const name=file.name||'file';let sheets=[];let json=null;
+  if(/\.json$/i.test(name)){json=JSON.parse(new TextDecoder().decode(buf));const rows=Array.isArray(json)?json:(json.rows||[]);if(!rows.length)throw new Error('JSON 沒有 rows');const headers=[...new Set(rows.flatMap(r=>Object.keys(r||{})))];sheets=[{name:'rows',headers,rows:rows.map(r=>headers.map(h=>r[h]==null?'':r[h])),encoding:'json'}]}
+  else if(/\.xlsx?$/i.test(name)){if(!window.XLSX)throw new Error('Excel 元件未載入');const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:false,raw:true});sheets=wb.SheetNames.map(sn=>{const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});const hi=a.findIndex(r=>r&&r.filter(v=>String(v).trim()!=='').length>=2);const headers=hi>=0?a[hi].map(v=>String(v==null?'':v).trim()):[];return {name:sn,headers,rows:hi>=0?a.slice(hi+1):[],encoding:'xlsx',headerRow:hi+1}}).filter(s=>s.headers.length)}
+  else{const dec=C().decodeBytes(buf,$('encSel').value);const p=C().parseText(dec.text);sheets=[{name:name,headers:p.headers,rows:p.rows,encoding:dec.encoding,delimiter:p.delimiter}]}
+  if(!sheets.length)throw new Error('檔案沒有可用的表頭');
+  IMP={file:name,size:file.size,hash,lastModified:file.lastModified?new Date(file.lastModified).toISOString().slice(0,10):'',sheets,sheetIdx:0,json};
+  const dup=DB.imports.find(i=>i.file_hash===hash);
+  if(json&&json.dataset)$('dsSel').value=json.dataset;else{const d=C().detectDataset(sheets[0].headers);if(d.dataset)$('dsSel').value=d.dataset}
+  $('asOf').value=(json&&String(json.as_of||'').slice(0,10))||IMP.lastModified||today();
+  $('sheetSel').innerHTML=sheets.map((s,i)=>'<option value="'+i+'">'+esc(s.name)+' ('+N(s.rows.length)+' 列)</option>').join('');
+  $('mapCard').style.display='';$('prevCard').style.display='none';step(2);renderMapping();
+  if(dup)toast('⚠ 同一個檔案（雜湊相同）已在 '+dup.at.slice(0,16).replace('T',' ')+' 匯入過：再匯一次不會增加筆數',5000);else toast('已讀取 '+name+'（'+sheets[0].encoding+'）· 請確認欄位對照')}catch(e){toast('❌ 讀檔失敗：'+e.message,5000);console.error(e)}}
+function onSheet(){IMP.sheetIdx=Number($('sheetSel').value)||0;renderMapping()}function onDataset(){renderMapping()}
+function renderMapping(){const ds=$('dsSel').value,sh=IMP.sheets[IMP.sheetIdx],sig=C().headerSignature(sh.headers);const tpl=DB.mappings.find(m=>m.id===sig+'|'+ds);
+  let map;if(tpl){map=Object.assign({},tpl.map);$('mapTpl').textContent='已確認範本 v'+tpl.version+' · '+(tpl.confirmedBy||'')+' '+String(tpl.confirmedAt||'').slice(0,10);$('mapTpl').className='badge ok';if(tpl.dateOrder)$('dateOrder').value=tpl.dateOrder}
+  else{map=C().suggestMapping(sh.headers,ds);$('mapTpl').textContent='新表頭：以下為建議，請確認';$('mapTpl').className='badge warn'}
+  IMP.map=map;IMP.sig=sig;
+  $('mapGrid').innerHTML=C().FIELDS[ds].map(f=>'<label class="'+(f.req?'req':'')+'"><span>'+(f.req?'<b>*</b> ':'')+esc(f.zh)+' <small class="hint">'+esc(f.en)+'</small></span><select data-f="'+f.k+'"><option value="">— 不對應 —</option>'+sh.headers.map((h,i)=>'<option value="'+i+'" '+(map[f.k]===i?'selected':'')+'>'+esc(h||('(欄 '+(i+1)+')'))+'</option>').join('')+'</select></label>').join('');
+  $('mapGrid').querySelectorAll('select').forEach(s=>s.onchange=()=>{IMP.map[s.dataset.f]=s.value===''?null:Number(s.value)})}
+function resetImport(){IMP=null;$('mapCard').style.display='none';$('prevCard').style.display='none';step(1)}
+function ctxFor(ds,batch){const sh=IMP.sheets[IMP.sheetIdx];return {as_of:$('asOf').value||'',import_batch_id:batch,source_file:IMP.file,source_sheet:sh.name,file_hash:IMP.hash,ingested_at:nowIso(),dateOrder:$('dateOrder').value,mapping_id:IMP.sig,mapping_version:C().MAPPING_VERSION}}
+function previewImport(){const ds=$('dsSel').value,sh=IMP.sheets[IMP.sheetIdx];const miss=C().missingRequired(ds,IMP.map);if(miss.length){toast('必填欄位尚未對照：'+miss.join(', '),4000);return}
+  const batch='imp_'+Date.now().toString(36);const n=C().normalizeRows(ds,sh.rows,IMP.map,ctxFor(ds,batch));const existing=ds==='order_line'?DB.orders:DB.ship;const m=C().mergeImport(existing,n.records,{at:nowIso(),import_batch_id:batch});
+  IMP.preview={ds,batch,n,m};const st=m.stats;const dup=DB.imports.find(i=>i.file_hash===IMP.hash);const dateIssues=n.records.filter(r=>r.quality.some(q=>q.startsWith('date_'))).length;
+  $('prevSummary').innerHTML='<div class="kpis"><div class="kpi g"><div class="kl">新增</div><div class="kn">'+N(st.added)+'</div></div><div class="kpi a"><div class="kl">更新（保留舊版）</div><div class="kn">'+N(st.updated)+'</div></div><div class="kpi n"><div class="kl">相同</div><div class="kn">'+N(st.same)+'</div></div><div class="kpi n"><div class="kl">檔內重複略過</div><div class="kn">'+N(st.skippedDup)+'</div></div><div class="kpi r"><div class="kl">錯誤列（不匯入）</div><div class="kn">'+N(n.errors.length+st.conflict)+'</div></div></div>'
+    +(dup?'<div class="al alw">同檔已匯入過（'+esc(dup.at.slice(0,16).replace('T',' '))+'）。再匯一次只會核對，不會增加筆數。</div>':'')+(dateIssues?'<div class="al alw">'+N(dateIssues)+' 列日期無法確定（例：a/b/yyyy 兩邊都 ≤12）。這些列會匯入但標記 review；請在上方選日期格式後重新預覽。</div>':'')
+    +(n.errors.length?'<div class="al ale">錯誤列範例：'+n.errors.slice(0,5).map(e=>'第 '+e.row+' 列 '+esc(e.reason)).join('；')+'</div>':'')+'<div class="subtxt">檔案 '+esc(IMP.file)+' · 工作表 '+esc(sh.name)+' · 編碼 '+esc(sh.encoding)+' · 雜湊 '+esc(IMP.hash.slice(0,16))+' · as_of '+esc($('asOf').value)+' · 解析器 '+esc(C().PARSER_VERSION)+'</div>';
+  const defs=C().FIELDS[ds].filter(f=>IMP.map[f.k]!=null);const chg=new Map(m.changes.filter(c=>c.type==='update').map(c=>[c.id,c.diff]));
+  $('prevTbl').innerHTML='<thead><tr><th>#</th><th>狀態</th>'+defs.map(f=>'<th>'+esc(f.zh)+'</th>').join('')+'</tr></thead><tbody>'+n.records.slice(0,60).map(r=>{const d=chg.get(r.id);const ex=existing.find(x=>x.id===r.id);const stt=d?'<span class="badge warn">更新</span>':ex?'<span class="badge na">相同</span>':'<span class="badge ok">新增</span>';return '<tr><td class="num">'+r.source_row+'</td><td>'+stt+(r.quality.length?' <span class="badge warn" title="'+esc(r.quality.join(','))+'">review</span>':'')+'</td>'+defs.map(f=>'<td class="'+(f.num?'num':'')+'">'+(d&&d[f.k]?'<s>'+esc(d[f.k].from)+'</s> → ':'')+esc(f.num?N(r[f.k]):(f.date?(r[f.k]||r[f.k+'_raw']||''):r[f.k]))+'</td>').join('')+'</tr>'}).join('')+'</tbody>'+(n.records.length>60?'<tfoot><tr><td colspan="'+(defs.length+2)+'" class="subtxt">只顯示前 60 列，共 '+N(n.records.length)+' 列</td></tr></tfoot>':'');
+  $('prevCard').style.display='';step(3);$('commitBtn').disabled=!n.records.length}
+async function commitImport(){const P=IMP&&IMP.preview;if(!P)return;const ds=P.ds;const by=($('confirmBy').value||'').trim();SETTINGS.confirmBy=by;await saveSettings();
+  const store=ds==='order_line'?'erp_orders':'erp_ship';await S().replaceAll(DBN,store,P.m.records);if(ds==='order_line')DB.orders=P.m.records;else DB.ship=P.m.records;
+  const sh=IMP.sheets[IMP.sheetIdx];const batch={id:P.batch,at:nowIso(),file:IMP.file,size:IMP.size,file_hash:IMP.hash,sheet:sh.name,encoding:sh.encoding,dataset:ds,as_of:$('asOf').value||'',rows:sh.rows.length,added:P.m.stats.added,updated:P.m.stats.updated,same:P.m.stats.same,skippedDup:P.m.stats.skippedDup,conflict:P.m.stats.conflict,errors:P.n.errors.length,errorRows:P.n.errors.slice(0,50),changes:P.m.changes.slice(0,200),mapping_id:IMP.sig,dateOrder:$('dateOrder').value,parser_version:C().PARSER_VERSION,confirmedBy:by,status:'committed'};
+  await S().put(DBN,'imports',batch);DB.imports.unshift(batch);
+  const mid=IMP.sig+'|'+ds;const old=DB.mappings.find(m=>m.id===mid);const tpl={id:mid,dataset:ds,headers:sh.headers,map:IMP.map,dateOrder:$('dateOrder').value,confirmedBy:by,confirmedAt:nowIso(),version:old?(old.version||1)+1:1,uses:(old&&old.uses||0)+1};await S().put(DBN,'mappings',tpl);DB.mappings=DB.mappings.filter(m=>m.id!==mid).concat([tpl]);
+  CMP={orders:null,ship:null};resetImport();renderStatus();step(4);toast('✅ 已匯入：新增 '+N(batch.added)+' · 更新 '+N(batch.updated)+' · 相同 '+N(batch.same));
+  try{if(window.VRTProdAutoSync&&autoSyncOn())VRTProdAutoSync.markDirty(TOOL,'import',{},900)}catch(_){}showTab(ds==='order_line'?'orders':'ship')}
+/* ── compare ── */
+function periodRange(kind){const p=(document.querySelector('#'+(kind==='orders'?'ordPeriod':'shipPeriod')+' button.on')||{}).dataset||{};const T=today();if(p.p==='all')return null;if(p.p==='month')return {from:T.slice(0,7)+'-01',to:T.slice(0,7)+'-31'};if(p.p==='year')return {from:T.slice(0,4)+'-01-01',to:T.slice(0,4)+'-12-31'};return {from:C().addDays(T,-90),to:C().addDays(T,90)}}
+function runCompare(force){if(!PROD.ready)return;const asOf={erp:erpAsOf(),prod:PROD.asOf};
+  if(force||!CMP.orders)CMP.orders=C().compareOrders({erp:liveOrders(),prod:{sewing:PROD.sewing,plan:PROD.plan,orders:PROD.orders,shipping:PROD.shipping},crosswalk:DB.crosswalk,asOf});
+  if(force||!CMP.ship)CMP.ship=C().compareShipping({erpShip:liveShip(),prodShip:PROD.shipping,crosswalk:DB.crosswalk,asOf});renderOrders();renderShip()}
+const stBadge=s=>{const st=C().STATES[s]||{zh:s,en:'',cls:'na'};return '<span class="badge '+st.cls+'">'+esc(st.zh)+' '+esc(st.en)+'</span>'};
+function kpiRow(id,summary,sel,onSel){const S2=C().STATES;$(id).innerHTML=C().ORDER.map(s=>'<div class="kpi click '+({ok:'g',bad:'r',warn:'a',na:'n'}[S2[s].cls])+(sel===s?' sel':'')+'" data-s="'+s+'"><div class="kl">'+esc(S2[s].zh)+' '+esc(S2[s].en)+'</div><div class="kn">'+N(summary[s]||0)+'</div></div>').join('')+'<div class="kpi p"><div class="kl">ERP 群組 groups</div><div class="kn">'+N(summary.total||0)+'</div></div>';$(id).querySelectorAll('.kpi.click').forEach(k=>k.onclick=()=>onSel(k.dataset.s))}
+const FILT={orders:'',ship:''};
+function inRange(d,R){return !R||(d&&d>=R.from&&d<=R.to)}
+function renderOrders(){const R=CMP.orders;if(!R){$('ordTbl').innerHTML='';return}const rng=periodRange('orders'),q=($('ordQ').value||'').trim().toUpperCase(),open=$('ordOpenOnly').checked;
+  let rows=R.rows.filter(r=>inRange(r.erp.delivery,rng)||(!r.erp.delivery&&!rng)).filter(r=>!open||!r.erp.closed).filter(r=>!q||[r.key,r.erp.od,r.erp.my,r.erp.po,r.erp.style,r.erp.cust].some(v=>String(v||'').toUpperCase().includes(q)));
+  const sum={total:rows.length};C().ORDER.forEach(s=>sum[s]=rows.filter(r=>r.state===s).length);kpiRow('ordKpis',sum,FILT.orders,s=>{FILT.orders=FILT.orders===s?'':s;renderOrders()});if(FILT.orders)rows=rows.filter(r=>r.state===FILT.orders);
+  $('ordAsOf').textContent='ERP 快照 '+(R.asOf.erp||'—')+' · PROD 資料至 '+(R.asOf.prod||'—')+(DEMO?' · 🧪 含測試資料':'')+' · 真實資料驗收：'+(liveOrders().some(r=>!r.is_demo)?'待驗收（已匯入真實檔，請逐筆核對）':'NOT TESTED（尚無真實 ERP 檔）');
+  const pr=v=>v==null?'—':N(v);
+  $('ordTbl').innerHTML='<thead><tr><th>狀態</th><th>ERP 自編單號 / 訂單</th><th>客戶 · PO · 款 · 色</th><th>交期</th><th class="num">ERP 訂單量</th><th class="num">PROD PO 行量</th><th class="num">排產訂單量</th><th class="num">排產車縫量</th><th class="num">車縫累計</th><th class="num">進度</th><th class="num">排程 PO／已出／未出</th><th>對應方式</th><th>原因</th></tr></thead><tbody>'+(rows.length?rows.slice(0,500).map((r,i)=>{const p=r.prod||{};return '<tr class="click" data-i="'+R.rows.indexOf(r)+'"><td>'+stBadge(r.state)+'</td><td class="mono"><b>'+esc(r.erp.my||r.key)+'</b><div class="subtxt">'+esc(r.erp.od)+(r.erp.closed?' · 結案':'')+'</div></td><td>'+esc(r.erp.cust)+'<div class="subtxt mono">'+esc(r.erp.po)+' · '+esc(r.erp.style)+' · '+esc(r.erp.clr)+'</div></td><td class="mono">'+esc(r.erp.delivery||'—')+'</td><td class="num"><b>'+N(r.erp.qty)+'</b><div class="subtxt">'+N(r.erp.lines)+' 行</div></td><td class="num">'+pr(p.poQty)+'</td><td class="num">'+(Array.isArray(p.planOrder)?p.planOrder.map(N).join(' / '):pr(p.planOrder))+'</td><td class="num">'+pr(p.planSewing)+'</td><td class="num">'+pr(p.sewn)+(p.sewnLatest?'<div class="subtxt">至 '+esc(p.sewnLatest)+'</div>':'')+'</td><td class="num">'+(p.progress!=null?pct(p.progress,0):'—')+'</td><td class="num">'+(p.shipOrig!=null?N(p.shipOrig)+' / '+N(p.shipped)+' / '+N(p.shipOpen):'—')+'</td><td class="subtxt">'+esc(r.via)+'</td><td class="subtxt" style="max-width:260px">'+(r.reasons||[]).map(esc).join('<br>')+'</td></tr>'}).join(''):'<tr><td colspan="13" class="empty">'+(liveOrders().length?'此篩選沒有資料':'尚未匯入 ERP 訂單檔（或載入隔離測試資料試看流程）')+'</td></tr>')+'</tbody>';
+  $('ordTbl').querySelectorAll('tr.click').forEach(tr=>tr.onclick=()=>openRow('orders',Number(tr.dataset.i)));
+  $('ordUnmatched').innerHTML=R.unmatchedProd.length?'<div class="al alw"><b>PROD 有自編單號、ERP 檔沒有：'+N(R.unmatchedProd.length)+'</b>（可能是 ERP 檔期間不含、或鍵值不同）<div class="subtxt">'+R.unmatchedProd.slice(0,30).map(u=>esc(u.key)+'（車縫 '+N(u.sewn)+'·排程已出 '+N(u.shipped)+'）').join('，')+(R.unmatchedProd.length>30?' …':'')+'</div></div>':''}
+function renderShip(){const R=CMP.ship;if(!R){$('shipTbl').innerHTML='';return}const rng=periodRange('ship'),q=($('shipQ').value||'').trim().toUpperCase();
+  let rows=R.rows.filter(r=>inRange(r.erp.lastShip,rng)||(!r.erp.lastShip&&!rng)).filter(r=>!q||[r.key,r.erp.my,r.erp.od,r.erp.po,r.erp.cust,r.erp.blList].some(v=>String(v||'').toUpperCase().includes(q)));
+  const sum={total:rows.length};C().ORDER.forEach(s=>sum[s]=rows.filter(r=>r.state===s).length);kpiRow('shipKpis',sum,FILT.ship,s=>{FILT.ship=FILT.ship===s?'':s;renderShip()});if(FILT.ship)rows=rows.filter(r=>r.state===FILT.ship);
+  $('shipAsOf').textContent='ERP 快照 '+(R.asOf.erp||'—')+' · 排程儲存 '+(PROD.latest&&PROD.latest.shipping||'—')+(DEMO?' · 🧪 含測試資料':'')+' · 真實資料驗收：'+(liveShip().some(r=>!r.is_demo)?'待驗收':'NOT TESTED（尚無真實 ERP 檔）');
+  $('shipTbl').innerHTML='<thead><tr><th>狀態</th><th>ERP 自編單號 / 訂單</th><th>客戶 · PO · 款 · 色</th><th>出貨單</th><th>最後出貨日</th><th class="num">ERP 已出</th><th class="num">排程 PO 量</th><th class="num">排程已出</th><th class="num">排程未出</th><th>排程 ETD</th><th>對應</th><th>原因</th></tr></thead><tbody>'+(rows.length?rows.slice(0,500).map(r=>{const p=r.prod||{};return '<tr class="click" data-i="'+R.rows.indexOf(r)+'"><td>'+stBadge(r.state)+'</td><td class="mono"><b>'+esc(r.erp.my||r.key)+'</b><div class="subtxt">'+esc(r.erp.od)+'</div></td><td>'+esc(r.erp.cust)+'<div class="subtxt mono">'+esc(r.erp.po)+' · '+esc(r.erp.style)+' · '+esc(r.erp.clr)+'</div></td><td class="mono subtxt">'+esc(r.erp.blList)+'</td><td class="mono">'+esc(r.erp.lastShip||'—')+'</td><td class="num"><b>'+N(r.erp.shipped)+'</b></td><td class="num">'+(p.orig!=null?N(p.orig):'—')+'</td><td class="num">'+(p.shipped!=null?N(p.shipped):'—')+'</td><td class="num">'+(p.open!=null?N(p.open):'—')+'</td><td class="mono">'+esc(p.etd||'—')+'</td><td class="subtxt">'+esc(r.via)+'</td><td class="subtxt" style="max-width:260px">'+(r.reasons||[]).map(esc).join('<br>')+'</td></tr>'}).join(''):'<tr><td colspan="12" class="empty">'+(liveShip().length?'此篩選沒有資料':'尚未匯入 ERP 出貨檔')+'</td></tr>')+'</tbody>';
+  $('shipTbl').querySelectorAll('tr.click').forEach(tr=>tr.onclick=()=>openRow('ship',Number(tr.dataset.i)));
+  $('shipUnmatched').innerHTML=R.unmatchedProd.length?'<div class="al alw"><b>排程已出貨、ERP 檔沒有：'+N(R.unmatchedProd.length)+'</b><div class="subtxt">'+R.unmatchedProd.slice(0,30).map(u=>esc(u.key)+'（已出 '+N(u.shipped)+' · ETD '+esc(u.etd||'—')+'）').join('，')+'</div></div>':''}
+function openRow(kind,i){const R=CMP[kind];const r=R.rows[i];if(!r)return;const kv=o=>Object.entries(o||{}).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>'<dt>'+esc(k)+'</dt><dd>'+esc(Array.isArray(v)?v.join(' / '):String(v))+'</dd>').join('');
+  const lines=(kind==='orders'?liveOrders():liveShip()).filter(x=>(x.my_no&&C().nk(x.my_no)===r.key)||(!x.my_no&&r.key.includes('|')));
+  openModal((kind==='orders'?'訂單':'出貨')+' · '+(r.erp.my||r.key),'<div>'+stBadge(r.state)+' <span class="subtxt">對應方式 '+esc(r.via)+'</span></div><div class="grid2" style="margin-top:10px"><div><div class="ct">ERP（原值）</div><dl class="kv">'+kv(r.erp)+'</dl></div><div><div class="ct">PROD</div><dl class="kv">'+(r.prod?kv(r.prod):'<dd>—</dd>')+'</dl></div></div>'
+    +(r.reasons&&r.reasons.length?'<div class="al alw" style="margin-top:10px">'+r.reasons.map(esc).join('<br>')+'</div>':'')+(r.candidates&&r.candidates.length?'<div class="al" style="margin-top:10px">候選 PROD 鍵（PO|款|色）：'+r.candidates.map(esc).join('、')+'<br><small>要指定對應：在「紀錄與備份」加入人工對照鍵（ERP 自編單號 → 其中一個鍵）</small></div>':'')
+    +'<div class="ct" style="margin-top:10px">ERP 明細行（'+N(lines.length)+'）</div><div class="tbl" style="max-height:240px"><table><thead><tr><th>序</th><th>鍵</th><th class="num">數量</th><th>日期</th><th>檔</th><th>版本</th></tr></thead><tbody>'+lines.slice(0,80).map(x=>'<tr><td class="mono">'+esc(x.od_seq||x.bl_seq||'')+'</td><td class="mono">'+esc(x.source_business_key)+'</td><td class="num">'+N(x.qty)+'</td><td class="mono">'+esc(x.business_date||'')+'</td><td class="subtxt">'+esc(x.source_file)+' #'+esc(x.source_row)+'</td><td class="subtxt">'+((x.versions||[]).length?N(x.versions.length)+' 次更正':'')+(x.is_demo?' 🧪':'')+'</td></tr>').join('')+'</tbody></table></div>')}
+function exportCompare(kind){const R=CMP[kind];if(!R||!R.rows.length){toast('沒有可匯出的對照結果');return}const rows=kind==='orders'?[['state','key','erp_my_no','erp_od_no','erp_cust','erp_po','erp_style','erp_clr','erp_delivery','erp_qty','prod_po_qty','plan_order_qty','plan_sewing_qty','sewn','ship_orig','shipped','open','via','reasons']].concat(R.rows.map(r=>{const p=r.prod||{};return [r.state,r.key,r.erp.my,r.erp.od,r.erp.cust,r.erp.po,r.erp.style,r.erp.clr,r.erp.delivery,r.erp.qty,p.poQty,Array.isArray(p.planOrder)?p.planOrder.join('/'):p.planOrder,p.planSewing,p.sewn,p.shipOrig,p.shipped,p.shipOpen,r.via,(r.reasons||[]).join(' | ')]}))
+    :[['state','key','erp_my_no','erp_od_no','erp_cust','erp_po','erp_style','erp_clr','bl','last_ship','erp_shipped','sched_orig','sched_shipped','sched_open','sched_etd','via','reasons']].concat(R.rows.map(r=>{const p=r.prod||{};return [r.state,r.key,r.erp.my,r.erp.od,r.erp.cust,r.erp.po,r.erp.style,r.erp.clr,r.erp.blList,r.erp.lastShip,r.erp.shipped,p.orig,p.shipped,p.open,p.etd,r.via,(r.reasons||[]).join(' | ')]}));
+  dl('erp_link_'+kind+'_'+today()+'.csv','﻿'+rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')}
+function dl(name,text,type){try{const b=new Blob([text],{type:type||'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove()}catch(e){toast('下載被瀏覽器阻擋')}}
+['ordQ','shipQ'].forEach(id=>$(id).oninput=()=>{clearTimeout(window._qt);window._qt=setTimeout(()=>id==='ordQ'?renderOrders():renderShip(),200)});$('ordOpenOnly').onchange=renderOrders;
+['ordPeriod','shipPeriod'].forEach(id=>$(id).onclick=e=>{const b=e.target.closest('button');if(!b)return;[...$(id).children].forEach(x=>x.classList.toggle('on',x===b));id==='ordPeriod'?renderOrders():renderShip()});
+/* ── daily report draft ── */
+let DAILY=null;
+function dailyInput(){const D=$('dailyDate').value||C().prevWorkday(today());return {date:D,today:today(),prod:{sewing:PROD.sewing,cutting:PROD.cutting,qc:PROD.qc,plan:PROD.plan,orders:PROD.orders},erp:{orders:liveOrders().filter(r=>!r.is_demo).length,ship:liveShip().filter(r=>!r.is_demo).length,asOf:erpAsOf()},compare:{orders:CMP.orders,ship:CMP.ship},link:location.origin+location.pathname,generatedAt:nowIso()}}
+function renderDaily(){if(!PROD.ready)return;if(!$('dailyDate').value)$('dailyDate').value=C().prevWorkday(today());if(!CMP.orders&&(liveOrders().length||liveShip().length))runCompare();DAILY=C().dailyReport(dailyInput());$('dailyText').textContent=DAILY.plain;
+  $('dailyMeta').textContent='report_id '+DAILY.report.report_id+' · 產生 '+DAILY.report.generated_at.replace('T',' ')+' · 來源：車縫列 '+N(DAILY.report.sources.sewingRows)+' · 裁剪列 '+N(DAILY.report.sources.cuttingRows)+' · QC '+N(DAILY.report.sources.qcReports)+' · ERP 訂單 '+N(DAILY.report.sources.erpOrders)+' · 缺口 '+N(DAILY.report.gaps.length)+(DEMO?' · 🧪 測試資料不計入':'');renderReports()}
+function dailyLatest(){const d=PROD.latest&&PROD.latest.sewing;if(!d){toast('沒有車縫日報資料');return}$('dailyDate').value=d;renderDaily()}
+function dailyPrev(){$('dailyDate').value=C().prevWorkday($('dailyDate').value||today());renderDaily()}function dailyNext(){$('dailyDate').value=C().nextWorkday($('dailyDate').value||today());renderDaily()}
+async function copyDaily(){try{await navigator.clipboard.writeText(DAILY.plain);toast('已複製')}catch(_){toast('無法複製')}}
+function exportDaily(){if(!DAILY)return;dl(DAILY.report.report_id+'.json',JSON.stringify({report:DAILY.report,text:DAILY.text,plain:DAILY.plain},null,1))}
+async function saveDailyVersion(){if(!DAILY)return;DB.reports=DB.reports.filter(r=>r.report_id!==DAILY.report.report_id);DB.reports.unshift({report_id:DAILY.report.report_id,business_date:DAILY.report.business_date,generated_at:DAILY.report.generated_at,version:DB.reports.filter(r=>r.business_date===DAILY.report.business_date).length+1,plain:DAILY.plain,report:DAILY.report});DB.reports=DB.reports.slice(0,120);await S().put(DBN,'kv',DB.reports,'reports');renderReports();toast('已存成版本')}
+function renderReports(){$('repTbl').innerHTML='<thead><tr><th>業務日</th><th>版本</th><th>產生時間</th><th>report_id</th><th>車縫</th><th>缺口</th><th></th></tr></thead><tbody>'+(DB.reports.length?DB.reports.map((r,i)=>'<tr><td class="mono">'+esc(r.business_date)+'</td><td class="num">v'+r.version+'</td><td class="mono">'+esc(String(r.generated_at).replace('T',' '))+'</td><td class="mono subtxt">'+esc(r.report_id)+'</td><td class="num">'+(r.report.metrics.sewn==null?'未齊':N(r.report.metrics.sewn))+'</td><td class="num">'+N(r.report.gaps.length)+'</td><td><span class="link" data-i="'+i+'">看</span></td></tr>').join(''):'<tr><td colspan="7" class="empty">尚無已存版本</td></tr>')+'</tbody>';$('repTbl').querySelectorAll('.link').forEach(l=>l.onclick=()=>{const r=DB.reports[Number(l.dataset.i)];openModal(r.business_date+' v'+r.version,'<pre class="rep">'+esc(r.plain)+'</pre>')})}
+async function sendDaily(){if(!DAILY)return;if(DEMO&&!confirm('目前載入了測試資料；日報只使用正式資料，仍要傳送嗎？'))return;if(!confirm('傳送這份日報草稿到 Telegram 群組？（手動一次，不會建立排程）'))return;try{let chat='';try{chat=localStorage.getItem('vrt_tg_chat')||''}catch(_){}const r=await VRTTelegram.send(DAILY.text,chat);toast('✅ 已傳送'+(r.plain?'（純文字）':''))}catch(e){toast('❌ 傳送失敗：'+e.message,5000)}}
+/* ── log / backup ── */
+function renderLog(){$('impTbl').innerHTML='<thead><tr><th>時間</th><th>檔案</th><th>資料集</th><th>as_of</th><th class="num">列</th><th class="num">新增</th><th class="num">更新</th><th class="num">相同</th><th class="num">略過</th><th class="num">錯誤</th><th>確認人</th><th>編碼</th><th>雜湊</th></tr></thead><tbody>'+(DB.imports.length?DB.imports.map(b=>'<tr><td class="mono">'+esc(b.at.slice(0,16).replace('T',' '))+'</td><td>'+esc(b.file)+'<div class="subtxt">'+esc(b.sheet)+'</div></td><td>'+esc(C().DATASET_LABEL[b.dataset]?C().DATASET_LABEL[b.dataset].zh:b.dataset)+'</td><td class="mono">'+esc(b.as_of)+'</td><td class="num">'+N(b.rows)+'</td><td class="num">'+N(b.added)+'</td><td class="num">'+N(b.updated)+'</td><td class="num">'+N(b.same)+'</td><td class="num">'+N(b.skippedDup)+'</td><td class="num">'+N(b.errors+(b.conflict||0))+'</td><td>'+esc(b.confirmedBy)+'</td><td class="subtxt">'+esc(b.encoding)+'</td><td class="mono subtxt">'+esc(String(b.file_hash).slice(0,12))+'</td></tr>').join(''):'<tr><td colspan="13" class="empty">尚無匯入</td></tr>')+'</tbody>';
+  $('mapTbl').innerHTML='<thead><tr><th>資料集</th><th>表頭</th><th>對照</th><th>日期格式</th><th>確認</th><th>版本</th><th></th></tr></thead><tbody>'+(DB.mappings.length?DB.mappings.map(m=>'<tr><td>'+esc(C().DATASET_LABEL[m.dataset].zh)+'</td><td class="subtxt" style="max-width:220px">'+esc(m.headers.join(' | '))+'</td><td class="subtxt">'+esc(Object.entries(m.map).filter(([k,v])=>v!=null).map(([k,v])=>k+'←'+(m.headers[v]||v)).join(', '))+'</td><td>'+esc(m.dateOrder)+'</td><td class="subtxt">'+esc(m.confirmedBy)+' '+esc(String(m.confirmedAt).slice(0,10))+'</td><td class="num">v'+m.version+'</td><td><span class="link" data-id="'+esc(m.id)+'">刪除</span></td></tr>').join(''):'<tr><td colspan="7" class="empty">尚無範本</td></tr>')+'</tbody>';$('mapTbl').querySelectorAll('.link').forEach(l=>l.onclick=async()=>{if(!confirm('刪除此範本？下次匯入同格式需重新確認欄位'))return;await S().remove(DBN,'mappings',l.dataset.id);DB.mappings=DB.mappings.filter(m=>m.id!==l.dataset.id);renderLog()});
+  $('cwTbl').innerHTML='<thead><tr><th>ERP 鍵</th><th>PROD 鍵</th><th>資料集</th><th>確認</th><th></th></tr></thead><tbody>'+(DB.crosswalk.length?DB.crosswalk.map(c=>'<tr><td class="mono">'+esc(c.erpKey)+'</td><td class="mono">'+esc(c.prodKey)+'</td><td>'+esc(c.dataset==='order_line'?'訂單':'出貨')+'</td><td class="subtxt">'+esc(c.confirmedBy)+' '+esc(String(c.confirmedAt).slice(0,10))+'</td><td><span class="link" data-id="'+esc(c.id)+'">移除</span></td></tr>').join(''):'<tr><td colspan="5" class="empty">尚無人工對照</td></tr>')+'</tbody>';$('cwTbl').querySelectorAll('.link').forEach(l=>l.onclick=async()=>{await S().remove(DBN,'crosswalk',l.dataset.id);DB.crosswalk=DB.crosswalk.filter(c=>c.id!==l.dataset.id);CMP={orders:null,ship:null};renderLog();markDirty('crosswalk')});
+  const changed=DB.orders.concat(DB.ship).filter(r=>(r.versions||[]).length);$('verTbl').innerHTML='<thead><tr><th>資料集</th><th>鍵</th><th>目前</th><th>更正紀錄</th></tr></thead><tbody>'+(changed.length?changed.slice(0,200).map(r=>'<tr><td>'+esc(C().DATASET_LABEL[r.dataset].zh)+'</td><td class="mono">'+esc(r.source_business_key)+'</td><td class="subtxt">qty '+N(r.qty)+' · '+esc(r.business_date||'')+'</td><td class="subtxt">'+r.versions.map(v=>esc(String(v.at).slice(0,16).replace('T',' '))+'：'+esc(Object.entries(v.fields).map(([k,x])=>k+' '+(x==null?'—':x)+'→'+(r[k]==null?'—':r[k])).join(', '))).join('<br>')+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">尚無更正</td></tr>')+'</tbody>'}
+async function addCrosswalk(){const e=($('cwErp').value||'').trim(),p=($('cwProd').value||'').trim(),ds=$('cwDs').value;if(!e||!p){toast('請填 ERP 鍵與 PROD 鍵');return}const c={id:'cw_'+C().hash32(ds+'|'+C().nk(e)),dataset:ds,erpKey:e,prodKey:p,confirmedBy:($('confirmBy').value||SETTINGS.confirmBy||'').trim(),confirmedAt:nowIso(),scope:'manual'};await S().put(DBN,'crosswalk',c);DB.crosswalk=DB.crosswalk.filter(x=>x.id!==c.id).concat([c]);$('cwErp').value='';$('cwProd').value='';CMP={orders:null,ship:null};renderLog();markDirty('crosswalk');toast('已加入對照鍵')}
+function backupAll(){dl('VRT_ERPLink_backup_'+today()+'.json',JSON.stringify({schema:'erplink-1',exportedAt:nowIso(),orders:DB.orders,ship:DB.ship,imports:DB.imports,mappings:DB.mappings,crosswalk:DB.crosswalk,reports:DB.reports,settings:SETTINGS},null,0))}
+$('restoreIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const j=JSON.parse(await f.text());if(j.schema!=='erplink-1')throw new Error('不是本頁的備份檔');if(!confirm('還原會以備份內容「合併」到目前資料（同鍵以備份為準）。繼續？'))return;
+  const mo=C().mergeImport(DB.orders,j.orders||[],{at:nowIso(),import_batch_id:'restore'}),ms=C().mergeImport(DB.ship,j.ship||[],{at:nowIso(),import_batch_id:'restore'});await S().replaceAll(DBN,'erp_orders',mo.records);await S().replaceAll(DBN,'erp_ship',ms.records);for(const b of j.imports||[])await S().put(DBN,'imports',b);for(const m of j.mappings||[])await S().put(DBN,'mappings',m);for(const c of j.crosswalk||[])await S().put(DBN,'crosswalk',c);if(Array.isArray(j.reports))await S().put(DBN,'kv',j.reports,'reports');await load();CMP={orders:null,ship:null};renderStatus();renderLog();toast('已還原：訂單 '+N(mo.records.length)+' · 出貨 '+N(ms.records.length));markDirty('restore')}catch(err){toast('❌ 還原失敗：'+err.message,5000)}};
+async function clearAll(){if(!confirm('清除本頁資料庫前請先匯出備份。已匯出並確定要清除？'))return;if(!confirm('再次確認：這會刪除本機的 ERP 快照行、匯入批次、範本、對照鍵與已存日報。'))return;for(const k of ['erp_orders','erp_ship','imports','mappings','crosswalk'])await S().replaceAll(DBN,k,[]);await S().put(DBN,'kv',[],'reports');try{VRTSmartSync.authorizeShrink(TOOL,'explicit-clear')}catch(_){}await load();CMP={orders:null,ship:null};DEMO=null;renderStatus();renderLog();toast('已清除本頁資料庫')}
+/* ── cloud (Smart Sync tool erplink): envelopes {id,_vrtEntity,_vrtValue,_smartBucket}; buckets by business month ── */
+const ENT={erp_orders:'erplink.order',erp_ship:'erplink.ship',imports:'erplink.import',mappings:'erplink.mapping',crosswalk:'erplink.crosswalk'};
+function env(entity,v,bucket){return {id:entity+':'+v.id,_vrtEntity:entity,_vrtValue:v,_smartBucket:bucket}}
+function cloudRecords(){const mo=r=>String(r.business_date||'').slice(0,7)||'nodate';return DB.orders.map(r=>env(ENT.erp_orders,r,'ord_'+mo(r))).concat(DB.ship.map(r=>env(ENT.erp_ship,r,'ship_'+mo(r))),DB.imports.map(r=>env(ENT.imports,r,'imports')),DB.mappings.map(r=>env(ENT.mappings,r,'mappings')),DB.crosswalk.map(r=>env(ENT.crosswalk,r,'crosswalk')))}
+function cloudMeta(){return {schemaVersion:415,tool:TOOL,summary:{orders:DB.orders.length,ship:DB.ship.length,imports:DB.imports.length,mappings:DB.mappings.length,crosswalk:DB.crosswalk.length,asOf:erpAsOf()}}}
+async function applyCloud(rows){const by={};rows.forEach(r=>{const e=r._vrtEntity,v=r._vrtValue;if(!e||!v)return;(by[e]=by[e]||[]).push(v)});
+  const merge=(local,remote)=>{const m=new Map(local.map(r=>[r.id,r]));for(const r of remote||[]){const o=m.get(r.id);if(!o||String(r.last_seen||r.first_seen||'')>=String(o.last_seen||o.first_seen||''))m.set(r.id,r)}return [...m.values()]};
+  DB.orders=merge(DB.orders,by[ENT.erp_orders]);DB.ship=merge(DB.ship,by[ENT.erp_ship]);const byId=(a,b)=>{const m=new Map(a.map(r=>[r.id,r]));(b||[]).forEach(r=>m.set(r.id,r));return [...m.values()]};DB.imports=byId(DB.imports,by[ENT.imports]).sort((a,b)=>b.at.localeCompare(a.at));DB.mappings=byId(DB.mappings,by[ENT.mappings]);DB.crosswalk=byId(DB.crosswalk,by[ENT.crosswalk]);
+  await S().replaceAll(DBN,'erp_orders',DB.orders);await S().replaceAll(DBN,'erp_ship',DB.ship);await S().replaceAll(DBN,'imports',DB.imports);await S().replaceAll(DBN,'mappings',DB.mappings);await S().replaceAll(DBN,'crosswalk',DB.crosswalk);CMP={orders:null,ship:null};renderStatus();return cloudRecords()}
+async function cloudPush(silent){await window.VRT_LOCAL_READY;const url=VRTPlatform.getGasUrl()||'';if(!url){if(!silent)toast('未設定 GAS URL（入口頁設定）');return false}try{const res=await VRTSmartSync.push({url,tool:TOOL,records:cloudRecords(),meta:cloudMeta(),resumeBuckets:true,onStatus:m=>{if(!silent)toast('☁↑ '+m,1500)}});if(res&&res.needsPull){if(!silent)toast('雲端有新資料，請先拉取');return res}if(!silent)toast(res.noChange?'雲端已是最新':'☁↑ 已上傳 '+N(res.uploaded||0)+' · 未變 '+N(res.unchanged||0));return res}catch(e){if(!silent)toast('☁↑ 失敗：'+e.message,5000);return false}}
+async function cloudPull(silent){await window.VRT_LOCAL_READY;const url=VRTPlatform.getGasUrl()||'';if(!url){if(!silent)toast('未設定 GAS URL（入口頁設定）');return false}try{const res=await VRTSmartSync.pull({url,tool:TOOL,localRecords:cloudRecords(),meta:cloudMeta(),resumeBuckets:true,onStatus:m=>{if(!silent)toast('☁↓ '+m,1500)},apply:applyCloud});if(!res.ok){if(!silent)toast('雲端尚無 erplink 資料');return false}if(!silent)toast(res.noChange?'雲端已是最新':'☁↓ 已下載 '+N(res.downloaded||0)+(res.pendingUpload?' · 待上傳 '+N(res.pendingUpload):''));return res}catch(e){if(!silent)toast('☁↓ 失敗：'+e.message,5000);return false}}
+function markDirty(reason){try{if(window.VRTProdAutoSync&&autoSyncOn())VRTProdAutoSync.markDirty(TOOL,reason||'change',{},900)}catch(_){}}
+window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:TOOL,lockKey:TOOL,pull:async function(){return await cloudPull(true)},push:async function(){return await cloudPush(true)},canSync:function(){return autoSyncOn()&&!!VRTPlatform.getGasUrl()},startDelay:1500})}catch(e){console.warn('[VRT Auto erplink]',e)}},0)},{once:true});
+/* ── init ── */
+window.VRT_LOCAL_READY=(async()=>{await load();await readProd();renderStatus();let t='status';try{t=localStorage.getItem('vrt_erplink_tab')||'status'}catch(_){}if(location.hash==='#daily')t='daily';if(location.hash==='#import')t='import';showTab(t)})();
+try{VRTTelegram.init({kind:'erplink',tool:TOOL,getData:()=>{if(!CMP.orders&&PROD.ready)runCompare();return {orders:liveOrders(),ship:liveShip(),compare:CMP,asOf:{erp:erpAsOf(),prod:PROD.asOf}}}})}catch(e){console.warn('VRTTelegram init',e)}
+window.ERPLINK={get DB(){return DB},get PROD(){return PROD},get CMP(){return CMP},get DEMO(){return DEMO},load,readProd,runCompare,importFile,previewImport,commitImport,loadDemo,clearDemo,renderDaily,dailyInput,cloudRecords,cloudMeta,applyCloud,cloudPush,cloudPull,addCrosswalk,backupAll,clearAll,get IMP(){return IMP},get DAILY(){return DAILY}};
+</script>
+</body></html>
