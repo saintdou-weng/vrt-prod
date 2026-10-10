@@ -1,0 +1,36 @@
+{
+  "release": "4.14",
+  "date": "2026-10-01",
+  "base": "4.13 (2026-09-30)",
+  "appsScript": "AppsScript/VRT_Production_v4.4.gs — replaces v4.3. Paste over the existing project, deploy a NEW VERSION of the existing deployment (/exec unchanged), run setupBotCommands() once. v4.2 still works with every v4.14 page; v4.4 is needed for the bilingual 日/週/月/年 bot summaries and the page ✈️ Telegram fallback.",
+  "newFiles": [
+    "vrt-tg-summary-v1.js — one set of bilingual 日/週/月/年 summary builders shared by the pages and the Telegram bot (spliced into the GAS by AppsScript/build_gas.py)",
+    "vrt-telegram-v1.js — ✈️ Telegram button + modal on each module page (period type, periods that hold data with counts, preview, send via GAS proxy, plain-text fallback)",
+    "vrt-portal-overview-v1.js — portal 一眼看清 panel: freshness of 17 modules, period comparator, plan vs actual, cut vs sew, digest to Telegram (read-only)",
+    "vrt-i18n-v1.js, vrt-i18n-en.js, vrt-i18n-km.js — shared 中 / EN / ខ្មែរ layer and dictionary (7,347 UI strings)",
+    "AppsScript/VRT_Production_v4.4.gs, AppsScript/build_gas.py, AppsScript/period_summaries_block.gs",
+    "qa/v414/* (8 files)"
+  ],
+  "changedFiles": [
+    "all 21 pages: shared language layer in <head>; ?v= tags unified to 4.14.0",
+    "11 module pages: ✈️ Telegram button (sewing, cutting, Final QC, spare parts, production plan, monthly shipping, orders, shipping, customer statistics, fabric stock, IE/OBD)",
+    "orders_v3.html: cloud layout (weekly snapshots / headers / imports / audit as month buckets; meta 206 chars instead of the whole side stores; Gemini apiKey never uploaded; reads the 4.13 layout); pdf.js failure no longer breaks the page",
+    "cutting_plan_v2.html, shipping_v2.html, VRT_FG_Inventory_Management_v1.html, VRT_PO_Delivery_Control_Center.html, vrt_customer_statistics_control_center_v1.html: push and pull carry the same data-derived meta (no daily phantom commits)",
+    "VRT_PO_Delivery_Control_Center.html: sample rows never saved or pushed; fabric-PO pull rides on the module's auto-sync; header language wins over old settings",
+    "portal_v2.html: QC read/write identical to the QC module (KPI rows, metadata-only sources, local attachments kept); overview panel",
+    "production_v4.html, cutting_v3.html, vrt-auto-sync-v3.js: read-only pulls respect the owner module's sync lock; production overview understands the new orders layout",
+    "vrt_fabric_delivery_greige_center_v1.html: upload-resume key read from localStorage",
+    "sewing_v5.html (km reads data-km), production_plan_capacity_v1.html (language button works), ie_smv_report_v2_1.html (km chineseNote)",
+    "vrt-platform-v40.js: PROD v4.14 badge"
+  ],
+  "tests": {
+    "qa/v414/test_telegram.js": "18/18",
+    "qa/v414/test_tg_page.js": "13/13",
+    "qa/v414/test_sync_fixes.js": "10/10",
+    "qa/v414/test_portal_overview.js": "5/5",
+    "qa/v414/test_i18n_layer.js": "6/6",
+    "qa/v414/browser_i18n_check.js (Chromium)": "EN and KM on 21 pages with real data: 20 pages show no Chinese UI text; FG keeps one Chinese source-file name",
+    "qa/v413 (importer 22, stageC 8, qc_kpi 6, parts_cloud 5, i18n_parts 16, realdata 12, plan_io 5, balancing 12, io_modules 5)": "all pass on 4.14",
+    "existing qa/v39–v43 suites": "identical pass/fail lists to the untouched 4.8 baseline (v39 33/5, v40 45/8, v41 59/10, v42 70/11, v43 80/13); none caused by 4.14"
+  }
+}

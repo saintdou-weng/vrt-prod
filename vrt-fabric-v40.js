@@ -27,7 +27,7 @@ function exportOld(){downloadWB([aoaSheet(oldFiltered(),'Old Fabric Usage')],'VR
 const fabricCollection=k=>k==='cur'?'current':k==='old'?'old':'accessory';
 function fabricEdit(kind,id){const list=DB[fabricCollection(kind)],r=list.find(r=>r.id===id)||{},keys=[kind==='old'?'useDate':'snapshotDate','itemCode','erpCode','description','lotNumber','supplier','customer','quantity','unit','quality','location','po','style','comment'];if(kind==='acc')keys.push('colorCode','colorName','size','opening','inbound','outbound','adjustment','balance');detailTitle.textContent=id?'編輯庫存／使用':'新增庫存／使用';detailBody.innerHTML='<form id="fabricEditor"><div class="detailgrid">'+keys.map(k=>'<label>'+esc(k)+'<input name="'+k+'" type="'+(/Date$/.test(k)?'date':/^(quantity|opening|inbound|outbound|adjustment|balance)$/.test(k)?'number':'text')+'" step="any" value="'+esc(r[k]??(/Date$/.test(k)?(kind==='old'?oldAnchor:curAnchor):k==='unit'?'YARD':''))+'"></label>').join('')+'</div><button class="btn btn-y" type="submit">儲存</button></form>';document.getElementById('fabricEditor').onsubmit=async e=>{e.preventDefault();const before=VRTData39.copy(DB);try{const x={...r,...Object.fromEntries(new FormData(e.target))};x.quantity=VRTData39.number(x.quantity);if(!x.itemCode||!(x.snapshotDate||x.useDate)||x.quantity==null||x.quantity<0)throw new Error('請填日期、Item Code 及有效數量');x.stockType=kind==='old'?'old_usage':fabricCollection(kind);for(const k of ['opening','inbound','outbound','adjustment','balance'])if(k in x)x[k]=num(x[k]);x.id=id||VRTImport40.fabricId(x);if(!id&&list.some(v=>v.id===x.id))throw new Error('相同品項／批次已存在，請編輯原紀錄');if(id){DB.editHistory=DB.editHistory||[];DB.editHistory.push({record:VRTData39.copy(r),at:new Date().toISOString()})}x.updatedAt=new Date().toISOString();if(id)list[list.indexOf(r)]=x;else list.push(x);if(!await save())throw new Error('IndexedDB 儲存失敗');VRTProdAutoSync.markDirty('fabricstock','save');closeDetail();renderCurrent();renderOld();renderAccessory()}catch(err){DB=before;alert(err.message)}};detailMask.classList.add('on')}
 async function fabricDelete(kind,id){
-  if(!confirm('刪除此紀錄？'))return;
+  if(!await VRTDialog.confirm('刪除此紀錄？'))return;
   const before=VRTData39.copy(DB);
   try{const key=fabricCollection(kind),r=DB[key].find(x=>x.id===id);if(!r)return;
     DB.tombstones=DB.tombstones||[];DB.tombstones.push({id,deletedAt:new Date().toISOString()});
@@ -46,7 +46,7 @@ async function cloudPull(silent){await window.VRT_LOCAL_READY;const url=VRTPlatf
 function fabricCSV(kind){const rows=kind==='cur'?currentFiltered().rows:kind==='old'?oldFiltered():accessoryFiltered().rows;if(!rows.length)return;const keys=Object.keys(rows[0]).filter(k=>k!=='history'),data='\ufeff'+[keys,...rows.map(r=>keys.map(k=>r[k]??''))].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'text/csv;charset=utf-8'}));a.download='VRT_Fabric_'+kind+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
 async function clearData(){
-  if(!confirm('確定刪除全部布料、舊布使用、輔料及收發資料？刪除紀錄將同步至雲端，修改歷史仍會保留。'))return;
+  if(!await VRTDialog.confirm('確定刪除全部布料、舊布使用、輔料及收發資料？刪除紀錄將同步至雲端，修改歷史仍會保留。'))return;
   const before=VRTData39.copy(DB),at=new Date().toISOString();
   try{
     const rows=[...DB.current,...DB.old,...DB.accessory,...(DB.movements||[])];

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMV 管理系統 v5.7 · Official SMV</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -172,10 +172,10 @@ tr:hover td{background:#eff6ff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.14.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-data-core-v39.js?v=4.16.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body><div style="padding:12px 20px;background:#eaf2ff;color:#173760">IE Weekly Update、OBD 工序檔請至 <a href="ie_smv_report_v2_1.html?v=4.4.0" style="font-weight:700">📐 IE 工程／SMV 改善</a>。本頁管理正式 SMV 與分析。</div>
 <div class="hdr">
@@ -963,7 +963,7 @@ function renderScenario(){const body=document.getElementById('sc-body');if(!body
 function showSmvEditBox(html){let m=document.getElementById('smvEditMask');if(!m){m=document.createElement('div');m.id='smvEditMask';m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:1200;display:grid;place-items:center;padding:18px';document.body.appendChild(m)}m.innerHTML=`<div style="width:min(540px,96vw);background:#fff;border-radius:14px;padding:18px;box-shadow:0 18px 60px #0005">${html}</div>`;m.style.display='grid';m.onclick=e=>{if(e.target===m)m.style.display='none'}}
 function editOfficialSmv(snapId,itemIndex){const snap=allSnaps.find(x=>String(x.id)===String(snapId)),i=snap&&(snap.items||[])[itemIndex];if(!i)return;const b=Number(i.origSMV)||0;showSmvEditBox(`<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">✎ ${i.style} 正式 SMV</h3><button class="btn btn-g" onclick="document.getElementById('smvEditMask').style.display='none'">✕</button></div><div class="al al-i" style="margin:12px 0">情境值只是參考；按套用才會改正式 Current SMV。</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><label>Original 100%<input id="seo" type="number" step="0.0001" value="${Number.isFinite(b)?b:''}" style="width:100%;padding:8px"></label><label>正式 Current<input id="secv" type="number" step="0.0001" value="${i.curSMV??''}" style="width:100%;padding:8px"></label><label style="grid-column:1/-1">套用情境<select id="sepol" style="width:100%;padding:8px" onchange="smvApplyScenarioPreview()"><option value="">不套用</option><option value="-10">Original -10%</option><option value="-15">Original -15%</option><option value="-20">Original -20%</option><option value="-35">Original -35%</option></select></label><label style="grid-column:1/-1">備註<input id="serem" value="${String(i.remark||'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px"></label></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn btn-g" onclick="document.getElementById('smvEditMask').style.display='none'">取消</button><button class="btn btn-y" onclick="saveOfficialSmvEdit('${String(snapId).replace(/'/g,"\\'")}',${itemIndex})">儲存正式值</button></div>`)}
 function smvApplyScenarioPreview(){const p=Number(document.getElementById('sepol')?.value),o=Number(document.getElementById('seo')?.value);if(Number.isFinite(p)&&p&&o>0)document.getElementById('secv').value=(o*(1+p/100)).toFixed(4)}
-async function saveOfficialSmvEdit(snapId,itemIndex){const snap=allSnaps.find(x=>String(x.id)===String(snapId)),old=snap?.items?.[itemIndex];if(!old)return;const o=Number(document.getElementById('seo').value),c=Number(document.getElementById('secv').value);if(!(o>0)||!(c>0))return alert('SMV 必須大於 0');if(!confirm(old.style+'：核可新正式 SMV '+c+'？原正式版本會保留。'))return;const stamp=new Date().toISOString(),day=stamp.slice(0,10),i={...old,origSMV:o,curSMV:c,newSMV:c,effectiveDate:day,remark:document.getElementById('serem').value};const row={id:'MANUAL-'+VRTData39.hash([stamp,i]),section:snap.section,reportDate:day,effectiveDate:day,importedAt:stamp,fileName:'Manual_Approved_'+stamp,source:'MANUAL_APPROVED',supersedes:snap.id,items:[i]};await dbAdd(row);allSnaps=await dbAll();updateHeader();document.getElementById('smvEditMask').style.display='none';renderScenario();toast('已建立新正式版本，舊版保留。');window.VRTProdAutoSync?.markDirty('smv','official-edit',{},900)}
+async function saveOfficialSmvEdit(snapId,itemIndex){const snap=allSnaps.find(x=>String(x.id)===String(snapId)),old=snap?.items?.[itemIndex];if(!old)return;const o=Number(document.getElementById('seo').value),c=Number(document.getElementById('secv').value);if(!(o>0)||!(c>0))return alert('SMV 必須大於 0');if(!await VRTDialog.confirm(old.style+'：核可新正式 SMV '+c+'？原正式版本會保留。'))return;const stamp=new Date().toISOString(),day=stamp.slice(0,10),i={...old,origSMV:o,curSMV:c,newSMV:c,effectiveDate:day,remark:document.getElementById('serem').value};const row={id:'MANUAL-'+VRTData39.hash([stamp,i]),section:snap.section,reportDate:day,effectiveDate:day,importedAt:stamp,fileName:'Manual_Approved_'+stamp,source:'MANUAL_APPROVED',supersedes:snap.id,items:[i]};await dbAdd(row);allSnaps=await dbAll();updateHeader();document.getElementById('smvEditMask').style.display='none';renderScenario();toast('已建立新正式版本，舊版保留。');window.VRTProdAutoSync?.markDirty('smv','official-edit',{},900)}
 
 // ══════════════════════════════════════════════════════
 // STYLE COMPARISON TAB  (by style, not by date)
@@ -1327,7 +1327,7 @@ function filterHist(){
     <td class="mono" style="color:var(--mut)">${f4(i.origSMV)}</td><td class="mono" style="color:var(--pri);font-weight:700">${f4(i.curSMV)}</td>
     <td class="mono" style="color:var(--grn)">${f4(i.newSMV)}</td><td>${i.pcsBox??'–'}</td><td style="font-size:11px;color:var(--mut)">${i.remark||''}</td></tr>`).join('')||'<tr><td colspan="9" class="empty">無資料</td></tr>';
 }
-async function doDelSnap(id){if(!confirm('確定刪除此版本？'))return;await dbDel(id);allSnaps=await dbAll();updateHeader();if(String(viewSnap?.id)===String(id))closeHist();else renderHistory();toast('🗑 已刪除');}
+async function doDelSnap(id){if(!await VRTDialog.confirm('確定刪除此版本？'))return;await dbDel(id);allSnaps=await dbAll();updateHeader();if(String(viewSnap?.id)===String(id))closeHist();else renderHistory();toast('🗑 已刪除');}
 function exportHistCSV(){if(!viewSnap)return;const rows=[['Report Date','Section','No','Style','Customer','Type','Original SMV','Current SMV','New SMV','Pcs/Box','Remark'],...viewSnap.items.map(i=>[viewSnap.reportDate,viewSnap.section,i.no,i.style,i.cust,i.type,i.origSMV,i.curSMV,i.newSMV,i.pcsBox??'',i.remark||''])];const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})),download:`SMV_${viewSnap.section}_${viewSnap.reportDate}.csv`}).click();}
 
 
@@ -1415,7 +1415,7 @@ async function applyOneBomSmvIdx(idx){
   if(b.costing?.profile){b.costing.profile.productionSMV=o.smv;b.costing.profile.smvNote=noteForSmv(o);b.costing.updatedAt=new Date().toISOString();b.costingSummary=costingSummary(b.costing)}b.updatedAt=new Date().toISOString();await writeBomState(BOM_LINK_DB);toast(`✓ ${o.style} Production SMV → BOM ${o.smv.toFixed(4)}`);await loadBomLink(true);
 }
 async function syncAllBomProductionSmv(){
-  if(!BOM_LINK_DB)await loadBomLink(true);const rows=BOM_LINK_ROWS.filter(x=>x.b);if(!rows.length){toast('沒有匹配 BOM 款式');return}if(!confirm(`將 ${rows.length} 款正式 Production SMV 寫入 BOM。\n只更新 Production SMV，不改 Costing Base Minutes。確定？`))return;let changed=0;
+  if(!BOM_LINK_DB)await loadBomLink(true);const rows=BOM_LINK_ROWS.filter(x=>x.b);if(!rows.length){toast('沒有匹配 BOM 款式');return}if(!await VRTDialog.confirm(`將 ${rows.length} 款正式 Production SMV 寫入 BOM。\n只更新 Production SMV，不改 Costing Base Minutes。確定？`))return;let changed=0;
   rows.forEach(row=>{const o=row.o,b=row.b;if(Number(b.costing?.profile?.productionSMV)!==o.smv||Number(b.latestProductionSMV)!==o.smv)changed++;b.latestProductionSMV=o.smv;b.smvLink={productionSMV:o.smv,smvDate:o.date,section:o.section,source:o.source||'SMV Manager',updatedAt:new Date().toISOString()};if(b.costing?.profile){b.costing.profile.productionSMV=o.smv;b.costing.profile.smvNote=noteForSmv(o);b.costing.updatedAt=new Date().toISOString();b.costingSummary=costingSummary(b.costing)}b.updatedAt=new Date().toISOString()});await writeBomState(BOM_LINK_DB);toast(`✓ BOM Production SMV 已同步 ${changed} 款`);await loadBomLink(true);
 }
 function bomUrl(){return (localStorage.getItem('vrt_bom_manager_url')||BOM_DEFAULT_URL).trim()||BOM_DEFAULT_URL;}
@@ -1587,7 +1587,7 @@ async function scanAllFolders(silent=false){
   window.vsPull=async function(){gasUrl=localStorage.getItem(LS_GAS)||gasUrl;if(!gasUrl){vsLog('請先填入 GAS URL','err');return}vsBusy(true);try{const r=await VRTDomain39.sync('smv','pull',gasUrl,m=>vsLog(m,'i'));allSnaps=await dbAll();updateHeader();renderScenario();vsLog('Pull · '+(r.downloaded||0)+' downloaded · '+(r.unchanged||0)+' unchanged',r.ok?'ok':'err');return r}catch(e){vsLog(e.message,'err');throw e}finally{vsBusy(false)}};
 
   window.vsMobileRepair = async function(){
-    if(!confirm('只重建 SMV 專用手機資料庫，不會刪除 Sewing / Cutting 資料。確定修復？'))return;
+    if(!await VRTDialog.confirm('只重建 SMV 專用手機資料庫，不會刪除 Sewing / Cutting 資料。確定修復？'))return;
     vsBusy(true);vsLog('手機 SMV DB 修復中...','i');
     try{
       try{if(db)db.close()}catch(_){ } db=null;
@@ -1632,7 +1632,7 @@ async function scanAllFolders(silent=false){
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'smv',lockKey:'smv',pull:async function(){return await (window.vsPull&&window.vsPull());},push:async function(){return await (window.vsPush&&window.vsPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto smv]',e)}},0)},{once:true});
 </script>
-<script src="vrt-io-v1.js?v=4.14.0"></script>
+<script src="vrt-io-v1.js?v=4.16.0"></script>
 <script>
 /* v4.13 統一 JSON 備份／還原（所有模組同格式：{tool, format:'vrt-backup', formatVersion, exportedAt, ...}） */
 function vrtIoButtons413(container,before,cls){if(!container||document.getElementById('vrtIoBackup413'))return;const b=document.createElement('button'),r=document.createElement('button'),inp=document.createElement('input');b.id='vrtIoBackup413';b.className=cls;b.textContent='💾 備份 JSON';b.title='下載本模組完整資料（JSON） / Download a full JSON backup';b.onclick=()=>vrtBackup413();r.className=cls;r.textContent='📥 還原 JSON';r.title='從 JSON 備份還原 / Restore from a JSON backup';r.onclick=()=>inp.click();inp.type='file';inp.accept='.json';inp.style.display='none';inp.onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)vrtRestore413(f)};if(before&&before.parentNode===container){container.insertBefore(b,before.nextSibling);container.insertBefore(r,b.nextSibling)}else{container.appendChild(b);container.appendChild(r)}container.appendChild(inp)}
@@ -1641,7 +1641,7 @@ function vrtIoMsg413(m,bad){try{if(typeof toast==='function')toast(m);else if(ty
 function vrtBackup413(){const name=VRTIO.backupJSON('smv',{snapshots:allSnaps});vrtIoMsg413('已下載備份 '+name)}
 async function vrtRestore413(file){try{const d=await VRTIO.readJSON(file);const snaps=d.snapshots||(Array.isArray(d)?d:null);if(!Array.isArray(snaps)||!snaps.every(s=>s&&s.id&&Array.isArray(s.items)))throw new Error('不是正式 SMV 備份 / Not an official-SMV backup');
   const have=new Set(allSnaps.map(s=>s.id)),add=snaps.filter(s=>!have.has(s.id));
-  if(!confirm(VRTIO.confirmText('還原正式 SMV 備份？備份 '+snaps.length+' 個版本，其中 '+add.length+' 個是本機沒有的（只新增，不刪除現有版本）','Restore official SMV? '+add.length+' missing versions will be added; existing ones are kept.')))return;
+  if(!await VRTDialog.confirm(VRTIO.confirmText('還原正式 SMV 備份？備份 '+snaps.length+' 個版本，其中 '+add.length+' 個是本機沒有的（只新增，不刪除現有版本）','Restore official SMV? '+add.length+' missing versions will be added; existing ones are kept.')))return;
   if(!add.length){vrtIoMsg413('本機已有全部版本 / nothing to add');return}
   // a version deleted earlier is protected by a tombstone in the IE state; clear those tombstones so cloud sync does not remove the restored version again
   try{const st=await VRTDomain39.read('vrt_ie_smv_integrated_v2','state','main');if(st&&Array.isArray(st.tombstones)){const ids=new Set(add.map(s=>'snapshot:'+s.id));const keep=st.tombstones.filter(t=>!ids.has(t.id));if(keep.length!==st.tombstones.length){st.tombstones=keep;await VRTDomain39.write('vrt_ie_smv_integrated_v2',{state:{key:'main',value:st}})}}}catch(_){}

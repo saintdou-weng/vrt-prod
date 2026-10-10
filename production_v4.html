@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 生產進度總表 v4.3</title>
+<title>VRT 生產進度總表 v4.4</title>
 <style>
 :root{
   --bg:#f0f2f7;--s1:#fff;--s2:#f7f8fc;--s3:#eef1f8;--bd:#e2e6f0;--bd2:#d0d5e8;
@@ -167,10 +167,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
-<script src="vrt-data-core-v39.js?v=4.14.0"></script>
+<script src="vrt-data-core-v39.js?v=4.16.0"></script>
 </head>
 <body>
 
@@ -181,7 +181,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 
 <!-- HEADER -->
 <div class="hdr">
-  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.3 · 排產計畫為主 · 訂單/裁剪/車縫/SMV 只做進度核對</div></div>
+  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.4 · 排產計畫為主 · 訂單/裁剪/車縫/SMV 只做進度核對 · 📰 生產日報</div></div>
   <div style="font-size:11px;color:#8bb5d8;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><span class="dot" id="d-ord"></span><span id="l-ord">訂單…</span></span>
     <span><span class="dot" id="d-cut"></span><span id="l-cut">裁剪…</span></span>
@@ -204,6 +204,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   <button class="tb" onclick="go('gantt',this)">📅 排產甘特</button>
   <button class="tb" onclick="go('queue',this)">📋 排產明細</button>
   <button class="tb" onclick="go('smv',this)">📐 計畫 SMV</button>
+  <button class="tb" onclick="go('daily',this)" id="tb-daily">📰 生產日報</button>
   <button class="tb" onclick="go('info',this)">ℹ️ 連動說明</button>
 </div>
 
@@ -318,6 +319,59 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
       <thead><tr><th>Style</th><th>Customer / PO</th><th>Line</th><th>Start→End</th><th class="r">Plan pcs</th><th class="r">人數</th><th class="r">Current SMV</th><th class="r">理論 pcs/日</th><th class="r">需求天數</th><th>資料狀態</th></tr></thead>
       <tbody id="smv-tbody"></tbody>
     </table></div>
+  </div>
+</div>
+
+<!-- ════ DAILY REPORT (v4.16 D1) ════ -->
+<style>
+#pane-daily .drbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+#pane-daily .drbar select{background:var(--s1);border:1px solid var(--bd2);color:var(--t1);border-radius:5px;padding:6px 9px;font-size:12px;font-family:var(--ui)}
+#pane-daily .drbtn{padding:6px 12px;border:1px solid var(--bd2);background:var(--s1);color:var(--t1);border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--ui);font-weight:600}
+#pane-daily .drbtn:hover{background:var(--s2)}#pane-daily .drbtn.pri{background:var(--blue);border-color:var(--blue);color:#fff}#pane-daily .drbtn.pri:hover{background:#185fae}
+#pane-daily .drbtn:disabled{opacity:.45;cursor:not-allowed}
+#pane-daily .drgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:13px}
+@media(max-width:900px){#pane-daily .drgrid{grid-template-columns:1fr}}
+#pane-daily .drtext{white-space:pre-wrap;font-size:13px;line-height:1.65;padding:14px 16px;font-family:var(--ui)}
+#pane-daily .drtext .en{color:var(--t2)}
+#pane-daily .drmeta{font-size:11px;color:var(--muted);padding:8px 16px;border-top:1px solid var(--bd);display:flex;gap:12px;flex-wrap:wrap}
+#pane-daily .drhist{max-height:520px;overflow:auto}
+#pane-daily .drhist .h{padding:8px 12px;border-bottom:1px solid var(--bd);cursor:pointer;display:flex;justify-content:space-between;gap:8px;font-size:12px}
+#pane-daily .drhist .h:hover{background:var(--s2)}#pane-daily .drhist .h.on{background:#eef5ff}
+#pane-daily .drhist .h small{color:var(--muted)}
+#pane-daily .drkv{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;padding:12px 16px 0}
+#pane-daily .drkv div{background:var(--s2);border:1px solid var(--bd);border-radius:7px;padding:8px 10px}
+#pane-daily .drkv b{display:block;font-family:var(--mono);font-size:16px}#pane-daily .drkv span{font-size:10px;color:var(--t2)}
+#pane-daily .drkv i{display:block;font-size:10px;color:var(--muted);font-style:normal}
+#pane-daily .drai{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:7px;margin:0 16px 12px;padding:10px 12px;font-size:12px}
+#pane-daily .drnote{font-size:11px;color:var(--t2);margin:6px 0 0}
+</style>
+<div id="pane-daily" class="pane">
+  <div class="drbar">
+    <select id="drPeriod" onchange="drPeriodChange()"><option value="day">📰 日報 Daily</option><option value="week">📅 週報 Weekly</option></select>
+    <span style="font-size:12px;color:var(--t2)">日期 Date</span><select id="drDate" onchange="drShow(this.value)"></select>
+    <button class="drbtn pri" id="drGen" onclick="drGenerate(document.getElementById('drDate').value,{force:true,period:document.getElementById('drPeriod').value})">⟳ 產生／重新生成</button>
+    <button class="drbtn" id="drSend" onclick="drSend()">✈️ 推到 Telegram</button>
+    <button class="drbtn" id="drWord" onclick="drWord()">📄 匯出 Word</button>
+    <button class="drbtn" id="drAi" onclick="drAi()">🤖 AI 文字版（Claude）</button>
+    <button class="drbtn" onclick="drCopy()">📋 複製</button>
+    <span id="drStatus" style="font-size:11px;color:var(--t2)"></span>
+  </div>
+  <div class="drgrid">
+    <div>
+      <div class="card">
+        <div class="chdr"><div class="ctit">📰 生產日報 Daily production report</div><span id="drHead" style="font-size:11px;color:var(--t2)"></span></div>
+        <div class="drkv" id="drKv"></div>
+        <div id="drAiBox" class="drai" style="display:none" data-no-i18n></div>
+        <div class="drtext" id="drText" data-no-i18n>（尚未產生 — 資料載入後會自動產生最近一天的日報）</div>
+        <div class="drmeta" id="drMeta"></div>
+      </div>
+      <div class="drnote">數字全部由程式從本頁與各模組的本機資料計算（車縫＝同日只認日報／目標／Daily Output 其中一種來源，與車縫系統一致；WIP＝本頁「裁剪中／車縫中」款的已裁－已縫；排單＝排單產能模組的當月車縫量）。判讀門檻：全廠效率 ≥35% GREEN／25–35% AMBER／&lt;25% RED；線別 ≥30% 可接受／25–30% 偏低／&lt;25% 低效；退修 ≤5% GREEN／≤10% AMBER；線別退修 ≥10% 高；雙重風險＝低效＋高退修。Telegram 版是摘要，完整管理分析版（KPI、管理結論、各組表、品質對帳、行動表、資料口徑）在「📄 匯出 Word」。AI 只改寫文字，回來的每個數字都會比對，不符就不採用。每個日期（或週）只自動產生一次；「重新生成」會覆蓋本機與雲端那一版。</div>
+    </div>
+    <div class="card">
+      <div class="chdr"><div class="ctit">🗂 歷史 History</div><span id="drHistN" style="font-size:11px;color:var(--t2)"></span></div>
+      <div class="drhist" id="drHist"></div>
+      <div class="drmeta" id="drUsage">Claude 用量：—</div>
+    </div>
   </div>
 </div>
 
@@ -1069,6 +1123,7 @@ function go(name,el){
   if(name==='gantt'){fillPlanPeriodSelect();renderGantt()}
   if(name==='queue'){fillPlanPeriodSelect();renderQueue()}
   if(name==='smv')renderSmv();
+  if(name==='daily')drOpenTab();
 }
 function rebuildAndRender(){SCHED=buildSchedule();fillPlanPeriodSelect();renderGantt();renderQueue();}
 function setL(m){document.getElementById('loading').style.display='flex';document.getElementById('lmsg').textContent=m;}
@@ -1287,6 +1342,84 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 
 
 
+<script src="vrt-daily-report-v1.js?v=4.16.0"></script>
+<script>
+/* ═══ v4.16 D1 生產日報 Daily production report — numbers computed by code (vrt-daily-report-v1.js), AI only rewrites text ═══ */
+(function(){
+  const DR_DB='VRT_DailyReport',DR_STORE='reports';let DR_CUR=null,DR_INDEX=[],DR_CLOUD={},DR_AUTO_DONE=false;
+  const $=id=>document.getElementById(id);
+  const gasUrl=()=>{try{return (window.VRTPlatform&&VRTPlatform.getGasUrl&&VRTPlatform.getGasUrl())||localStorage.getItem('vrt_portal_gas_url')||''}catch(_){return ''}};
+  const post=async body=>{const url=gasUrl();if(!url)throw new Error('尚未設定 GAS 網址');const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow'});let d=null;try{d=await r.json()}catch(_){}if(!d)throw new Error('GAS no JSON reply');if(d.ok===false)throw new Error(d.error||'GAS error');return d};
+  const call=async body=>{const d=await post(body);return (d&&d.data&&typeof d.data==='object')?d.data:{}};   // daily-report actions answer okCors({ok,...}) → unwrap .data
+  const status=(m,ok)=>{const e=$('drStatus');if(e){e.textContent=m||'';e.style.color=ok===false?'var(--red)':'var(--t2)'}};
+  /* own store (this page's only writable DB) */
+  function drOpen(){return new Promise((res,rej)=>{const q=indexedDB.open(DR_DB,1);q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains(DR_STORE))d.createObjectStore(DR_STORE,{keyPath:'date'})};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+  async function drTx(mode,fn){const db=await drOpen();try{return await new Promise((res,rej)=>{const t=db.transaction(DR_STORE,mode),o=t.objectStore(DR_STORE);const r=fn(o);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}finally{try{db.close()}catch(_){}}}
+  const drAll=()=>drTx('readonly',o=>o.getAll()),drGet=d=>drTx('readonly',o=>o.get(d)),drPut=rep=>drTx('readwrite',o=>o.put(rep));
+  /* read-only readers for the other modules (same rule as the portal overview: open without version, never create or upgrade) */
+  function openRO(name){return new Promise(res=>{let q;try{q=indexedDB.open(name)}catch(e){return res(null)}let created=false;q.onupgradeneeded=e=>{created=true;try{e.target.transaction.abort()}catch(_){}};q.onsuccess=()=>{if(created){try{q.result.close()}catch(_){}return res(null)}res(q.result)};q.onerror=()=>res(null);q.onblocked=()=>res(null)})}
+  async function readAll(name,store,key){const db=await openRO(name);if(!db)return key===undefined?[]:null;try{if(!db.objectStoreNames.contains(store))return key===undefined?[]:null;return await new Promise((res,rej)=>{const t=db.transaction(store,'readonly'),o=t.objectStore(store),r=key===undefined?o.getAll():o.get(key);r.onsuccess=()=>res(r.result==null?(key===undefined?[]:null):r.result);r.onerror=()=>rej(r.error)})}catch(_){return key===undefined?[]:null}finally{try{db.close()}catch(_){}}}
+  async function drCollect(){
+    const qcRecords=(await readAll('VRT_FinalQC','records')).filter(r=>!r.deleted),qcKpi=(await readAll('VRT_FinalQC','kpi')).filter(r=>!r.deleted);
+    const m=await readAll('vrt_spareparts','meta','maintenance39'),mv=(m&&m.v)||{};
+    const shipping=await readAll('VRT_Shipping','shipping_records');
+    let cs=await readAll('vrt_custstats_v31','data','current');if(!cs){try{cs=JSON.parse(localStorage.getItem('vrt_custstats_v31')||'null')}catch(_){cs=null}}
+    return {sewing:SEW,cutting:CUT,styles:STYLES,prodplan:PLAN,qc:{records:qcRecords,kpi:qcKpi},spareparts:{needle:(mv.needleChanges||[]).filter(r=>!r.deleted),part:(mv.partChanges||[]).filter(r=>!r.deleted)},shipping:shipping||[],custstats:cs||{}};
+  }
+  const sewDates=()=>{const S=VRTDailyReport.helpers.sewPick(SEW);return Object.keys(S).filter(d=>d<=TODAY).sort().reverse()};
+  const curPeriod=()=>{const e=$('drPeriod');return e&&e.value==='week'?'week':'day'};
+  const weekKeys=()=>{const H=VRTDailyReport.helpers;const seen=new Set(),out=[];sewDates().forEach(d=>{const k=H.isoWeekKey(d);if(!seen.has(k)){seen.add(k);out.push({key:k,anchor:d})}});return out};
+  const keyLabel=x=>x.local===false?x.date+' ☁':x.date;
+  window.drPeriodChange=function(){fillDates();const d=$('drDate').value;if(d)drShow(d)};
+  function fillDates(sel){const week=curPeriod()==='week';const have=new Set(DR_INDEX.map(x=>x.date));let all;
+    if(week){const wk=weekKeys().slice(0,30).map(w=>w.key);all=[...new Set(wk.concat(DR_INDEX.filter(x=>/-W\d{2}$/.test(x.date)).map(x=>x.date)))].sort().reverse().slice(0,60)}
+    else{const ds=sewDates().slice(0,60);all=[...new Set(ds.concat(DR_INDEX.filter(x=>!/-W\d{2}$/.test(x.date)).map(x=>x.date)))].sort().reverse().slice(0,90)}
+    $('drDate').innerHTML=all.map(d=>'<option value="'+d+'">'+d+(have.has(d)?' ✓':'')+'</option>').join('')||'<option value="">（無車縫資料）</option>';if(sel)$('drDate').value=sel}
+  async function refreshIndex(){const local=await drAll();DR_INDEX=local.map(r=>({date:r.date,generatedAt:r.generatedAt,source:r.source,sentAt:r.sentAt||'',ai:!!(r.ai&&r.ai.ok),zhChars:r.zhChars||0,pieces:r.facts&&r.facts.sewing?r.facts.sewing.pieces:null,local:true}));
+    for(const c of Object.values(DR_CLOUD)){if(!DR_INDEX.some(x=>x.date===c.date))DR_INDEX.push(Object.assign({},c,{local:false}))}
+    DR_INDEX.sort((a,b)=>a.date<b.date?1:-1);renderHist()}
+  function renderHist(){const h=$('drHist');if(!h)return;h.innerHTML=DR_INDEX.slice(0,120).map(x=>'<div class="h'+(DR_CUR&&DR_CUR.date===x.date?' on':'')+'" onclick="drShow(\''+x.date+'\')"><span>'+(/-W\d{2}$/.test(x.date)?'📅 ':'')+x.date+(x.ai?' 🤖':'')+(x.sentAt?' ✈️':'')+(x.local?'':' ☁')+'</span><small>'+(x.pieces!=null?Number(x.pieces).toLocaleString()+' pcs · ':'')+(x.source||'')+'</small></div>').join('')||'<div class="h"><small>尚無日報</small></div>';$('drHistN').textContent=DR_INDEX.length+' 天'}
+  async function cloudIndex(){if(!gasUrl())return;try{const d=await call({action:'dailyReportList',limit:120});if(d&&d.ok){DR_CLOUD={};(d.index||[]).forEach(x=>DR_CLOUD[x.date]=x)}}catch(e){console.warn('[daily] cloud index',e.message)}}
+  async function cloudUsage(){if(!gasUrl())return;try{const d=await call({action:'dailyReportUsage'});if(d&&d.ok&&d.usage){const u=d.usage;$('drUsage').textContent='Claude 用量：'+(u.configured?'本月 '+u.thisMonth.calls+' 次 · '+(u.thisMonth.inTokens+u.thisMonth.outTokens).toLocaleString()+' tokens ≈ $'+u.thisMonth.costUsd.toFixed(3)+' · 累計 $'+u.total.costUsd.toFixed(3)+(u.model?' · '+u.model:''):'GAS 尚未設定 CLAUDE_API_KEY（AI 文字版停用，規則版照常）')}}catch(_){}}
+  window.drOpenTab=async function(){if(!SEW.length&&!CUT.length){status('資料尚未載入');return}await cloudIndex();await refreshIndex();fillDates();const d=$('drDate').value;if(d)await drShow(d);cloudUsage()};
+  window.drShow=async function(date){if(!date)return;let rep=await drGet(date);if(!rep&&DR_CLOUD[date]&&gasUrl()){try{const d=await call({action:'dailyReportGet',date});if(d&&d.ok&&d.report){rep=d.report;await drPut(rep)}}catch(_){}}
+    if(!rep){DR_CUR=null;$('drText').textContent='（'+date+' 尚未產生，按「產生」）';$('drKv').innerHTML='';$('drMeta').textContent='';$('drHead').textContent='';$('drAiBox').style.display='none';$('drDate').value=date;renderHist();return}
+    DR_CUR=rep;const isW=/-W\d{2}$/.test(date);if($('drPeriod')&&$('drPeriod').value!==(isW?'week':'day')){$('drPeriod').value=isW?'week':'day';fillDates(date)}$('drDate').value=date;render(rep);renderHist()};
+  function render(rep){const f=rep.facts,R=VRTDailyReport.helpers;const N=R.N,pct=R.pct;
+    $('drHead').textContent=(f.label||f.date)+' · '+(rep.source==='gas'?'GAS 自動':'本頁')+' · '+String(rep.generatedAt||'').slice(0,16).replace('T',' ')+(rep.sentAt?' · ✈️ 已推送 '+String(rep.sentAt).slice(5,16).replace('T',' '):'');
+    const RAGC={G:'🟢',A:'🟡',R:'🔴'};const rg=k=>f.rag&&f.rag[k]?RAGC[f.rag[k]]+' ':'';const kv=[['產量 Output',N(f.sewing.pieces)+' pcs',f.prevDay.pieces!=null?(f.period==='week'?'前週 ':'前日 ')+N(f.prevDay.pieces):''],['效率 Efficiency',rg('capacity')+pct(f.sewing.eff),f.sewing.effBasis==='minutes'?'Σ分鐘':f.sewing.effBasis==='workers'?'人數加權':''],['線數 Lines',N(f.sewing.lines),''],['裁剪 Cutting',N(f.cutting.pieces)+' pcs',''],['WIP 已裁未縫',f.wip.cutNotSewn!=null?N(f.wip.cutNotSewn):'—',f.wip.daysOfOutput?'≈ '+N(f.wip.daysOfOutput)+' 天':''],['不良率 Reject',rg('quality')+(f.qc.rate!=null?pct(f.qc.rate,2):'—'),f.qc.date?'QC '+String(f.qc.date).slice(5):''],['排單 Plan',f.plan?rg('plan')+pct(f.plan.completion):'—',f.plan?'餘 '+N(f.plan.remaining)+' · 需 '+N(f.plan.requiredPerDay)+'/日':''],['本週出貨 Shipping',rg('shipping')+(f.shipping.pct!=null?pct(f.shipping.pct,0):'—'),f.shipping.open?'未出 '+N(f.shipping.open):''],['缺布 No fabric',f.fabric.hasData?N(f.fabric.noFabricPcs):'—',f.fabric.snapshotDate?String(f.fabric.snapshotDate).slice(5):''],['換針 Needles',N(f.maint.needle.qty),'非計畫 '+N(f.maint.needle.unplanned)]];
+    $('drKv').innerHTML=kv.map(k=>'<div><span>'+esc(k[0])+'</span><b>'+esc(k[1])+'</b><i>'+esc(k[2])+'</i></div>').join('');
+    const txt=rep.text||VRTDailyReport.render(f).text;$('drText').innerHTML=txt.split('\n').map(l=>/^\s{2}/.test(l)?'<span class="en">'+esc(l)+'</span>':esc(l)).join('\n');
+    const ai=rep.ai;const box=$('drAiBox');if(ai&&ai.ok){box.style.display='';box.innerHTML='<b>🤖 AI 文字版（'+esc(ai.model||'')+' · '+(ai.usage?ai.usage.inTokens+'/'+ai.usage.outTokens+' tokens ≈ $'+Number(ai.costUsd||0).toFixed(4):'')+' · 數字已逐一核對 ✓）</b><div style="white-space:pre-wrap;margin-top:6px">'+esc(ai.text)+'</div>'}else if(ai&&ai.badNumbers&&ai.badNumbers.length){box.style.display='';box.innerHTML='<b>⚠️ AI 版未採用</b>：文字裡出現事實以外的數字 '+esc(ai.badNumbers.join(', '))+'，依規則保留程式版。'}else box.style.display='none';
+    $('drMeta').innerHTML='<span>中文 '+(rep.zhChars||VRTDailyReport.zhCount(txt))+' 字</span><span>異常 '+f.anomalies.length+' 項</span><span>資料：車縫 '+N(f.sewing.rows)+' 列 · 裁剪 '+N(f.cutting.rows)+' · QC '+N(f.qc.reports)+' 份 · 出貨 '+N(f.shipping.allRows)+' 列 · 針 '+N(f.source.needle)+' · 件 '+N(f.source.part)+'</span>'+(rep.dataNote?'<span>'+esc(rep.dataNote)+'</span>':'');
+    $('drSend').disabled=false;$('drWord').disabled=false;$('drAi').disabled=false}
+  window.drGenerate=async function(date,opts){opts=opts||{};if(!SEW.length){status('沒有車縫資料，無法產生',false);return null}
+    const period=opts.period||(/-W\d{2}$/.test(date||'')?'week':curPeriod());let anchor=date||'';if(period==='week'&&/-W\d{2}$/.test(anchor)){const w=weekKeys().find(x=>x.key===anchor);anchor=w?w.anchor:''}
+    const key=period==='week'?(anchor?VRTDailyReport.helpers.isoWeekKey(anchor):(weekKeys()[0]||{}).key||''):date;
+    const existing=key?await drGet(key):null;if(existing&&!opts.force){DR_CUR=existing;render(existing);return existing}
+    status('⏳ 計算中…');try{const data=await drCollect();const f=VRTDailyReport.compute(data,{date:anchor||'',today:TODAY,period});const r=VRTDailyReport.render(f);
+      const rep={date:f.date,facts:f,text:r.text,html:r.html,zhChars:r.zhChars,generatedAt:f.generatedAt,source:'page',version:VRTDailyReport.version};
+      if(existing){rep.sentAt=existing.sentAt||'';}
+      await drPut(rep);DR_CUR=rep;await refreshIndex();fillDates(rep.date);render(rep);status('✓ 已產生 '+rep.date+(opts.silent?'（自動）':''));
+      if(gasUrl()){call({action:'dailyReportSave',report:rep,force:!!opts.force}).then(d=>{if(d&&d.ok){DR_CLOUD[rep.date]={date:rep.date,generatedAt:rep.generatedAt,source:'page'};if(d.kept&&d.report&&d.report.ai&&d.report.ai.ok&&!(rep.ai&&rep.ai.ok)){rep.ai=d.report.ai;drPut(rep);if(DR_CUR===rep)render(rep)}}}).catch(e=>console.warn('[daily] cloud save',e.message))}
+      return rep}catch(e){console.error(e);status('✗ '+e.message,false);return null}};
+  window.drSend=async function(){const rep=DR_CUR;if(!rep)return;if(!gasUrl()){status('尚未設定 GAS 網址',false);return}
+    const useAi=rep.ai&&rep.ai.ok?await VRTDialog.confirm('要推送 AI 文字版嗎？\n「確定」＝AI 版（數字已核對）　「取消」＝規則版',{okText:'AI 版',cancelText:'規則版'}):false;
+    if(rep.sentAt&&!(await VRTDialog.confirm(rep.date+' 的日報已在 '+String(rep.sentAt).slice(0,16).replace('T',' ')+' 推送過，要再推一次？')))return;
+    $('drSend').disabled=true;status('⏳ 傳送中…');try{const text=useAi?rep.ai.html:rep.html;const d=await post({action:'sendMessage',text,parse_mode:'HTML',disable_web_page_preview:true,auditTool:'production_overview',auditType:'daily_report'});if(!d||!d.ok)throw new Error((d&&d.error)||'send failed');
+      rep.sentAt=new Date().toISOString();rep.sentAi=!!useAi;await drPut(rep);call({action:'dailyReportSave',report:{date:rep.date,facts:rep.facts,sentAt:rep.sentAt,sentAi:rep.sentAi,text:rep.text,html:rep.html,generatedAt:rep.generatedAt,source:rep.source,zhChars:rep.zhChars}}).catch(()=>{});
+      render(rep);refreshIndex();status('✅ 已推送到 Telegram 生產群組'+(d.data&&d.data.plainFallback?'（純文字）':''))}catch(e){status('✗ 推送失敗：'+e.message,false)}finally{$('drSend').disabled=false}};
+  window.drAi=async function(){const rep=DR_CUR;if(!rep)return;if(!gasUrl()){status('尚未設定 GAS 網址',false);return}$('drAi').disabled=true;status('⏳ Claude 改寫中…（數字會逐一核對）');
+    try{const d=await call({action:'dailyReportAi',date:rep.date,facts:rep.facts});if(d&&d.notConfigured){status('GAS 尚未設定 CLAUDE_API_KEY：請在 Apps Script → 專案設定 → 指令碼屬性加入後再試',false);$('drUsage').textContent='Claude 用量：GAS 尚未設定 CLAUDE_API_KEY';return}
+      if(!d||!d.ai)throw new Error((d&&d.error)||'no reply');rep.ai=d.ai;await drPut(rep);render(rep);refreshIndex();if(d.ai.ok)status('✓ AI 文字版完成 · '+d.ai.usage.inTokens+'/'+d.ai.usage.outTokens+' tokens ≈ $'+Number(d.ai.costUsd||0).toFixed(4));else status('⚠️ AI 版含事實以外的數字（'+(d.ai.badNumbers||[]).join(', ')+'），未採用',false);cloudUsage()}
+    catch(e){status('✗ AI 失敗：'+e.message,false)}finally{$('drAi').disabled=false}};
+  window.drWord=function(){const rep=DR_CUR;if(!rep)return;const html=VRTDailyReport.docHtml(rep.facts,(rep.ai&&rep.ai.ok?rep.ai.text+'\n\n— 規則版 Rule-based —\n':'')+rep.text);const blob=new Blob(['\ufeff'+html],{type:'application/msword;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.setAttribute('download','VRT_DailyReport_'+rep.date+'.doc');document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);status('已匯出 Word（.doc）')};
+  window.drCopy=async function(){const rep=DR_CUR;if(!rep)return;try{await navigator.clipboard.writeText((rep.ai&&rep.ai.ok?rep.ai.text:rep.text));status('已複製')}catch(e){status('無法複製',false)}};
+  /* auto: once per data date, right after the page has loaded its data (no Telegram send here — the ✈️ button or the GAS 10:00 job does that) */
+  window.drAutoGenerate=async function(){if(DR_AUTO_DONE||!SEW.length)return;DR_AUTO_DONE=true;try{const d=sewDates()[0];if(!d)return;const have=await drGet(d);if(have)return;await drGenerate(d,{silent:true});const tb=$('tb-daily');if(tb)tb.textContent='📰 生產日報 ●'}catch(e){console.warn('[daily] auto',e)}};
+  const _hideL=window.hideL;window.hideL=function(){_hideL.apply(this,arguments);setTimeout(()=>{try{drAutoGenerate()}catch(_){}},50)};
+})();
+</script>
 <script>
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'production_overview',lockKey:'production_overview',pull:async function(){return await (window.vcAutoPullOverview&&window.vcAutoPullOverview());},push:async function(){return await (Promise.resolve(true));},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:5000});}catch(e){console.warn('[VRT Auto production_overview]',e)}},0)},{once:true});

@@ -1,0 +1,49 @@
+{
+  "release": "4.16",
+  "date": "2026-10-10",
+  "base": "4.15 (2026-10-05)",
+  "instruction": "PROD_修改指令_給Codex_20261009.md — this batch: B1 B2 B11 (data correctness) → C + D1 rule template → D1 AI hook + D2 → B3 B7 B8. Still open: A1–A4 PDF imports, B4 B5 B6 B9 B10.",
+  "principles": "1 nothing deleted or rewritten in existing cloud / IndexedDB data, new fields backward compatible · 2 module versions + PROD_MODULE_TEST_MATRIX_v4.16.csv updated, tested with the listed sample files · 3 no native confirm/prompt/alert anywhere (vrt-dialog-v1.js) · 4 every number computed by code; AI only rewrites text and every number it returns is checked",
+  "appsScript": {
+    "production": "VRT_Production_v4.6.gs — delivered as a separate file (NOT in this repo: it holds the bot token). Paste over the existing project, deploy a NEW VERSION of the existing deployment (/exec unchanged, pollTelegram trigger unchanged). New: daily report job (installDailyReportTrigger → 10:00 + 15:00 daily + Monday 10:30 weekly, idempotent per date/week key, reuses a report the page already generated, sends once), dailyReport* / aiSummary / inbox* web actions, Claude API via Script Properties CLAUDE_API_KEY (+ optional CLAUDE_MODEL auto-picked from /v1/models, prices for the estimate), usage log claude_usage_log.json, Telegram file intake inside pollTelegram (handleMsg: msg.document → inboxIntake_; no webhook, regulation 11.2 kept) + inboxPollBots every 30 min (Paul 10-10) for the bot already in the production groups (CFG.INBOX_BOTS in the built GS only — @ga_po_adminpw_bot — each polled with its own token and offset; a webhook-owned bot is skipped, never deleteWebhook), Gmail intake installInboxGmailTrigger (optional). backendVersion 4.6.0, capabilities dailyReport/aiSummary/inbox. checkProductionV46(), checkInboxSetup(), previewDailyReport(), claudeListModels().",
+    "erp": "PSJERP_AppsScript專用_v0.4.4.gs unchanged (v4.15 delivery).",
+    "securityNote": "Built .gs files live outside the repo (../gas/out). The Claude API key is read only from Script Properties and never sent to the browser; pages call GAS actions, GAS calls api.anthropic.com."
+  },
+  "newFiles": [
+    "vrt-dialog-v1.js — B11: alert → in-page notice (non-blocking), VRTDialog.confirm/prompt → Promise modal (Enter/Esc, danger style), automation mode (?auto=1 / vrt_auto_mode / navigator.webdriver / setAuto) auto-answers + logs vrt:dialog events; loaded in every page's <head> before vrt-i18n-v1.js; 99 call sites converted to await VRTDialog.* (AST-driven), 0 native sites left",
+    "vrt-daily-report-v1.js v1.1 — D1 daily + weekly (period:'week'), management-analysis layout after the factory's own reports (KPI tiles + RAG, 管理結論 zh/en, line 判讀 + dual/quality/capacity risk, plan position vs elapsed working days, QC reconciliation, action table with owners, 資料口徑; thresholds in TH): pure compute/render/aiPrompt/checkAiText/checkNumbersAgainstText/docHtml; runs in browser, Node and GAS (spliced). Numbers: sewing day (same de-dup as sewing_v5: norm > target > dpo), weighted efficiency Σ produced / Σ attended minutes (fallback worker-weighted), lines, cutting (ref rows excluded), WIP cut-not-sewn (page STYLES; GAS uses the customer-statistics Cutting WIP; otherwise blank, never guessed), Final QC rate + top 3 defects + worst lines (latest report ≤ 7 days, flagged asOf), ISO-week shipping completion (shipped / planned, open, overdue), fabric shortage (customer statistics No Fabric Available by PO), needle changes vs 28-day per-line baseline, part changes; comparisons vs previous data day and same weekday last week; 3 highlights + key-number table + ≤3 ranked issues with line / PO and who",
+    "vrt-inbox-v1.js — C: 「☁ 待匯入 N 檔」 on 15 importing pages; lists files the bot routed to the page, Import = download through GAS (inboxFile) and hand the File to the page's own importer (same preview / questions), ✓ / skip / reroute, done list, per-page auto-import switch (files whose importer asks a question stay pending with the question as note)",
+    "AppsScript/daily_report_block.gs, AppsScript/inbox_block.gs — spliced by build_gas.py (no credentials inside)",
+    "PROD_MODULE_TEST_MATRIX_v4.16.csv — v3.7 matrix + columns In-page dialogs / Inbox / v4.16 change / v4.16 test",
+    "qa/v416/test_orders_weekly.js (6/6), test_fixes_b.js (9/9), test_daily_report.js (7/7), test_inbox.js (5/5), browser_v416.js (7/7 Chromium, real data), README.md"
+  ],
+  "changedFiles": [
+    "orders_v3.html v3.6 — B1 whole-file SHA-256 content hash (legacy 500-byte hash still recognised for old import records) · B2 weekly uid = fnv(as_of | canonical customer), saveWeeklySnapshots upsert + count check, import queue (sequential, holds the orders auto-sync lock, refuses pull/push while importing), apply guard (a pull that started before a local write is skipped), strictly increasing ids, cloud envelope id = entity:uid (no cross-device collision), old numeric-id cloud rows read/deduped/migrated on next push; schemaVersion 416",
+    "shipping_v2.html v2.1 — B7 shipAsOfOf (file name or sheet rows), loading an older AS-OF report asks (仍要取代 / 取消), < 50 % rows asks, meta asOf + history (last 20 loads)",
+    "vrt_monthly_shipping_control_center_v1.html v3.7 · v4.16 — B8 monthShipDiff (added / changed(fields) / same / kept by row identity) + preview modal before save and push; importFile returns true/false for the inbox",
+    "vrt_customer_statistics_control_center_v1.html v3.2 — B3 parse in a Web Worker (Blob worker importing vendor/xlsx.full.min.js, sheets DASHBOARD + ALL CUSTOMER only, !ref trimmed, 120 s timeout, main-thread fallback); status shows parse ms",
+    "production_v4.html v4.4 — D1 「📰 生產日報」 tab: 日報/週報 toggle, date or week list, 產生／重新生成, ✈️ Telegram (shared sendMessage proxy, audit daily_report, asks AI/rule version), 📄 Word (.doc), 🤖 AI (GAS dailyReportAi; rejected text shown with the offending numbers), 📋 copy, history (own IndexedDB VRT_DailyReport + cloud index), Claude usage line; auto-generates the latest data date once after the page data loads (no send)",
+    "vrt-telegram-v1.js v1.1 — D2 🤖 AI 摘要 button in every module's ✈️ modal (GAS aiSummary with the computed text; number-checked; sends the AI version when accepted)",
+    "vrt-i18n-v1.js v1.1 — exports translateLines (used by the dialog layer)",
+    "vrt-i18n-en.js / vrt-i18n-km.js — 8,464 keys (+626; the report builder strings are bilingual by design, en = their English part)",
+    "vrt-platform-v40.js — PROD v4.16 badge; every ?v= tag 4.16.0",
+    "15 importing pages — VRTInbox.init wiring before </body>; 22 pages — vrt-dialog-v1.js in <head>; confirm/prompt sites converted in pages and shared JS (vrt-qc-v40/v42, vrt-fabric-v40/ui-v43, vrt-maintenance-v39, vrt-ie-balancing-v1, vrt-bom-costing-ui-v44, vrt-portal-overview-v1)",
+    "AppsScript/build_gas.py — v4.6 splice + doPost dispatch + handleMsg document hook; AppsScript/README.md — Script Properties table",
+    "qa/v41/gas_harness.js — binary blobs, base64, sub-folders, formatDate ss/'T'; qa/v414/i18n_extract.js — scans the new shared files; qa/v414/test_sync_fixes.js, qa/v413/test_realdata.js — weekly expectation = unique rows"
+  ],
+  "tests": {
+    "qa/v416/test_orders_weekly.js": "6/6",
+    "qa/v416/test_fixes_b.js": "9/9",
+    "qa/v416/test_daily_report.js": "9/9",
+    "qa/v416/test_inbox.js": "5/5",
+    "qa/v416/browser_v416.js (Chromium, real PROD data)": "7/7",
+    "qa/v414/test_sync_fixes.js": "10/10",
+    "qa/v414/test_tg_page.js": "13/13",
+    "qa/v414/test_portal_overview.js": "5/5",
+    "qa/v414/test_telegram.js (GAS v4.6)": "18/18",
+    "qa/v415/test_erp_link_core.js": "11/11",
+    "qa/v414/test_i18n_layer.js": "6/6",
+    "B3 3-minute freeze": "NOT REPRODUCED — the 10-06 file (1.7 MB) parses in ≈ 1.7 s here (worker and main thread); the worker version keeps the page responsive regardless",
+    "real Telegram / Drive / Gmail / Claude": "NOT TESTED against the live services (stubbed); acceptance F-C (file in a test group → pending list within 5 min) and F-D1 (3 consecutive days) are for the live run"
+  }
+}

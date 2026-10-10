@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>成品倉庫管理系統 · FG Inventory</title>
 <!--
@@ -240,8 +240,8 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body>
 
@@ -1446,7 +1446,7 @@ window.importJSON=async function(e){
   e.target.value='';
 };
 window.clearAllData=async function(){
-  if(!confirm(`確定清空全部 ${fmt(FG.length)} 筆 FG 資料？\n（不影響 Cutting / Sewing 資料庫）\n此操作不可復原。`)) return;
+  if(!await VRTDialog.confirm(`確定清空全部 ${fmt(FG.length)} 筆 FG 資料？\n（不影響 Cutting / Sewing 資料庫）\n此操作不可復原。`)) return;
   FG=[];
   await saveFG();
   toast('已清空 FG 資料','info');
@@ -1454,7 +1454,7 @@ window.clearAllData=async function(){
 };
 window.deleteRec=async function(id){
   const r=FG.find(x=>x.id===id); if(!r) return;
-  if(!confirm(`刪除此筆？\n${r.po} ${r.styleNo} ${fmt(r.pcs)} PCS`)) return;
+  if(!await VRTDialog.confirm(`刪除此筆？\n${r.po} ${r.styleNo} ${fmt(r.pcs)} PCS`)) return;
   FG=FG.filter(x=>x.id!==id);
   await saveFG(); renderRecs(); updateHeader();
   toast('已刪除 1 筆','info');
@@ -2574,5 +2574,6 @@ window.tgSendDaily=async function(){
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fg',lockKey:'fg',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto fg]',e)}},0)},{once:true});
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"fg",label:"📦 FG 成品",feed:f=>handleFiles([f])})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

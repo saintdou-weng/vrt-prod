@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 機修零件與機針管理 · Spare Parts &amp; Needle v4.13</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -222,12 +222,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.14.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.14.0"></script>
-<script src="vrt-import-core-v40.js?v=4.14.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-data-core-v39.js?v=4.16.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.16.0"></script>
+<script src="vrt-import-core-v40.js?v=4.16.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
 #app .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.v39-table{min-width:1000px}.v39-table td{min-width:75px}.v39-table td:nth-child(2),.v39-table td:nth-child(4){min-width:150px}.toolbar input,.toolbar select{max-width:100%;min-height:38px}.toolbar .tb-group{min-width:0}.tabs .tab{min-height:44px}
@@ -810,8 +810,8 @@ function savePart(id){
 function copyPart(id){const p=PARTS.find(x=>x.id===id);if(!p)return;
   const c=Object.assign({},p);c.id=uid();c.partNo=p.partNo+'-COPY';c.createdAt=todayStr();c.updatedAt=todayStr();
   PARTS.push(c);saveAll();renderInventory();toast('Copied');}
-function delPart(id){const p=PARTS.find(x=>x.id===id);if(!p)return;
-  if(!confirm(t('confirmDel')+'\n'+p.partNo))return;
+async function delPart(id){const p=PARTS.find(x=>x.id===id);if(!p)return;
+  if(!await VRTDialog.confirm(t('confirmDel')+'\n'+p.partNo))return;
   PARTS=PARTS.filter(x=>x.id!==id);saveAll();renderInventory();}
 
 function quickMove(id,type){
@@ -861,7 +861,7 @@ function renderHistory(){
   h+=`</tbody></table></div></div></div>`;
   $('app').innerHTML=h;
 }
-function delTxn(id){if(!confirm(t('confirmDel')))return;TXNS=TXNS.filter(x=>x.id!==id);saveAll();renderHistory();}
+async function delTxn(id){if(!await VRTDialog.confirm(t('confirmDel')))return;TXNS=TXNS.filter(x=>x.id!==id);saveAll();renderHistory();}
 
 /* ========== MONTHLY SUMMARY ========== */
 function balanceAtMonthEnd(partNo,yearMonth){
@@ -1114,7 +1114,7 @@ function printReport(){
 </body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
 }
-function restoreVersion(id){const v=VERSIONS.find(x=>x.id===id);if(!v)return;if(!confirm('Restore '+v.label+'?'))return;
+async function restoreVersion(id){const v=VERSIONS.find(x=>x.id===id);if(!v)return;if(!await VRTDialog.confirm('Restore '+v.label+'?'))return;
   PARTS=JSON.parse(JSON.stringify(v.parts));saveAll();renderReports();toast('Restored');}
 
 /* ===== Excel/CSV 匯入 ===== */
@@ -1265,7 +1265,7 @@ function saveSettings(){
   else renderSettings();
 }
 function applyTheme(){document.body.classList.toggle('dark',SET.theme==='dark');}
-function clearAll(){if(!confirm(t('confirmDel')))return;PARTS=[];TXNS=[];VERSIONS=[];SUPPLIERS=[];INVOICES=[];OCRHIST=[];saveAll(true);goTab('dashboard',null);}
+async function clearAll(){if(!await VRTDialog.confirm(t('confirmDel')))return;PARTS=[];TXNS=[];VERSIONS=[];SUPPLIERS=[];INVOICES=[];OCRHIST=[];saveAll(true);goTab('dashboard',null);}
 
 /* ===== 本機備份 / 還原 ===== */
 function backupLocal(){
@@ -1698,7 +1698,7 @@ async function commitOCR(){
   // 發票去重
   const dupKey=(H.supplier||'')+'|'+(H.invNo||'')+'|'+(H.date||'');
   const dup=INVOICES.find(iv=>(iv.supplier+'|'+iv.invNo+'|'+iv.date)===dupKey&&H.invNo);
-  if(dup){ if(!confirm(t('invDup')+'\n'+dupKey+'\n'+t('updateQ'))){toast(t('cancelQ'));return;} }
+  if(dup){ if(!await VRTDialog.confirm(t('invDup')+'\n'+dupKey+'\n'+t('updateQ'))){toast(t('cancelQ'));return;} }
   // 供應商自動建立
   if(H.supplier&&!SUPPLIERS.find(s=>s.name===H.supplier))
     SUPPLIERS.push({id:uid(),name:H.supplier,currency:H.currency||SET.currency,createdAt:todayStr()});
@@ -1764,11 +1764,12 @@ window.VRT_LOCAL_READY=(async function init(){
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'spareparts',lockKey:'spareparts',pull:async function(){return await (window.cloudDownload&&window.cloudDownload(true));},push:async function(){return await (window.cloudUpload&&window.cloudUpload(true));},canSync:function(){return !!((window.SET&&SET.gasUrl)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto spareparts]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
-<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.16.0"></script>
+<script src="vrt-telegram-v1.js?v=4.16.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"spareparts",tool:"spareparts",getData:()=>{const s=VRTParts39.getState();const m=s.maintenance||{};return {needle:m.needleChanges||[],part:m.partChanges||[],txns:s.txns||[]}}})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"spareparts",label:"🔧 機修零件",feed:f=>importExcel(f)})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

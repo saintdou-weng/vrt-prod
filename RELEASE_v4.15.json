@@ -1,0 +1,38 @@
+{
+  "release": "4.15",
+  "date": "2026-10-05",
+  "base": "4.14 (2026-10-01)",
+  "theme": "PROD ↔ ERP mutual entry links + ERP link centre (規格書 VRT_PROD_ERP_Claude_Integration_Spec_20261005 Phase 0 inventory / Phase 1 minimum read-only link)",
+  "appsScript": {
+    "production": "VRT_Production_v4.5.gs — delivered as a separate file (NOT in this repo: it holds the bot token). Paste over the existing project, deploy a NEW VERSION of the existing deployment (/exec unchanged, pollTelegram trigger unchanged). Change: /prod menu gets 🔗 ERP 對照 (vrt_erp_link_v1.html) + 🏢 VRT ERP ↗ (https://saintdou-weng.github.io/vrt-asset/); capabilities backendVersion 4.5.0, erpLink:true; checkProductionV45(). No new triggers, no setupBotCommands needed.",
+    "erp": "PSJERP_AppsScript專用_v0.4.4.gs — separate ERP project (PSJERP), delivered as a separate file (holds that bot's token/chat id). Paste over 0.4.3, run ADD_PROD_MENU() once. Changes: MENU ROUTE may be a full https URL; seeded rows 🏭 VRT Prod + 🔗 ERP 對照 (PROD); daily 15:30 message says NOT_CONNECTED instead of CLOUD_REFRESH_OK while the Bridge is not connected (規格書 11.1). Webhook, triggers, Script Properties untouched. Keeps the 0.4.3 update_id de-duplication.",
+    "securityNote": "The v4.14 full/patch ZIPs contained AppsScript/VRT_Production_v4.2.gs and v4.4.gs with CFG.BOT_TOKEN. From 4.15 the AppsScript folder holds only build_gas.py, period_summaries_block.gs and README.md; built .gs files live outside the repo (../gas/out). If the earlier AppsScript folder was pushed to GitHub, revoke the token at @BotFather and paste the new one into the GS."
+  },
+  "newFiles": [
+    "vrt_erp_link_v1.html — ERP 對照中心: manual import of ERP export files (CSV/TXT/XLSX/JSON contract; encoding BOM→UTF-8→Big5; header mapping confirmed by the user and saved as a versioned template by header signature; as_of; preview new/updated/same/skipped/errors; commit with batch log), read-only comparison ERP orders ↔ PROD customer PO lines / production plan / sewing cumulative / shipping schedule and ERP shipments ↔ shipping schedule (six states), fixed-business-day daily report draft (copy / version / JSON / ✈️ Telegram), crosswalk keys, backup/restore/clear, Smart Sync tool 'erplink' + auto-sync (switchable), isolated synthetic test data (in-memory, is_demo)",
+    "vrt-erp-link-core-v1.js — pure logic (also runs in Node): FIELDS contract, suggestMapping/detectDataset, parseText/decodeBytes, parseDate (ISO, yyyy/mm/dd, yyyymmdd, dd-MMM-yy, ROC, excel serial; a/b/yyyy ambiguous unless the template says MDY/DMY), normalizeRows (raw keys kept, row_hash, quality flags), mergeImport (idempotent, versions, never deletes), aggProd/aggErp, compareOrders, compareShipping, dailyReport, prev/nextWorkday, sampleFiles",
+    "qa/v415/test_erp_link_core.js (11/11), qa/v415/browser_erp_link.js (10/10 in Chromium with real PROD data), qa/v415/README.md",
+    "AppsScript/README.md"
+  ],
+  "changedFiles": [
+    "portal_v2.html — header links 🏢 VRT ERP ↗ / 🔗 ERP 對照; new group 🔗 ERP 連結 with the ERP link centre card and the VRT ERP card; ?v= tags 4.15.0",
+    "vrt-platform-v40.js — PROD v4.15 badge + a 'VRT ERP ↗' link on every page (data-no-i18n); VRTPlatform.erpUrl",
+    "vrt-tg-summary-v1.js — v1.1: new 'erplink' kind/builder (ERP orders due in period, shipments, comparison state counts, top differences); rowsOf/dateFnOf for erplink",
+    "vrt-i18n-en.js / vrt-i18n-km.js — 7,838 keys (+491: new page, core, summary builder, portal cards)",
+    "AppsScript/build_gas.py — base/output outside the repo; v4.5 patch step (ERP menu buttons, version strings, checkProductionV45)",
+    "qa/v41/gas_harness.js, qa/v414/test_telegram.js, test_tg_page.js, test_portal_overview.js — read the built GS from ../gas/out (env VRT_GS); telegram test asserts the two new buttons and backendVersion 4.5.0",
+    "qa/v414/i18n_extract.js — scans the new page and core",
+    "AppsScript/VRT_Production_v4.2.gs, VRT_Production_v4.4.gs — REMOVED from the repo (credentials)"
+  ],
+  "erpSideDelivery": "VRT_ERP_v0.4.1_PROD入口補丁.zip: index.html (6 small edits: rail links to the PROD portal and the ERP link centre, compare-centre note + links, production-page link, i18n keys, version note v0.4.1), PSJERP.gs 0.4.4 with EMPTY token/chat-id lines (repo-safe), PATCH_NOTES.md listing every edit so the same edits can be re-applied to a newer index.html coming from the other chat (which is capturing the real ERP data).",
+  "tests": {
+    "qa/v415/test_erp_link_core.js": "11/11",
+    "qa/v415/browser_erp_link.js (Chromium, real PROD data)": "10/10",
+    "qa/v414/test_telegram.js (GAS v4.5)": "18/18",
+    "qa/v414/test_tg_page.js": "13/13",
+    "qa/v414/test_sync_fixes.js": "10/10",
+    "qa/v414/test_portal_overview.js": "5/5",
+    "qa/v414/test_i18n_layer.js": "6/6",
+    "real ERP export comparison": "NOT TESTED — no real ERP export file was available (規格書 2.2.10); the other chat is capturing it"
+  }
+}

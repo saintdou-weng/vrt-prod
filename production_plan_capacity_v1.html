@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW"><head>
-<script src="vrt-i18n-v1.js?v=4.14.0"></script>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Production Plan & Capacity v3.1</title>
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="vrt-io-v1.js?v=4.14.0"></script>
+<script src="vrt-io-v1.js?v=4.16.0"></script>
 <style>
 *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
 .header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -94,9 +94,9 @@ select,input{border:1px solid #d0d5e8;border-radius:7px;padding:7px 10px;backgro
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head><body>
 <div class="header"><div class="logo">🏭</div><div><div class="htitle">VRT Production Plan & Capacity</div><div class="hsub">生產排產與產能控制中心 · v4.14 · AUTO SYNC · <span id="cloudStatus">☁ Local only</span></div></div><div class="grow"></div><div class="hstats"><div class="hstat"><b id="hRec">0</b><span id="hRecLabel">本月記錄</span></div><div class="hstat"><b id="hPcs">0</b><span id="hPcsLabel">本月排單 pcs</span></div><div class="hstat"><b id="hLines">0</b><span id="hLinesLabel">本月線別</span></div></div><button class="hbtn" id="langBtn" onclick="toggleLang()">中</button><button class="hbtn" onclick="cloudPush()">☁↑</button><button class="hbtn" onclick="newPlan()">＋新增</button><button class="hbtn" onclick="exportPlanXlsx()">⬇ Excel</button><button class="hbtn" onclick="planBackup()">💾 備份 JSON</button><button class="hbtn" onclick="goTab('import')">📥 匯入</button></div>
 <div class="tabs">
@@ -205,12 +205,12 @@ function recordTable(rs){return `<div class="tbl"><table><thead><tr><th>Line</th
 function renderRecords(){let q=FILTER.q.toLowerCase(),rs=DATA.records.filter(r=>!q||[r.line,r.customer,r.po,r.style,r.color,r.size].join(' ').toLowerCase().includes(q));$('records').innerHTML=`<div class="card"><div class="frow"><input class="search" placeholder="Line / Customer / PO / Style / Color" oninput="FILTER.q=this.value;renderRecords()" value="${esc(FILTER.q)}"><button class="btn by" onclick="newPlan()">＋新增</button><button class="btn bg" onclick="exportPlanXlsx()">Excel 匯出</button><button class="btn bg" onclick="exportPlanCsv()">CSV 匯出</button><span class="subtxt">${N(rs.length)} records</span></div>${recordTable(rs)}</div>`}
 function planForm(r={}){return `<div class="grid2"><label>Month<input id="ppMonth" type="month" value="${esc(r.month||SEL_MONTH)}"></label><label>Line<input id="ppLine" value="${esc(r.line||'')}"></label><label>Customer<input id="ppCustomer" value="${esc(r.customer||'')}"></label><label>PO<input id="ppPo" value="${esc(r.po||'')}"></label><label>Style<input id="ppStyle" value="${esc(r.style||'')}"></label><label>Color<input id="ppColor" value="${esc(r.color||'')}"></label><label>Size<input id="ppSize" value="${esc(r.size||'')}"></label><label>Plan pcs<input id="ppQty" type="number" min="1" value="${num(r.sewingQty)}"></label><label>Start<input id="ppStart" type="date" value="${esc(r.startDate||'')}"></label><label>End<input id="ppEnd" type="date" value="${esc(r.endDate||'')}"></label><label>Manpower<input id="ppMan" type="number" min="0" value="${num(r.manpower)}"></label><label>Daily output<input id="ppDaily" type="number" min="0" value="${num(r.dailyOutput)}"></label></div><div class="btnrow" style="margin-top:14px"><button class="btn bb" onclick="savePlanEditor('${r.id||''}')">儲存</button><button class="btn bg" onclick="closeModal()">取消</button></div>`}function newPlan(){openModal('新增 Production Plan',planForm({month:SEL_MONTH}))}function editPlan(id){let r=DATA.records.find(x=>x.id===id);if(r)openModal('修改 Production Plan',planForm(r))}
 async function savePlanEditor(oldId){let r={month:$('ppMonth').value,line:normLine($('ppLine').value),customer:$('ppCustomer').value.trim(),po:$('ppPo').value.trim(),style:$('ppStyle').value.trim(),color:$('ppColor').value.trim(),size:$('ppSize').value.trim(),sewingQty:num($('ppQty').value),startDate:$('ppStart').value,endDate:$('ppEnd').value,manpower:num($('ppMan').value),dailyOutput:num($('ppDaily').value),sourceSheet:'Manual'};if(!r.month||!r.line||!r.sewingQty||!(r.customer||r.po||r.style)){toast('Month、Line、Plan pcs 及識別欄位必填');return}r.id=planId(r);if(DATA.records.some(x=>x.id===r.id&&x.id!==oldId)){toast('相同排程已存在，未重複新增');return}if(oldId)DATA.records=DATA.records.filter(x=>x.id!==oldId);DATA.records.push(r);DATA.savedAt=new Date().toISOString();await save();SEL_MONTH=r.month;closeModal();renderAll();toast('已儲存')}
-async function deletePlan(id){if(!confirm('確定刪除這筆 Production Plan？'))return;DATA.records=DATA.records.filter(x=>x.id!==id);DATA.savedAt=new Date().toISOString();await save();closeModal();renderAll();toast('已刪除')}
+async function deletePlan(id){if(!await VRTDialog.confirm('確定刪除這筆 Production Plan？'))return;DATA.records=DATA.records.filter(x=>x.id!==id);DATA.savedAt=new Date().toISOString();await save();closeModal();renderAll();toast('已刪除')}
 function planExportRows(){return DATA.records.map(r=>({Month:r.month,Line:r.line,Customer:r.customer,PO:r.po,Style:r.style,Color:r.color,Size:r.size,'Plan pcs':r.sewingQty,'Start Date':r.startDate,'End Date':r.endDate,Manpower:r.manpower,'Daily Output':r.dailyOutput,Remark:r.remark||''}))}function planBlob(blob,name){let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}function exportPlanXlsx(){let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(planExportRows()),'PRODUCTION PLAN');XLSX.writeFile(wb,'VRT_PRODUCTION_PLAN.xlsx')}function exportPlanCsv(){let csv='\ufeff'+XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(planExportRows()));planBlob(new Blob([csv],{type:'text/csv;charset=utf-8'}),'VRT_PRODUCTION_PLAN.csv')}
 /* v4.13 JSON backup / restore (same shape the other modules use through VRTIO). */
 function planBackup(){if(!DATA.records.length){toast('尚無排單資料可備份');return}const name=VRTIO.backupJSON('production_plan',{records:DATA.records,source:DATA.source,savedAt:DATA.savedAt,versions:VERS.slice(0,12)});toast('已備份 '+name)}
 async function planRestore(file){try{const d=await VRTIO.readJSON(file),recs=Array.isArray(d.records)?d.records:Array.isArray(d)?d:null;if(!recs)throw new Error('備份裡找不到 records 陣列');const clean=sanitizePlanRecords(recs.map(r=>({...r,line:normLine(r.line),id:r.id||planId(r)}))),months=[...new Set(clean.records.map(r=>r.month))].sort();if(!clean.records.length)throw new Error('備份裡沒有有效排單');
-  if(!confirm('還原 '+file.name+'？\n\n'+clean.records.length+' 筆排單 · 月份 '+months.join(', ')+(clean.dropped?' · 清理 '+clean.dropped+' 筆':'')+'\n\n目前排單會整個被取代（目前版本先存入版本歷史）。'))return;
+  if(!await VRTDialog.confirm('還原 '+file.name+'？\n\n'+clean.records.length+' 筆排單 · 月份 '+months.join(', ')+(clean.dropped?' · 清理 '+clean.dropped+' 筆':'')+'\n\n目前排單會整個被取代（目前版本先存入版本歷史）。'))return;
   if(DATA.records.length&&sig(DATA.records)!==sig(clean.records))VERS.unshift(snapshot(DATA.records,DATA.source));if(Array.isArray(d.versions))for(const v of d.versions)if(v&&Array.isArray(v.records)&&!VERS.some(x=>x.savedAt===v.savedAt))VERS.push(v);VERS=VERS.slice(0,12);
   DATA={records:clean.records,source:d.source||('JSON 還原 · '+file.name),savedAt:new Date().toISOString()};await save();SEL_MONTH=months.slice(-1)[0]||SEL_MONTH;PERIOD_KEY='';PLAN_PENDING512=null;renderAll();cloudState('☁ Local restored');toast('已還原 '+clean.records.length+' 筆')}catch(e){toast('還原失敗：'+e.message)}}
 window.planBackup=planBackup;window.planRestore=planRestore;
@@ -33832,10 +33832,11 @@ window.renderReport = async function () {
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'prodplan',lockKey:'prodplan',pull:async function(){return await (window.cloudPull&&window.cloudPull(true));},push:async function(){return await (window.cloudPush&&window.cloudPush(true));},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto prodplan]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
-<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.16.0"></script>
+<script src="vrt-telegram-v1.js?v=4.16.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"prodplan",tool:"prodplan",getData:()=>DATA.records})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"prodplan",label:"🗓 排單產能",feed:f=>importFile(f)})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body></html>

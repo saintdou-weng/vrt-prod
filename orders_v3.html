@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 訂單管理系統 v3</title>
+<title>VRT 訂單管理系統 v3.6</title>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -184,14 +184,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
 
 <div class="hdr">
-  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.5 · Weekly 最新日期／箱數分析／DB 修正</div></div>
+  <div><div class="logo">VRT <b>ORDER</b></div><div class="sub">訂單管理系統 v3.6 · Weekly 內容雜湊去重／匯入鎖／雲端業務鍵（v4.16）</div></div>
   <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
     <span class="link-no" id="sw-link">● 車縫未連接</span>
     <span class="link-no" id="ct-link">● 裁剪未連接</span>
@@ -873,8 +873,8 @@ function openDB(){
     });
 }
 const dbAll=s=>new Promise((r,j)=>{const t=db.transaction(s,'readonly');const q=t.objectStore(s).getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
-const dbAdd=(s,d)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite');const q=t.objectStore(s).add(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
-const dbPut=(s,d)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite');const q=t.objectStore(s).put(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
+const dbAdd=(s,d)=>new Promise((r,j)=>{if(d&&typeof d==='object'&&d.id==null)d.id=ordNewId();ORD_WRITE_SEQ++;const t=db.transaction(s,'readwrite');const q=t.objectStore(s).add(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
+const dbPut=(s,d)=>new Promise((r,j)=>{ORD_WRITE_SEQ++;const t=db.transaction(s,'readwrite');const q=t.objectStore(s).put(d);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)});
 const dbClear=s=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).clear().onsuccess=()=>r()});
 const dbDel=(s,id)=>new Promise(r=>{db.transaction(s,'readwrite').objectStore(s).delete(id).onsuccess=()=>r()});
 
@@ -944,6 +944,21 @@ async function tryReadLinkedStore(storeName){
 
 
 function weeklyImportSourceDate(imp){return imp?normalizeWeeklyDate(imp.as_of||'',`${imp.file_name||''} ${imp.subject||''}`):null}
+/* v4.16 (B2): one weekly snapshot row per as_of_date + canonical customer. Re-importing the same week updates the row in place
+   (keeps the local id, bumps updated_at); nothing is duplicated and nothing else is deleted. Returns counts and verifies them. */
+async function saveWeeklySnapshots(result,src){
+  const asOf=result.asOf;const byUid=new Map();for(const w of APP.weekly||[]){const u=wkUidOf(w);if(u&&(!byUid.has(u)||(Number(w.id)||0)>(Number(byUid.get(u).id)||0)))byUid.set(u,w)}
+  let added=0,updated=0,same=0;const seen=new Set();
+  for(const s0 of result.snapshots){const s={...s0,as_of_date:asOf};const uid=wkUid(asOf,s.customer);if(seen.has(uid)){continue}seen.add(uid);const ex=byUid.get(uid);
+    if(ex){const changed=['garment','apron','topNapkin','fabric','totalOpenCtns','producedCtns','unproducedCtns','openSmv','openAmount','remark'].some(k=>String(ex[k]==null?'':ex[k])!==String(s[k]==null?'':s[k]));
+      if(!changed&&ex.source_hash===src.hash){same++;continue}
+      const row={...ex,...s,uid,id:ex.id,source_file:src.file,source_hash:src.hash,imported_at:ex.imported_at||nowLocal(),updated_at:nowLocal()};if(src.subject||ex.source_subject)row.source_subject=src.subject||ex.source_subject;await dbPut('weekly_snapshots',row);updated++}
+    else{const row={...s,uid,source_file:src.file,source_hash:src.hash,imported_at:nowLocal()};if(src.subject)row.source_subject=src.subject;await dbAdd('weekly_snapshots',row);added++}}
+  const rows=await dbAll('weekly_snapshots');const have=new Set(rows.filter(w=>normalizeWeeklyDate(w.as_of_date,w.source_file||'')===asOf).map(wkUidOf));
+  const missing=[...seen].filter(u=>!have.has(u));
+  if(missing.length)log(`⚠ 核對：週報 ${asOf} 應有 ${seen.size} 筆，資料庫只找到 ${seen.size-missing.length} 筆`,'err');
+  return {added,updated,same,total:seen.size,verified:!missing.length,inDb:have.size};
+}
 async function repairWeeklyHistory(){
   const imports=(APP.imports||[]).filter(i=>i.type==='weekly').sort((a,b)=>String(a.imported_at||'').localeCompare(String(b.imported_at||''))||(Number(a.id)||0)-(Number(b.id)||0));
   let fixed=0;
@@ -1067,11 +1082,27 @@ function getMsgSubject(buf){
   for(const s of ss)if((s.includes('Order')||s.includes('Weekly'))&&!s.startsWith('Root')&&!s.startsWith('POP')&&!s.startsWith('Received')&&s.length>10)return s;
   return 'Unknown';
 }
-function hashBuf(buf){
+function hashBuf(buf){   // legacy (v4.15 and earlier): first 500 bytes + size — xlsx files from the same template collide. Kept only to recognise old import records.
   const a=new Uint8Array(buf);let h=0;
   for(let i=0;i<Math.min(a.length,500);i++)h=(h*31+a[i])>>>0;
   return h+'_'+a.length;
 }
+/* v4.16 (B1): whole-content hash. SHA-256 when crypto.subtle is available, FNV-1a over every byte otherwise. */
+function fnv32(str){let h=2166136261>>>0;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return ('00000000'+(h>>>0).toString(16)).slice(-8)}
+async function hashBufFull(buf){
+  const a=new Uint8Array(buf);
+  try{if(window.crypto&&crypto.subtle){const d=await crypto.subtle.digest('SHA-256',a);return 'sha256:'+Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,'0')).join('')}}catch(_){}
+  let h=2166136261>>>0;for(let i=0;i<a.length;i++){h^=a[i];h=Math.imul(h,16777619)}return 'fnv:'+(h>>>0).toString(16)+'_'+a.length;
+}
+/* v4.16 (B2): business identities that are the same on every device.
+   weekly snapshot = as_of_date + canonical customer; import record = type + content hash; audit = its content.
+   IndexedDB keeps the numeric autoIncrement id for local use only; the cloud envelope id uses the uid. */
+const wkUid=(asOf,customer)=>'wk_'+fnv32(String(asOf||'')+'|'+canonicalCustomer(customer));
+const wkUidOf=w=>w&&(w.uid||wkUid(normalizeWeeklyDate(w.as_of_date,w.source_file||'')||w.as_of_date,w.customer));
+const impUidOf=i=>i&&(i.uid||('imp_'+fnv32(String(i.type||'')+'|'+String(i.file_hash||'')+'|'+String(i.file_name||i.subject||'')+'|'+String(i.as_of||i.po_number||''))));
+const audUidOf=a=>{if(!a)return '';if(a.uid)return a.uid;const o={};for(const k of Object.keys(a).sort())if(k!=='id'&&k!=='uid')o[k]=a[k];return 'aud_'+fnv32(JSON.stringify(o))};
+let ORD_LAST_ID=0;const ordNewId=()=>{const t=Date.now()*1000;ORD_LAST_ID=t>ORD_LAST_ID?t:ORD_LAST_ID+1;return ORD_LAST_ID};   // time-based, strictly increasing numeric ids: unique on this device even inside one millisecond, and practically never colliding across devices (autoIncrement ids did)
+let ORD_IMPORTING=false,ORD_WRITE_SEQ=0;   // import in progress / local-write counter (a cloud pull started before a write must not overwrite it)
 
 // ══ PDF TEXT ══
 async function pdfText(buf){
@@ -2040,7 +2071,7 @@ async function processFile(file){
     // ── 直接拖入 PDF ──
     if(ext==='pdf'){
       log('識別: PDF 採購訂單（直接匯入）','info');
-      const fh=hashBuf(buf),already=APP.imports.some(i=>i.type==='po'&&i.file_hash===fh);
+      const fhLegacy=hashBuf(buf),fh=await hashBufFull(buf),already=APP.imports.some(i=>i.type==='po'&&(i.file_hash===fh||i.file_hash===fhLegacy));
       if(already&&!poNeedsReparse49(fh)){log('↷ 已匯入相同 PDF，資料完整，跳過避免重複','warn');return;}
       if(already)log('↻ 偵測到舊版解析欄位異常，允許同 PO 原地重新解析修正','info');
       openOrderModal('⏳ PDF 解析中',`<div class="info-box"><b>${escHtml(file.name)}</b><br><span id="poParseProgress49">準備解析 PDF…</span><br><small>大型多頁 ADI PDF 會逐頁顯示進度；解析失敗不會寫入資料。</small></div>`);
@@ -2053,13 +2084,14 @@ async function processFile(file){
     // ── 直接拖入 Excel（週報） ──
     if(ext==='xls'||ext==='xlsx'){
       log('識別: 週報（直接匯入）','info');
-      const fh=hashBuf(buf);if(APP.imports.some(i=>i.type==='weekly'&&i.file_hash===fh)){log('↷ 已匯入相同週報，跳過','warn');return;}
+      const fh=await hashBufFull(buf);   // v4.16 B1: whole-file hash (the old 500-byte hash made different weeks look identical)
+      if(APP.imports.some(i=>i.type==='weekly'&&i.file_hash===fh)){log('↷ 已匯入完全相同的週報檔（內容雜湊相同），跳過','warn');return;}
       const dm=file.name.match(/(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\w+[-\/]\d+[-\/]\d+)/);
       const result=parseWeekly(buf,dm?dm[1]:'',file.name);
       if(!result){log('❌ 週報解析失敗','err');return;}
-      let saved=0;for(const s of result.snapshots){await dbAdd('weekly_snapshots',{...s,source_file:file.name,source_hash:fh,imported_at:nowLocal()});saved++;}
-      log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
-      await dbAdd('order_imports',{type:'weekly',subject:file.name,file_name:file.name,file_hash:fh,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
+      const r=await saveWeeklySnapshots(result,{file:file.name,hash:fh});
+      log(`✅ 週報 ${result.asOf}：新增 ${r.added} · 更新 ${r.updated} · 相同 ${r.same}（共 ${r.total} 客戶${r.verified?'，核對一致':'，⚠ 核對不符'}）`,r.verified?'':'err');
+      await dbAdd('order_imports',{type:'weekly',uid:'imp_'+fnv32('weekly|'+fh),subject:file.name,file_name:file.name,file_hash:fh,file_hash_legacy:hashBuf(buf),as_of:result.asOf,rows:r.total,added:r.added,updated:r.updated,imported_at:nowLocal()});
       await loadAll();refreshAll();return;
     }
     // ── .msg 郵件（原有流程，完全保留） ──
@@ -2069,24 +2101,23 @@ async function processFile(file){
       log('識別: 週報','info');
       const xlsxBuf=extractXlsx(buf);
       if(!xlsxBuf){log('❌ 找不到XLS','err');return;}
-      const fh=hashBuf(xlsxBuf);if(APP.imports.some(i=>i.type==='weekly'&&i.file_hash===fh)){log('↷ 已匯入相同週報，跳過','warn');return;}
+      const fh=await hashBufFull(xlsxBuf);if(APP.imports.some(i=>i.type==='weekly'&&i.file_hash===fh)){log('↷ 已匯入完全相同的週報檔（內容雜湊相同），跳過','warn');return;}
       const dm=subj.match(/(\w+[-\/]\d+[-\/]\d+|\d{4}[-\/]\d{2}[-\/]\d{2})/);
       const result=parseWeekly(xlsxBuf,dm?dm[1]:'',file.name+' '+subj);
       if(!result){log('❌ 週報解析失敗','err');return;}
-      let saved=0;
-      for(const s of result.snapshots){await dbAdd('weekly_snapshots',{...s,source_file:file.name,source_hash:fh,source_subject:subj,imported_at:nowLocal()});saved++;}
-      log(`✅ 週報 ${result.asOf} 儲存 ${saved}筆`,'');
-      await dbAdd('order_imports',{type:'weekly',subject:subj,file_name:file.name,file_hash:fh,as_of:result.asOf,rows:saved,imported_at:nowLocal()});
+      const r=await saveWeeklySnapshots(result,{file:file.name,hash:fh,subject:subj});
+      log(`✅ 週報 ${result.asOf}：新增 ${r.added} · 更新 ${r.updated} · 相同 ${r.same}（共 ${r.total} 客戶${r.verified?'，核對一致':'，⚠ 核對不符'}）`,r.verified?'':'err');
+      await dbAdd('order_imports',{type:'weekly',uid:'imp_'+fnv32('weekly|'+fh),subject:subj,file_name:file.name,file_hash:fh,file_hash_legacy:hashBuf(xlsxBuf),as_of:result.asOf,rows:r.total,added:r.added,updated:r.updated,imported_at:nowLocal()});
     }else{
       log('識別: 採購訂單','info');
       const pdfs=extractPdfs(buf);
       if(!pdfs.length){log('❌ 找不到PDF','err');return;}
       const seen=new Set();const unique=[];
-      for(const p of pdfs){const h=hashBuf(p.data);if(!seen.has(h)){seen.add(h);unique.push(p);}else log(`跳過重複: ${p.name}`,'warn');}
+      for(const p of pdfs){const h=await hashBufFull(p.data);if(!seen.has(h)){seen.add(h);unique.push(p);}else log(`跳過重複: ${p.name}`,'warn');}
       log(`PDF ${unique.length}個（去重後）`,'info');
       for(const{data:pd,name:pn2}of unique){
         log(`解析: ${pn2}`,'info');
-        const ph=hashBuf(pd),already=APP.imports.some(i=>i.type==='po'&&i.file_hash===ph);
+        const phLegacy=hashBuf(pd),ph=await hashBufFull(pd),already=APP.imports.some(i=>i.type==='po'&&(i.file_hash===ph||i.file_hash===phLegacy));
         if(already&&!poNeedsReparse49(ph)){log(`↷ ${pn2} 已匯入且資料完整，跳過`,'warn');continue;}
         openOrderModal('⏳ PDF 解析中',`<div class="info-box"><b>${escHtml(pn2)}</b><br><span id="poParseProgress49">準備解析 PDF…</span></div>`);
         try{
@@ -2936,21 +2967,34 @@ async function restore(e){
   let b;try{b=JSON.parse(await f.text())}catch(err){alert('還原失敗：不是有效的 JSON 備份（'+err.message+'）');return}
   const stores=[['po_lines',b.po_lines],['po_headers',b.po_headers],['weekly_snapshots',b.weekly_snapshots],['order_imports',b.order_imports],['parse_audit',b.parse_audit]].filter(([,d])=>Array.isArray(d));
   if(!stores.length){alert('還原失敗：檔案裡沒有 po_lines / po_headers / weekly_snapshots 等資料');return}
-  if(!confirm('還原 '+f.name+'？\n\n'+stores.map(([s,d])=>s+' '+d.length+' 筆').join('、')+'\n\n檔案裡有的資料表會整個以備份取代，沒有的資料表保留。'))return;
+  if(!await VRTDialog.confirm('還原 '+f.name+'？\n\n'+stores.map(([s,d])=>s+' '+d.length+' 筆').join('、')+'\n\n檔案裡有的資料表會整個以備份取代，沒有的資料表保留。'))return;
   // v4.13: snapshot first so a failure half-way can be rolled back instead of leaving a partial store.
   const before={};for(const[s]of stores)before[s]=await dbAll(s);
   try{for(const[s,d]of stores){await dbClear(s);for(const r of d)await dbAdd(s,r);}}
   catch(err){for(const[s]of stores){try{await dbClear(s);for(const r of before[s]||[])await dbAdd(s,r)}catch(_){}}alert('還原失敗，已恢復原資料：'+err.message);await loadAll();refreshAll();return}
   await loadAll();refreshAll();alert(`還原成功 ${b.po_lines?.length||0}筆PO, ${b.weekly_snapshots?.length||0}筆週報`);
 }
-async function ccAll(){if(!confirm('清除匯入記錄？'))return;await dbClear('order_imports');await loadAll();renderRecentList();}
-async function ccOrders(){if(!confirm('⚠️ 清除全部訂單資料？'))return;for(const s of['po_lines','po_headers','weekly_snapshots','order_imports','parse_audit'])await dbClear(s);await loadAll();refreshAll();alert('已清除');}
+async function ccAll(){if(!await VRTDialog.confirm('清除匯入記錄？'))return;await dbClear('order_imports');await loadAll();renderRecentList();}
+async function ccOrders(){if(!await VRTDialog.confirm('⚠️ 清除全部訂單資料？'))return;for(const s of['po_lines','po_headers','weekly_snapshots','order_imports','parse_audit'])await dbClear(s);await loadAll();refreshAll();alert('已清除');}
 
 // ══ DRAG DROP ══
 function dov(e){e.preventDefault();e.currentTarget.classList.add('ov');}
 function dol(e){e.currentTarget.classList.remove('ov');}
-async function ddr(e){e.preventDefault();e.currentTarget.classList.remove('ov');const ff=[...e.dataTransfer.files].filter(f=>/\.(msg|pdf|xls|xlsx)$/i.test(f.name));if(!ff.length){log('請拖入 .msg / .pdf / .xlsx','warn');return;}for(const f of ff)await processFile(f);}
-async function fsel(e){for(const f of[...e.target.files])await processFile(f);e.target.value='';}
+async function ddr(e){e.preventDefault();e.currentTarget.classList.remove('ov');const ff=[...e.dataTransfer.files].filter(f=>/\.(msg|pdf|xls|xlsx)$/i.test(f.name));if(!ff.length){log('請拖入 .msg / .pdf / .xlsx','warn');return;}await importQueue(ff);}
+async function fsel(e){const ff=[...e.target.files];e.target.value='';await importQueue(ff);}
+/* v4.16 (B2): files are processed one at a time while the orders auto-sync lock is held (and refreshed), so no cloud pull or push
+   can run in the middle of an import. The push is scheduled once, after the whole batch. */
+let ORD_QUEUE=[],ORD_QUEUE_RUNNING=false;
+async function importQueue(files){
+  ORD_QUEUE.push(...files);if(ORD_QUEUE_RUNNING)return;ORD_QUEUE_RUNNING=true;ORD_IMPORTING=true;
+  const lock=()=>{try{return window.VRTProdAutoSync?VRTProdAutoSync.lock('orders'):true}catch(_){return true}};
+  if(!lock())log('⏳ 其他分頁正在同步訂單，等候中…','warn');
+  let waited=0;while(!lock()&&waited<60000){await new Promise(r=>setTimeout(r,1500));waited+=1500}
+  const hb=setInterval(lock,15000);const n0=ORD_QUEUE.length;let done=0;
+  try{while(ORD_QUEUE.length){const f=ORD_QUEUE.shift();done++;if(n0>1)log(`— 檔案 ${done}/${Math.max(n0,done+ORD_QUEUE.length)} —`,'info');try{await processFile(f)}catch(e){log('❌ '+f.name+'：'+e.message,'err')}}}
+  finally{clearInterval(hb);ORD_IMPORTING=false;ORD_QUEUE_RUNNING=false;try{if(window.VRTProdAutoSync)VRTProdAutoSync.unlock('orders')}catch(_){}
+    try{if(window.VRTProdAutoSync)VRTProdAutoSync.markDirty('orders','import',{},900)}catch(_){}}
+}
 
 // ══ RECENT ══
 function renderRecentList(){
@@ -2972,10 +3016,10 @@ function renderSettings(){
   updateDbStats();
 }
 function renderCrud(){const el=document.getElementById('crud-body');if(!el)return;const q=(document.getElementById('crud-q').value||'').toLowerCase();let rows=APP.orders.filter(o=>!q||[o.customer,o.po_number,o.style_code,o.sku,o.color,o.size].join(' ').toLowerCase().includes(q));document.getElementById('crud-count').textContent=`${rows.length} / ${APP.orders.length} 筆`;el.innerHTML=rows.slice(0,1000).map(o=>`<tr><td><b>${o.customer||'-'}</b><div class="subtxt">${o.po_number||'-'}</div></td><td>${o.style_code||'-'}<div class="subtxt">${o.sku||''}</div></td><td>${o.color||'-'}</td><td>${o.size||'-'}</td><td class="num">${Number(o.qty||0).toLocaleString()}</td><td class="mono">${DateEngine.normalize(o.ship_date||o.cancel_date)||o.ship_date||'-'}</td><td class="num">${o.unit_price==null?'-':Number(o.unit_price).toFixed(2)}</td><td><button class="btn bg2" onclick="editOrderLine(${o.id})" style="font-size:9px;padding:3px 7px">修改</button> <button class="btn br" onclick="deleteOrderLine(${o.id})" style="font-size:9px;padding:3px 7px">刪除</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">無資料</td></tr>'}
-function askOrderLine(old={}){const customer=prompt('Customer',old.customer||'');if(customer===null)return null;const po_number=prompt('PO Number',old.po_number||'');if(po_number===null)return null;const style_code=prompt('Style',old.style_code||'');if(style_code===null)return null;const sku=prompt('SKU / Item',old.sku||style_code||'');if(sku===null)return null;const color=prompt('Color',old.color||'');if(color===null)return null;const size=prompt('Size',old.size||'');if(size===null)return null;const qty=Number(prompt('Qty',old.qty||0));const ship_date=DateEngine.normalize(prompt('Ship Date YYYY-MM-DD',old.ship_date||'')||'');const unit_price=Number(prompt('Unit Price',old.unit_price||0))||0;if(!customer.trim()||!po_number.trim()||!qty){alert('Customer、PO、Qty 必填');return null}return{...old,customer:customer.trim(),po_number:po_number.trim(),style_code:style_code.trim(),sku:sku.trim(),color:color.trim(),size:size.trim(),qty,ship_date,unit_price,ext_price:qty*unit_price,source_type:old.source_type||'manual',source_file:old.source_file||'Manual'}}
-async function addOrderLine(){const r=askOrderLine();if(!r)return;const k=x=>[x.customer,x.po_number,x.sku,x.style_code,x.color,x.size,x.ship_date].join('|').toUpperCase();if(APP.orders.some(x=>k(x)===k(r))){alert('相同訂單明細已存在，未重複新增');return}r.id=await dbAdd('po_lines',r);APP.orders.push(r);renderCrud()}
-async function editOrderLine(id){const old=APP.orders.find(x=>x.id===id);if(!old)return;const r=askOrderLine(old);if(!r)return;await dbPut('po_lines',r);APP.orders=APP.orders.map(x=>x.id===id?r:x);renderCrud()}
-async function deleteOrderLine(id){if(!confirm('確定刪除這筆訂單明細？'))return;await dbDel('po_lines',id);APP.orders=APP.orders.filter(x=>x.id!==id);renderCrud()}
+async function askOrderLine(old={}){const customer=await VRTDialog.prompt('Customer',old.customer||'');if(customer===null)return null;const po_number=await VRTDialog.prompt('PO Number',old.po_number||'');if(po_number===null)return null;const style_code=await VRTDialog.prompt('Style',old.style_code||'');if(style_code===null)return null;const sku=await VRTDialog.prompt('SKU / Item',old.sku||style_code||'');if(sku===null)return null;const color=await VRTDialog.prompt('Color',old.color||'');if(color===null)return null;const size=await VRTDialog.prompt('Size',old.size||'');if(size===null)return null;const qty=Number(await VRTDialog.prompt('Qty',old.qty||0));const ship_date=DateEngine.normalize(await VRTDialog.prompt('Ship Date YYYY-MM-DD',old.ship_date||'')||'');const unit_price=Number(await VRTDialog.prompt('Unit Price',old.unit_price||0))||0;if(!customer.trim()||!po_number.trim()||!qty){alert('Customer、PO、Qty 必填');return null}return{...old,customer:customer.trim(),po_number:po_number.trim(),style_code:style_code.trim(),sku:sku.trim(),color:color.trim(),size:size.trim(),qty,ship_date,unit_price,ext_price:qty*unit_price,source_type:old.source_type||'manual',source_file:old.source_file||'Manual'}}
+async function addOrderLine(){const r=await askOrderLine();if(!r)return;const k=x=>[x.customer,x.po_number,x.sku,x.style_code,x.color,x.size,x.ship_date].join('|').toUpperCase();if(APP.orders.some(x=>k(x)===k(r))){alert('相同訂單明細已存在，未重複新增');return}r.id=await dbAdd('po_lines',r);APP.orders.push(r);renderCrud()}
+async function editOrderLine(id){const old=APP.orders.find(x=>x.id===id);if(!old)return;const r=await askOrderLine(old);if(!r)return;await dbPut('po_lines',r);APP.orders=APP.orders.map(x=>x.id===id?r:x);renderCrud()}
+async function deleteOrderLine(id){if(!await VRTDialog.confirm('確定刪除這筆訂單明細？'))return;await dbDel('po_lines',id);APP.orders=APP.orders.filter(x=>x.id!==id);renderCrud()}
 function exportOrderLinesCsv(){if(!APP.orders.length)return;const keys=['customer','po_number','style_code','sku','color','size','qty','ship_date','unit_price','ext_price','source_file'],head=['Customer','PO','Style','SKU','Color','Size','Qty','Ship Date','Unit Price','Amount','Source'],csv='\ufeff'+[head.join(','),...APP.orders.map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))].join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='VRT_ORDER_LINES.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 function saveAllSets(){
   APP.sets.apiKey=document.getElementById('s-ki').value.trim();
@@ -3077,7 +3121,7 @@ function expQcCsv(){
   audit.forEach(x=>rows.push([x.file,x.customer,x.po,x.parser,x.lineCount,x.avgConfidence,x.declaredTotal,x.computedTotal,x.totalMatch,(x.issues||[]).length,x.reviewCount,x.imported_at]));
   dl(rows,'parse_qc');
 }
-async function clearQc(){if(!confirm('清除解析審計（不影響訂單資料）？'))return;await dbClear('parse_audit');APP.audit=[];renderQC();}
+async function clearQc(){if(!await VRTDialog.confirm('清除解析審計（不影響訂單資料）？'))return;await dbClear('parse_audit');APP.audit=[];renderQC();}
 window.renderQC=renderQC;window.renderTemplates=renderTemplates;window.expQcCsv=expQcCsv;window.clearQc=clearQc;
 
 function refreshAll(){
@@ -3091,7 +3135,7 @@ async function init(){
     document.getElementById('db-st').textContent='● DB已連接';
     document.getElementById('db-st').style.color='var(--grn)';
     await loadAll();loadSets();pdfUiRestore43();refreshAll();
-    log('VRT 訂單管理系統 v3.5 就緒','info');
+    log('VRT 訂單管理系統 v3.6 就緒（v4.16：週報內容雜湊、匯入排隊鎖）','info');
     log('Weekly 與客戶 PDF 已分頁：Weekly 不再混入 PDF 數量','info');
     log('SMV分析、裝箱比對獨立於訂單總表，等待車縫/裁剪連接','info');
     // v3.4: shared HRA-style auto reconcile handles startup; avoid duplicate full/parallel pulls.
@@ -3133,19 +3177,37 @@ function ordSaveGas(){
 const ORD_ENT={po_headers:'orders.header',weekly_snapshots:'orders.weekly',order_imports:'orders.import',parse_audit:'orders.audit'};
 const ORD_STORE_OF=Object.fromEntries(Object.entries(ORD_ENT).map(([k,v])=>[v,k]));
 function ordEnvelope(store,r){const ent=ORD_ENT[store];const mm=v=>{const m=String(v||'').match(/^(20\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]:'undated'};
-  const bucket=store==='po_headers'?'headers':store==='parse_audit'?'audit_'+(Math.abs(Number(r.id)||0)%8):store==='weekly_snapshots'?'weekly_'+mm(r.as_of_date):'imports_'+mm(r.imported_at);
-  return {id:ent+':'+r.id,_vrtEntity:ent,_vrtValue:r,_smartBucket:bucket,updatedAt:r.updated_at||r.imported_at||undefined}}
-async function ordCloudRecords(){const rows=(await dbAll('po_lines')).slice();for(const st of Object.keys(ORD_ENT))for(const r of await dbAll(st))rows.push(ordEnvelope(st,r));return rows}
-async function ordBuildCloudMeta(){const sets={...APP.sets};delete sets.apiKey;const lines=await dbAll('po_lines'),poHeaders=await dbAll('po_headers'),weekly=await dbAll('weekly_snapshots'),imports=await dbAll('order_imports');return {schemaVersion:414,lsKeys:{orderSetsV3:JSON.stringify(sets)},summary:{totalPOs:lines.length,weeklySnapshots:weekly.length,headers:poHeaders.length,imports:imports.length}}}
-async function ordApplyCloud(recs,meta){if(!db){try{await openDB()}catch(_){}}if(!db)throw new Error('本機 FactoryDB 無法開啟');
+  const bucket=store==='po_headers'?'headers':store==='parse_audit'?'audit_'+(parseInt(audUidOf(r).slice(4,6),16)%8):store==='weekly_snapshots'?'weekly_'+mm(normalizeWeeklyDate(r.as_of_date,r.source_file||'')||r.as_of_date):'imports_'+mm(r.imported_at);
+  // v4.16 (B2): the cloud id is the business identity (as_of + customer / type + content hash), never the local autoIncrement id —
+  // two devices' row #5 used to collide in the cloud and one of them vanished on the next pull.
+  const cid=store==='weekly_snapshots'?wkUidOf(r):store==='order_imports'?impUidOf(r):store==='parse_audit'?audUidOf(r):r.id;
+  // side-store rows travel without their local numeric id (each device assigns its own on apply), with the uid filled in
+  let val=r;if(store!=='po_headers'){val=Object.assign({},r,{uid:cid});delete val.id;for(const k of Object.keys(val))if(val[k]===undefined)delete val[k]}   // undefined keys would hash differently from the JSON the cloud stores
+  return {id:ent+':'+cid,_vrtEntity:ent,_vrtValue:val,_smartBucket:bucket,updatedAt:r.updated_at||r.imported_at||undefined}}
+async function ordCloudRecords(){const rows=(await dbAll('po_lines')).slice();
+  // v4.16: one cloud row per business identity. Older local stores may hold the same week+customer several times (the UI already
+  // showed only the newest); the newest local row represents it in the cloud. Local rows are never deleted here.
+  for(const st of Object.keys(ORD_ENT)){const m=new Map();for(const r of await dbAll(st)){const e=ordEnvelope(st,r);const o=m.get(e.id);if(!o||String(e.updatedAt||'')>String(o.updatedAt||'')||(String(e.updatedAt||'')===String(o.updatedAt||'')&&(Number(r.id)||0)>(Number(o._localId)||0))){e._localId=r.id;m.set(e.id,e)}}for(const e of m.values()){delete e._localId;rows.push(e)}}
+  return rows}
+async function ordBuildCloudMeta(){const sets={...APP.sets};delete sets.apiKey;const lines=await dbAll('po_lines'),poHeaders=await dbAll('po_headers'),weekly=await dbAll('weekly_snapshots'),imports=await dbAll('order_imports');return {schemaVersion:416,lsKeys:{orderSetsV3:JSON.stringify(sets)},summary:{totalPOs:lines.length,weeklySnapshots:weekly.length,headers:poHeaders.length,imports:imports.length}}}
+async function ordApplyCloud(recs,meta,seq0){if(!db){try{await openDB()}catch(_){}}if(!db)throw new Error('本機 FactoryDB 無法開啟');
+  // v4.16 (B2): a pull that started before a local import/save finished must not overwrite the newer local rows — skip this apply,
+  // keep the local rows; the next reconcile (scheduled after the import) merges properly.
+  if(ORD_IMPORTING||(seq0!=null&&seq0!==ORD_WRITE_SEQ)){ordLog('匯入／儲存進行中，本次不套用雲端資料（保留本機）','i');return await ordCloudRecords()}
   const write=async(storeName,records)=>{if(!Array.isArray(records)||!db.objectStoreNames.contains(storeName))return;await new Promise((res,rej)=>{const tx=db.transaction(storeName,'readwrite'),os=tx.objectStore(storeName);os.clear();records.forEach(r=>os.put(r));tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})};
+  // rows of the side stores are identified by their uid; the numeric id from another device is dropped (it may collide locally)
+  const dedupe=(rows,uidOf,newer)=>{const m=new Map();for(const r of rows||[]){const u=uidOf(r);if(!u)continue;const o=m.get(u);if(!o||newer(r,o))m.set(u,r)}return [...m.values()].map(r=>{const x={...r,uid:uidOf(r)};delete x.id;x.id=ordNewId();return x})};
+  const newerBy=k=>(a,b)=>String(a[k]||'')>=String(b[k]||'');
   const plain=[],byStore={};for(const r of recs||[]){if(r&&r._vrtEntity){const st=ORD_STORE_OF[r._vrtEntity];if(st&&r._vrtValue&&!r.deleted)(byStore[st]=byStore[st]||[]).push(r._vrtValue)}else plain.push(r)}
-  await write('po_lines',plain);
+  if(byStore.weekly_snapshots)byStore.weekly_snapshots=dedupe(byStore.weekly_snapshots,wkUidOf,(a,b)=>String(a.updated_at||a.imported_at||'')>=String(b.updated_at||b.imported_at||''));
+  if(byStore.order_imports)byStore.order_imports=dedupe(byStore.order_imports,impUidOf,newerBy('imported_at'));
+  if(byStore.parse_audit)byStore.parse_audit=dedupe(byStore.parse_audit,audUidOf,newerBy('imported_at'));
+  ORD_WRITE_SEQ++;await write('po_lines',plain);
   for(const st of Object.keys(ORD_ENT)){if(byStore[st])await write(st,byStore[st]);else if(meta&&meta.idbData&&Array.isArray(meta.idbData[st]))await write(st,meta.idbData[st])}   // older cloud layout (≤4.13) still restores
   if(meta&&meta.lsKeys&&meta.lsKeys.orderSetsV3){try{const cloud=JSON.parse(meta.lsKeys.orderSetsV3)||{};const keep=APP.sets.apiKey;APP.sets={...APP.sets,...cloud,apiKey:keep||cloud.apiKey||''};localStorage.setItem('orderSetsV3',JSON.stringify(APP.sets))}catch(_){}}
   APP.headers=await dbAll('po_headers');APP.orders=await dbAll('po_lines');APP.weekly=await dbAll('weekly_snapshots');APP.imports=await dbAll('order_imports');APP.audit=await dbAll('parse_audit');refreshAll()}
 async function ordCloudPush(){
-  const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}ordSetBusy(true);ordLog('智慧同步：讀取訂單資料...','i');
+  const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}if(ORD_IMPORTING){ordLog('匯入進行中，稍後再推送','i');return {ok:false,busy:true};}ordSetBusy(true);ordLog('智慧同步：讀取訂單資料...','i');
   try{
     const poLines=await dbAll('po_lines'),meta=await ordBuildCloudMeta(),records=await ordCloudRecords();
     const res=await VRTSmartSync.push({url:gasUrl,tool:'orders',records,meta,onStatus:m=>ordLog(m,'i')});
@@ -3157,8 +3219,9 @@ async function ordCloudPush(){
 async function ordCloudPull(){
   const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){ordLog('請先填入 GAS URL','err');return;}ordSetBusy(true);ordLog('智慧拉取：只下載有變更的訂單區塊...','i');
   try{
-    const local=await ordCloudRecords(),metaLocal=await ordBuildCloudMeta();
-    const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,meta:metaLocal,onStatus:m=>ordLog(m,'i'),apply:ordApplyCloud});
+    if(ORD_IMPORTING){ordLog('匯入進行中，稍後再拉取','i');return {ok:false,busy:true};}
+    const seq0=ORD_WRITE_SEQ,local=await ordCloudRecords(),metaLocal=await ordBuildCloudMeta();
+    const res=await VRTSmartSync.pull({url:gasUrl,tool:'orders',localRecords:local,meta:metaLocal,onStatus:m=>ordLog(m,'i'),apply:(r,m)=>ordApplyCloud(r,m,seq0)});
     if(!res.ok){ordLog('雲端尚無訂單資料','err');return;}ordLog(`✓ 智慧拉取完成 · PO ${APP.orders.length} / Weekly ${APP.weekly.length} · 下載 ${res.downloaded||0} · 未變 ${res.unchanged||0}${res.pendingUpload?' · 待上傳 '+res.pendingUpload:''}`,'ok');document.getElementById('ordCloudStatus').textContent=`已還原：PO ${APP.orders.length} / Weekly ${APP.weekly.length}`;const vv=document.getElementById('ordCloudVisible');if(vv){vv.textContent=`☁ 已下載 ${res.downloaded||0} · 未變 ${res.unchanged||0} · PO ${APP.orders.length}`;vv.style.color='#4ade80'}
   }catch(e){ordLog('✗ 拉取失敗：'+e.message,'err');const vv=document.getElementById('ordCloudVisible');if(vv){vv.textContent='☁ 拉取失敗：'+e.message;vv.style.color='#f87171'}}finally{ordSetBusy(false);}
 }
@@ -3191,11 +3254,12 @@ init();
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'orders',lockKey:'orders',pull:async function(){return await (window.ordCloudPull&&window.ordCloudPull());},push:async function(){return await (window.ordCloudPush&&window.ordCloudPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto orders]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
-<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.16.0"></script>
+<script src="vrt-telegram-v1.js?v=4.16.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"orders",tool:"orders",getData:()=>({lines:APP.orders||[],headers:APP.headers||[],weekly:APP.weekly||[]})})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"orders",label:"📦 訂單週報",feed:f=>importQueue([f]),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

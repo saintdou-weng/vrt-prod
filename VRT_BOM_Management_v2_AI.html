@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT BOM／Costing Sheet · v4.4</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
@@ -343,11 +343,11 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.14.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.14.0"></script>
-<script src="vrt-bom-cost-core-v39.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-data-core-v39.js?v=4.16.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.16.0"></script>
+<script src="vrt-bom-cost-core-v39.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body>
 
@@ -878,7 +878,7 @@ function setFabs(){
   el.innerHTML=html;
 }
 /* ---------- Router ---------- */
-function go(tab){if(CURRENT==='costing'&&tab!=='costing'&&COSTING_CHILD_DIRTY&&!confirm('報價有未儲存修改，確定離開？'))return;COSTING_CHILD_DIRTY=false; CURRENT=tab; SELECTED_ID=null; buildRibbon1(); renderRibbon2(); setFabs(); render(); window.scrollTo({top:0}); }
+async function go(tab){if(CURRENT==='costing'&&tab!=='costing'&&COSTING_CHILD_DIRTY&&!await VRTDialog.confirm('報價有未儲存修改，確定離開？'))return;COSTING_CHILD_DIRTY=false; CURRENT=tab; SELECTED_ID=null; buildRibbon1(); renderRibbon2(); setFabs(); render(); window.scrollTo({top:0}); }
 function render(){
   buildRibbon1(); renderRibbon2();
   const m=MAIN(); if(!m)return;
@@ -1457,7 +1457,7 @@ window.addEventListener('message',async e=>{
       if(!s)throw new Error('找不到對應 BOM，請從 BOM 新增款式。');
       if(d.sourceUpdatedAt!==s.updatedAt)throw new Error('BOM 已被修改。請重新載入後再儲存報價。');
       const before=JSON.parse(JSON.stringify(s)),revised=JSON.parse(JSON.stringify(s));
-      if((rec.bomLines||[]).length<(s.items||[]).length&&!confirm('本次將刪除 '+(s.items.length-rec.bomLines.length)+' 筆 BOM 物料。確認儲存？舊版會保留。'))throw new Error('取消刪除物料');
+      if((rec.bomLines||[]).length<(s.items||[]).length&&!await VRTDialog.confirm('本次將刪除 '+(s.items.length-rec.bomLines.length)+' 筆 BOM 物料。確認儲存？舊版會保留。'))throw new Error('取消刪除物料');
       VRTBomCost39.applyLines(revised,rec);revised.costing=rec;revised.updatedAt=nowISO();revised.costingSummary=costingRecordSummary(rec);revised.versions=[...(s.versions||[]),{ver:(s.versions||[]).length+1,ts:revised.updatedAt,editor:'BOM / Cost',comment:'儲存前材料／報價',items:before.items.length,snapshot:JSON.stringify(before.items),costingSnapshot:before.costing||null,hasCostingSnapshot:true}];
       Object.assign(s,revised);try{await persist()}catch(err){Object.assign(s,before);throw err}COSTING_CHILD_DIRTY=false;logAct('更新 BOM／報價',s.styleNo);updateCostingStatus();fr.contentWindow.postMessage({type:'VRT_COSTING_SAVE_ACK',ok:true,requestId:d.requestId,sourceUpdatedAt:s.updatedAt},location.origin);window.VRTProdAutoSync?.markDirty('bom','costing-save',{},900);
     }catch(err){fr.contentWindow.postMessage({type:'VRT_COSTING_SAVE_ACK',ok:false,requestId:d.requestId,error:err.message},location.origin);toast(err.message,'warn')}return;
@@ -2252,8 +2252,8 @@ if(document.readyState!=='loading')init();
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'bom',lockKey:'bom',pull:async function(){return await (window.cloudPull&&window.cloudPull());},push:async function(){return await (window.cloudPush&&window.cloudPush());},canSync:function(){return !!((DB.settings&&DB.settings.cloudProxy)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto bom]',e)}},0)},{once:true});
 </script>
-<script src="vrt-cost-sheet-v44.js?v=4.14.0"></script>
-<script src="vrt-bom-import-v39.js?v=4.14.0"></script>
-<script src="vrt-bom-costing-ui-v44.js?v=4.14.0"></script>
+<script src="vrt-cost-sheet-v44.js?v=4.16.0"></script>
+<script src="vrt-bom-import-v39.js?v=4.16.0"></script>
+<script src="vrt-bom-costing-ui-v44.js?v=4.16.0"></script>
 </body>
 </html>

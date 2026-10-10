@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT PO Delivery Control Center</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -215,8 +215,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body data-theme="light">
 
@@ -661,7 +661,7 @@ function confirmImport(){
   toast('✓ '+tf('imp_saved',{n,total:DATA.length}),'ok');
 }
 function cancelImport(){ pendingRecs=[]; pendingSummaries=[]; const pa=document.getElementById('previewArea'); if(pa)pa.style.display='none'; const m=document.getElementById('impMsg'); if(m)m.textContent=''; }
-function clearDB(){ if(!confirm(t('confirm_clear')))return; DATA=[]; saveData(true); renderTabs(); render(); toast(t('msg_cleared'),'warn'); }
+async function clearDB(){ if(!await VRTDialog.confirm(t('confirm_clear')))return; DATA=[]; saveData(true); renderTabs(); render(); toast(t('msg_cleared'),'warn'); }
 function resetSample(){ DATA=SEED.map(r=>({...r,_demo:true})); saveData(true); renderTabs(); render(); toast(t('msg_reset'),'ok'); }
 
 /* ===================== DASHBOARD ===================== */
@@ -883,7 +883,7 @@ function addRecord(){ const code=val('n_code'); const completed=val('n_completed
     fabArrival:null, completed, committed:!!completed, cat:code==='ready'?'✅ 無限制':code==='pattern'?'📐 Engineering':'🧵 Material',
     subtype:code, reason:reasonFor(code), code, risk:deriveRisk(code,completed), comment:val('n_remark') });
   closeModal(); saveData(true); renderTabs(); render(); }
-function deleteSelected(){ if(!selected.size){ toast(t('msg_nodel'),'warn'); return; } if(!confirm(tf('confirm_del',{n:selected.size})))return;
+async function deleteSelected(){ if(!selected.size){ toast(t('msg_nodel'),'warn'); return; } if(!await VRTDialog.confirm(tf('confirm_del',{n:selected.size})))return;
   DATA=DATA.filter(r=>!selected.has(r.id)); selected.clear(); saveData(true); renderTabs(); render(); toast(t('msg_deleted'),'ok'); }
 async function saveData(silent){ await dbSaveAll(DATA); if(!silent)toast(t('msg_saved'),'ok'); }
 
@@ -1072,5 +1072,6 @@ window.fabPoFiles511=fabPoFiles511;window.fabPoConfirm511=fabPoConfirm511;window
 /* v4.14: the fabric-PO pull rides on the module's own auto-sync pull (below) instead of a second unlocked pull 1.2 s after load */
 window.fabPoCloudPull512=fabPoCloudPull512;
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"podelivery",label:"🚚 PO 交期",feed:f=>addFiles([f])})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

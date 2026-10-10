@@ -1,0 +1,61 @@
+{
+  "release": "4.13",
+  "date": "2026-09-30",
+  "base": "4.12 (ChatGPT package 2026-09-27 = GitHub main zip 2026-09-30; identical code files)",
+  "appsScript": "AppsScript/VRT_Production_v4.3.gs (new: bilingual day/week/month/year Telegram summaries). v4.2 still works with every v4.13 page; v4.3 is only needed for the new summaries.",
+  "changedFiles": [
+    "vrt-import-core-v40.js",
+    "vrt-maintenance-v39.js",
+    "vrt-domain-sync-v39.js",
+    "vrt-data-core-v39.js",
+    "vrt-qc-core-v42.js",
+    "vrt-qc-v42.js",
+    "vrt-platform-v40.js",
+    "vrt-io-v1.js (new)",
+    "vrt-ie-balancing-v1.js (new)",
+    "vrt_spare_parts_v2.html",
+    "vrt_final_qc_v1.html",
+    "ie_smv_report_v2_1.html",
+    "production_plan_capacity_v1.html",
+    "cutting_v3.html",
+    "sewing_v5.html",
+    "orders_v3.html",
+    "shipping_v2.html",
+    "smv_manager_v5_final.html",
+    "vrt_customer_statistics_control_center_v1.html",
+    "vrt_monthly_shipping_control_center_v1.html",
+    "vrt_fabric_stock_control_v1.html",
+    "release_sources/Needle_Change_202609.xlsx",
+    "release_sources/Parts_Change_202609.xlsx",
+    "release_sources/QC_Defect_KPI_20260921_26.xlsx",
+    "AppsScript/VRT_Production_v4.3.gs (new)",
+    "qa/v413/* (new checks), qa/v40/run_attachment_checks.js (fixture counts), qa/v41/gas_harness.js (real formatDate, gsPath option)"
+  ],
+  "changedModules": [
+    "Spare Parts: schema-detecting Daily Needle / Spare Part Change importer (old J:U + new K:V layouts, Received column, reversed Opening/Closing headers, tab-name dates), reason classification, Change Analytics tab (D/W/M/Y, item, line, reason, revised sheets, purchase insights), trilingual overlay, multi-record cloud buckets (571 → 9 requests for the same data), stale-row retirement on re-import",
+    "Final QC: sewing-line Top-3 defect KPI workbook (QC weekly meeting) as separate sewingkpi kind with its own store, tab and Final QC comparison tab; KPI rows travel in month buckets",
+    "IE / OBD: new tab 排線與機台 / Line Balancing (vrt-ie-balancing-v1.js) reading OBD/SMV, production plan, sewing actuals and needle changes already in the browser; DRAFT / SIMULATION ONLY for pending OBDs; balancing math, simulation, machine families + aliases, manpower, changeover similarity, plan vs actual, needle KPIs per 1,000 pcs with Insufficient data, machine/needle master, weekly view, Excel report A–H; saved records travel in one ie_balancing cloud bucket",
+    "Import/export unification: shared vrt-io-v1.js; Production plan gets JSON backup/restore + CSV/XLSX own-export re-import; JSON backup/restore added to Shipping, Official SMV, Customer statistics, Monthly shipping, Fabric stock (same file format everywhere: {tool, format:'vrt-backup', formatVersion, exportedAt, ...})",
+    "Fixes: cutting weekly Excel export crash (wbOut), sewing restore no longer wipes efficiency rows, sewing cloud meta always carries summary, orders restore validates + snapshots before replacing",
+    "Telegram (GAS v4.3): /day /week /month /year all-department digest; 車縫／裁剪／QC＋缺點KPI／機針零件／排單 each with 日／週／月／年 + ◀ prev / latest / next ▶ buttons that edit the message in place; every summary 中文 + English, HTML parse mode with escaping, plain-text fallback, 4096 guard; menus bilingual; checkTelegramSetup() / ensurePollingTrigger() helpers"
+  ],
+  "notChanged": [
+    "Smart Sync / Auto Sync libraries and the sync protocol (v4.2 GAS keeps working)",
+    "BOM, FG, PO delivery, Cutting plan, Fabric delivery, Portal, Production Overview"
+  ],
+  "tests": {
+    "qa/v413/test_importer.js": "22/22",
+    "qa/v413/test_stageC.js": "8/8",
+    "qa/v413/test_qc_kpi.js": "6/6",
+    "qa/v413/test_parts_cloud.js": "5/5",
+    "qa/v413/test_i18n_parts.js": "16/16",
+    "qa/v413/test_realdata.js": "12/12",
+    "qa/v413/test_plan_io.js": "5/5",
+    "qa/v413/test_balancing.js": "12/12",
+    "qa/v413/test_io_modules.js": "5/5",
+    "qa/v413/test_telegram.js": "18/18",
+    "existing qa/v39 + v40 + v41 + v42 + v43 suites": "80 pass / 13 fail — identical counts and identical failing checks on the untouched 4.8 baseline (IE 4, BOM 1, QC roundtrip 1, v40 sync 2, fabric 2, …); none caused by 4.13",
+    "real browser (Chromium/Playwright)": "spare parts analytics zh/en/km, Final QC KPI + compare, IE 排線與機台 with plan 705 / sewing 5,009 / needles 453 / OBD 5209 — all sub-views render, no page errors"
+  },
+  "notes": "Numbered 4.13 to follow ChatGPT's 4.8–4.12 packages. Stage A–I of the IE Line Balancing instruction (2026-09-30) delivered as v1 (Stage D–I as the single JS module; multi-line drag/drop and PDF export not included). Portal overview redesign (task 7) not started — awaiting go-ahead."
+}

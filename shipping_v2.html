@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 出貨分析儀表板</title>
+<title>VRT 出貨分析儀表板 v2.1 (4.16)</title>
 <script src="vendor/xlsx.full.min.js"></script>
 <style>
 /* ── RESET & BASE ── */
@@ -227,9 +227,9 @@ tbody tr:hover td{background:#f8fafc}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body>
 
@@ -396,8 +396,22 @@ const SHIPPING_SYNC_NET43={vrtTimeoutMs:90000,vrtRetryDelays:[5000,15000,45000],
 
 
 // ── 全量資料只存 IndexedDB ──
+/* v4.16 (B7): AS OF date of a shipping schedule — from the file name ("as of Oct 6 2025", "as of 10-06-2025", "as of October-06-2025",
+   "as of 2025-10-06") or from the first rows of the sheet; '' when unknown (then no warning is possible). */
+function shipAsOfOf(name,raw){const MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};const pad=n=>String(n).padStart(2,'0');
+  const one=t=>{t=String(t||'');let m=t.match(/as\s*of[\s:._-]*([A-Za-z]{3,9})[\s._-]*(\d{1,2})(?:st|nd|rd|th)?[\s,._-]*(\d{2,4})/i);if(m){const mo=MON[m[1].slice(0,3).toUpperCase()];if(mo)return (m[3].length===2?'20'+m[3]:m[3])+'-'+pad(mo)+'-'+pad(+m[2])}
+    m=t.match(/as\s*of[\s:._-]*(\d{1,2})[\s._-]*([A-Za-z]{3,9})[\s._-]*(\d{2,4})/i);if(m){const mo=MON[m[2].slice(0,3).toUpperCase()];if(mo)return (m[3].length===2?'20'+m[3]:m[3])+'-'+pad(mo)+'-'+pad(+m[1])}
+    m=t.match(/as\s*of[\s:._-]*(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/i);if(m)return m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]);
+    m=t.match(/as\s*of[\s:._-]*(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/i);if(m){const a=+m[1],b=+m[2],y=m[3].length===2?'20'+m[3]:m[3];if(a<=12)return y+'-'+pad(a)+'-'+pad(b);if(b<=12)return y+'-'+pad(b)+'-'+pad(a)}
+    return ''};
+  let d=one(name);if(d)return d;if(Array.isArray(raw))for(let i=0;i<Math.min(8,raw.length);i++){for(const c of (raw[i]||[])){if(typeof c==='string'&&/as\s*of/i.test(c)){d=one(c);if(d)return d}}}return ''}
+let SHIP_LOAD_INFO=null;
+async function shipMetaState(){try{return await VRTProdStorage.get(SHIP_IDB,SHIP_META,'state')}catch(_){return null}}
 async function shipSave(filename) {
-  try {ALL=normalizeShipRows(ALL);const meta={filename:filename||'Manual',savedAt:new Date().toISOString(),count:ALL.length};await VRTProdStorage.replaceAll(SHIP_IDB,SHIP_REC,ALL,{keyPath:'id'});await VRTProdStorage.put(SHIP_IDB,SHIP_META,meta,'state',{});try{localStorage.removeItem(SHIP_LS);localStorage.removeItem(SHIP_META_LS)}catch(_){}return true}
+  try {ALL=normalizeShipRows(ALL);const prev=await shipMetaState();const info=SHIP_LOAD_INFO&&SHIP_LOAD_INFO.filename===filename?SHIP_LOAD_INFO:null;SHIP_LOAD_INFO=null;
+    const asOf=info?info.asOf:((prev&&prev.filename===filename&&prev.asOf)||shipAsOfOf(filename||'',null)||'');
+    const history=((prev&&prev.history)||[]).filter(h=>!(h.filename===filename&&h.asOf===asOf)).concat(info?[{filename:info.filename,asOf:info.asOf,count:info.count,loadedAt:info.loadedAt,replaced:info.prevCount}]:[]).slice(-20);
+    const meta={filename:filename||'Manual',savedAt:new Date().toISOString(),count:ALL.length,asOf,history};await VRTProdStorage.replaceAll(SHIP_IDB,SHIP_REC,ALL,{keyPath:'id'});await VRTProdStorage.put(SHIP_IDB,SHIP_META,meta,'state',{});try{localStorage.removeItem(SHIP_LS);localStorage.removeItem(SHIP_META_LS)}catch(_){}return true}
   catch(e){console.warn('Shipping save failed:',e);return false}
 }
 
@@ -483,7 +497,7 @@ async function loadFile(file){
     if(ci.cust===undefined||ci.shipped===undefined)throw new Error('缺少必要欄位（CUSTOMER 或 TOTAL QTTY SHIPPED）');
 
     // Parse rows
-    ALL=[];
+    const NEW=[];   // v4.16 B7: parse into a new array; the current data is only replaced after the as-of check below
     for(let i=hdr+1;i<raw.length;i++){
       const r=raw[i];if(!r)continue;
       const cust=nvs(r[ci.cust]);if(!cust||cust.toUpperCase()==='CUSTOMER')continue;
@@ -499,7 +513,7 @@ async function loadFile(file){
       const fabType=ci.fabType!==undefined?nvs(r[ci.fabType]):'';
       const fabGroup=parseFabGroup(fabType);
 
-      ALL.push({
+      NEW.push({
         item:r[ci.item]?+r[ci.item]:0,
         erp:ci.erp!==undefined?nvs(r[ci.erp]):'',
         cust,po,
@@ -517,7 +531,13 @@ async function loadFile(file){
       });
     }
 
-    ALL=normalizeShipRows(ALL);document.getElementById('fileInfo').textContent=`${file.name}  ·  ${ALL.length.toLocaleString()} 筆記錄`;
+    // v4.16 (B7): a report must not silently replace newer data. Compare the AS OF date of the new file with the one already loaded.
+    const newAsOf=shipAsOfOf(file.name,raw),prevMeta=await shipMetaState(),prevAsOf=(prevMeta&&prevMeta.asOf)||shipAsOfOf(prevMeta&&prevMeta.filename||'',null);
+    if(ALL.length&&newAsOf&&prevAsOf&&newAsOf<prevAsOf){const ok=await VRTDialog.confirm(`這份出貨排程的 AS OF 日期是 ${newAsOf}，比目前載入的資料（AS OF ${prevAsOf}，${ALL.length.toLocaleString()} 筆）還舊。\n載入會用舊報表整份取代現有資料（舊檔不會「合併」進新資料）。\n確定要用舊報表取代？`,{okText:'仍要取代',cancelText:'取消'});
+      if(!ok){setStatus('已取消（保留較新的資料）',true);document.getElementById('loadStatus').textContent='已取消：保留 AS OF '+prevAsOf+' 的資料';return false}}
+    if(ALL.length&&NEW.length<ALL.length*0.5){const ok=await VRTDialog.confirm(`新檔只有 ${NEW.length.toLocaleString()} 筆，目前資料有 ${ALL.length.toLocaleString()} 筆（少了一半以上）。確定整份取代？`,{okText:'確定取代',cancelText:'取消'});if(!ok){setStatus('已取消',true);document.getElementById('loadStatus').textContent='已取消：筆數差異過大';return false}}
+    SHIP_LOAD_INFO={asOf:newAsOf||'',filename:file.name,count:NEW.length,loadedAt:new Date().toISOString(),prevAsOf:prevAsOf||'',prevCount:ALL.length};
+    ALL=normalizeShipRows(NEW);document.getElementById('fileInfo').textContent=`${file.name}  ·  ${ALL.length.toLocaleString()} 筆記錄`;
     setStatus('就緒',true);
     buildFilters();
     applyFilters();
@@ -525,11 +545,11 @@ async function loadFile(file){
     document.getElementById('dashboard').style.display='block';
     document.getElementById('btnCloudSync').style.display='';const bb43=document.getElementById('btnCloudBaseline43');if(bb43)bb43.style.display='';
     document.getElementById('loadStatus').textContent='';
-    await shipSave(file.name);
+    await shipSave(file.name);return true;
   }catch(e){
     setStatus('錯誤','');
     document.getElementById('loadStatus').textContent='❌ '+e.message;
-    console.error(e);
+    console.error(e);return false;
   }
 }
 
@@ -956,7 +976,7 @@ function renderRow(r){
 
 function openShipEditor(id=''){const r=ALL.find(x=>x.id===id)||{};document.getElementById('modalTitle').textContent=id?'修改出貨資料':'新增出貨資料';document.getElementById('modalSub').textContent='儲存後寫入 IndexedDB，並列入 Smart Sync';document.getElementById('modalBody').innerHTML=`<div class="dist-grid"><label>客戶<input id="seCust" class="filter-input" value="${esc(r.cust||'')}"></label><label>PO #<input id="sePo" class="filter-input" value="${esc(r.po||'')}"></label><label>款式<input id="seStyle" class="filter-input" value="${esc(r.style||'')}"></label><label>顏色<input id="seColor" class="filter-input" value="${esc(r.color||'')}"></label><label>尺寸<input id="seSize" class="filter-input" value="${esc(r.size||'')}"></label><label>ETD<input id="seEtd" type="date" class="filter-input" value="${esc(r.etd||'')}"></label><label>PO量<input id="seOrig" type="number" class="filter-input" value="${pn(r.orig)}"></label><label>已出<input id="seShipped" type="number" class="filter-input" value="${pn(r.shipped)}"></label><label>未出<input id="seOpen" type="number" class="filter-input" value="${pn(r.open)}"></label><label>布種<input id="seFab" class="filter-input" value="${esc(r.fabType||'')}"></label></div><label style="display:block;margin-top:10px">備註<input id="seRemark" class="filter-input" style="width:100%" value="${esc(r.remark||'')}"></label><div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-primary" onclick="saveShipEditor('${id}')">儲存</button><button class="btn btn-ghost" onclick="closeModal()">取消</button></div>`;document.getElementById('modal').classList.add('show')}
 async function saveShipEditor(oldId){let r={cust:document.getElementById('seCust').value.trim(),po:document.getElementById('sePo').value.trim(),style:document.getElementById('seStyle').value.trim(),color:document.getElementById('seColor').value.trim(),size:document.getElementById('seSize').value.trim(),etd:document.getElementById('seEtd').value,orig:pn(document.getElementById('seOrig').value),shipped:pn(document.getElementById('seShipped').value),open:pn(document.getElementById('seOpen').value),fabType:document.getElementById('seFab').value.trim(),remark:document.getElementById('seRemark').value.trim(),desc:'',fabItem:'',item:0,erp:''};if(!r.cust||!r.po){alert('客戶與 PO 必填');return}r.etdYear=r.etd?r.etd.slice(0,4):'';r.etdMonth=r.etd?parseInt(r.etd.slice(5,7)):0;r.fabGroup=parseFabGroup(r.fabType);r.status=classify(r.orig,r.shipped,r.open,r.remark);r.id='shipping_'+shipHash(shipKey(r));if(ALL.some(x=>x.id===r.id&&x.id!==oldId)){alert('相同 ETD／客戶／PO／款式／顏色／尺寸已存在');return}if(oldId)ALL=ALL.filter(x=>x.id!==oldId);ALL.push(r);await shipSave('Manual');closeModal();buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block'}
-async function deleteShip(id){if(!confirm('確定刪除這筆出貨資料？'))return;ALL=ALL.filter(x=>x.id!==id);await shipSave('Manual');buildFilters();applyFilters()}
+async function deleteShip(id){if(!await VRTDialog.confirm('確定刪除這筆出貨資料？'))return;ALL=ALL.filter(x=>x.id!==id);await shipSave('Manual');buildFilters();applyFilters()}
 
 // ══════════════════════════════════════════════
 // PAGINATION
@@ -1129,7 +1149,7 @@ function exportExcel(){if(!FILTERED.length){alert('無資料可匯出');return}c
 /* v4.14: one meta builder for push and pull, derived from the data only (no fileDate = today, which forced a meta commit every day) */
 function shippingCloudMeta414(){const shipped=ALL.filter(r=>r.status==='shipped').length,outstanding=ALL.filter(r=>r.status==='outstanding').length,abnormal=ALL.filter(r=>r.status==='abnormal').length;const etds=ALL.map(r=>String(r.etd||'')).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort();return {summary:{total:ALL.length,shipped,outstanding,abnormal,shipRate:ALL.length?Math.round(shipped/ALL.length*100):0,etdFrom:etds[0]||'',etdTo:etds[etds.length-1]||''}}}
 async function syncToGas(forceBaseline=false){
-  const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){const u=prompt('請貼上 GAS /exec URL：');if(!u)return;VRTPlatform.setGasUrl(u.trim())}
+  const gasUrl=(VRTPlatform.getGasUrl()||'').trim();if(!gasUrl){const u=await VRTDialog.prompt('請貼上 GAS /exec URL：');if(!u)return;VRTPlatform.setGasUrl(u.trim())}
   const url=VRTPlatform.getGasUrl();if(!ALL.length){alert('請先載入出貨排程檔案');return;}
   const btn=document.getElementById('btnCloudSync'),orig=btn.textContent;btn.disabled=true;btn.textContent=forceBaseline?'☁ 建立基準...':'☁ 智慧同步...';
   try{
@@ -1141,7 +1161,7 @@ async function syncToGas(forceBaseline=false){
 }
 async function buildShippingBaseline43(){
   if(!ALL.length){alert('請先載入出貨資料');return}
-  if(!confirm('建立雲端基準會把目前本機 '+ALL.length.toLocaleString()+' 筆出貨資料分批建立為雲端完整基準。之後只同步差異。確定繼續？'))return;
+  if(!await VRTDialog.confirm('建立雲端基準會把目前本機 '+ALL.length.toLocaleString()+' 筆出貨資料分批建立為雲端完整基準。之後只同步差異。確定繼續？'))return;
   return await syncToGas(true);
 }
 
@@ -1236,7 +1256,7 @@ window.VRT_LOCAL_READY=(async()=>{const ok=await shipRestore();await shipLoadPoD
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'shipping',lockKey:'shipping',pull:async function(){return await (window.pullFromGas&&window.pullFromGas());},push:async function(){return await (window.syncToGas&&window.syncToGas());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto shipping]',e)}},0)},{once:true});
 </script>
-<script src="vrt-io-v1.js?v=4.14.0"></script>
+<script src="vrt-io-v1.js?v=4.16.0"></script>
 <script>
 /* v4.13 統一 JSON 備份／還原（所有模組同格式：{tool, format:'vrt-backup', formatVersion, exportedAt, ...}） */
 function vrtIoButtons413(container,before,cls){if(!container||document.getElementById('vrtIoBackup413'))return;const b=document.createElement('button'),r=document.createElement('button'),inp=document.createElement('input');b.id='vrtIoBackup413';b.className=cls;b.textContent='💾 備份 JSON';b.title='下載本模組完整資料（JSON） / Download a full JSON backup';b.onclick=()=>vrtBackup413();r.className=cls;r.textContent='📥 還原 JSON';r.title='從 JSON 備份還原 / Restore from a JSON backup';r.onclick=()=>inp.click();inp.type='file';inp.accept='.json';inp.style.display='none';inp.onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)vrtRestore413(f)};if(before&&before.parentNode===container){container.insertBefore(b,before.nextSibling);container.insertBefore(r,b.nextSibling)}else{container.appendChild(b);container.appendChild(r)}container.appendChild(inp)}
@@ -1244,17 +1264,18 @@ function vrtIoMsg413(m,bad){try{if(typeof toast==='function')toast(m);else if(ty
 
 function vrtBackup413(){const name=VRTIO.backupJSON('shipping',{records:ALL,filename:(document.getElementById('fileInfo')||{}).textContent||''});vrtIoMsg413('已下載備份 '+name)}
 async function vrtRestore413(file){try{const d=await VRTIO.readJSON(file);const rows=d.records||(Array.isArray(d)?d:null);if(!Array.isArray(rows)||!rows.length||!rows.every(r=>r&&(r.po!==undefined||r.item!==undefined)))throw new Error('不是出貨備份 / Not a shipping backup');
-  if(!confirm(VRTIO.confirmText('還原出貨備份？目前 '+ALL.length+' 筆會被 '+rows.length+' 筆取代','Restore shipping? Current '+ALL.length+' rows will be replaced by '+rows.length+'.')))return;
+  if(!await VRTDialog.confirm(VRTIO.confirmText('還原出貨備份？目前 '+ALL.length+' 筆會被 '+rows.length+' 筆取代','Restore shipping? Current '+ALL.length+' rows will be replaced by '+rows.length+'.')))return;
   ALL=rows;const ok=await shipSave(file.name||'backup.json');if(ok===false)throw new Error('本機儲存失敗 / local save failed');
   const fi=document.getElementById('fileInfo');if(fi)fi.textContent=(file.name||'backup.json')+'  ·  '+ALL.length.toLocaleString()+' 筆  ·  已從 JSON 還原';
   if(typeof setStatus==='function')setStatus('已還原',true);buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block';const bc=document.getElementById('btnCloudSync');if(bc)bc.style.display='';const bb=document.getElementById('btnCloudBaseline43');if(bb)bb.style.display='';vrtIoMsg413('已還原 '+ALL.length+' 筆 / restored')}catch(e){alert('還原失敗 / Restore failed: '+e.message)}}
 vrtIoButtons413(document.getElementById('vrtIoSlot413'),null,'btn btn-ghost');
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
-<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.16.0"></script>
+<script src="vrt-telegram-v1.js?v=4.16.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"shipping",tool:"shipping",getData:()=>ALL})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"shipping",label:"🚚 出貨排程",feed:f=>loadFile(f),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

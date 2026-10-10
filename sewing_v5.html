@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>車縫生產分析系統</title>
 <style>
@@ -165,8 +165,8 @@ select{background:#fff;border:1px solid #d0d5e8;color:#1e2640;padding:6px 10px;b
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -1155,7 +1155,7 @@ async function saveEffDB(){
 // Connect to a data file (for portability / Google Drive sync folder)
 async function connectDataFile(){
   if(!FSA){ alert("此瀏覽器不支援檔案連結功能，請使用 Chrome 或 Edge"); return; }
-  const choice=confirm("選擇已有的資料檔案？\n\n確定 = 選擇已有的 sewing_data.json（還原資料）\n取消 = 建立新的資料檔案");
+  const choice=await VRTDialog.confirm("選擇已有的資料檔案？\n\n確定 = 選擇已有的 sewing_data.json（還原資料）\n取消 = 建立新的資料檔案");
   const h=choice ? await pickDataFile() : await pickNewFile();
   if(!h) return;
   _fileHandle=h;
@@ -3220,7 +3220,7 @@ async function deleteWholeDay(){
   const cnt=DB.filter(r=>r.date===date).length;
   if(!cnt){ _sewToast("此日無資料","info"); return; }
   const lines=[...new Set(DB.filter(r=>r.date===date).map(r=>r.lineNo))].join("、");
-  if(!confirm(`確定刪除 ${date} 的全部資料？
+  if(!await VRTDialog.confirm(`確定刪除 ${date} 的全部資料？
 共 ${cnt} 筆，涵蓋：${lines}
 
 此操作不可復原。`)) return;
@@ -3238,7 +3238,7 @@ async function deleteWholeDay(){
 async function deleteLineDay(date,lineNo){
   const cnt=DB.filter(r=>r.date===date&&r.lineNo===lineNo).length;
   if(!cnt) return;
-  if(!confirm(`確定刪除 ${date} ${lineNo} 的全部 ${cnt} 筆記錄？\n此操作不可復原。`)) return;
+  if(!await VRTDialog.confirm(`確定刪除 ${date} ${lineNo} 的全部 ${cnt} 筆記錄？\n此操作不可復原。`)) return;
   DB=DB.filter(r=>!(r.date===date&&r.lineNo===lineNo));
   await saveToMainIDB();
   populateDateSel();renderDaily();
@@ -3249,7 +3249,7 @@ async function deleteLineDay(date,lineNo){
 async function deleteOneRecord(id){
   const rec=DB.find(r=>r.id===id);
   if(!rec) return;
-  if(!confirm(`確定刪除此筆？\n${rec.date} ${rec.lineNo} ${rec.styleNo||""} ${rec.color||""} ${(rec.pieces||0)}件\n此操作不可復原。`)) return;
+  if(!await VRTDialog.confirm(`確定刪除此筆？\n${rec.date} ${rec.lineNo} ${rec.styleNo||""} ${rec.color||""} ${(rec.pieces||0)}件\n此操作不可復原。`)) return;
   DB=DB.filter(r=>r.id!==id);
   await saveToMainIDB();
   populateDateSel();renderDaily();
@@ -4301,7 +4301,7 @@ function exportEffExcel(){
 }
 
 async function clearEffDB(){
-  if(!confirm("確定清除所有效率報表資料？")) return;
+  if(!await VRTDialog.confirm("確定清除所有效率報表資料？")) return;
   EFF_DB=[]; saveEffDB(); renderEffTable();
 }
 
@@ -4476,7 +4476,7 @@ function exportValidateExcel(){
 async function backupData(){
   if(!DB.length){ alert("No data to backup"); return; }
   const minD=getMinDate(DB); const maxD=getMaxDate(DB);
-  if(!confirm(`Preparing Backup\n\nRecords: ${DB.length.toLocaleString()}\nDate Range: ${minD} ~ ${maxD}\n\nProceed?`)) return;
+  if(!await VRTDialog.confirm(`Preparing Backup\n\nRecords: ${DB.length.toLocaleString()}\nDate Range: ${minD} ~ ${maxD}\n\nProceed?`)) return;
   initEffDB();
   const backup={version:3,date:new Date().toISOString(),daily:DB,eff:EFF_DB,
     meta:{recordCount:DB.length,minDate:minD,maxDate:maxD}};
@@ -4491,7 +4491,7 @@ async function restoreData(event){
     const backup=JSON.parse(text);
     if(!backup.daily) throw new Error("格式不符");
     const bk=backup.daily; const bMin=getMinDate(bk); const bMax=getMaxDate(bk);
-    if(!confirm(`Preparing Restore\n\nBackup Records: ${bk.length.toLocaleString()}\nDate Range: ${bMin} ~ ${bMax}\n\n⚠️ 目前所有資料將被覆蓋，確定還原？`)) return;
+    if(!await VRTDialog.confirm(`Preparing Restore\n\nBackup Records: ${bk.length.toLocaleString()}\nDate Range: ${bMin} ~ ${bMax}\n\n⚠️ 目前所有資料將被覆蓋，確定還原？`)) return;
     await clearMainIDB();
     // v4.13: a backup without efficiency rows must not wipe the efficiency records already on this device.
     const keepEff=!(Array.isArray(backup.eff)&&backup.eff.length)&&Array.isArray(EFF_DB)&&EFF_DB.length;
@@ -4933,22 +4933,22 @@ function recsNextPage(){
   else more.querySelector("button").style.display="none";
 }
 
-function deleteByDate(){
+async function deleteByDate(){
   const dv = document.getElementById("rDate").value;
   if(!dv){ alert("請先在上方「日期」下拉選單選擇要刪除的日期"); return; }
   const count = DB.filter(r=>r.date===dv).length;
   if(!count){ alert("該日期沒有資料"); return; }
-  if(!confirm(`確定刪除 ${dv} 的所有資料？（共 ${count} 筆）\n\n⚠️ 此操作無法復原`)) return;
+  if(!await VRTDialog.confirm(`確定刪除 ${dv} 的所有資料？（共 ${count} 筆）\n\n⚠️ 此操作無法復原`)) return;
   DB = DB.filter(r=>r.date!==dv);
   saveDB(); updateHeader(); renderDBCard(); rebuildAllSelectors();
   alert(`已刪除 ${dv} 的 ${count} 筆資料`);
 }
 
 function newSewRecord(){editSewRecord('')}
-async function editSewRecord(id){const old=DB.find(r=>r.id===id)||{},date=prompt('日期 YYYY-MM-DD',old.date||new Date().toISOString().slice(0,10));if(date===null)return;const section=prompt('Section (Garment / Apron)',old.section||'Garment');if(section===null)return;const lineNo=prompt('線別',old.lineNo||'Line 1');if(lineNo===null)return;const styleNo=prompt('款號',old.styleNo||'');if(styleNo===null)return;const po=prompt('PO',old.po||'');if(po===null)return;const pieces=Number(prompt('件數',old.pieces||0));if(!date||!lineNo||!pieces){alert('日期、線別、件數必填');return}const workers=Number(prompt('人數',old.workers||0))||0,efficiency=Number(prompt('效率 %',old.efficiency||0))||0;let r={...old,date:normalizeDate(date),section,lineNo:normLineNo(lineNo),styleNo,po,pieces,workers,efficiency,tSrc:old.tSrc||'manual'};r.id='sew_'+sewHash([r.date,r.section,r.lineNo,r.styleNo,r.po,r.selfKey||'',r.color||'',r.size||'',r.tSrc].join('|'));if(id)DB=DB.filter(x=>x.id!==id);DB=dedupAndNorm([...DB,r]);await saveToMainIDB();rebuildAllSelectors();renderRecs();updateHeader();renderDBCard()}
+async function editSewRecord(id){const old=DB.find(r=>r.id===id)||{},date=await VRTDialog.prompt('日期 YYYY-MM-DD',old.date||new Date().toISOString().slice(0,10));if(date===null)return;const section=await VRTDialog.prompt('Section (Garment / Apron)',old.section||'Garment');if(section===null)return;const lineNo=await VRTDialog.prompt('線別',old.lineNo||'Line 1');if(lineNo===null)return;const styleNo=await VRTDialog.prompt('款號',old.styleNo||'');if(styleNo===null)return;const po=await VRTDialog.prompt('PO',old.po||'');if(po===null)return;const pieces=Number(await VRTDialog.prompt('件數',old.pieces||0));if(!date||!lineNo||!pieces){alert('日期、線別、件數必填');return}const workers=Number(await VRTDialog.prompt('人數',old.workers||0))||0,efficiency=Number(await VRTDialog.prompt('效率 %',old.efficiency||0))||0;let r={...old,date:normalizeDate(date),section,lineNo:normLineNo(lineNo),styleNo,po,pieces,workers,efficiency,tSrc:old.tSrc||'manual'};r.id='sew_'+sewHash([r.date,r.section,r.lineNo,r.styleNo,r.po,r.selfKey||'',r.color||'',r.size||'',r.tSrc].join('|'));if(id)DB=DB.filter(x=>x.id!==id);DB=dedupAndNorm([...DB,r]);await saveToMainIDB();rebuildAllSelectors();renderRecs();updateHeader();renderDBCard()}
 
-function clearAll(){
-  if(!confirm("確定清除【所有】資料？\n\n⚠️ 此操作無法復原")) return;
+async function clearAll(){
+  if(!await VRTDialog.confirm("確定清除【所有】資料？\n\n⚠️ 此操作無法復原")) return;
   DB=[]; EFF_DB=[];
   clearMainIDB().catch(e=>{});
   saveToCloudIDB([]).catch(e=>{});
@@ -40520,11 +40520,12 @@ window.wExport = wExport;
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'sewing',lockKey:'sewing',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto sewing]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.14.0"></script>
-<script src="vrt-telegram-v1.js?v=4.14.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.16.0"></script>
+<script src="vrt-telegram-v1.js?v=4.16.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"sewing",tool:"sewing",getData:()=>DB})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"sewing",label:"🧵 車縫",feed:f=>addFiles([f])})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

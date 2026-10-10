@@ -5,9 +5,9 @@
      慣例：GAS POST text/plain;charset=utf-8｜日期一律本地時區 getters｜Telegram parse_mode HTML + escapeHtml｜SheetJS cellDates:false,raw:true｜onclick 全部 window-scoped -->
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Fabric Delivery & Greige Inventory Summary Center</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -154,9 +154,9 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body>
 
@@ -929,7 +929,7 @@ function renderSettings(){
    +'<div class="hint">資料自動存於瀏覽器 localStorage；版本快照最多 20 版。Telegram 使用 parse_mode:HTML + escapeHtml；GAS 上傳使用 Content-Type: text/plain;charset=utf-8；日期一律本地時區。</div></div>';
 }
 function saveCfg(){S.cfg.gasEndpoint=$("cfgGas").value.trim();S.cfg.gasToken=$("cfgTok").value.trim();S.cfg.tgToken=$("cfgTg").value.trim();S.cfg.tgChat=$("cfgChat").value.trim();S.cfg.year=+$("cfgYear").value||2026;saveLocal();toast(t("saved"));renderTab()}
-function resetAll(){if(!confirm("確定清除全部資料並還原內建範例？"))return;localStorage.removeItem(LS_KEY);location.reload()}
+async function resetAll(){if(!await VRTDialog.confirm("確定清除全部資料並還原內建範例？"))return;localStorage.removeItem(LS_KEY);location.reload()}
 window.saveCfg=saveCfg;window.resetAll=resetAll;
 
 /* ---------- 列編輯 ---------- */
@@ -952,8 +952,8 @@ function editSave(){
   fields.forEach(f=>{const v=$("ef_"+f[0]).value;row[f[0]]=f[2]?(v===""?null:+v):v.trim()});row.updatedAt=new Date().toISOString();
   saveLocal();closeModal("mEdit");toast(t("saved"));renderTab();
 }
-function editDelete(){
-  const type=editCtx.type,id=editCtx.id;if(!id||!confirm('確定刪除所選這 1 筆？刪除會同步到雲端。'))return;
+async function editDelete(){
+  const type=editCtx.type,id=editCtx.id;if(!id||!await VRTDialog.confirm('確定刪除所選這 1 筆？刪除會同步到雲端。'))return;
   const arr=type==="orders"?S.orders:S.greige,row=arr.find(r=>r.id===id),ts=new Date().toISOString();
   S.tombstones=S.tombstones||[];const prior=S.tombstones.find(x=>x.id===id);if(!prior||String(prior.deletedAt||'')<ts)S.tombstones=S.tombstones.filter(x=>x.id!==id).concat([{id,deletedAt:ts,updatedAt:ts,deletedBy:(S.cfg&&S.cfg.user)||'local-user',syncType:'tombstone',entityType:type}]);
   if(type==="orders")S.orders=S.orders.filter(r=>r.id!==id);else S.greige=S.greige.filter(r=>r.id!==id);
@@ -1356,5 +1356,6 @@ window.cycleLang=cycleLang;
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricdelivery',lockKey:'fabricdelivery',pull:async function(){return await (window.gasDownload&&window.gasDownload(true));},push:async function(){return await (window.gasUpload&&window.gasUpload(true));},canSync:function(){return !!((window.S&&S.cfg&&S.cfg.gasEndpoint)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricdelivery]',e)}},0)},{once:true});
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"fabricdelivery",label:"🧶 胚布中心",input:'#impFile'})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

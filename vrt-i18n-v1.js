@@ -36,7 +36,7 @@
   const DICT={en:null,km:null},loading={};
   function scriptBase(){const s=[...document.getElementsByTagName('script')].find(x=>/vrt-i18n-v1\.js/.test(x.src||''));return s?s.src.replace(/vrt-i18n-v1\.js.*$/,''):''}
   function loadDict(l){if(l==='zh')return Promise.resolve(null);if(DICT[l])return Promise.resolve(DICT[l]);if(g['VRT_I18N_'+l.toUpperCase()]){DICT[l]=prep(g['VRT_I18N_'+l.toUpperCase()]);return Promise.resolve(DICT[l])}
-    if(loading[l])return loading[l];loading[l]=new Promise(res=>{const s=document.createElement('script');s.src=scriptBase()+'vrt-i18n-'+l+'.js?v=4.14.0';s.onload=()=>{const d=g['VRT_I18N_'+l.toUpperCase()];DICT[l]=d?prep(d):null;res(DICT[l])};s.onerror=()=>res(null);(document.head||document.documentElement).appendChild(s)});return loading[l]}
+    if(loading[l])return loading[l];loading[l]=new Promise(res=>{const s=document.createElement('script');s.src=scriptBase()+'vrt-i18n-'+l+'.js?v=4.16.0';s.onload=()=>{const d=g['VRT_I18N_'+l.toUpperCase()];DICT[l]=d?prep(d):null;res(DICT[l])};s.onerror=()=>res(null);(document.head||document.documentElement).appendChild(s)});return loading[l]}
   function prep(map){const exact=new Map(),pats=[];for(const k of Object.keys(map)){exact.set(k,map[k]);if(k.indexOf('{n}')>=0){const parts=k.split('{n}');const lit=parts.reduce((a,b)=>b.length>a.length?b:a,'');if(!CJK.test(lit)||lit.trim().length<2)continue;const re=new RegExp('^'+parts.map(p=>p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('(.+?)')+'$');pats.push({lit,re,v:map[k],len:k.replace(/\{n\}/g,'').length})}}
     pats.sort((a,b)=>b.len-a.len);
     // reverse English → Khmer (km mode only; exact, words ≥ 4 chars with a lowercase letter, so codes like PO / ADI stay)
@@ -113,5 +113,5 @@
   function cycle(){return setLang(LANGS[(LANGS.indexOf(lang)+1)%LANGS.length])}
   function start(){try{mountSwitch()}catch(_){}const ad=ADAPT[PAGE];if(ad)setTimeout(()=>{try{ad(lang)}catch(_){}},400);apply().catch(()=>{})}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
-  g.VRTI18n={version:'1.0',get lang(){return lang},set:setLang,cycle,t:s=>translate(s)||s,translate,load:loadDict,walk,apply,restore,LANGS};
+  g.VRTI18n={version:'1.1',get lang(){return lang},set:setLang,cycle,t:s=>translate(s)||s,translate,translateLines,load:loadDict,walk,apply,restore,LANGS};
 })(typeof window!=='undefined'?window:globalThis);

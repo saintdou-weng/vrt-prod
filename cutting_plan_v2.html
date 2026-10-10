@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.14.0"></script>
-<script src="vrt-platform-v40.js?v=4.14.0"></script>
-<meta charset="UTF-8"><script src="vrt-i18n-v1.js?v=4.14.0"></script>
+<script src="vrt-deploy-config.js?v=4.16.0"></script>
+<script src="vrt-platform-v40.js?v=4.16.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 裁剪計畫管理系統 v2 · APS</title>
 <style>
@@ -194,9 +194,9 @@ select{cursor:pointer}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.14.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.14.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.14.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
 </head>
 <body>
 
@@ -747,7 +747,7 @@ async function saveDB(){
 }
 async function connectDataFile(){
   if(!FSA){ alert("此瀏覽器不支援檔案連結，請用 Chrome 或 Edge"); return; }
-  const choice=confirm("確定 = 選擇既有 cutting_data.json（還原）\n取消 = 建立新資料檔案");
+  const choice=await VRTDialog.confirm("確定 = 選擇既有 cutting_data.json（還原）\n取消 = 建立新資料檔案");
   const h=choice?await pickDataFile():await pickNewFile(); if(!h) return;
   _fileHandle=h; await saveFileHandle("db",h);
   if(choice){ const data=await readFromFile(h);
@@ -972,7 +972,7 @@ function confirmImport(){
   try{ hubLogHistory('import_plan',{records:DB.length,dates:[...importDates].sort()}); pvaAutoSnapshot(); }catch(e){}
 }
 function cancelImport(){ pendingRecs=[]; document.getElementById("previewArea").style.display="none"; document.getElementById("importMsg").textContent=""; }
-function clearAll(){ if(!confirm("確定清除所有裁剪資料？此動作無法復原。")) return;
+async function clearAll(){ if(!await VRTDialog.confirm("確定清除所有裁剪資料？此動作無法復原。")) return;
   DB=[]; saveDB(); saveToCloudIDB([]).catch(()=>{}); updateHeader(); renderDBCard(); renderGlobalKpi();
   document.getElementById("importMsg").textContent="已清除所有資料"; }
 
@@ -1172,11 +1172,11 @@ function editActual(id, td){
 }
 function saveActual(id, val){ const r=DB.find(x=>x.id===id); if(!r) return;
   r.actualQty=num(val); saveDB(); updateHeader(); renderDaily(); }
-function delRecord(id){ if(!confirm("刪除此筆記錄？")) return;
+async function delRecord(id){ if(!await VRTDialog.confirm("刪除此筆記錄？")) return;
   DB=DB.filter(r=>r.id!==id); saveDB(); updateHeader(); renderDBCard();
   const cur=document.querySelector('.sec.on'); if(cur) refreshSec(cur.id.replace('sec-','')); }
-function deleteWholeDay(){ const date=document.getElementById("dsel").value;
-  if(!date||!confirm(`刪除 ${date} 全部裁剪記錄？`)) return;
+async function deleteWholeDay(){ const date=document.getElementById("dsel").value;
+  if(!date||!await VRTDialog.confirm(`刪除 ${date} 全部裁剪記錄？`)) return;
   DB=DB.filter(r=>normalizeDate(r.date)!==date); saveDB(); updateHeader(); renderDBCard();
   populateDailySel(); renderDaily(); renderGlobalKpi(); }
 
@@ -1512,12 +1512,12 @@ function saveRecCell(id,field,val){ const r=DB.find(x=>x.id===id); if(!r) return
   saveDB(); updateHeader(); renderRecs(); }
 function dupRecord(id){ const r=DB.find(x=>x.id===id); if(!r) return;
   const c={...r,id:uid(),actualQty:0}; DB.push(c); saveDB(); updateHeader(); populateRecSel(); renderRecs(); }
-function addRecord(){
+async function addRecord(){
   const date=document.getElementById("rDate").value||getMaxDate(DB)||todayStr();
-  const po=prompt("PO / 訂單號：",""); if(po===null) return;
-  const style=prompt("款號 Style：","")||'';
-  const size=prompt("尺寸 Size：","")||'';
-  const order=num(prompt("訂單量 Order Qty：","0"));
+  const po=await VRTDialog.prompt("PO / 訂單號：",""); if(po===null) return;
+  const style=await VRTDialog.prompt("款號 Style：","")||'';
+  const size=await VRTDialog.prompt("尺寸 Size：","")||'';
+  const order=num(await VRTDialog.prompt("訂單量 Order Qty：","0"));
   const rec={ id:uid(), date:normalizeDate(date), erpFab:'', fabric:'', po:clean(po), selfKey:'', style:clean(style),
     color:'', colorCode:'', size:clean(size), orderQty:order, planQty:order, actualQty:0,
     totalYards:0, addPct:0, bundle:0, ydPerPc:0, markerEff:0, markerSize:'', markerLen:0, layer:0, ply:0,
@@ -1647,10 +1647,10 @@ function backupData(){
 function restoreData(e){
   const f=e.target.files[0]; if(!f) return;
   const rd=new FileReader();
-  rd.onload=()=>{ try{ const data=JSON.parse(rd.result);
+  rd.onload=async ()=>{ try{ const data=JSON.parse(rd.result);
     const recs=Array.isArray(data)?data:(data.recs||[]);
     if(!recs.length){ alert("檔案中無記錄"); return; }
-    if(!confirm(`將還原 ${recs.length} 筆裁剪記錄，與現有資料合併？`)) return;
+    if(!await VRTDialog.confirm(`將還原 ${recs.length} 筆裁剪記錄，與現有資料合併？`)) return;
     DB=dedupAndNorm([...DB,...recs]);
     if(data.fabRecv) FAB_RECV={...FAB_RECV,...data.fabRecv};
     if(data.settings){ const st=data.settings;
@@ -2071,5 +2071,6 @@ window.pvaExport=pvaExport;
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'cuttingplan',lockKey:'cuttingplan',pull:async function(){return await (window.vcPull&&window.vcPull());},push:async function(){return await (window.vcPush&&window.vcPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto cuttingplan]',e)}},0)},{once:true});
 </script>
+<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"cuttingplan",label:"📅 裁剪計劃",feed:f=>addFiles([f])})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>
