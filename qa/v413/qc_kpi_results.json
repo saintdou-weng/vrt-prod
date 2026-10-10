@@ -1,0 +1,32 @@
+[
+  {
+    "name": "KPI workbook imports as sewingkpi: 54 date/line rows (12 empty template rows skipped), 5 days, 11 lines; Final QC records untouched (0)",
+    "status": "PASS",
+    "detail": "output 21575 / defects 1789 / rate 8.29%"
+  },
+  {
+    "name": "Same KPI file twice → 0 added, 0 updated, 66 unchanged; no history growth",
+    "status": "PASS",
+    "detail": "idempotent"
+  },
+  {
+    "name": "KPI + Final QC daily + weekly coexist; compare tab joins by date/line; sewingkpi tab renders lines, days, Top defects",
+    "status": "PASS",
+    "detail": "joined rows 1"
+  },
+  {
+    "name": "Final QC totals are not changed by KPI rows (qcTotals over records only); header shows KPI count separately",
+    "status": "PASS",
+    "detail": "inspected 5406 unchanged"
+  },
+  {
+    "name": "Delete + JSON backup/restore keep KPI rows; export on KPI tab produces KPI sheet",
+    "status": "PASS",
+    "detail": "restored 66 incl. deleted flag"
+  },
+  {
+    "name": "Real GS roundtrip: KPI rows travel in one month bucket (kpi_2026-09), second device receives 66 KPI + Final QC rows, unchanged re-sync transfers nothing",
+    "status": "PASS",
+    "detail": "buckets 5 incl. p:kpi_2026-09 (54)"
+  }
+]

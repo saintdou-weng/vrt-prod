@@ -1,0 +1,92 @@
+[
+  {
+    "name": "/prod in the group (with @bot suffix) → menu with every production tool URL + jump buttons",
+    "status": "PASS",
+    "detail": "11 tool buttons · jumps m:prod2:0,m:sum:0 · balancing button: 📐 IE／OBD／排線 Line balancing"
+  },
+  {
+    "name": "/prod2 and /sum menus render; /sum has Day/Week/Month/Year digest buttons first",
+    "status": "PASS",
+    "detail": "prod2 8 urls · sum buttons 21 (pages: 1)"
+  },
+  {
+    "name": "Menu paging: /sum has more than 8 rows → page 2 reachable and returns to page 1 in place (editMessageText)",
+    "status": "PASS",
+    "detail": "page1 rows 11 → m:sum:1 → page2 rows 6"
+  },
+  {
+    "name": "/day /week /month /year (and /today) → bilingual all-department digest, HTML-safe, ≤4096, with department + period buttons",
+    "status": "PASS",
+    "detail": "/day 1169ch · /week 1333ch · /month 1343ch · /year 1378ch · /today 1169ch"
+  },
+  {
+    "name": "Sewing 日/週/月/年 all have data (anchored on the latest data day, not \"today\"), bilingual, cross-checked against the backup",
+    "status": "PASS",
+    "detail": "day 2026-09-28 = 240 pcs (norm) · month 2026-09 = 8013 pcs · week label W40（09/28–10/04）"
+  },
+  {
+    "name": "Cutting 日/週/月/年: only daily detail rows counted (Weekly Report / Summary rows excluded), cross-checked against the backup",
+    "status": "PASS",
+    "detail": "latest 2026-09-28 · month daily-only 98341 (all rows would be 489797) · year 1684123"
+  },
+  {
+    "name": "QC 日/週/月/年: Final QC + sewing defect KPI both present in the month; reject rate and KPI rate cross-checked",
+    "status": "PASS",
+    "detail": "Sep inspected 28816 reject 1312 (4.55%) · KPI output 21575 defects 1789 (8.29%) · Top defects present: true"
+  },
+  {
+    "name": "Spare parts 日/週/月/年: needle changes with planned vs unplanned split, part changes, reasons bilingual; totals match the cloud rows",
+    "status": "PASS",
+    "detail": "Sep needles 1170 (planned 240 / unplanned 870) · day text: 🔧 機針／零件 Needles &amp; spare parts · 日 Day 2026-09-28（一 Mon）"
+  },
+  {
+    "name": "Production plan 日/週/月/年 anchored on today: styles overlapping the period, load by line, starting list",
+    "status": "PASS",
+    "detail": "today 2026-09-30 · month: Scheduled styles: 270 · 車縫量 Sewing qty: 136,800 pcs"
+  },
+  {
+    "name": "Summary buttons: tapping 週 edits the same message in place; ◀ 上期 goes to the previous week; 📍 最新 returns to latest",
+    "status": "PASS",
+    "detail": "2026-W40 → prev 2026-W39 → latest 2026-W40 · answerCallbackQuery calls 4"
+  },
+  {
+    "name": "Every period button of every department can be pressed without error (60 edits) and the ▶ next of a future period says \"no data\" instead of crashing",
+    "status": "PASS",
+    "detail": "140 button presses ok · future month → （本期沒有資料 / No data in this period：2030-01）"
+  },
+  {
+    "name": "Legacy /sum summaries (orders, shipping, BOM, FG, PO, cut plan, fabric, SMV, customers, status) are bilingual HTML and escape customer names",
+    "status": "PASS",
+    "detail": "ord,ship,bom,fg,pod,cutplan,fstock,smvsum,custsum,mshipsum,fabdel,stat · escaped customer ok"
+  },
+  {
+    "name": "If Telegram rejects the HTML, the same content is re-sent as plain text (message always goes out)",
+    "status": "PASS",
+    "detail": "HTML rejected once → plain text sent (1056 ch)"
+  },
+  {
+    "name": "4096 guard: an oversized summary is clipped at a line break with a truncation note",
+    "status": "PASS",
+    "detail": "9489 → 3948"
+  },
+  {
+    "name": "pollTelegram: getUpdates with a group /prod, a /week and a callback are all handled and the offset advances",
+    "status": "PASS",
+    "detail": "sendMessage,sendMessage,answerCallbackQuery,editMessageText · offset 904"
+  },
+  {
+    "name": "Manual senders for time triggers: sendDigest / sendPeriodSummary / sendWeeklyDigest post to CFG.CHAT_ID",
+    "status": "PASS",
+    "detail": "3 messages to -5221939558"
+  },
+  {
+    "name": "Setup helpers: checkTelegramSetup reports missing trigger; ensurePollingTrigger creates it once",
+    "status": "PASS",
+    "detail": "before: 沒有 pollTelegram 觸發器 → 執行 ensurePollingTrigger() → created pollTelegram@1 → after: OK：群組打 /prod /prod2 /sum /day 會回應（每分鐘輪詢一次）"
+  },
+  {
+    "name": "Existing sync API unchanged in v4.3: ping/capabilities, smartManifest, pull compat all still answer; backendVersion 4.3.0",
+    "status": "PASS",
+    "detail": "capabilities [\"day\",\"week\",\"month\",\"year\"] · sewing buckets 75"
+  }
+]

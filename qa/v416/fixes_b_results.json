@@ -1,0 +1,47 @@
+[
+ {
+  "name": "B7 shipAsOfOf: AS OF date from file names / sheet rows in every spelling the reports use",
+  "status": "PASS",
+  "detail": "9 name cases + sheet row + unknown → \"\""
+ },
+ {
+  "name": "B7 loading an OLDER report over newer data asks first; cancel keeps the newer data, confirm replaces it (as-of + history recorded in meta)",
+  "status": "PASS",
+  "detail": "asked once for the older file (cancel → 40 rows kept, confirm → 38) · newer file loads silently · meta.asOf/history kept"
+ },
+ {
+  "name": "B7 a file with less than half the rows asks too; a file without an AS OF date cannot be compared and loads without the date question",
+  "status": "PASS",
+  "detail": "half-size file asked + kept 60 · undated file loaded (55) with asOf \"\""
+ },
+ {
+  "name": "B8 monthly shipping: the real schedule file shows a preview first — cancel saves nothing, confirm saves and reports added/changed; re-import = 未變",
+  "status": "PASS",
+  "detail": "preview added 35 · cancel → 0 saved · confirm → 35 rows · identical re-import skipped · revised copy: changed 1, kept 0, versions 1"
+ },
+ {
+  "name": "B8 monthShipDiff: added / changed(fields) / same / kept by row identity",
+  "status": "PASS",
+  "detail": "added 1 · changed 1 (pieces,mode,customer) · same 1 · kept 1"
+ },
+ {
+  "name": "B3 customer statistics: worker-or-fallback parse of the real 1.7 MB report gives the same customers / details as a plain workbook parse; only DASHBOARD + ALL CUSTOMER are read",
+  "status": "PASS",
+  "detail": "customers 12 · details 2939 · order 1495861 balance 859920 · parse 2945 ms (harness = main-thread fallback)"
+ },
+ {
+  "name": "B3 importFile saves the parsed report (DATA + IndexedDB) and the status shows the parse time",
+  "status": "PASS",
+  "detail": "details 2939 · customers 12 · ☁ Local updated · 解析 2504 ms"
+ },
+ {
+  "name": "B11 dialog layer: automation mode answers confirm/prompt at once and logs them; alert never blocks; harness fallback uses the native stub",
+  "status": "PASS",
+  "detail": "fallback confirm → true in 2 ms · auto: confirm true / prompt def / globals · log 9 entries · alert non-blocking"
+ },
+ {
+  "name": "B11 no page or shared script still calls native confirm()/prompt() directly (all go through VRTDialog); every page loads vrt-dialog-v1.js before vrt-i18n-v1.js",
+  "status": "PASS",
+  "detail": "50 files scanned · 0 native sites · 22 pages load the dialog layer first"
+ }
+]

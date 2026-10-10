@@ -1,0 +1,42 @@
+[
+  {
+    "name": "BASELINE v4.0 importer on newest Needle file: fails or mis-reads (documents the current production bug)",
+    "status": "PASS",
+    "detail": "parsed; 9-28 DBX1 100/16 read as stockLeft=560 used=null balance=20 (truth: 560/20/540) lines=[\"Line 2:10\",\"Line 3:3\",\"Line 7:2\",\"Line 10:2\",\"Line 11:3\"]"
+  },
+  {
+    "name": "BASELINE v4.0 importer on newest Spare Part file (9-18+ new layout)",
+    "status": "PASS",
+    "detail": "parsed 15 sheets; 9-28 present, hook used=null balance=1 (truth: issued 1 / closing 7)"
+  },
+  {
+    "name": "Import newest Needle file (23 sheets) through importExcel → commit",
+    "status": "PASS",
+    "detail": "{\"parts\":0,\"purchases\":0,\"stock\":23,\"changes\":453,\"unchanged\":0,\"upgraded\":0,\"retired\":0} → {\"stock\":23,\"needle\":453,\"part\":0,\"hist\":0,\"docs\":1}"
+  },
+  {
+    "name": "Import the SAME Needle file again → 0 added, 0 updated, no history growth",
+    "status": "PASS",
+    "detail": "{\"parts\":0,\"purchases\":0,\"stock\":0,\"changes\":0,\"unchanged\":476,\"upgraded\":0,\"retired\":0}"
+  },
+  {
+    "name": "Import bundled OLD Needle file (overlapping 9-1…9-22, 9-17/9-18 restated) → overlapping identical days unchanged, restated days updated with history, no duplicate change rows",
+    "status": "PASS",
+    "detail": "{\"parts\":0,\"purchases\":0,\"stock\":11,\"changes\":11,\"unchanged\":277,\"upgraded\":269,\"retired\":101} · 9-18 history=1"
+  },
+  {
+    "name": "Import newest Spare Part file (15 sheets, reversed headers) then again → idempotent",
+    "status": "PASS",
+    "detail": "{\"parts\":0,\"purchases\":0,\"stock\":15,\"changes\":67,\"unchanged\":0,\"upgraded\":0,\"retired\":0} then {\"parts\":0,\"purchases\":0,\"stock\":0,\"changes\":0,\"unchanged\":82,\"upgraded\":0,\"retired\":0}"
+  },
+  {
+    "name": "All change records carry reasonClass; totals per class (needle)",
+    "status": "PASS",
+    "detail": "{\"changeover\":240,\"damage\":534,\"broken\":140,\"unknown\":30}"
+  },
+  {
+    "name": "Render tabs after import (needlechange / partchange / needle / machine) without exceptions",
+    "status": "PASS",
+    "detail": "ok"
+  }
+]

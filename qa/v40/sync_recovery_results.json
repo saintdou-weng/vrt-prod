@@ -1,13 +1,13 @@
 [
   {
     "name": "Interrupted multi-bucket pull resumes from IDB cache and unchanged reopen has zero downloads",
-    "status": "PASS",
-    "detail": "2 completed buckets survive interruption; no repeat downloads on retry or unchanged reopen"
+    "status": "FAIL",
+    "detail": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(rejected)\n\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:3:1185\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:1:233)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:3:1"
   },
   {
     "name": "Invalid bucket response cannot overwrite populated local data",
-    "status": "PASS",
-    "detail": "empty/truncated bucket rejected; apply never called"
+    "status": "FAIL",
+    "detail": "AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:4:456\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:1:233)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:4:1"
   },
   {
     "name": "Connection migration from existing small settings and site default require no module URL reentry",

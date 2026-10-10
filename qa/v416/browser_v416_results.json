@@ -1,0 +1,40 @@
+{
+ "results": [
+  {
+   "name": "D1 production_v4: 📰 生產日報 tab auto-generates the latest data date from the page data (no cloud needed); WIP = page STYLES; Word export downloads a .doc; Telegram / AI buttons report the missing GAS URL instead of failing silently",
+   "status": "PASS",
+   "detail": "date 2026-09-28 · pieces 240 · WIP 0 = page · zh 188 chars · VRT_DailyReport_2026-09-28.doc · without GAS URL: \"尚未設定 GAS 網址\""
+  },
+  {
+   "name": "B11 in-page dialogs: VRTDialog.confirm shows a modal (Enter = OK, Esc = cancel, danger style for delete), alert becomes a non-blocking notice, automation mode (?auto=1) auto-answers and logs; no native dialog opened anywhere in this run so far",
+   "status": "PASS",
+   "detail": "confirm (danger) esc→false · prompt enter→default · 2 notices non-blocking in 2 ms · auto mode answered + logged 4 · native dialogs 0"
+  },
+  {
+   "name": "B7 shipping_v2: loading an older AS-OF report over newer data opens the in-page question; cancel keeps the newer data",
+   "status": "PASS",
+   "detail": "asked (這份出貨排程的 AS OF 日期是 2026-09-07，比目前載入的資料（AS…) · cancel → 40 rows kept · 已取消：保留 AS OF 2026-10-06 的資料"
+  },
+  {
+   "name": "B8 monthly shipping: the real 1-VRT MONTHLY SHIPPING SCHEDULE.xlsx opens a preview (added/changed/same/kept) before anything is saved; confirm saves",
+   "status": "PASS",
+   "detail": "preview KPIs 35/0/0/0 · before 0 → after 35"
+  },
+  {
+   "name": "B3 customer statistics: the real 1.7 MB report parses in a Web Worker (main thread stays responsive) and lands in the page",
+   "status": "PASS",
+   "detail": "import 1573 ms · timer ticks 31/31 (main thread free) · details 2939 · ☁ Local updated · 解析 1548 ms"
+  },
+  {
+   "name": "D2 shared Telegram modal has the 🤖 AI 摘要 button; without a GAS URL it explains instead of failing",
+   "status": "PASS",
+   "detail": "AI button present in the ✈️ modal"
+  },
+  {
+   "name": "C orders_v3 with a mock GAS (routed through the browser): 「☁ 待匯入 1 檔」 badge, panel lists the Telegram file, Import runs the page importer and the row is marked done",
+   "status": "PASS",
+   "detail": "badge 1 · import → weekly rows 3602 → 3626 · queue done"
+  }
+ ],
+ "pageErrors": []
+}

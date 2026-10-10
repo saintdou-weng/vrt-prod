@@ -1,0 +1,112 @@
+[
+  {
+    "name": "New needle file: 23 daily sheets parsed, dates from tab names with year 2026",
+    "status": "PASS",
+    "detail": "2026-09-01 … 2026-09-28"
+  },
+  {
+    "name": "New needle 9-28: Opening/Received/Issued/Closing columns detected (K:V lines)",
+    "status": "PASS",
+    "detail": "DBX1 100/16 open 560 issued 20 close 540, lines {\"Line 1\":10,\"Line 2\":3,\"Line 6\":2,\"Line 9\":2,\"Line 10\":3}"
+  },
+  {
+    "name": "New needle 9-19: Received 500 kept separately; opening-issued=closing still accepted",
+    "status": "PASS",
+    "detail": "rule=opening-issued"
+  },
+  {
+    "name": "New needle 9-1: old layout inside same workbook (J:U lines), title date 2026-01-09 corrected to 2026-09-01 by tab",
+    "status": "PASS",
+    "detail": "9-1：原表日期 2026-01-09（日／月互換） → 依分頁名稱採 2026-09-01"
+  },
+  {
+    "name": "New needle totals: issued sum per sheet equals source totals row (9-28 = 50)",
+    "status": "PASS",
+    "detail": "no totals-row mismatch warnings"
+  },
+  {
+    "name": "Needle change records: reasonClass classified; changeover not merged with damage",
+    "status": "PASS",
+    "detail": "{\"changeover\":240,\"damage\":730,\"broken\":140,\"unknown\":10,\"other\":50}"
+  },
+  {
+    "name": "Old needle file (cellDates:false serial dates): 19 sheets, all old layout, same quantities as new file for overlapping days (9-17/9-18 were restated at source, excluded)",
+    "status": "PASS",
+    "detail": "overlap 9-1/9-10/9-18 identical"
+  },
+  {
+    "name": "Old vs new parser identity: same item IDs and change IDs for identical source rows (idempotent across file versions)",
+    "status": "PASS",
+    "detail": "39 change ids equal"
+  },
+  {
+    "name": "New parts file: 15 sheets, 9-10 (title 2026-10-09) corrected to 2026-09-10",
+    "status": "PASS",
+    "detail": "09-10,09-11,09-12,09-14,09-15,09-16,09-17,09-18,09-19,09-21,09-22,09-23,09-24,09-25,09-28"
+  },
+  {
+    "name": "New parts 9-28: reversed header text (D says Closing, G says Opening) → numbers decide: D=opening, G=closing, warning issued, values untouched",
+    "status": "PASS",
+    "detail": "9-28：表頭「តុល្យភាព CLOSING BALANCE 期末余额」依數字關係（期初－發放＝結存）判定為期初、「ចំនួននៅសល់ OPENING BALANCE 未结余额2」為結存；原值保留未改，請通知製表人"
+  },
+  {
+    "name": "New parts 9-28: totals row (851 / 6 / 845) matches detail sums",
+    "status": "PASS",
+    "detail": "851/6/845"
+  },
+  {
+    "name": "New parts 9-17 (old layout, Column1 stray header): Feed Dog 57-3=54, lines 4/6/8",
+    "status": "PASS",
+    "detail": "ok"
+  },
+  {
+    "name": "Old parts file: 8 sheets incl. 9-18 whose title has no day (\"/9/2026\") → date from tab",
+    "status": "PASS",
+    "detail": "09-10,09-11,09-12,09-14,09-15,09-16,09-17,09-18"
+  },
+  {
+    "name": "Old parts vs new parts overlapping day 9-17: both parse; source workbook was restated (rows 50+ renumbered) → differences are reported, not hidden",
+    "status": "PASS",
+    "detail": "49 same IDs, 0 restated quantities; mergeReports keeps prior version in history"
+  },
+  {
+    "name": "Same file parsed twice → identical fingerprints and change IDs (no duplicates on re-import)",
+    "status": "PASS",
+    "detail": "mergeReports unchanged=15"
+  },
+  {
+    "name": "Edge: line allocation > issued → warning, row preserved, no invented line",
+    "status": "PASS",
+    "detail": "9-3 DBX1：線別合計 13 大於發放 10，保留線別數量供核對"
+  },
+  {
+    "name": "Edge: issued > allocated → Unassigned qty computed and flagged, not silently changed",
+    "status": "PASS",
+    "detail": "unassigned 7"
+  },
+  {
+    "name": "Edge: stock arithmetic mismatch → warning, source values kept",
+    "status": "PASS",
+    "detail": "kept 100/10/85"
+  },
+  {
+    "name": "Edge: received present, sheet follows opening+received-issued=closing → accepted with that rule",
+    "status": "PASS",
+    "detail": "rule detected"
+  },
+  {
+    "name": "Edge: blank remark → reasonClass unknown; missing line allocation → total only + warning",
+    "status": "PASS",
+    "detail": "unknown + unassigned 10"
+  },
+  {
+    "name": "Edge: title without year and file name without year → current-year assumption is warned",
+    "status": "PASS",
+    "detail": "2026-09-03"
+  },
+  {
+    "name": "Native export round-trip (Record ID / Date / Part Type) still works",
+    "status": "PASS",
+    "detail": "ok"
+  }
+]

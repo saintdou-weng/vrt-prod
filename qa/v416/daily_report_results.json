@@ -1,0 +1,47 @@
+[
+ {
+  "name": "compute — real backups: sewing day = de-duplicated rows (norm > target > dpo), weighted efficiency formula, prev day / same weekday last week, cutting excludes ref rows",
+  "status": "PASS",
+  "detail": "D 2026-09-28 pieces 240 (builder 240) · prev 2026-09-25 323 · cutting 9800 · eff —"
+ },
+ {
+  "name": "compute — synthetic full day: every number of the report is derived from the rows (checked by hand here) and the anomalies fire on the documented thresholds",
+  "status": "PASS",
+  "detail": "pieces 4600 · eff 69.7% · WIP 3500 · QC 4.38% top Skip stitch/Open seam/Dirty/Broken · ship 60% overdue PO-2 · fabric 1200 · needle flag Line 2 · anomalies ship,qc,needle,fabric"
+ },
+ {
+  "name": "render — fixed bilingual layout (3 highlights, key-number table vs prev/last week, ≤3 issues with line/PO + who), about 250 Chinese characters; Telegram HTML escapes data; checkAiText accepts its own text and rejects changed numbers",
+  "status": "PASS",
+  "detail": "zh 193 chars · 6 points · verdict line · html escaped · own text ok · altered numbers 4,650/61 rejected · prompt 11238 chars"
+ },
+ {
+  "name": "render — a date without data says so (no fake zeros as highlights); Word export is a self-contained HTML document with the numbers table",
+  "status": "PASS",
+  "detail": "no-data message · doc 20087 chars"
+ },
+ {
+  "name": "management-analysis layout — synthetic week with a dual-risk line and a month plan: RAG per area, line 判讀 (可接受/偏低/低效) + risk class (dual/quality/capacity), plan position (completion vs elapsed working days, required/day), per-day table, QC reconciliation, actions with owners, 資料口徑; Word doc carries KPI tiles, 管理結論, 9 sections and the action table",
+  "status": "PASS",
+  "detail": "W41 · 2 days 8,800 pcs · Line 3 dual (eff 19% / rej 14%) · plan 14,200/110,000 req 5322/day RAG R · 5 actions · doc 23990 chars, 16 tables"
+ },
+ {
+  "name": "week report on the real backups: Mon–Sun window, previous week comparison, cutting per period, no plan/QC data → RAG — and plain statements, Telegram text under the limit",
+  "status": "PASS",
+  "detail": "W39 1461 pcs over 5 days (prev W38 2898) · cutting 16786 · text 1519 chars"
+ },
+ {
+  "name": "page — production_v4 pulls the cloud, auto-generates the latest day once (not sent), WIP equals the page KPI data (STYLES), sewing day total equals the sewing builder; regenerate overwrites; stored in its own DB; cloud copy saved",
+  "status": "PASS",
+  "detail": "auto date 2026-09-28 · pieces 240 · WIP 15516 = page · once per date · week 2026-W40 · cloud daily_report_2026-09-28.json"
+ },
+ {
+  "name": "page — ✈️ Telegram uses the shared sendMessage proxy (HTML, audit daily_report) and records sentAt; AI button without CLAUDE_API_KEY reports \"not configured\" and keeps the rule text",
+  "status": "PASS",
+  "detail": "sent 1 HTML message (audit daily_report) · sentAt recorded · AI: GAS 尚未設定 CLAUDE_API_KEY：請在 Apps Script →"
+ },
+ {
+  "name": "GAS — generateDailyReport reads the cloud buckets, saves daily_report_<date>.json + index, trigger is idempotent (second run: no new file, no second send), dailyReportList/Get answer; AI step: fake key + stubbed Claude → text with a wrong number is rejected, correct text accepted and cost logged",
+  "status": "PASS",
+  "detail": "trigger reused page report 2026-09-28 (no resend) · GAS 2026-09-25 saved+sent once · week 2026-W39 saved+sent once (plan 117994) · list/get ok · WIP basis none · AI: no key → notConfigured, wrong number rejected (9,999), good text accepted $0.0098 · usage 2 calls · D2 check ok"
+ }
+]

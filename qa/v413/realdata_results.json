@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Sewing: restore real backup (5,009 daily rows) → dedupAndNorm count, eff handling, date range",
+    "status": "PASS",
+    "detail": "backup 5009 → DB 5009 (dedup removed 0) · eff 0 · 2020-06-08…2026-09-28 · tSrc {\"?\":4964,\"dpo\":41,\"target\":4}"
+  },
+  {
+    "name": "Sewing: exports (daily/weekly/records/monthly/yearly Excel, eff Excel, backup JSON) run without exceptions after restore",
+    "status": "PASS",
+    "detail": "ok"
+  },
+  {
+    "name": "Sewing: re-import source \"Daily Production Output Report as of September\" over restored data → same-day rows replaced, not duplicated",
+    "status": "PASS",
+    "detail": "pending 223 · \"找到 223 筆記錄，請確認後存入\" · total 5009→5183 · Sep rows 55→223 · duplicate keys 0"
+  },
+  {
+    "name": "Sewing: mock-GS push from device A, pull on device B → same row count; second push uploads 0",
+    "status": "PASS",
+    "detail": "A 5009 rows → 75 bucket POSTs + 1 commit, 75 buckets · B 5009 rows · unchanged re-sync transfers: none"
+  },
+  {
+    "name": "Cutting: restore real backup (18,663 rows) → count, date range, sections",
+    "status": "PASS",
+    "detail": "CUT 18663 · 2020-06-15…2026-09-28 · sections {\"Garment\":12844,\"Apron\":2210,\"Napkin\":3609} · rows sharing date|section|line|style: 29"
+  },
+  {
+    "name": "Cutting: every Excel export type runs (documents the weekly export crash if present)",
+    "status": "PASS",
+    "detail": "all export types ok · saved: 裁剪日報_2026-10-09.xlsx, 裁剪週報_2026-10-05.xlsx, 裁剪月報_2026-10.xlsx, 裁剪全記錄_2026-10-09.xlsx, 裁剪款號彙整_2026-10-09.xlsx, 裁縫月度比對_202610.xlsx, 款式資料庫_2026-10-09.xlsx"
+  },
+  {
+    "name": "Orders: restore real backup → store counts match file; restore twice → no growth",
+    "status": "PASS",
+    "detail": "po_lines 549 · snapshots 3602 · headers 11 · idempotent"
+  },
+  {
+    "name": "Orders: CSV exports run after restore",
+    "status": "PASS",
+    "detail": "ok"
+  },
+  {
+    "name": "Plan: import source Excel (Production Plan From July Until Dec_2026) → records, months, Line 12 rule; then export CSV/XLSX; CSV re-import currently impossible",
+    "status": "PASS",
+    "detail": "records 705 (your CSV export has 705) · months {\"2026-07\":119,\"2026-08\":228,\"2026-09\":242,\"2026-10\":116} · Line12 from Aug: 0 · exports ok · saved VRT_PRODUCTION_PLAN.xlsx"
+  },
+  {
+    "name": "Cutting: mock-GS roundtrip (18,663 rows)",
+    "status": "PASS",
+    "detail": "A 18663 → 64 bucket POSTs, 64 buckets · B 18663 · unchanged re-sync transfers: none"
+  },
+  {
+    "name": "Orders: mock-GS roundtrip (549 lines + weekly snapshots; v4.16 cloud carries one row per week×customer = 1,827 of the backup's 3,602 raw rows)",
+    "status": "PASS",
+    "detail": "A [549,1827] → 66 bucket POSTs, 66 buckets · B [549,1827] · unchanged re-sync transfers: none"
+  },
+  {
+    "name": "Plan: mock-GS roundtrip (705 records)",
+    "status": "PASS",
+    "detail": "A 705 → 4 bucket POSTs, 4 buckets · B 705 · unchanged re-sync transfers: none"
+  }
+]

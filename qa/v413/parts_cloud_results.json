@@ -1,0 +1,27 @@
+[
+  {
+    "name": "BASELINE v4.8 transport: bucket count for the same two files (old parser reads them wrongly but still uploads)",
+    "status": "PASS",
+    "detail": "smartBucket POSTs 571 · manifest buckets 571 · uploaded 571"
+  },
+  {
+    "name": "v4.13 transport: same data uploads in a few dozen month/week/hash buckets instead of one per row",
+    "status": "PASS",
+    "detail": "rows 560 · smartBucket POSTs 9 · manifest buckets 9 (baseline 571) · e.g. p:maint_needle_2026-09, p:maint_part_2026-09, p:maint_source_01, p:maint_source_07"
+  },
+  {
+    "name": "Second device pull receives identical needle/part change rows and stock sheets; re-sync on both sides transfers nothing",
+    "status": "PASS",
+    "detail": "B has 453 needle + 67 part changes, 38 sheets; re-sync 0/0"
+  },
+  {
+    "name": "New daily import on device A after sync touches only the current month/week buckets",
+    "status": "PASS",
+    "detail": "buckets touched: p:maint_needle_2026-09"
+  },
+  {
+    "name": "Migration: cloud written by v4.8 (571 h: buckets) → v4.13 device pulls, re-imports newest files, pushes → manifest has only p: buckets, no data loss, third device matches",
+    "status": "PASS",
+    "detail": "buckets after migration 18 · needle 453 · part 67 · sheets 38"
+  }
+]

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Shipping: restore real backup rows → backup JSON → fresh browser restore → same count; buttons present; xlsx file rejected",
+    "status": "PASS",
+    "detail": "backup 120 rows → restored 120 · reload keeps 120 · rejects other tool + non-JSON"
+  },
+  {
+    "name": "Customer statistics: import real xlsx → backup → fresh restore → same details/customers; save persisted",
+    "status": "PASS",
+    "detail": "seed synthetic · details 2 customers 1 → restored + persisted"
+  },
+  {
+    "name": "Monthly shipping: import real xlsx (or seed) → backup incl. versions → fresh restore → same records, MONTH set",
+    "status": "PASS",
+    "detail": "seed 1-VRT MONTHLY SHIPPING SCHEDULE.xlsx · 35 records → restored, MONTH 2026-10 · persisted"
+  },
+  {
+    "name": "Fabric stock: seed DB (current/old/accessory) → backup → fresh restore → same counts and movements array kept",
+    "status": "PASS",
+    "detail": "current 30 / old 1 / accessory 1 → restored + persisted"
+  },
+  {
+    "name": "Official SMV: seed 3 versions → backup → fresh browser restore adds all 3; second restore adds 0; existing versions never deleted",
+    "status": "PASS",
+    "detail": "restored 3 + kept local 1 · second restore adds 0"
+  }
+]

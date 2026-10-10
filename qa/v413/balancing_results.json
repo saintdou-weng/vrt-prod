@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Seed PROD data into this browser: plan 705, sewing 5009, needle changes 453",
+    "status": "PASS",
+    "detail": "ok"
+  },
+  {
+    "name": "Import IE weekly (approved) + 4 OBDs (all pending) without upload changes",
+    "status": "PASS",
+    "detail": "styles 4 · updates 81 · ops 65"
+  },
+  {
+    "name": "Tab renders; plan row auto-resolves an OBD only when the style matches; pending OBD → DRAFT / SIMULATION ONLY",
+    "status": "PASS",
+    "detail": "plan rows with a matching OBD: 9 (A050-W-SP→A050-W-SP-CHP, A050-W-SP→A050-W-SP-CHP, 5209→5209, A050-W-SP→A050-W-SP-CHP) · 5209 in plan: Line 4 · first Sep row OBD: none"
+  },
+  {
+    "name": "Balancing math for OBD 5209 (35 ops, SMV 13.81): required = SMV×output÷(minutes×eff); suggested = ceil; statuses by thresholds",
+    "status": "PASS",
+    "detail": "Σraw 19.19 · suggested Σ 40 · assigned Σ 40 · bottlenecks 0 · families SN:15, Manual:8, 5-thread Overlock:6, 3-thread Overlock:4, Iron:4, Snap:2, Bartack:1 · manpower calc 40 vs plan 29"
+  },
+  {
+    "name": "Simulation: changing output / efficiency updates stations immediately; SN example 0.90 SMV × 600 ÷ (480×0.45) = 2.50 → 3",
+    "status": "PASS",
+    "detail": "example raw 2.50 → suggested 3 · Σsuggested @600=53 @300=40"
+  },
+  {
+    "name": "Target efficiency priority: user > recent actual (same style/line) > plan > 45% default (labelled)",
+    "status": "PASS",
+    "detail": "auto: 25% (同款同線近期實際 2 天 · 2026-08-31) · user: 50% · unknown style: 45% (模擬預設 45%)"
+  },
+  {
+    "name": "Every sub-view renders without exception (setup, balance, machine, manpower, changeover, pva, needle, master, weekly, report)",
+    "status": "PASS",
+    "detail": "ok"
+  },
+  {
+    "name": "Changeover 5209 → A2642K: similarity scores in [0,1], machine add/remove table, retained/new ops",
+    "status": "PASS",
+    "detail": "machine sim 48% · op sim 62% · retained 15 / new 9 · training 9"
+  },
+  {
+    "name": "Needle history: Change Style never counted as failure; per-1,000 uses actual pieces or shows Insufficient data; link unique/ambiguous/unlinked",
+    "status": "PASS",
+    "detail": "Line 1 Sep: needles 260 (changeover 89, unplanned 166) · pieces 0 · per1000 total Insufficient data · links {\"ambiguous\":13,\"unique\":49} · machine hours known 0 → life hours = Insufficient data"
+  },
+  {
+    "name": "Save assignment + alias + master + link → persisted in state.balancing, survives reload, packs into one ie_balancing bucket",
+    "status": "PASS",
+    "detail": "balancing records 2 → bucket ie_balancing · mergeIE keeps 2"
+  },
+  {
+    "name": "Excel report A–H exports all sheets",
+    "status": "PASS",
+    "detail": "VRT_IE_LineBalancing_Line6_1835_2026-10-10.xlsx · {\"A Setup\":18,\"B Balancing\":35,\"C Machines\":7,\"D Manpower\":7,\"E Changeover\":1,\"F Needle history\":20,\"G Weekly\":41,\"H Plan vs Actual\":0}"
+  },
+  {
+    "name": "Old PROD data untouched: styles / operations / updates counts unchanged after balancing use",
+    "status": "PASS",
+    "detail": "styles 4 · ops 65 · updates 81"
+  }
+]

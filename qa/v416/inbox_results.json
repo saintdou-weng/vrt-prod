@@ -1,0 +1,27 @@
+[
+ {
+  "name": "GAS pollTelegram: a weekly order file posted in the group is downloaded (getFile → file URL), stored in Drive PROD_Inbox/<group>/<date>/, queued as pending for orders_v3, mirrored to the import_queue sheet, 👍 reaction sent; same file again = ignored; 25 MB file = skipped with note; unknown name = unrouted; text commands still answered",
+  "status": "PASS",
+  "detail": "queue 3 (orders pending · statement skipped 20 MB · unrouted) · Drive PROD_Inbox/VRT Malen/2026-10-10 · sheet 3 rows · 👍 ×2 · /prod ok · offset 905"
+ },
+ {
+  "name": "GAS web actions: inboxList by module (counts), inboxFile returns the exact bytes (base64), inboxDone updates queue + sheet, reroute an unrouted file, inboxRoutes lists the table (+ INBOX_ROUTES_JSON extension)",
+  "status": "PASS",
+  "detail": "list/counts ok · bytes identical · done → sheet updated · unrouted → custstats · routes 18 (custom first)"
+ },
+ {
+  "name": "page orders_v3: 「☁ 待匯入」 shows the file routed to it, Import downloads it and runs the page's own importer (weekly rows appear), then marks it done in the queue",
+  "status": "PASS",
+  "detail": "badge 1 → import → weekly rows 0 → 24 · queue row done · badge 0"
+ },
+ {
+  "name": "auto-import: with the per-page switch on, a file whose importer asks a question stays pending with the question as note; a file that imports without questions is marked done by \"auto\"",
+  "status": "PASS",
+  "detail": "June (asked) → pending \"需人工確認 needs confirmation: 這份週報…\" · September → done by auto"
+ },
+ {
+  "name": "multi-bot intake (GA Purchase Order bot already in the production groups): inboxPollBots polls each extra bot with ITS token, downloads with that token, ignores non-document updates, skips documents older than INBOX_MAX_AGE_DAYS, keeps a per-bot offset; a bot that has a webhook (owned by another system) is skipped without deleteWebhook; PROD bot untouched; underscore file names routed",
+  "status": "PASS",
+  "detail": "GA PO bot: 2 files (spare parts + IE) via its own token, 1 old skipped, text ignored, offset 14 · webhook bot skipped (no deleteWebhook) · PROD bot untouched · checkInboxBots 3 bots"
+ }
+]

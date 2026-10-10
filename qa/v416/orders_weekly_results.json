@@ -1,0 +1,32 @@
+[
+ {
+  "name": "B1 same-size weekly files (Feb-16 / Jun-15 = 124,701 B; Feb-02 / Feb-23 = 124,750 B) are all imported — content hash, not size",
+  "status": "PASS",
+  "detail": "weeks {\"2026-02-16\":24,\"2026-06-15\":24,\"2026-02-02\":24,\"2026-02-23\":24} · 4 distinct content hashes"
+ },
+ {
+  "name": "B1 re-import of the very same file is skipped; a changed copy of the same week updates rows in place (no duplicates, same count)",
+  "status": "PASS",
+  "detail": "rows 24 → 24 → 24 · uids unique"
+ },
+ {
+  "name": "B2 cross-device: A imports Feb-16, B imports Jun-15 (same local ids), both push, both pull → both devices hold both weeks, nothing lost, second pushes transfer 0",
+  "status": "PASS",
+  "detail": "A {\"2026-06-15\":24,\"2026-02-16\":24} · B same · ids A 1791583663372000,1791583663374000,1791583663375000 B 1791583663892000,1791583663894000,1791583663895000 · weekly buckets p:weekly_2026-02,p:weekly_2026-06 · second pushes 0 commits"
+ },
+ {
+  "name": "B2 import queue holds the orders auto-sync lock; a pull / push requested meanwhile is refused (busy) instead of overwriting",
+  "status": "PASS",
+  "detail": "pull/push refused while importing · 3 weeks saved · lock released"
+ },
+ {
+  "name": "B2 a pull that started before a local write finished does not overwrite the new rows (apply skipped, rows kept)",
+  "status": "PASS",
+  "detail": "during pull: {\"2026-02-16\":24,\"2026-06-15\":24} → after reconcile: {\"2026-06-15\":24,\"2026-02-16\":24}"
+ },
+ {
+  "name": "Old cloud rows (v4.15 numeric envelope ids) are still read: a pull merges them, dedupes by as_of+customer and the next push moves them to uid ids",
+  "status": "PASS",
+  "detail": "old week rows 24 · cloud ids now orders.weekly:wk_009f1532,orders.weekly:wk_0b8eec5e"
+ }
+]

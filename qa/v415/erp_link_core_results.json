@@ -1,0 +1,57 @@
+[
+ {
+  "name": "Parse + suggest + normalise keeps raw keys (leading zeros, hyphens), dates by rule, qty numeric; required fields enforced (T11)",
+  "status": "PASS",
+  "detail": "ids a6d1d0,b62c61,20a259,6517aa · key sample TEST-0001|1"
+ },
+ {
+  "name": "Dates: ISO / yyyy/mm/dd / yyyymmdd / dd-MMM-yy / ROC 民國 / excel serial parse; a/b/yyyy with both ≤12 is ambiguous unless the template says MDY or DMY (never today)",
+  "status": "PASS",
+  "detail": "roc 115/09/05 → 2026-09-05 · ambiguous flagged"
+ },
+ {
+  "name": "T03 same file ×3 and renamed file: counts and quantities never grow; duplicates inside one file are skipped",
+  "status": "PASS",
+  "detail": "1000 rows · 4 imports · qty 600500 unchanged · in-file dups skipped 3"
+ },
+ {
+  "name": "T05 a corrected field updates the row, keeps the previous version, and re-running does not accumulate",
+  "status": "PASS",
+  "detail": "T-00010 qty 110 → 55 · versions 1 · rerun adds nothing"
+ },
+ {
+  "name": "T06 / T07 a partial file (10 rows) after 1,000 keeps the other 990; a legitimate reduction is reflected with history (never silently dropped)",
+  "status": "PASS",
+  "detail": "990 untouched · reduction 101 → 1 kept with version"
+ },
+ {
+  "name": "Rows without a line seq are identified by content (two different lines never collapse into one)",
+  "status": "PASS",
+  "detail": "2 lines kept, flagged no_line_seq"
+ },
+ {
+  "name": "compareOrders: crosswalk > self key > unique PO+style+colour; six states; nothing multiplied (T10)",
+  "status": "PASS",
+  "detail": "states {\"diff\":0,\"timing\":0,\"missing\":0,\"ambiguous\":0,\"incomparable\":0,\"match\":3,\"total\":3,\"unmatchedProd\":1,\"erpQty\":51240} · T029671 via selfKey progress 63%"
+ },
+ {
+  "name": "compareOrders difference / timing / incomparable: qty mismatch → diff; ERP snapshot older than PROD data → timing; plan only → incomparable (T29, T31)",
+  "status": "PASS",
+  "detail": "diff ✓ timing ✓ incomparable ✓ missing ✓"
+ },
+ {
+  "name": "compareShipping: ERP shipped vs schedule shipped side by side (ETD / shipped / open kept apart); multiple BLs per PO sum once (T10)",
+  "status": "PASS",
+  "detail": "ERP 900 (2 BL) = schedule 900 · open 540 shown separately · schedule lag → timing"
+ },
+ {
+  "name": "dailyReport numbers trace to the rows: sewn = sum of that day, cutting excludes Weekly Report rows, QC picks one report per line",
+  "status": "PASS",
+  "detail": "sewn 3410 · cut 420 · QC 380/12 · plan 3450/day → 99% · empty day gaps 5"
+ },
+ {
+  "name": "prevWorkday skips Sunday and factory holidays",
+  "status": "PASS",
+  "detail": "Mon 10-05 → Sat 10-03; with 10-03 closed → Fri 10-02"
+ }
+]

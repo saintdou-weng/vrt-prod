@@ -1,15 +1,15 @@
 {
   "release": "VRT PROD 4.0.0",
-  "generatedAt": "2026-09-23T11:03:11.828Z",
+  "generatedAt": "2026-09-30T17:35:45.662Z",
   "environment": "Node; simulated DOM and IndexedDB; mock cloud. Actual uploaded Excel files plus generated EML wrappers. No live GAS, mobile or desktop browser certification.",
-  "pass": 53,
-  "fail": 0,
-  "runnerFailed": false,
+  "pass": 45,
+  "fail": 8,
+  "runnerFailed": true,
   "tests": [
     {
       "name": "BOM page starts and uses canonical style for costing context",
-      "status": "PASS",
-      "detail": "BOM owns selection and same-origin costing view",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: 'vrt_bom_costing_view_v39.html?v=4.4.0' == 'vrt_bom_costing_view_v39.html'\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_bom_runtime.js:4:423\n    at async add (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_bom_runtime.js:2:305)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_bom_runtime.js:4:1",
       "suite": "bom_results.json",
       "runner": "../v39/run_all.js"
     },
@@ -57,8 +57,8 @@
     },
     {
       "name": "Repeated IE imports are idempotent; operations keep repeated sequence numbers",
-      "status": "PASS",
-      "detail": "56 updates / 2 OBD revisions / 59 operations after two imports",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: 58 == 56\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:6:174\n    at async add (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:2:244)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:6:1",
       "suite": "ie_results.json",
       "runner": "../v39/run_all.js"
     },
@@ -71,22 +71,22 @@
     },
     {
       "name": "Publishing is idempotent and retains older official records",
-      "status": "PASS",
-      "detail": "35 new snapshots + old snapshot retained; same approved report cannot publish twice",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: 58 == 56\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:8:580\n    at async add (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:2:244)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:8:1",
       "suite": "ie_results.json",
       "runner": "../v39/run_all.js"
     },
     {
       "name": "IE Excel export and reimport preserve all styles and operations without duplicates",
-      "status": "PASS",
-      "detail": "56 IE + 2 OBD + 59 operations survive export/reimport",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: 58 == 56\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:9:384\n    at async add (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:2:244)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:9:1",
       "suite": "ie_results.json",
       "runner": "../v39/run_all.js"
     },
     {
       "name": "IE CSV summary export reimports without replacing operation details",
-      "status": "PASS",
-      "detail": "56 summaries reimported; linked 59 operations remain untouched",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: 58 == 56\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:10:393\n    at async add (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:2:244)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v39/qa_ie_runtime.js:10:1",
       "suite": "ie_results.json",
       "runner": "../v39/run_all.js"
     },
@@ -128,7 +128,7 @@
     {
       "name": "Every HTML/JS syntax",
       "status": "PASS",
-      "detail": "239 scripts parsed",
+      "detail": "326 scripts parsed",
       "suite": "logic_results.json",
       "runner": "../v39/run_all.js"
     },
@@ -287,13 +287,13 @@
     {
       "name": "Daily maintenance imports render and persist without stock double deduction",
       "status": "PASS",
-      "detail": "280 needle / 35 parts / 27 daily snapshots; five-file included button also retains 86 parts, 152 purchases and 2 older stock reports",
+      "detail": "453 needle / 67 parts / 38 daily snapshots (v4.13 fixtures = newest Sept reports); five-file included button also retains 86 parts, 152 purchases and 1 older stock report",
       "runner": "run_attachment_checks.js"
     },
     {
       "name": "Fabric 7090 records render, reload, partial merge and export/reimport",
-      "status": "PASS",
-      "detail": "7090 records, latest stock day visible, 5 views execute, native Excel headers recognized",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: 0 == 7090\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/run_attachment_checks.js:7:340\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/run_attachment_checks.js:2:281)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/run_attachment_checks.js:7:1",
       "runner": "run_attachment_checks.js"
     },
     {
@@ -304,14 +304,14 @@
     },
     {
       "name": "Interrupted multi-bucket pull resumes from IDB cache and unchanged reopen has zero downloads",
-      "status": "PASS",
-      "detail": "2 completed buckets survive interruption; no repeat downloads on retry or unchanged reopen",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(rejected)\n\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:3:1185\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:1:233)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:3:1",
       "runner": "sync_recovery_checks.js"
     },
     {
       "name": "Invalid bucket response cannot overwrite populated local data",
-      "status": "PASS",
-      "detail": "empty/truncated bucket rejected; apply never called",
+      "status": "FAIL",
+      "detail": "AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:4:456\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:1:233)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v40/sync_recovery_checks.js:4:1",
       "runner": "sync_recovery_checks.js"
     },
     {

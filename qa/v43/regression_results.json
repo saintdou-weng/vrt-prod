@@ -17,7 +17,7 @@
   {
     "name": "IE actual preview-confirm path saves weekly updates and pending OBD operations",
     "status": "PASS",
-    "detail": "60 weekly records, 1 OBD versions, 24 operations saved from editable preview; repeat adds zero"
+    "detail": "61 weekly records, 1 OBD versions, 24 operations saved from editable preview; repeat adds zero"
   },
   {
     "name": "IE mixed invalid file keeps valid preview; failed save retains preview and previous state",
@@ -26,13 +26,13 @@
   },
   {
     "name": "Fabric reference examples are recognized and excluded from live inventory",
-    "status": "PASS",
-    "detail": "72 labeled example transactions excluded; UI explains reference-only status and directs user to real ledger entry"
+    "status": "FAIL",
+    "detail": "AssertionError [ERR_ASSERTION]: 72 == 0\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v43/regression.js:14:292\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v43/regression.js:5:47)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v43/regression.js:14:1"
   },
   {
     "name": "Fabric opening / receipt / issue calculate once; forms, export, reimport, delete and reload retain correct balances",
-    "status": "PASS",
-    "detail": "100 opening + 20 received - 30 issued = 90; opening is not receipts; native roundtrip, online form, tombstone, negative-balance guard and IDB reload verified"
+    "status": "FAIL",
+    "detail": "Error: QA-CLOTH / 202609-LOT-001：期初只能有一筆，且須早於收發紀錄\n    at Object.movementSave43 (vrt-fabric-ui-v43.js?v=4.14.0:8:248)"
   },
   {
     "name": "Fabric ledger and original stock coexist through actual Production GS smart-sync handlers",

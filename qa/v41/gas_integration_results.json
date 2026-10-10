@@ -1,8 +1,8 @@
 [
   {
     "name": "QC attachment → real frontend → actual GS → second device, no repeat transfers",
-    "status": "PASS",
-    "detail": "13 reports; latest day 4708 / 199 / 4509, 11 active lines; second device intact; unchanged Push/Pull send zero buckets/commits"
+    "status": "FAIL",
+    "detail": "AssertionError [ERR_ASSERTION]: Expected values to be loosely deep-equal:\n\n[\n  {\n    base64: '',\n    hasLocalAttachment: true,\n    hash: 'QCS-c5085bffc2efaff5',\n    id: 'QCS-c5085bffc2efaff5',\n    name: 'Final_QC_20260917.xlsx',\n    size: 3407200,\n    updatedAt: ''\n  }\n]\n\nshould loosely deep-equal\n\n[\n  {\n    base64: 'UEsDBBQABgAIAAAAIQD9RzwTUwIAAGYXAAATAAgCW0NvbnRlbnRfVHlwZXNdLnhtbCCiBAIooAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...\n    at /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v41/gas_integration_checks.js:22:143\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v41/gas_integration_checks.js:4:47)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v41/gas_integration_checks.js:15:1"
   },
   {
     "name": "Large unchanged metadata omitted from response and recovered from persistent IDB",
@@ -46,8 +46,8 @@
   },
   {
     "name": "Pull cannot apply a different revision or corrupted cloud content with the same row count",
-    "status": "PASS",
-    "detail": "stale hash and same-count corruption rejected, local apply never called"
+    "status": "FAIL",
+    "detail": "AssertionError [ERR_ASSERTION]: Missing expected rejection.\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v41/gas_integration_checks.js:83:5\n    at async test (/tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v41/gas_integration_checks.js:4:47)\n    at async /tmp/claude-0/-home-claude/a1424a09-4f2e-5b2d-a6d0-9096ee09ab3e/scratchpad/work/vrt-prod-main/qa/v41/gas_integration_checks.js:80:1"
   },
   {
     "name": "Legacy changed during migration conflicts, corrupt manifest never treated as empty cloud",
