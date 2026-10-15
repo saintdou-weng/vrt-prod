@@ -1,6 +1,6 @@
 /* VRT PROD v4.16 — one connection setting, unchanged IndexedDB names. */
 (function(g){'use strict';
- const ERP_URL='https://saintdou-weng.github.io/vrt-asset/';
+ const ERP_URL='https://saintdou-weng.github.io/PSJERP/';
  const KEY='vrt_portal_gas_url',aliases=['vrt_prod_gas_url','vrt_gas_url','smv_gas_url','vrt_smv_gas_url','vrt_ie_gas_url'];
  const valid=v=>/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec(?:\?.*)?$/.test(String(v||'').trim());
  const read=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
