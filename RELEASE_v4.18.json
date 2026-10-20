@@ -1,0 +1,49 @@
+{
+  "release": "4.18",
+  "date": "2026-10-18",
+  "base": "4.17 (2026-10-17)",
+  "request": "Paul 10/16 item 6 (PSJERP 互動：訂單總數 vs 客戶下單／出貨比、PO 與客戶統計對照、BOM 核查), unblocked 10/18 by choosing option (2): read the PSJERP cloud directly (Apps Script /exec, ?action=erp_manifest / erp_get with k=<read key>, read-only; key kept in the PROD project's Script Property PSJERP_READ_KEY, never in code or GitHub).",
+  "principles": "1 read-only towards PSJERP and the legacy ERP (only erp_manifest / erp_get; no writes, no erp_put / erp_drop) · 2 the PSJERP read key lives only in Script Properties; responses, logs, Drive files, zips and the repo never contain it; the browser sends a viewer pass in the POST body (never a URL) · 3 PSJERP rows are cached in the PROD Drive and in the ERP link page's own store; they are NOT pushed to the erplink cloud and do not touch any other module's data · 4 every number computed by code; matching rules are conservative (an ERP order is never used for two statistics rows, ambiguous cases are listed, not picked)",
+  "appsScript": {
+    "production": "VRT_Production_v4.8.gs — delivered separately (NOT in this repo: it holds the bot tokens). Paste over the existing project, deploy a NEW VERSION of the existing deployment (/exec unchanged; pollTelegram / daily / weekly / inbox triggers unchanged). New: erp_bridge_block.gs — erpBridgeSync (manifest → only cod700 / cbl300 / cod550, version skip, erp_get limit 3000 pages, orders / shipments 3 years + still-open older orders, BOM 2 years, cross-batch duplicate rows counted once, date-sorted 5,000-row Drive pages erp_bridge_p_<rep>_<n>.json, a big batch is parked in <batch>.part.json and resumed), soft lock via Script Property (no LockService script lock), installErpBridgeTrigger (Mon + Thu 10:xx and 12:xx Asia/Phnom_Penh) + erpBridgeContinue one-off trigger when a first load does not finish (max 12 a day), removeErpBridgeTrigger, checkErpBridge, checkProductionV48; web actions erpBridgeStatus (no business data, no pass) / erpBridgePull / erpBridgePage (pass = ERP_BRIDGE_VIEW_KEY or PSJERP_READ_KEY, 20 failures an hour → locked for the hour). backendVersion 4.8.0, capability erpBridge. /prod VRT ERP button → https://saintdou-weng.github.io/PSJERP/ (repo renamed).",
+    "scriptProperties": "PSJERP_READ_KEY (required for the bridge; Paul enters it himself), optional ERP_BRIDGE_VIEW_KEY, ERP_BRIDGE_YEARS (3), ERP_BRIDGE_BOM_YEARS (2), PSJERP_URL.",
+    "erp": "PSJERP_AppsScript專用_v0.4.4.gs and the PSJERP web app unchanged (only read).",
+    "securityNote": "Built .gs files live outside the repo (../gas/out). Tokens and the PSJERP read key never appear in the repo, zips, tests or docs; the tests use a test key and assert it never reaches a response, console line or Drive file."
+  },
+  "changedFiles": [
+    "vrt_erp_link_v1.html v1.1 — PSJERP card on 狀態 (badge, last GAS check, per-dataset cache / local state, batch list, pass field + 記住這台電腦, ↻ 從 PSJERP 更新 / ⬇ 只下載 GAS 快取 / 忘記密碼, source switch 自動／PSJERP／手動匯入); rows cached in the new store psj (keyPath rep) and converted with fromBridge; remembered pass → quiet cache pick-up on open (status call only, pages only when the GAS cache signature changed); new tabs 👤 客戶下單／出貨 (period 今年至今 / 近 12 個月 / 本月 / 上月 / 全部, tolerance, KPIs ordered / shipped / ratio / open / overdue / statistics balance, per-customer table under the customer-statistics name with ERP codes, monthly ordered vs shipped with cumulative ratio, ERP code ⇄ customer name table with evidence + manual entries, PO＋款 check vs the customer statistics snapshot with state filter) and 🧵 BOM 核查 (重點款 / 有問題的 / 全部款, tolerance, KPIs, style rows with ERP median main fabric yd/pc and spread, PROD fabric yd/pc, diff %, trims, reasons); CSV exports; status cards for PSJERP BOM / customer statistics / BOM module; responsibility table rows for 客戶下單／出貨比 and BOM; .grid2 children min-width 0 (390 px layout).",
+    "vrt-erp-link-core-v1.js v1.1 — BRIDGE_REP, fromBridge, customerMap, customerCompare, bomCheck, pok, unitOf; resolve(): PO-only candidates from an index built once (was a scan of every PROD combo per ERP group: compareShipping 15.8 s → 0.5 s at 15k groups; results unchanged).",
+    "vrt-tg-summary-v1.js — erplink builder adds 👤 客戶下單／出貨（本期）and 🧵 BOM 核查 lines when the page supplies custInput / bom (the GAS copy has neither and skips them).",
+    "AppsScript/erp_bridge_block.gs (new), AppsScript/build_gas.py → VRT_Production_v4.8.gs, AppsScript/README.md (v4.8 + Script Properties).",
+    "vrt-platform-v40.js — ERP_URL https://saintdou-weng.github.io/PSJERP/ (repo renamed vrt-asset → PSJERP); PROD v4.18 badge; version 4.18.0; portal_v2.html ERP links; every ?v= tag 4.18.0.",
+    "vrt-i18n-en.js / vrt-i18n-km.js — 8,858 keys (+298 strings of the new ERP link UI / reasons / Telegram lines).",
+    "qa/v418/* (new), qa/v41/gas_harness.js prefers ../gas/out/VRT_Production_v4.8.gs, PROD_MODULE_TEST_MATRIX_v4.18.csv."
+  ],
+  "notDone": [
+    "Real PSJERP data was not read from here (the read key is only Paul's); the first live pull and the customer-name map on the real ERP codes need Paul's check (manual entries are available in the page).",
+    "BOM: only main fabric per piece (yd/m) and trim line counts are compared — material names differ between ERP and the tech packs; Rib is counted as a trim in the BOM module side.",
+    "A1–A4 PDF imports, B4 B5 B6 B9 B10 (10/09 instruction); qa/v39 IE runtime 4 pre-existing failures; live acceptance F-C / F-D1 / two Monday weekly reports / /prod footer buttons."
+  ],
+  "tests": {
+    "qa/v418/test_erp_bridge_core.js": "5/5",
+    "qa/v418/test_erp_bridge_gas.js (GAS v4.8)": "9/9",
+    "qa/v418/browser_v418.js (Chromium, real plan / customer statistics / BOM + PSJERP-shaped rows)": "7/7",
+    "qa/v415/test_erp_link_core.js": "11/11",
+    "qa/v415/browser_erp_link.js": "10/10",
+    "qa/v417/test_ie_weekly.js": "4/4",
+    "qa/v417/test_reports_v12.js": "4/4",
+    "qa/v417/test_gas_v47.js (on v4.8)": "3/3",
+    "qa/v417/browser_v417.js": "4/4",
+    "qa/v416/test_daily_report.js": "9/9",
+    "qa/v416/test_orders_weekly.js": "6/6",
+    "qa/v416/test_fixes_b.js": "9/9",
+    "qa/v416/test_inbox.js": "5/5",
+    "qa/v414/test_sync_fixes.js": "10/10",
+    "qa/v414/test_tg_page.js": "13/13",
+    "qa/v414/test_portal_overview.js": "5/5",
+    "qa/v414/test_telegram.js (GAS v4.8)": "18/18",
+    "qa/v413/test_balancing.js": "12/12",
+    "qa/v414/test_i18n_layer.js": "6/6 (8,858 keys)",
+    "real PSJERP / Drive / Telegram": "NOT TESTED against the live services (stubbed)"
+  }
+}

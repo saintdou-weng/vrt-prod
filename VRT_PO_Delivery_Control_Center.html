@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.16.0"></script>
-<script src="vrt-platform-v40.js?v=4.16.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
+<script src="vrt-deploy-config.js?v=4.18.0"></script>
+<script src="vrt-platform-v40.js?v=4.18.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT PO Delivery Control Center</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -215,8 +215,8 @@ tbody tr:hover{background:var(--bg)}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
 </head>
 <body data-theme="light">
 
@@ -1072,6 +1072,6 @@ window.fabPoFiles511=fabPoFiles511;window.fabPoConfirm511=fabPoConfirm511;window
 /* v4.14: the fabric-PO pull rides on the module's own auto-sync pull (below) instead of a second unlocked pull 1.2 s after load */
 window.fabPoCloudPull512=fabPoCloudPull512;
 </script>
-<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"podelivery",label:"🚚 PO 交期",feed:f=>addFiles([f])})}catch(e){console.warn("VRTInbox init",e)}</script>
+<script src="vrt-inbox-v1.js?v=4.18.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"podelivery",label:"🚚 PO 交期",feed:f=>addFiles([f])})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

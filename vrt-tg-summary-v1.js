@@ -259,8 +259,17 @@
     const bad=co.filter(r=>r.state==='diff').slice(0,5);if(bad.length){L.push('');L.push('⚠️ 訂單差異 Order differences (Top '+bad.length+'):');bad.forEach(r=>L.push('• '+esc(r.erp.my||r.erp.po||r.key)+' '+esc(r.erp.style||'')+' — '+esc((r.reasons||[])[0]||'')))}
     const badS=cs.filter(r=>r.state!=='match').slice(0,5);if(badS.length){L.push('');L.push('⚠️ 出貨待查 Shipment items to check (Top '+badS.length+'):');badS.forEach(r=>L.push('• '+esc(r.erp.my||r.erp.po||r.key)+' — '+esc(ST[r.state]||r.state)+(r.reasons&&r.reasons[0]?'：'+esc(r.reasons[0]):'')))}
     if(cmp.orders&&cmp.orders.summary&&cmp.orders.summary.unmatchedProd)L.push('PROD 有、ERP 檔沒有的自編單號 self keys only in PROD: '+N(cmp.orders.summary.unmatchedProd));
+    // v4.18: customer orders vs shipments for THIS summary period + PO check vs the customer statistics, and the BOM check (pages only:
+    // the GAS copy of this builder has no VRTErpLink / custInput and simply skips both blocks)
+    const EL=g.VRTErpLink;let cust=null;if(data.custInput&&EL&&EL.customerCompare){try{const cc=EL.customerCompare(Object.assign({},data.custInput,{period:{from:P.start,to:P.end}}));const T=cc.totals;cust=T;
+      L.push('');L.push('👤 客戶下單／出貨（本期）orders vs shipments: 下單 ordered <b>'+N(T.erpOrdered)+'</b> · 出貨 shipped <b>'+N(T.erpShipped)+'</b>'+(T.ratio!=null?' · 出貨比 ratio '+pct(T.ratio,0):''));
+      const late=cc.customers.reduce((s2,c)=>s2+c.openLate,0);L.push('　ERP 未交 open '+N(T.erpOpen)+(late?' · 逾期 late '+N(late):'')+(cc.snapshotDate?' · 客戶統計餘量 balance '+N(T.csBalance)+'（快照 snapshot '+esc(cc.snapshotDate)+'）':''));
+      cc.customers.filter(c=>c.ordered||c.shipped).sort((a,b)=>b.ordered-a.ordered).slice(0,3).forEach(c=>L.push('• '+esc(c.customer)+'：下單 '+N(c.ordered)+' · 出貨 '+N(c.shipped)+(c.ratio!=null?'（'+pct(c.ratio,0)+'）':'')));
+      if(cc.poRows.length)L.push('　PO 核對 vs 客戶統計 PO check: '+cnt(cc.poRows))}catch(_){}}
+    const B=data.bom;if(B&&B.summary&&B.summary.total){const s3=B.summary;L.push('');L.push('🧵 BOM 核查（重點款 focus '+N(s3.focus)+'）: 主料不符 fabric diff '+N(s3.diff)+' · 兩邊都沒 BOM no BOM '+N(s3.focusNoBom)+' · PROD BOM 缺 missing in PROD '+N(s3.focusErpOnly)+(s3.erpInconsistent?' · ERP 各單不一致 inconsistent '+N(s3.erpInconsistent):''));
+      B.rows.filter(r=>r.focus&&r.state==='diff').slice(0,3).forEach(r=>L.push('• '+esc(r.style)+' — '+esc((r.reasons||[])[0]||'')))}
     L.push('（唯讀對照，不改任何一邊 read-only, neither side is changed）');
-    return {text:L.join('\n'),stats:{orders:ord.length,ship:shp.length,compare:{orders:co.length,ship:cs.length}}};
+    return {text:L.join('\n'),stats:{orders:ord.length,ship:shp.length,compare:{orders:co.length,ship:cs.length},cust,bom:B&&B.summary||null}};
   }
   const BUILDERS={sewing,cutting,qc,spareparts,prodplan,monthship,orders,shipping,custstats,fabricstock,ie,erplink};
   // date accessor used by periodOptions / latestDate per kind (rows or shape)

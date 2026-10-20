@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble VRT_Production_v4.6.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
+"""Assemble VRT_Production_v4.8.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
 v4.15 (2026-10-05): the base file and the output both hold the Telegram bot token, so they live OUTSIDE the repo:
   base   : $VRT_GAS_BASE  (default ../../gas/VRT_Production_v4.2.gs, i.e. next to the repo, never inside it)
   output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.6.gs)
@@ -8,13 +8,14 @@ Never copy a built .gs into the repo / GitHub / a public ZIP."""
 import re,os,sys
 HERE=os.path.dirname(os.path.abspath(__file__))
 BASE=os.environ.get('VRT_GAS_BASE') or os.path.join(HERE,'..','..','gas','VRT_Production_v4.2.gs')
-OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.6.gs')
+OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.8.gs')
 src=open(BASE,encoding='utf-8').read()
 block=open(os.path.join(HERE,'period_summaries_block.gs'),encoding='utf-8').read()
 shared=open(os.path.join(HERE,'..','vrt-tg-summary-v1.js'),encoding='utf-8').read()   # repo root
 daily_js=open(os.path.join(HERE,'..','vrt-daily-report-v1.js'),encoding='utf-8').read()
 daily_block=open(os.path.join(HERE,'daily_report_block.gs'),encoding='utf-8').read()
 inbox_block=open(os.path.join(HERE,'inbox_block.gs'),encoding='utf-8').read() if os.path.exists(os.path.join(HERE,'inbox_block.gs')) else ''
+erp_bridge_block=open(os.path.join(HERE,'erp_bridge_block.gs'),encoding='utf-8').read()   # v4.8 PSJERP read-only bridge (no credentials inside)
 def rep(old,new,count=1):
     global src
     assert src.count(old)==count,(src.count(old),old[:80])
@@ -307,6 +308,59 @@ rep("""    if (payload && payload.action === 'auditSent') return handleProdAudit
     if (payload && /^(dailyReport|aiSummary)/.test(String(payload.action||''))) return handleDailyReport_(payload);
     if (payload && /^inbox/.test(String(payload.action||''))) return handleInbox_(payload);""")
 
+# 12. v4.7 (2026-10-17): 排單週報 + 效率週報, 中文 Telegram 版, /prod 與 /prod2 底下的生產摘要按鈕 (portal 1 & 2), dailyReportText for the portal page
+rep("""   VRT 生產系統 GAS 後端 v4.6 — 📰 生產日報（每日 10:00／15:00 自動產生＋推送，數字由程式算、AI 只改寫文字並逐數核對）、""",
+"""   VRT 生產系統 GAS 後端 v4.7 — 週報拆成「效率週報」（含換針零件）與「排單週報」（負荷／換款／空檔，不含機修）；Telegram 版預設中文
+     （指令碼屬性 DR_TG_LANG=both 改中英）；/prod 與 /prod2 底下多「📰 生產日報」「📋 排單週報」「📅 效率週報」中文摘要按鈕（10/17）
+   v4.6 — 📰 生產日報（每日 10:00／15:00 自動產生＋推送，數字由程式算、AI 只改寫文字並逐數核對）、""")
+rep("backendVersion:'4.6.0',erpLink:true,dailyReport:true,aiSummary:true,inbox:true,","backendVersion:'4.7.0',erpLink:true,dailyReport:true,aiSummary:true,inbox:true,weeklyPlanReport:true,portalSummary:true,")
+rep("return okCors({ message: 'VRT Prod GAS v4.6 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + DAILY REPORT + INBOX', time: new Date().toISOString() });",
+    "return okCors({ message: 'VRT Prod GAS v4.7 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + DAILY/WEEKLY REPORTS + INBOX', time: new Date().toISOString() });")
+# the three 中文摘要 buttons are a FOOTER row: always the last tool row of /prod and /prod2, on every page (入口 1 與入口 2 底下都有)
+DR_FOOTER="""    footer: [ { t:'📰 生產日報', cb:'drday' }, { t:'📋 排單週報', cb:'drplan' }, { t:'📅 效率週報', cb:'dreff' } ],   // v4.7 生產摘要（中文）"""
+rep("""      { t:'🏢 VRT ERP ↗',          url:'https://saintdou-weng.github.io/vrt-asset/' },
+    ],
+  },""","""      { t:'🏢 VRT ERP ↗',          url:'https://saintdou-weng.github.io/vrt-asset/' },
+    ],
+"""+DR_FOOTER+"""
+  },""")
+rep("""      { t:'🧶 布料庫存 Fabric stock',   f:'vrt_fabric_stock_control_v1.html' },
+    ],
+  },""","""      { t:'🧶 布料庫存 Fabric stock',   f:'vrt_fabric_stock_control_v1.html' },
+    ],
+"""+DR_FOOTER+"""
+  },""")
+rep("""  // 3. Sheets 連結
+  if (M.sheets) kb.push([sheetsButton()]);""","""  // v4.7 底下固定一列：生產摘要（中文）按鈕，每一頁都有
+  if (M.footer && M.footer.length) kb.push(M.footer.map(it => ({ text: it.t, callback_data: it.cb })));
+  // 3. Sheets 連結
+  if (M.sheets) kb.push([sheetsButton()]);""")
+rep("""  // 有日／週／月／年的部門：先送「日」摘要＋期間按鈕
+  if (PERIOD_TOOLS[data]) {""",
+"""  // v4.7 生產摘要（中文）按鈕：drday / drplan / dreff → 最新的一份（沒有就當場產生）
+  if (/^dr(day|plan|eff)$/.test(data)) {
+    const t = dailyReportMenuText_(data.slice(2));
+    tgSendHtml_(chatId, t + '\\n\\n👆 /prod　/prod2　/sum', { inline_keyboard: [[{ text:'📰 日報', callback_data:'drday' },{ text:'📋 排單週報', callback_data:'drplan' },{ text:'📅 效率週報', callback_data:'dreff' }]] });
+    return;
+  }
+  // 有日／週／月／年的部門：先送「日」摘要＋期間按鈕
+  if (PERIOD_TOOLS[data]) {""")
+
+# 13. v4.8 (2026-10-18): PSJERP 雲端唯讀橋接 (ERP 對照中心直接讀 PSJERP 的 erp_manifest / erp_get; key = Script Property PSJERP_READ_KEY only)
+rep("""   VRT 生產系統 GAS 後端 v4.7 — 週報拆成「效率週報」（含換針零件）與「排單週報」（負荷／換款／空檔，不含機修）；Telegram 版預設中文""",
+"""   VRT 生產系統 GAS 後端 v4.8 — PSJERP 雲端唯讀橋接：ERP 對照中心直接讀 PSJERP 的訂單／出貨／BOM（指令碼屬性 PSJERP_READ_KEY，
+     週一、四 10 點與 12 點檢查版本，有變才抓；installErpBridgeTrigger() 執行一次）；/prod 的 VRT ERP 入口改到 PSJERP 新網址（10/18）
+   v4.7 — 週報拆成「效率週報」（含換針零件）與「排單週報」（負荷／換款／空檔，不含機修）；Telegram 版預設中文""")
+rep("backendVersion:'4.7.0',erpLink:true,","backendVersion:'4.8.0',erpBridge:true,erpLink:true,")
+rep("return okCors({ message: 'VRT Prod GAS v4.7 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + DAILY/WEEKLY REPORTS + INBOX', time: new Date().toISOString() });",
+    "return okCors({ message: 'VRT Prod GAS v4.8 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + PSJERP BRIDGE + DAILY/WEEKLY REPORTS + INBOX', time: new Date().toISOString() });")
+rep("""    if (payload && /^inbox/.test(String(payload.action||''))) return handleInbox_(payload);""",
+"""    if (payload && /^inbox/.test(String(payload.action||''))) return handleInbox_(payload);
+    // v4.8: PSJERP 雲端唯讀橋接（金鑰只在指令碼屬性，回應裡沒有）
+    if (payload && /^erpBridge/.test(String(payload.action||''))) return handleErpBridge_(payload);""")
+rep("""      { t:'🏢 VRT ERP ↗',          url:'https://saintdou-weng.github.io/vrt-asset/' },""",
+"""      { t:'🏢 VRT ERP ↗',          url:'https://saintdou-weng.github.io/PSJERP/' },   // v4.8: repo renamed vrt-asset → PSJERP""")
+
 # 11. extra intake bots (修改指令 C): tokens live OUTSIDE the repo in ../../gas/inbox_bots.json (or $VRT_INBOX_BOTS_FILE) and are
 #     written into CFG.INBOX_BOTS of the built .gs only — the repo block reads CFG.INBOX_BOTS / Script Property INBOX_BOTS_JSON.
 BOTS=os.environ.get('VRT_INBOX_BOTS_FILE') or os.path.join(HERE,'..','..','gas','inbox_bots.json')
@@ -319,7 +373,7 @@ if os.path.exists(BOTS):
 };"""%json.dumps(bots,ensure_ascii=False))
     print('inbox bots injected:',', '.join(b.get('name','?') for b in bots))
 
-out=src+'\n\n/* ═══ shared summary builders: copy of vrt-prod-main/vrt-tg-summary-v1.js (do not edit here; edit the .js and rebuild) ═══ */\n'+shared+block+'\n\n/* ═══ copy of vrt-prod-main/vrt-daily-report-v1.js (do not edit here) ═══ */\n'+daily_js+'\n'+daily_block+('\n'+inbox_block if inbox_block else '')
+out=src+'\n\n/* ═══ shared summary builders: copy of vrt-prod-main/vrt-tg-summary-v1.js (do not edit here; edit the .js and rebuild) ═══ */\n'+shared+block+'\n\n/* ═══ copy of vrt-prod-main/vrt-daily-report-v1.js (do not edit here) ═══ */\n'+daily_js+'\n'+daily_block+('\n'+inbox_block if inbox_block else '')+'\n'+erp_bridge_block
 os.makedirs(os.path.dirname(OUT),exist_ok=True)
 open(OUT,'w',encoding='utf-8').write(out)
 print('output ->',OUT,'(contains the bot token: keep out of the repo)')

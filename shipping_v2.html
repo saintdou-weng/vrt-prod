@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.16.0"></script>
-<script src="vrt-platform-v40.js?v=4.16.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
+<script src="vrt-deploy-config.js?v=4.18.0"></script>
+<script src="vrt-platform-v40.js?v=4.18.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 出貨分析儀表板 v2.1 (4.16)</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -227,9 +227,9 @@ tbody tr:hover td{background:#f8fafc}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.16.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.18.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
 </head>
 <body>
 
@@ -1256,7 +1256,7 @@ window.VRT_LOCAL_READY=(async()=>{const ok=await shipRestore();await shipLoadPoD
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'shipping',lockKey:'shipping',pull:async function(){return await (window.pullFromGas&&window.pullFromGas());},push:async function(){return await (window.syncToGas&&window.syncToGas());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto shipping]',e)}},0)},{once:true});
 </script>
-<script src="vrt-io-v1.js?v=4.16.0"></script>
+<script src="vrt-io-v1.js?v=4.18.0"></script>
 <script>
 /* v4.13 統一 JSON 備份／還原（所有模組同格式：{tool, format:'vrt-backup', formatVersion, exportedAt, ...}） */
 function vrtIoButtons413(container,before,cls){if(!container||document.getElementById('vrtIoBackup413'))return;const b=document.createElement('button'),r=document.createElement('button'),inp=document.createElement('input');b.id='vrtIoBackup413';b.className=cls;b.textContent='💾 備份 JSON';b.title='下載本模組完整資料（JSON） / Download a full JSON backup';b.onclick=()=>vrtBackup413();r.className=cls;r.textContent='📥 還原 JSON';r.title='從 JSON 備份還原 / Restore from a JSON backup';r.onclick=()=>inp.click();inp.type='file';inp.accept='.json';inp.style.display='none';inp.onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(f)vrtRestore413(f)};if(before&&before.parentNode===container){container.insertBefore(b,before.nextSibling);container.insertBefore(r,b.nextSibling)}else{container.appendChild(b);container.appendChild(r)}container.appendChild(inp)}
@@ -1270,12 +1270,12 @@ async function vrtRestore413(file){try{const d=await VRTIO.readJSON(file);const 
   if(typeof setStatus==='function')setStatus('已還原',true);buildFilters();applyFilters();document.getElementById('uploadScreen').style.display='none';document.getElementById('dashboard').style.display='block';const bc=document.getElementById('btnCloudSync');if(bc)bc.style.display='';const bb=document.getElementById('btnCloudBaseline43');if(bb)bb.style.display='';vrtIoMsg413('已還原 '+ALL.length+' 筆 / restored')}catch(e){alert('還原失敗 / Restore failed: '+e.message)}}
 vrtIoButtons413(document.getElementById('vrtIoSlot413'),null,'btn btn-ghost');
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.16.0"></script>
-<script src="vrt-telegram-v1.js?v=4.16.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.18.0"></script>
+<script src="vrt-telegram-v1.js?v=4.18.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"shipping",tool:"shipping",getData:()=>ALL})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
-<script src="vrt-inbox-v1.js?v=4.16.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"shipping",label:"🚚 出貨排程",feed:f=>loadFile(f),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
+<script src="vrt-inbox-v1.js?v=4.18.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"shipping",label:"🚚 出貨排程",feed:f=>loadFile(f),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
 </body>
 </html>

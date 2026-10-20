@@ -1,4 +1,4 @@
-/* VRT PROD · ERP link core v1.0 (2026-10-05) — pure logic for vrt_erp_link_v1.html (no DOM, no storage; runs in Node for tests)
+/* VRT PROD · ERP link core v1.1 (2026-10-18: + PSJERP cloud source, customer order/shipment ratio, Customer Statistics PO check, BOM check; v1.0 2026-10-05) — pure logic for vrt_erp_link_v1.html (no DOM, no storage; runs in Node for tests)
    Scope = 規格書階段 1 最小可用連結:
      · parse / map / normalise manually imported ERP export files (orders W_COD700-style lines, shipments W_CBL300-style lines)
      · idempotent merge (same file / renamed file / partial file never inflates or deletes; corrections keep the old version)
@@ -9,7 +9,7 @@
    confirmed crosswalk → ERP my_no ⇄ PROD selfKey (sewing.selfKey / shipping.erp) → unique PO+style+colour; anything else = 無法唯一對應. */
 (function(g){'use strict';
   if(g.VRTErpLink)return;
-  const VERSION='1.0.0',PARSER_VERSION='erplink-parser-1.0',MAPPING_VERSION=1;
+  const VERSION='1.1.0',PARSER_VERSION='erplink-parser-1.0',MAPPING_VERSION=1;
   /* ── helpers ── */
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const N=n=>{const v=Number(n||0);return (Number.isInteger(v)?v:Math.round(v*10)/10).toLocaleString('en-US')};
@@ -183,14 +183,16 @@
     uniq.forEach(k=>{const c=P.byCombo[k];o.po.qty+=c.po.qty;o.po.lines+=c.po.lines;c.po.cust.forEach(x=>o.po.cust.add(x));if(c.po.cancel>o.po.cancel)o.po.cancel=c.po.cancel;o.plan.rows+=c.plan.rows;o.plan.sewingQty+=c.plan.sewingQty;c.plan.orderQty.forEach(x=>o.plan.orderQty.add(x));c.plan.cust.forEach(x=>o.plan.cust.add(x));c.plan.lines.forEach(x=>o.plan.lines.add(x))});
     return o}
   function resolve(key,grp,P,crosswalk,kind){
-    const cw=(crosswalk||[]).find(c=>c.dataset===kind&&nk(c.erpKey)===key);
+    const cw=(crosswalk||[]).length?(crosswalk||[]).find(c=>c.dataset===kind&&nk(c.erpKey)===key):null;
     if(cw){const p=P.bySelf[nk(cw.prodKey)]||P.byCombo[nk(cw.prodKey)];return {prod:p?(P.bySelf[nk(cw.prodKey)]?withCombo(p,grp,P):p):null,via:p?'crosswalk':'crosswalk-missing',candidates:[]}}
     if(P.bySelf[key])return {prod:withCombo(P.bySelf[key],grp,P),via:'selfKey',candidates:[]};
     const combos=[];grp.po.forEach(po=>grp.style.forEach(st=>grp.clr.forEach(c=>{const k=cko(po,st,c);if(P.byCombo[k])combos.push(k)})));
     const uniq=[...new Set(combos)];if(uniq.length===1)return {prod:P.byCombo[uniq[0]],via:'po+style+colour',candidates:uniq};
     if(uniq.length>1)return {prod:null,via:'multi',candidates:uniq};
     // PO only (several styles) → candidates listed, never auto-picked
-    const poOnly=Object.keys(P.byCombo).filter(k=>[...grp.po].some(po=>po&&k.startsWith(nk(po)+'|')));
+    // v1.1: PO index built once per PROD aggregate (the old scan over every combo key per group was O(n²) at PSJERP volume)
+    if(!P._byPo){P._byPo={};Object.keys(P.byCombo).forEach(k=>{const i=k.indexOf('|');const p=i<0?k:k.slice(0,i);(P._byPo[p]=P._byPo[p]||[]).push(k)})}
+    const poOnly=[...new Set([...grp.po].filter(Boolean).flatMap(po=>P._byPo[nk(po)]||[]))];
     return {prod:null,via:poOnly.length?'po-only':'none',candidates:poOnly.slice(0,8)};
   }
   /* ── ERP orders ↔ PROD orders / plan / sewing / shipping ── */
@@ -292,5 +294,149 @@
       'BL-TEST-2,1,T029671,TESTCUST,A029671,GO1543,L.BLUE,300,2026/09/27,INV-T2\n';
     return {orders:{name:'TEST_erp_orders.csv',text:orders},ship:{name:'TEST_erp_shipments.csv',text:ship}};
   }
-  g.VRTErpLink={version:VERSION,PARSER_VERSION,MAPPING_VERSION,FIELDS,DATASET_LABEL,KEY_OF,STATES,ORDER,nk,parseDate,parseQty,headerSignature,suggestMapping,detectDataset,missingRequired,parseText,decodeBytes,normalizeRows,mergeImport,fileHash,aggProd,aggErp,compareOrders,compareShipping,dailyReport,prevWorkday,nextWorkday,addDays,sampleFiles,hash32,esc,N,pct};
+  /* ═══ v1.1 (2026-10-18) PSJERP cloud source + customer order / shipment ratio + PO-level check against Customer Statistics + BOM check ═══
+     Data comes from PSJERP's cloud (erp_manifest / erp_get) through the PROD GAS bridge (the read key never reaches the browser).
+     Column names = PSJERP's own parsers: W_COD700 my_no od_no order_date sales team cust style style_name clr po_no price currency delivery
+     qty ship_qty open_qty amount closed_date · W_CBL300 bl_no ship_date cust bl_seq od_no od_seq qty whs po_no style clr_no clr order_date
+     my_no cust_clr · W_COD550 od_no my_no cust style order_date type(main/trim) material material_no color size width weight total_use
+     order_qty cons unit buy_unit position dest supplier. Anything else in `cols` is carried as is. */
+  const BRIDGE_REP={cod700:'order_line',cbl300:'shipment_line',cod550:'bom_line'};
+  const pok=s=>nk(s).replace(/[\s\-_#\/.]/g,'');          // PO / style comparison key (separators ignored, raw value kept on the record)
+  const objRows=(cols,rows)=>(rows||[]).map(r=>{if(!Array.isArray(r))return r||{};const o={};(cols||[]).forEach((c,i)=>{o[c]=r[i]==null?null:r[i]});return o});
+  function fromBridge(rep,cols,rows,ctx){
+    ctx=Object.assign({source_system:'PSJERP_CLOUD'},ctx||{});const ds=BRIDGE_REP[String(rep||'').toLowerCase()];if(!ds)return {dataset:null,records:[],errors:[{reason:'unsupported rep '+rep}]};
+    if(ds==='bom_line'){const recs=objRows(cols,rows).map((o,i)=>{const cons=o.cons!=null&&o.cons!==''?Number(o.cons):(Number(o.order_qty)>0?Number(o.total_use)/Number(o.order_qty):null);
+        const r={dataset:'bom_line',source_system:ctx.source_system,my_no:raw(o.my_no),od_no:raw(o.od_no),cust:raw(o.cust),style:raw(o.style),order_date:parseDate(o.order_date).date||'',type:/trim|副/i.test(String(o.type||''))?'trim':/main|主/i.test(String(o.type||''))?'main':raw(o.type),material:raw(o.material),material_no:raw(o.material_no),color:raw(o.color),size:raw(o.size),width:raw(o.width),unit:raw(o.unit),cons:isFinite(cons)?cons:null,total_use:Number(o.total_use)||0,order_qty:Number(o.order_qty)||0,supplier:raw(o.supplier),position:raw(o.position),import_batch_id:ctx.import_batch_id||'',as_of:ctx.as_of||''};
+        r.id='bom_line:'+hash32([r.my_no,r.od_no,r.type,r.material,r.color,r.size,r.unit,r.total_use,i].join('\u0001'));return r});
+      return {dataset:ds,records:recs,errors:[]}}
+    const map=suggestMapping(cols,ds);const res=normalizeRows(ds,(rows||[]).map(r=>Array.isArray(r)?r:(cols||[]).map(c=>r[c])),map,ctx);
+    const ix=c=>(cols||[]).indexOf(c);const ex=ds==='order_line'?['open_qty','ship_qty','amount','closed_date','style_name','sales','team']:['od_seq','whs','order_date','cust_clr','clr_no'];
+    const keep=ex.map(c=>[c,ix(c)]).filter(x=>x[1]>=0);
+    if(keep.length||ds==='order_line'){const rowsArr=(rows||[]).map(r=>Array.isArray(r)?r:(cols||[]).map(c=>r[c]));
+      // normalizeRows skips blank / invalid rows: the extra columns are re-attached by source_row (row index + 2)
+      res.records.forEach(rec=>{const r=rowsArr[rec.source_row-2]||[];keep.forEach(([c,i])=>{const v=r[i];rec[c]=/qty|amount/.test(c)?(v==null||v===''?null:Number(v)):(c.endsWith('date')?(parseDate(v).date||''):raw(v))});
+        if(ds==='order_line'){if(rec.closed==null||rec.closed==='')rec.closed=rec.closed_date?'Y':'N';else if(/^\d{4}-\d{2}-\d{2}/.test(String(rec.closed)))rec.closed='Y'}})}
+    return {dataset:ds,records:res.records,errors:res.errors,mapping:map};
+  }
+  /* customer names differ between the ERP (codes / abbreviations) and PROD (sales sheets): learn the map from shared PO numbers,
+     never from look-alike names. prod = the names the comparison is keyed by (Customer Statistics); prodAlt = other PROD sources (plan /
+     PO lines / shipping use their own abbreviations: ADI, ASL, WPL …) — used only for an ERP code the primary source cannot place.
+     A name is used when ≥ minPo distinct POs agree and it holds ≥ minShare of them; a tiny customer (≤ 2 ERP POs) whose shared POs all
+     agree is accepted as 'weak' (shown for confirmation). Manual entries always win. */
+  function customerMap(input){
+    input=input||{};const minPo=input.minPo||2,minShare=input.minShare||0.6;const erpPo={},erpCodePos={};
+    const addE=(po,c)=>{const p=pok(po),k=raw(c);if(!p||!k)return;(erpPo[p]=erpPo[p]||new Set()).add(k);(erpCodePos[k]=erpCodePos[k]||new Set()).add(p)};
+    (input.erpOrders||[]).forEach(r=>{addE(r.po_no,r.cust);if(r.my_no&&pok(r.my_no)!==pok(r.po_no))addE(r.my_no,r.cust)});(input.erpShip||[]).forEach(r=>addE(r.po_no,r.cust));
+    const index=rows=>{const m={};(rows||[]).forEach(r=>{const p=pok(r.po),c=raw(r.customer);if(!p||!c)return;(m[p]=m[p]||new Set()).add(c)});return m};
+    const P1=index(input.prod),P2=index(input.prodAlt);
+    const votesOf=PP=>{const votes={};Object.keys(erpPo).forEach(p=>{if(!PP[p])return;erpPo[p].forEach(e=>PP[p].forEach(c=>{const v=votes[e]=votes[e]||{};v[c]=(v[c]||0)+1}))});return votes};
+    const V1=votesOf(P1),V2=votesOf(P2);const map={},evidence=[];
+    const judge=(e,v,src)=>{const tot=Object.values(v).reduce((s,x)=>s+x,0);const best=Object.entries(v).sort((a,b)=>b[1]-a[1])[0];const share=best[1]/tot;
+      const ok=best[1]>=minPo&&share>=minShare,weak=!ok&&share===1&&(erpCodePos[e]||new Set()).size<=2;
+      return {erp:e,prod:best[0],pos:best[1],share,others:Object.entries(v).filter(x=>x[0]!==best[0]).map(x=>x[0]+' '+x[1]).join(', '),used:ok||weak,weak,src}};
+    Object.keys(erpCodePos).forEach(e=>{let ev=null;if(V1[e])ev=judge(e,V1[e],'custstats');if((!ev||!ev.used||ev.weak)&&V2[e]){const ev2=judge(e,V2[e],'other');if(!ev||(!ev.used&&ev2.used))ev=ev2}
+      if(ev){evidence.push(ev);if(ev.used)map[e]=ev.prod}});
+    const prodNames=new Set();Object.values(P1).forEach(x=>x.forEach(c=>prodNames.add(c)));const altNames=new Set();Object.values(P2).forEach(x=>x.forEach(c=>altNames.add(c)));
+    const allErp=new Set(Object.keys(erpCodePos));(input.erpOrders||[]).forEach(r=>{if(r.cust)allErp.add(raw(r.cust))});
+    allErp.forEach(e=>{if(map[e])return;const same=[...prodNames].find(p=>nk(p)===nk(e))||[...altNames].find(p=>nk(p)===nk(e));if(same){map[e]=same;const i=evidence.findIndex(x=>x.erp===e);if(i>=0)evidence.splice(i,1);evidence.push({erp:e,prod:same,pos:0,share:1,others:'',used:true,byName:true})}});
+    (input.manual||[]).forEach(m=>{if(m&&m.erp&&m.prod){map[raw(m.erp)]=raw(m.prod);const i=evidence.findIndex(x=>x.erp===raw(m.erp));if(i>=0)evidence.splice(i,1);evidence.push({erp:raw(m.erp),prod:raw(m.prod),pos:null,share:null,others:'',used:true,manual:true})}});
+    const unmapped=[...allErp].filter(e=>!map[e]);
+    evidence.sort((a,b)=>(b.used-a.used)||(b.pos||0)-(a.pos||0));
+    return {map,evidence,unmapped,prodNames:[...prodNames].sort()};
+  }
+  const ym=d=>String(d||'').slice(0,7);
+  /* 訂單總數 vs 客戶下單／出貨比 + PO-level check against the Customer Statistics snapshot (PROD's open-order book) */
+  function customerCompare(input){
+    input=input||{};const tolPct=input.tolerancePct==null?0:Number(input.tolerancePct),today=input.today||'';const CM=input.customerMap||customerMap({erpOrders:input.erpOrders,erpShip:input.erpShip,prod:(input.custstats&&input.custstats.details)||[],prodAlt:(input.prodOrders||[]).concat(input.prodShip||[])});
+    const cname=e=>CM.map[raw(e)]||raw(e)||'—';const live=rs=>(rs||[]).filter(r=>!r.is_demo);const EO=live(input.erpOrders),ES=live(input.erpShip);const within=(d,R)=>!R||(d&&d>=R.from&&d<=R.to);const R=input.period||null;
+    /* 1. per customer: ERP ordered (order date in period) · ERP shipped (ship date in period) · ratio · ERP open book (not closed, current) */
+    const C={};const cc=n=>C[n]=C[n]||{customer:n,erpCodes:new Set(),ordered:0,orderLines:0,shipped:0,shipLines:0,open:0,openLate:0,openLines:0,cs:{order:0,completed:0,balance:0,pos:new Set()},po:{matched:0,diff:0,missing:0,qtyErp:0,qtyCs:0,shipErp:0,doneCs:0}};
+    EO.forEach(r=>{const n=cname(r.cust);const o=cc(n);if(r.cust)o.erpCodes.add(raw(r.cust));if(within(r.order_date,R)){o.ordered+=Number(r.qty)||0;o.orderLines++}
+      const closed=/^(y|yes|1|true|結案|closed)$/i.test(String(r.closed||''));const op=r.open_qty!=null?Number(r.open_qty):Math.max(0,(Number(r.qty)||0)-(Number(r.ship_qty)||0));if(!closed&&op>0){o.open+=op;o.openLines++;if(today&&r.delivery&&r.delivery<today)o.openLate+=op}});
+    ES.forEach(r=>{const n=cname(r.cust);const o=cc(n);if(r.cust)o.erpCodes.add(raw(r.cust));if(within(r.ship_date,R)){o.shipped+=Number(r.qty)||0;o.shipLines++}});
+    /* 2. PO + style level vs Customer Statistics (sizes / colours summed on both sides before comparing; never multiplied) */
+    const det=(input.custstats&&input.custstats.details)||[];const snap=parseDate(input.custstats&&input.custstats.snapshotDate||'').date||'';
+    const csAgg={};det.forEach(d=>{const k=pok(d.po)+'|'+pok(d.style);if(!pok(d.po))return;const a=csAgg[k]=csAgg[k]||{customer:raw(d.customer),po:raw(d.po),style:raw(d.style),order:0,completed:0,balance:0,rows:0,etd:''};a.order+=Number(d.orderQty)||0;a.completed+=Number(d.completedQty)||0;a.balance+=Number(d.balanceQty)||0;a.rows++;const e=parseDate(d.etd).date||'';if(e>a.etd)a.etd=e;
+      const o=cc(a.customer);o.cs.order+=Number(d.orderQty)||0;o.cs.completed+=Number(d.completedQty)||0;o.cs.balance+=Number(d.balanceQty)||0;o.cs.pos.add(pok(d.po))});
+    const eAgg={},ePo={},eMy={};EO.forEach(r=>{const p=pok(r.po_no);if(!p)return;const k=p+'|'+pok(r.style);if(r.my_no)(eMy[pok(r.my_no)]=eMy[pok(r.my_no)]||new Set()).add(k);const a=eAgg[k]=eAgg[k]||{qty:0,ship:0,open:0,lines:0,my:new Set(),cust:new Set(),delivery:'',closedAll:true,style:raw(r.style)};a.qty+=Number(r.qty)||0;a.ship+=Number(r.ship_qty)||0;a.open+=r.open_qty!=null?Number(r.open_qty)||0:0;a.lines++;if(r.my_no)a.my.add(raw(r.my_no));if(r.cust)a.cust.add(raw(r.cust));if(r.delivery>a.delivery)a.delivery=r.delivery;if(!/^(y|yes|1|true|結案|closed)$/i.test(String(r.closed||'')))a.closedAll=false;(ePo[p]=ePo[p]||new Set()).add(k)});
+    const sAgg={};ES.forEach(r=>{const k=pok(r.po_no)+'|'+pok(r.style);if(!pok(r.po_no))return;const a=sAgg[k]=sAgg[k]||{qty:0,last:'',bl:new Set()};a.qty+=Number(r.qty)||0;if(r.ship_date>a.last)a.last=r.ship_date;if(r.bl_no)a.bl.add(raw(r.bl_no))});
+    /* resolving a statistics row (PO + style) to ERP lines, in two passes so that no ERP order is used twice:
+       1. exact: same PO + same style, or — when the statistics 'PO' is an ERP 自編單號 (some sheets carry SORD… there) — that my_no + same style;
+       2. the rest, among the ERP keys of that PO / my_no that pass 1 did not claim: one key whose style starts with the statistics style
+          (or the reverse, ≥ 4 chars: colour suffixes 0882K / 0882KWHT) → 'po+style-prefix'; one key left and one statistics row left → 'po-only'
+          (or 'my_no'); none left → missing; several → ambiguous (candidates listed, never picked). */
+    const keysOf=p=>ePo[p]?{keys:[...ePo[p]],via:'po'}:eMy[p]?{keys:[...eMy[p]],via:'my_no'}:{keys:[],via:''};
+    const claimed=new Set(),res={},csPo={};
+    Object.keys(csAgg).forEach(k=>{const [p,sty]=k.split('|');(csPo[p]=csPo[p]||[]).push(k);if(eAgg[k]){res[k]={ek:k,via:'po+style'};claimed.add(k);return}
+      const ko=keysOf(p);if(ko.via==='my_no'){const ex=ko.keys.filter(x=>x.split('|')[1]===sty);if(ex.length===1&&!claimed.has(ex[0])){res[k]={ek:ex[0],via:'my_no'};claimed.add(ex[0])}}});
+    Object.keys(csAgg).forEach(k=>{if(res[k])return;const [p,sty]=k.split('|');const ko=keysOf(p);const cands=ko.keys.filter(x=>!claimed.has(x));const left=(csPo[p]||[]).filter(x=>!res[x]);
+      const near=(a,b)=>a.length>=4&&b.length>=4&&(a.startsWith(b)||b.startsWith(a));const pre=cands.filter(x=>near(x.split('|')[1]||'',sty));
+      if(pre.length===1&&left.filter(x=>near(x.split('|')[1]||'',pre[0].split('|')[1]||'')).length===1){res[k]={ek:pre[0],via:ko.via==='my_no'?'my_no':'po+style-prefix'};claimed.add(pre[0]);return}
+      if(cands.length===1&&left.length===1){res[k]={ek:cands[0],via:ko.via==='my_no'?'my_no':'po-only'};claimed.add(cands[0]);return}
+      res[k]={ek:null,via:ko.via||'po+style',cands,known:!!ko.via}});
+    const poRows=[];Object.keys(csAgg).forEach(k=>{const cs=csAgg[k];const [p]=k.split('|');const R0=res[k];const ek=R0.ek,via=R0.ek?R0.via:'po+style',cands=R0.cands||[];
+      const o=cc(cs.customer);const row={key:k,customer:cs.customer,po:cs.po,style:cs.style,cs:{order:cs.order,completed:cs.completed,balance:cs.balance,etd:cs.etd},via,erp:null,reasons:[],state:'match'};
+      if(!ek){const amb=cands.length>1;row.state=amb?'ambiguous':'missing';row.candidates=cands.map(x=>eAgg[x]&&eAgg[x].style||x.split('|')[1]);
+        row.reasons.push(amb?'ERP 同'+(R0.via==='my_no'?'自編單號':' PO')+'有多款（'+row.candidates.join(', ')+'），款號對不上 several ERP styles, style not matched':R0.known?'ERP 這張'+(R0.via==='my_no'?'自編單號':' PO')+'沒有這一款（其他款都已對上）style not on this ERP order':'ERP 沒有這張 PO（或尚未匯入該年度）PO not in ERP');if(!amb)o.po.missing++;poRows.push(row);return}
+      const e=eAgg[ek],s=sAgg[ek]||{qty:0,last:'',bl:new Set()};row.erp={qty:e.qty,shipQty:e.ship,open:e.open,shipped:s.qty,lastShip:s.last,bl:s.bl.size,my:[...e.my].join(' / '),cust:[...e.cust].join(' / '),delivery:e.delivery,closed:e.closedAll,style:e.style};
+      const tol=v=>Math.max(0,Math.abs(v)*tolPct/100);
+      if(Math.abs(e.qty-cs.order)>tol(cs.order)){row.reasons.push('訂單量 ERP '+N(e.qty)+' ≠ 客戶統計 '+N(cs.order)+'（差 '+N(e.qty-cs.order)+'）order qty differs');row.state='diff'}
+      const shipE=e.ship||s.qty;if(Math.abs(shipE-cs.completed)>tol(cs.completed)){const later=snap&&s.last&&s.last>snap;row.reasons.push('已出貨 ERP '+N(shipE)+' ≠ 客戶統計已完成 '+N(cs.completed)+(later?'（ERP 出貨日 '+s.last+' 晚於快照 '+snap+'）':'')+' shipped differs');row.state=row.state==='diff'?'diff':(later?'timing':'diff')}
+      if(e.ship&&s.qty&&Math.abs(e.ship-s.qty)>tol(e.ship))row.reasons.push('ERP 訂單已交量 '+N(e.ship)+' 與出貨明細合計 '+N(s.qty)+' 不同（出貨明細年度未齊？）ERP order shipped ≠ shipment lines');
+      if(e.closedAll&&cs.balance>0)row.reasons.push('ERP 已結案但客戶統計仍有餘量 '+N(cs.balance)+' closed in ERP, balance in customer statistics');
+      o.po.matched++;o.po.qtyErp+=e.qty;o.po.qtyCs+=cs.order;o.po.shipErp+=shipE;o.po.doneCs+=cs.completed;if(row.state!=='match')o.po.diff++;
+      poRows.push(row)});
+    poRows.sort((a,b)=>ORDER.indexOf(a.state)-ORDER.indexOf(b.state)||Math.abs((b.erp?b.erp.qty:0)-b.cs.order)-Math.abs((a.erp?a.erp.qty:0)-a.cs.order));
+    /* 3. monthly trend (ERP only): ordered by order month, shipped by ship month */
+    const T={};const tm=k=>T[k]=T[k]||{month:k,ordered:0,shipped:0};EO.forEach(r=>{const k=ym(r.order_date);if(k&&within(r.order_date,input.trendPeriod||R))tm(k).ordered+=Number(r.qty)||0});ES.forEach(r=>{const k=ym(r.ship_date);if(k&&within(r.ship_date,input.trendPeriod||R))tm(k).shipped+=Number(r.qty)||0});
+    let cO=0,cS=0;   // a month's shipments belong to orders of earlier months: the meaningful ratio is the cumulative one (the monthly one is kept for reference)
+    const trend=Object.values(T).sort((a,b)=>a.month.localeCompare(b.month)).map(t=>{cO+=t.ordered;cS+=t.shipped;return Object.assign(t,{ratio:t.ordered?t.shipped/t.ordered*100:null,cumOrdered:cO,cumShipped:cS,cumRatio:cO?cS/cO*100:null})});
+    const customers=Object.values(C).map(o=>({customer:o.customer,erpCodes:[...o.erpCodes].join(' / '),ordered:o.ordered,orderLines:o.orderLines,shipped:o.shipped,shipLines:o.shipLines,ratio:o.ordered?o.shipped/o.ordered*100:null,open:o.open,openLate:o.openLate,openLines:o.openLines,cs:{order:o.cs.order,completed:o.cs.completed,balance:o.cs.balance,pos:o.cs.pos.size},po:o.po,balanceDiff:o.cs.pos.size?o.open-o.cs.balance:null}))
+      .filter(o=>o.ordered||o.shipped||o.open||o.cs.pos).sort((a,b)=>(b.cs.balance+b.open)-(a.cs.balance+a.open));
+    const sum={};ORDER.forEach(s=>sum[s]=0);poRows.forEach(r=>sum[r.state]++);sum.total=poRows.length;
+    const totals={erpOrdered:customers.reduce((s,c)=>s+c.ordered,0),erpShipped:customers.reduce((s,c)=>s+c.shipped,0),erpOpen:customers.reduce((s,c)=>s+c.open,0),csOrder:customers.reduce((s,c)=>s+c.cs.order,0),csBalance:customers.reduce((s,c)=>s+c.cs.balance,0),csCompleted:customers.reduce((s,c)=>s+c.cs.completed,0)};
+    totals.ratio=totals.erpOrdered?totals.erpShipped/totals.erpOrdered*100:null;
+    return {customers,poRows,summary:sum,trend,totals,customerMap:CM,snapshotDate:snap,period:R};
+  }
+  /* ── BOM check: ERP W_COD550 (per order) ↔ PROD BOM module (per style). Material names differ between the two (ERP item names vs tech-pack
+     names), so the check is: coverage (which styles in plan / open orders have a BOM where), main-fabric consumption per piece (ERP median of
+     its orders vs PROD fabric qty/pc, units converted yd ↔ m only), ERP consistency across orders of the same style, trim line counts. ── */
+  const UNIT={YD:'YD',YDS:'YD',YARD:'YD',YARDS:'YD','碼':'YD',M:'M',MTR:'M',MTRS:'M',METER:'M',METERS:'M',METRE:'M','米':'M','公尺':'M',KG:'KG','公斤':'KG',PCS:'PCS',PC:'PCS','件':'PCS','個':'PCS','只':'PCS',SET:'SET','套':'SET',ROLL:'ROLL',CONE:'CONE'};
+  const unitOf=u=>{const k=nk(u).replace(/[.\s]/g,'');return UNIT[k]||k||''};
+  const toYd=(v,u)=>u==='YD'?v:u==='M'?v*1.0936133:null;
+  const median=a=>{const s=a.slice().sort((x,y)=>x-y);if(!s.length)return null;const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2};
+  const stk=s=>nk(s).replace(/[\s\-_\/.()（）]/g,'');
+  function bomCheck(input){
+    input=input||{};const tol=input.tolerance==null?0.05:Number(input.tolerance);const E={},P={};const CMn=(input.customerMap&&input.customerMap.map)||input.customerMap||{};
+    (input.erpBom||[]).forEach(b=>{const k=stk(b.style);if(!k)return;const s=E[k]=E[k]||{style:raw(b.style),cust:new Set(),orders:{},last:'',trimNames:new Set()};if(b.cust)s.cust.add(raw(b.cust));if(b.order_date>s.last)s.last=b.order_date;
+      const o=s.orders[b.my_no||b.od_no||'?']=s.orders[b.my_no||b.od_no||'?']||{main:{},mainLines:0,trim:0,date:b.order_date||''};
+      if(b.type==='main'){o.mainLines++;const u=unitOf(b.unit);const c=Number(b.cons);if(isFinite(c)&&c>0){const y=toYd(c,u);const key=y!=null?'YD':u||'?';o.main[key]=(o.main[key]||0)+(y!=null?y:c)}}else{o.trim++;if(b.material)s.trimNames.add(nk(b.material))}});
+    (input.prodBom||[]).forEach(st=>{const k=stk(st.styleNo||st.style);if(!k)return;const items=st.items||[];const fab=items.filter(it=>/fabric|main|shell|body|布|主料|面料/i.test(String(it.category||''))||/fabric|布/i.test(String(it.item||'')));
+      let yd=0,other={},n=0;fab.forEach(it=>{let q=Number(it.qtyPcs)||0;if(!q&&Number(it.qtyDozen))q=Number(it.qtyDozen)/12;if(!q)return;const u=unitOf(it.unit);const y=toYd(q,u);if(y!=null){yd+=y;n++}else{other[u||'?']=(other[u||'?']||0)+q}});
+      const p=P[k]=P[k]||{style:raw(st.styleNo||st.style),customer:raw(st.customerCode||st.customer),status:raw(st.status),variants:0,fabYd:null,fabOther:{},fabLines:0,trims:0,updatedAt:st.updatedAt||''};p.variants++;
+      if(p.fabYd==null||n>0&&yd>0&&p.variants===1){p.fabYd=n?yd:null;p.fabOther=other;p.fabLines=fab.length;p.trims=items.length-fab.length}});
+    const focus=new Map();(input.focus||[]).forEach(f=>{const k=stk(f.style);if(!k)return;const o=focus.get(k)||{style:raw(f.style),qty:0,lines:new Set(),cust:new Set(),src:new Set()};o.qty+=Number(f.qty)||0;if(f.line)o.lines.add(raw(f.line));if(f.customer)o.cust.add(raw(f.customer));if(f.src)o.src.add(f.src);focus.set(k,o)});
+    // plan styles often carry a colour suffix (3125KWBL, 0882KWHT): fall back to the longest BOM style key that prefixes the plan key, if unique
+    const keysAll=new Set(Object.keys(E).concat(Object.keys(P)));const resolveKey=k=>{if(keysAll.has(k))return k;const c=[...keysAll].filter(x=>x.length>=4&&k.startsWith(x)).sort((a,b)=>b.length-a.length);return c.length&&(c.length===1||c[0].length>c[1].length)?c[0]:null};
+    const fk=new Map();focus.forEach((v,k)=>{const r=resolveKey(k)||k;const o=fk.get(r);if(!o)fk.set(r,Object.assign({},v,{aliases:new Set([v.style])}));else{o.qty+=v.qty;v.lines.forEach(x=>o.lines.add(x));v.cust.forEach(x=>o.cust.add(x));v.src.forEach(x=>o.src.add(x));o.aliases.add(v.style)}});
+    const rows=[];new Set([...keysAll,...fk.keys()]).forEach(k=>{const e=E[k],p=P[k],f=fk.get(k);if(!e&&!p&&!f)return;const reasons=[];let state='match';
+      const per=e?Object.values(e.orders).map(o=>o.main.YD).filter(v=>v>0):[];const em=median(per),spread=per.length>1&&em?(Math.max(...per)-Math.min(...per))/em:0;
+      const row={key:k,style:(e&&e.style)||(p&&p.style)||(f&&f.style),customer:(p&&p.customer)||(f&&f.cust.size?[...f.cust].join(' / '):'')||(e?[...new Set([...e.cust].map(c=>CMn[c]||c))].join(' / '):''),focus:!!f,focusQty:f?f.qty:0,focusLines:f?[...f.lines].join(','):'',focusSrc:f?[...f.src].join('+'):'',focusAliases:f?[...f.aliases].filter(a=>stk(a)!==k).join(', '):'',
+        erp:e?{orders:Object.keys(e.orders).length,mainYd:em,minYd:per.length?Math.min(...per):null,maxYd:per.length?Math.max(...per):null,spread,trims:median(Object.values(e.orders).map(o=>o.trim)),noMain:Object.values(e.orders).filter(o=>!o.mainLines).length,last:e.last,otherUnits:[...new Set(Object.values(e.orders).flatMap(o=>Object.keys(o.main).filter(u=>u!=='YD')))].join(',')}:null,
+        prod:p?{fabYd:p.fabYd,fabOther:Object.keys(p.fabOther).join(','),fabLines:p.fabLines,trims:p.trims,status:p.status,variants:p.variants}:null,diffPct:null};
+      if(!e&&!p){state='missing';reasons.push('排產／訂單中，但 ERP 與 PROD 都沒有 BOM in plan / open orders, no BOM on either side')}
+      else if(!e){state='missing';reasons.push('ERP 沒有這款的訂單用料（近 '+(input.bomYears||2)+' 年）no ERP BOM in the window')}
+      else if(!p){state='missing';reasons.push('PROD BOM 模組沒有這款 not in the PROD BOM module')}
+      else if(em==null||p.fabYd==null){state='incomparable';reasons.push(em==null?'ERP 主料沒有可換算碼數的單耗 ERP main usage not in yd/m':'PROD BOM 布料沒有碼／米單耗 PROD fabric qty not in yd/m')}
+      else{row.diffPct=(p.fabYd-em)/em*100;if(Math.abs(p.fabYd-em)>em*tol){state='diff';reasons.push('主料單耗 PROD '+p.fabYd.toFixed(3)+' yd vs ERP '+em.toFixed(3)+' yd（'+(row.diffPct>=0?'+':'')+row.diffPct.toFixed(1)+'%）main fabric per pc differs')}}
+      if(e&&spread>tol&&per.length>1)reasons.push('ERP 同款 '+per.length+' 張單主料單耗不一致：'+Math.min(...per).toFixed(3)+'–'+Math.max(...per).toFixed(3)+' yd ERP orders of this style disagree');
+      if(e&&row.erp.noMain)reasons.push(row.erp.noMain+' 張 ERP 訂單沒有主料 order(s) without main fabric');
+      if(e&&p&&row.erp.trims!=null&&p.trims&&Math.abs(row.erp.trims-p.trims)>=3)reasons.push('副料項數 ERP '+row.erp.trims+' vs PROD '+p.trims+' trim line count differs');
+      row.state=state;row.reasons=reasons;rows.push(row)});
+    rows.sort((a,b)=>(b.focus-a.focus)||ORDER.indexOf(a.state)-ORDER.indexOf(b.state)||(b.focusQty-a.focusQty));
+    const sum={};ORDER.forEach(s=>sum[s]=0);rows.forEach(r=>sum[r.state]++);sum.total=rows.length;sum.focus=rows.filter(r=>r.focus).length;sum.focusNoBom=rows.filter(r=>r.focus&&!r.erp&&!r.prod).length;sum.focusErpOnly=rows.filter(r=>r.focus&&r.erp&&!r.prod).length;sum.focusDiff=rows.filter(r=>r.focus&&r.state==='diff').length;sum.erpInconsistent=rows.filter(r=>r.erp&&r.erp.spread>tol&&r.erp.orders>1).length;
+    return {rows,summary:sum,tolerance:tol};
+  }
+  g.VRTErpLink={version:VERSION,PARSER_VERSION,MAPPING_VERSION,FIELDS,DATASET_LABEL,KEY_OF,STATES,ORDER,nk,parseDate,parseQty,headerSignature,suggestMapping,detectDataset,missingRequired,parseText,decodeBytes,normalizeRows,mergeImport,fileHash,aggProd,aggErp,compareOrders,compareShipping,dailyReport,prevWorkday,nextWorkday,addDays,sampleFiles,hash32,esc,N,pct,
+    BRIDGE_REP,fromBridge,customerMap,customerCompare,bomCheck,pok,unitOf};
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.16.0"></script>
-<script src="vrt-platform-v40.js?v=4.16.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.16.0"></script><script src="vrt-i18n-v1.js?v=4.16.0"></script>
+<script src="vrt-deploy-config.js?v=4.18.0"></script>
+<script src="vrt-platform-v40.js?v=4.18.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 生產進度總表 v4.4</title>
+<title>VRT 生產進度總表 v4.5</title>
 <style>
 :root{
   --bg:#f0f2f7;--s1:#fff;--s2:#f7f8fc;--s3:#eef1f8;--bd:#e2e6f0;--bd2:#d0d5e8;
@@ -167,10 +167,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.16.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.16.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
-<script src="vrt-data-core-v39.js?v=4.16.0"></script>
+<script src="vrt-data-core-v39.js?v=4.18.0"></script>
 </head>
 <body>
 
@@ -181,7 +181,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 
 <!-- HEADER -->
 <div class="hdr">
-  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.4 · 排產計畫為主 · 訂單/裁剪/車縫/SMV 只做進度核對 · 📰 生產日報</div></div>
+  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.5 · 排產計畫為主 · 訂單/裁剪/車縫/SMV 只做進度核對 · 📰 生產日報</div></div>
   <div style="font-size:11px;color:#8bb5d8;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><span class="dot" id="d-ord"></span><span id="l-ord">訂單…</span></span>
     <span><span class="dot" id="d-cut"></span><span id="l-cut">裁剪…</span></span>
@@ -347,9 +347,9 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 </style>
 <div id="pane-daily" class="pane">
   <div class="drbar">
-    <select id="drPeriod" onchange="drPeriodChange()"><option value="day">📰 日報 Daily</option><option value="week">📅 週報 Weekly</option></select>
+    <select id="drPeriod" onchange="drPeriodChange()" title="日報／效率週報（含換針零件）／排單週報（負荷、換款、空檔，不含機修）"><option value="day">📰 日報 Daily</option><option value="week">📅 效率週報 Efficiency weekly</option><option value="plan">📋 排單週報 Loading weekly</option></select><select id="drLang" onchange="drLangChange()" title="Telegram 文字版語言"><option value="zh">中文</option><option value="both">中＋英</option></select>
     <span style="font-size:12px;color:var(--t2)">日期 Date</span><select id="drDate" onchange="drShow(this.value)"></select>
-    <button class="drbtn pri" id="drGen" onclick="drGenerate(document.getElementById('drDate').value,{force:true,period:document.getElementById('drPeriod').value})">⟳ 產生／重新生成</button>
+    <button class="drbtn pri" id="drGen" onclick="drGenerate(document.getElementById('drDate').value,{force:true,period:document.getElementById('drPeriod').value==='day'?'day':'week',kind:document.getElementById('drPeriod').value==='plan'?'plan':'eff'})">⟳ 產生／重新生成</button>
     <button class="drbtn" id="drSend" onclick="drSend()">✈️ 推到 Telegram</button>
     <button class="drbtn" id="drWord" onclick="drWord()">📄 匯出 Word</button>
     <button class="drbtn" id="drAi" onclick="drAi()">🤖 AI 文字版（Claude）</button>
@@ -532,7 +532,7 @@ async function loadAll(){
     try{const d=await idbOpen('VRT_SMV_Manager_v52');snaps=await idbAll(d,'smv_snapshots');d.close();}catch(_){}
     if(!snaps.length){try{const d=await idbOpen('SewingProd');snaps=await idbAll(d,'smv_snapshots');d.close();}catch(_){}}
     if(snaps.length){
-      SMV_MAP=VRTData39.officialByStyle(snaps,new Date().toISOString().slice(0,10));
+      SMV_MAP=VRTData39.officialByStyle(snaps,TODAY);
       SMV_INFO=`正式歷史 ${snaps.length} 版 · ${Object.keys(SMV_MAP).length} 款`;
       setDot('d-smv','ok');document.getElementById('l-smv').textContent=`SMV ${Object.keys(SMV_MAP).length} 款`;
     }else{
@@ -719,10 +719,10 @@ function planDateEnd(r){
 function planAggEvents(){
   const m={};
   PLAN.forEach(r=>{
-    const start=planDateStart(r),end=planDateEnd(r),line=String(r.line||'').trim(),style=String(r.style||'').trim(),po=String(r.po||'').trim(),customer=String(r.customer||'').trim();
+    const start=planDateStart(r),end=planDateEnd(r),line=String(r.line||'').trim(),style=String(r.style||'').trim(),po=String(r.po||'').trim(),customer=String(r.customer||'').trim(),dated=!!pd(r.startDate);
     if(!line||!style)return;
     const key=[line,customer,po,style,start,end,r.product||''].join('|');
-    const x=m[key]||(m[key]={line,customer,po,sk:nsk(style),style,product:r.product||'',start,end,shipDate:pd(r.shipmentDate)||'',qty:0,manpower:0,section:planSec(r),rows:0});
+    const x=m[key]||(m[key]={line,customer,po,sk:nsk(style),style,product:r.product||'',start,end,dated,shipDate:pd(r.shipmentDate)||'',qty:0,manpower:0,section:planSec(r),rows:0});
     x.qty+=Number(r.sewingQty)||0;x.manpower=Math.max(x.manpower,Number(r.manpower)||0);x.rows++;
     if(!x.shipDate&&r.shipmentDate)x.shipDate=pd(r.shipmentDate)||'';
   });
@@ -738,7 +738,7 @@ function buildSchedule(){
   return{lines,lAsgn,events};
 }
 function planWeekStart(ds){
-  const d=new Date(ds+'T00:00:00'),day=d.getDay(),diff=(day===0?-6:1-day);d.setDate(d.getDate()+diff);return d.toISOString().slice(0,10);
+  const d=new Date(ds+'T00:00:00'),day=d.getDay(),diff=(day===0?-6:1-day);d.setDate(d.getDate()+diff);return ymdLocal(d);
 }
 function planPeriodKeyDate(ds,mode){
   if(mode==='day')return ds;
@@ -906,37 +906,89 @@ function renderProgress(){
 // ══════════════════════════════════════════════════
 //  GANTT
 // ══════════════════════════════════════════════════
+/* v4.17 Gantt — every plan row is visible: same style on the same line is merged into one run (POs listed), parallel runs go into
+   separate lanes instead of on top of each other, days with nothing planned on a line are shown as hatched 「空 N 天」, a line with no
+   plan in the period still appears, and a change of style on a line is marked 「⇄ 換款」 at the day it happens. Rows without a start
+   date are listed under the chart (not drawn as month-long bars). */
+const LANE_H=24;
+function ganttRuns(arr){
+  const runs=[];
+  arr.filter(a=>a.dated).sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end)).forEach(a=>{
+    const r=runs.find(x=>x.sk===a.sk&&!(a.start>addDays(x.end,1)||a.end<addDays(x.start,-1)));
+    if(r){if(a.start<r.start)r.start=a.start;if(a.end>r.end)r.end=a.end;r.qty+=a.qty;if(a.po)r.pos.add(a.po);r.events.push(a);r.manpower=Math.max(r.manpower,a.manpower||0);if(!r.shipDate&&a.shipDate)r.shipDate=a.shipDate}
+    else runs.push({sk:a.sk,style:a.style,customer:a.customer,product:a.product,start:a.start,end:a.end,qty:a.qty,pos:new Set(a.po?[a.po]:[]),events:[a],manpower:a.manpower||0,shipDate:a.shipDate||'',line:a.line});
+  });
+  runs.sort((a,b)=>a.start.localeCompare(b.start)||b.end.localeCompare(a.end));
+  const laneEnd=[];runs.forEach(r=>{let i=laneEnd.findIndex(e=>e<r.start);if(i<0){i=laneEnd.length;laneEnd.push('')}laneEnd[i]=r.end;r.lane=i});
+  /* a changeover = a style starts on a day it was not running the day before, and the line had run something earlier */
+  runs.forEach(r=>{const earlier=runs.filter(x=>x!==r&&x.start<r.start);r.changeFrom=earlier.length&&!runs.some(x=>x!==r&&x.sk===r.sk&&x.start<r.start&&x.end>=addDays(r.start,-1))?earlier.sort((a,b)=>b.end.localeCompare(a.end)||b.start.localeCompare(a.start))[0]:null});
+  const chg={};runs.forEach(r=>{if(r.changeFrom)(chg[r.start]||(chg[r.start]=[])).push(r)});
+  return {runs,lanes:Math.max(1,laneEnd.length),changes:Object.keys(chg).sort().map(d=>({date:d,runs:chg[d],from:chg[d][0].changeFrom}))};
+}
+function isSunday(ds){return new Date(ds+'T00:00:00').getDay()===0}
+function workDaysBetween(a,b){let n=0;for(let d=a;d<=b;d=addDays(d,1))if(!isSunday(d))n++;return n}
+function ganttGaps(runs,start,end,hasBefore,hasAfter){
+  /* occupied day set inside the period */
+  const busy=new Set();runs.forEach(r=>{for(let d=(r.start<start?start:r.start);d<=(r.end>end?end:r.end);d=addDays(d,1))busy.add(d)});
+  const gaps=[];let cur=null;
+  for(let d=start;d<=end;d=addDays(d,1)){if(busy.has(d)){if(cur){gaps.push(cur);cur=null}}else{if(!cur)cur={start:d,end:d};else cur.end=d}}
+  if(cur)gaps.push(cur);
+  /* kind: none = nothing planned in the whole period · hole = empty days between plan (also at the edges when the line has plan before / after)
+           · open = after the last run and nothing planned later (尚未排) · lead = before the first run and nothing planned earlier (unlabelled) */
+  return gaps.map(g=>{const first=g.start===start,last=g.end===end;let kind='hole';
+    if(!runs.length)kind='none';else if(first&&!hasBefore)kind='lead';else if(last&&!hasAfter&&!runs.some(r=>r.start>g.end))kind='open';
+    return {...g,kind,days:workDaysBetween(g.start,g.end)}}).filter(g=>g.days>0);
+}
 function renderGantt(){
   if(!SCHED)SCHED=buildSchedule();fillPlanPeriodSelect();
   const fSec=document.getElementById('g-sec').value,colorBy=document.getElementById('g-color').value,{start,end}=planRange();
-  let events=planAggEvents().filter(a=>eventTouches(a,start,end));if(fSec)events=events.filter(a=>a.section===fSec);
+  const all=planAggEvents();if(!start||!end){document.getElementById('g-wrap').innerHTML='<div style="text-align:center;padding:45px;color:var(--muted)">Production Plan 沒有排產資料</div>';document.getElementById('g-meta').textContent='';return}
+  let events=all.filter(a=>eventTouches(a,start,end));if(fSec)events=events.filter(a=>a.section===fSec);
   const byLine={};events.forEach(a=>(byLine[a.line]||(byLine[a.line]=[])).push(a));
+  /* lines that have a plan near this period (±31 days) stay on the chart even when this period is empty for them */
+  const near=all.filter(a=>a.dated&&a.end>=addDays(start,-31)&&a.start<=addDays(end,31)&&(!fSec||a.section===fSec));
+  near.forEach(a=>{if(!byLine[a.line])byLine[a.line]=[]});
+  const lineSec={};all.forEach(a=>{if(!lineSec[a.line])lineSec[a.line]=a.section});
   const lineList=Object.keys(byLine).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-  document.getElementById('g-meta').textContent=`${PLAN_VIEW==='day'?'日':PLAN_VIEW==='week'?'週':'月'} ${PLAN_PERIOD||'-'} · ${lineList.length} Lines · ${events.length} 項 · ${fmt(events.reduce((a,b)=>a+b.qty,0))} pcs`;
-
-  const days=Math.max(1,daysDiff(start,end)+1),DW=PLAN_VIEW==='day'?260:PLAN_VIEW==='week'?80:24,ROW_H=42,CW=days*DW;
+  const undated=events.filter(a=>!a.dated);
+  const days=Math.max(1,daysDiff(start,end)+1),DW=PLAN_VIEW==='day'?260:PLAN_VIEW==='week'?86:24,CW=days*DW;
   const blockColor=a=>colorBy==='status'?(a.end<TODAY?'#94a3b8':a.start<=TODAY&&a.end>=TODAY?'#059669':'#1d6ec7'):custColor(a.customer||'');
-  document.getElementById('g-legend').innerHTML=`<span>期間 ${start||'-'} → ${end||'-'}</span><span style="color:#059669">■ 目前期間</span><span style="color:#1d6ec7">■ 未來</span><span style="color:#94a3b8">■ 已過</span>`;
-
-  if(!events.length){document.getElementById('g-wrap').innerHTML='<div style="text-align:center;padding:45px;color:var(--muted)">此期間 Production Plan 沒有排產資料</div>';return}
+  let totalChg=0,totalGapDays=0,shown=0;
+  document.getElementById('g-legend').innerHTML=`<span>期間 ${start} → ${end}</span><span style="color:#059669">■ 目前期間</span><span style="color:#1d6ec7">■ 未來</span><span style="color:#94a3b8">■ 已過</span><span style="color:#b45309">⇄ 換款</span><span style="color:#64748b">▨ 空檔（無排單的工作天）</span><span style="color:#64748b">同一 Line 同期多款 → 分列顯示</span>`;
+  if(!lineList.length){document.getElementById('g-wrap').innerHTML='<div style="text-align:center;padding:45px;color:var(--muted)">此期間 Production Plan 沒有排產資料</div>';document.getElementById('g-meta').textContent=`${PLAN_VIEW==='day'?'日':PLAN_VIEW==='week'?'週':'月'} ${PLAN_PERIOD||'-'} · 0 Lines`;return}
   let html=`<div class="gout"><table style="border-collapse:collapse;min-width:${170+CW}px;background:var(--s1)"><thead><tr><th class="g-sh">Line</th><th class="g-dh" style="padding:0"><div style="position:relative;width:${CW}px;height:34px">`;
-  for(let i=0;i<days;i++){const d=addDays(start,i),show=PLAN_VIEW!=='month'||i===0||new Date(d+'T00:00:00').getDay()===1; if(show)html+=`<div style="position:absolute;left:${i*DW}px;top:0;border-left:1px solid var(--bd);height:34px"><span style="font-size:9px;color:var(--muted);padding-left:3px;line-height:34px;white-space:nowrap">${PLAN_VIEW==='day'?d:d.slice(5)}</span></div>`}
+  for(let i=0;i<days;i++){const d=addDays(start,i),sun=isSunday(d),show=PLAN_VIEW!=='month'||i===0||new Date(d+'T00:00:00').getDay()===1; if(show)html+=`<div style="position:absolute;left:${i*DW}px;top:0;border-left:1px solid var(--bd);height:34px;${d===TODAY?'background:#fef3c7;':''}"><span style="font-size:9px;color:${sun?'#dc2626':'var(--muted)'};padding-left:3px;line-height:34px;white-space:nowrap">${PLAN_VIEW==='day'?d:d.slice(5)}${PLAN_VIEW==='week'?' '+'日一二三四五六'[new Date(d+'T00:00:00').getDay()]:''}</span></div>`}
   html+='</div></th></tr></thead><tbody>';
   ['Garment','Apron'].forEach(sec=>{
-    const lines=lineList.filter(ln=>(byLine[ln][0]?.section||'Garment')===sec);if(!lines.length)return;
+    const lines=lineList.filter(ln=>(lineSec[ln]||'Garment')===sec);if(!lines.length)return;
     html+=`<tr class="g-sr"><td colspan="2">${sec==='Garment'?'🧵 成衣':'👔 圍裙'} · ${lines.length} Lines</td></tr>`;
     lines.forEach(ln=>{
-      const arr=byLine[ln],man=Math.max(0,...arr.map(x=>x.manpower||0)),qty=arr.reduce((a,b)=>a+b.qty,0);
-      html+=`<tr><td class="g-lbl">${esc(ln)}<span style="font-size:10px;color:var(--muted);font-weight:400;display:block">${man||'-'} 人 · ${fmt(qty)} pcs</span></td><td class="g-cell"><div style="position:relative;width:${CW}px;height:${ROW_H}px">`;
+      const arr=byLine[ln],whole=ganttRuns(all.filter(a=>a.line===ln)),runs=whole.runs.filter(r=>eventTouches(r,start,end)),changes=whole.changes,man=Math.max(0,...arr.map(x=>x.manpower||0)),qty=arr.reduce((a,b)=>a+b.qty,0);
+      /* lanes are re-packed for the visible runs only */
+      const laneEnd=[];runs.forEach(r=>{let i=laneEnd.findIndex(e=>e<r.start);if(i<0){i=laneEnd.length;laneEnd.push('')}laneEnd[i]=r.end;r.lane=i});const lanes=Math.max(1,laneEnd.length);
+      const before=all.some(a=>a.line===ln&&a.dated&&a.end<start),after=all.some(a=>a.line===ln&&a.dated&&a.start>end);
+      const gaps=ganttGaps(runs,start,end,before,after),chgIn=changes.filter(c=>c.date>=start&&c.date<=end),chg=chgIn.length,gapDays=gaps.filter(g=>g.kind==='hole'||g.kind==='open').reduce((a,g)=>a+g.days,0);
+      totalChg+=chg;totalGapDays+=gapDays;shown+=runs.length;
+      const ROW_H=lanes*LANE_H+10;
+      html+=`<tr><td class="g-lbl">${esc(ln)}<span style="font-size:10px;color:var(--muted);font-weight:400;display:block">${man||'-'} 人 · ${fmt(qty)} pcs · ${runs.length} 款${chg?` · <span style="color:#b45309">換款 ${chg}</span>`:''}${gapDays?` · <span style="color:#dc2626">空 ${gapDays} 天</span>`:''}</span></td><td class="g-cell"><div style="position:relative;width:${CW}px;height:${ROW_H}px">`;
       for(let i=0;i<days;i+=PLAN_VIEW==='month'?7:1)html+=`<div style="position:absolute;left:${i*DW}px;top:0;width:1px;height:100%;background:var(--bd)"></div>`;
-      arr.forEach(a=>{
-        const cs=a.start<start?start:a.start,ce=a.end>end?end:a.end,left=Math.max(0,daysDiff(start,cs))*DW,right=(Math.min(days-1,daysDiff(start,ce))+1)*DW,w=Math.max(8,right-left-2),col=blockColor(a);
-        html+=`<div title="${esc(a.style)} · ${esc(a.customer)} · PO ${esc(a.po)} · ${fmt(a.qty)} pcs · ${a.start}→${a.end}" onclick="showPlanEvent('${encodeURIComponent(a.line+'|'+a.po+'|'+a.style+'|'+a.start+'|'+a.end)}')" style="position:absolute;left:${left}px;top:5px;width:${w}px;height:${ROW_H-10}px;background:${col};border-radius:5px;color:white;overflow:hidden;cursor:pointer;box-shadow:0 1px 3px #0002"><span style="font-size:10px;font-weight:700;position:absolute;left:5px;top:50%;transform:translateY(-50%);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:${Math.max(0,w-10)}px">${esc(a.style)} · ${fmt(a.qty)}</span></div>`;
+      for(let i=0;i<days;i++){const d=addDays(start,i);if(isSunday(d)&&PLAN_VIEW!=='month')html+=`<div style="position:absolute;left:${i*DW}px;top:0;width:${DW}px;height:100%;background:#f8fafc"></div>`;if(d===TODAY)html+=`<div style="position:absolute;left:${i*DW}px;top:0;width:${DW}px;height:100%;background:#fef3c7;opacity:.55"></div>`}
+      gaps.forEach(g=>{const left=daysDiff(start,g.start)*DW,w=(daysDiff(g.start,g.end)+1)*DW-2,label=g.kind==='none'?'本期無排單':g.kind==='open'?`尚未排 ${g.days} 天`:g.kind==='lead'?'':`空 ${g.days} 天`;
+        html+=`<div title="${esc(ln)} ${g.start}→${g.end}：${label}" style="position:absolute;left:${left}px;top:3px;width:${Math.max(6,w)}px;height:${ROW_H-6}px;border:1px dashed #cbd5e1;border-radius:5px;background:repeating-linear-gradient(135deg,#f1f5f9 0 6px,#fff 6px 12px);color:#64748b;font-size:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap">${w>40?label:''}</div>`});
+      runs.forEach(a=>{
+        const cs=a.start<start?start:a.start,ce=a.end>end?end:a.end,left=Math.max(0,daysDiff(start,cs))*DW,right=(Math.min(days-1,daysDiff(start,ce))+1)*DW,w=Math.max(8,right-left-2),col=blockColor(a),top=5+a.lane*LANE_H,pos=[...a.pos];
+        const first=a.events[0];
+        html+=`<div title="${esc(a.style)} · ${esc(a.customer)} · PO ${esc(pos.join(', '))} · ${fmt(a.qty)} pcs · ${a.start}→${a.end}${a.changeFrom?` · 換款：${esc(a.changeFrom.style)} → ${esc(a.style)}`:''}" onclick="showPlanEvent('${encodeURIComponent(first.line+'|'+first.po+'|'+first.style+'|'+first.start+'|'+first.end)}')" style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${LANE_H-4}px;background:${col};border-radius:5px;color:white;overflow:hidden;cursor:pointer;box-shadow:0 1px 3px #0002;${a.start<start?'border-left:3px solid #fff8;':''}${a.end>end?'border-right:3px solid #fff8;':''}"><span style="font-size:10px;font-weight:700;position:absolute;left:5px;top:50%;transform:translateY(-50%);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:${Math.max(0,w-10)}px">${esc(a.style)} · ${fmt(a.qty)}${pos.length>1?' · '+pos.length+' PO':''}</span></div>`;
       });
+      chgIn.forEach(c=>{const left=daysDiff(start,c.date)*DW,to=c.runs.map(r=>r.style).join(' / ');
+        html+=`<div title="換款 ${c.date}：${esc(c.from.style)} → ${esc(to)}" style="position:absolute;left:${left-1}px;top:0;width:2px;height:100%;background:#b45309;z-index:2"></div><div title="換款 ${c.date}：${esc(c.from.style)} → ${esc(to)}" style="position:absolute;left:${left+1}px;top:${ROW_H-12}px;font-size:9px;color:#b45309;font-weight:700;white-space:nowrap;z-index:2;background:#fff8;border-radius:3px;padding:0 2px">⇄ 換款${PLAN_VIEW==='month'?'':' '+c.date.slice(5)}</div>`});
       html+='</div></td></tr>';
     })
   });
-  html+='</tbody></table></div>';document.getElementById('g-wrap').innerHTML=html;
+  html+='</tbody></table></div>';
+  if(undated.length)html+=`<div style="margin-top:9px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 12px;font-size:11px;color:#9a3412"><b>⚠ 未填上線日／下線日 ${undated.length} 筆</b>（不畫進甘特，請回排產產能補日期）：${undated.slice(0,12).map(a=>`${esc(a.line)} ${esc(a.style)} ${fmt(a.qty)} pcs`).join(' · ')}${undated.length>12?' …':''}</div>`;
+  document.getElementById('g-wrap').innerHTML=html;
+  document.getElementById('g-meta').textContent=`${PLAN_VIEW==='day'?'日':PLAN_VIEW==='week'?'週':'月'} ${PLAN_PERIOD||'-'} · ${lineList.length} Lines · ${shown} 款段 · ${fmt(events.reduce((a,b)=>a+b.qty,0))} pcs · 換款 ${totalChg} · 空檔 ${totalGapDays} 工作天${undated.length?' · 未填日期 '+undated.length:''}`;
 }
 function showPlanEvent(enc){
   const [line,po,style,start,end]=decodeURIComponent(enc).split('|'),a=planAggEvents().find(x=>x.line===line&&x.po===po&&x.style===style&&x.start===start&&x.end===end);if(!a)return;
@@ -1140,7 +1192,8 @@ function pd(v){
   m=s.match(/([A-Za-z]{3,})\s+(\d{1,2})[,.\s]+(\d{4})/);if(m){const mo=MO[m[1].toLowerCase().slice(0,3)];if(mo)return`${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
   return'';
 }
-function addDays(ds,n){if(!ds)return'';const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function ymdLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function addDays(ds,n){if(!ds)return'';const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return ymdLocal(d);} /* v4.17: local date (toISOString shifted a day in UTC+7) */
 function daysDiff(a,b){if(!a||!b)return 0;return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
 function cmpD(a,b){if(!a&&!b)return 0;if(!a)return 1;if(!b)return-1;return a.localeCompare(b);}
 async function refresh(){CUST_CLR={};_CI=0;await loadAll();}
@@ -1342,7 +1395,7 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 
 
 
-<script src="vrt-daily-report-v1.js?v=4.16.0"></script>
+<script src="vrt-daily-report-v1.js?v=4.18.0"></script>
 <script>
 /* ═══ v4.16 D1 生產日報 Daily production report — numbers computed by code (vrt-daily-report-v1.js), AI only rewrites text ═══ */
 (function(){
@@ -1364,41 +1417,43 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
     const m=await readAll('vrt_spareparts','meta','maintenance39'),mv=(m&&m.v)||{};
     const shipping=await readAll('VRT_Shipping','shipping_records');
     let cs=await readAll('vrt_custstats_v31','data','current');if(!cs){try{cs=JSON.parse(localStorage.getItem('vrt_custstats_v31')||'null')}catch(_){cs=null}}
-    return {sewing:SEW,cutting:CUT,styles:STYLES,prodplan:PLAN,qc:{records:qcRecords,kpi:qcKpi},spareparts:{needle:(mv.needleChanges||[]).filter(r=>!r.deleted),part:(mv.partChanges||[]).filter(r=>!r.deleted)},shipping:shipping||[],custstats:cs||{}};
+    return {sewing:SEW,cutting:CUT,styles:STYLES,prodplan:PLAN,smvMap:SMV_MAP||null,qc:{records:qcRecords,kpi:qcKpi},spareparts:{needle:(mv.needleChanges||[]).filter(r=>!r.deleted),part:(mv.partChanges||[]).filter(r=>!r.deleted)},shipping:shipping||[],custstats:cs||{}};
   }
   const sewDates=()=>{const S=VRTDailyReport.helpers.sewPick(SEW);return Object.keys(S).filter(d=>d<=TODAY).sort().reverse()};
-  const curPeriod=()=>{const e=$('drPeriod');return e&&e.value==='week'?'week':'day'};
+  const curMode=()=>{const e=$('drPeriod');return e&&(e.value==='week'||e.value==='plan')?e.value:'day'};const curPeriod=()=>curMode()==='day'?'day':'week';const curKind=()=>curMode()==='plan'?'plan':'eff';
+  const curLang=()=>{const e=$('drLang');return e&&e.value==='both'?'both':'zh'};const modeOfKey=k=>/-W\d{2}-plan$/.test(k||'')?'plan':/-W\d{2}$/.test(k||'')?'week':'day';
+  window.drLangChange=function(){try{localStorage.setItem('vrt:dr:lang',curLang())}catch(_){}if(DR_CUR)render(DR_CUR)};try{const l=localStorage.getItem('vrt:dr:lang');if(l&&$('drLang'))$('drLang').value=l}catch(_){}
   const weekKeys=()=>{const H=VRTDailyReport.helpers;const seen=new Set(),out=[];sewDates().forEach(d=>{const k=H.isoWeekKey(d);if(!seen.has(k)){seen.add(k);out.push({key:k,anchor:d})}});return out};
   const keyLabel=x=>x.local===false?x.date+' ☁':x.date;
   window.drPeriodChange=function(){fillDates();const d=$('drDate').value;if(d)drShow(d)};
-  function fillDates(sel){const week=curPeriod()==='week';const have=new Set(DR_INDEX.map(x=>x.date));let all;
-    if(week){const wk=weekKeys().slice(0,30).map(w=>w.key);all=[...new Set(wk.concat(DR_INDEX.filter(x=>/-W\d{2}$/.test(x.date)).map(x=>x.date)))].sort().reverse().slice(0,60)}
-    else{const ds=sewDates().slice(0,60);all=[...new Set(ds.concat(DR_INDEX.filter(x=>!/-W\d{2}$/.test(x.date)).map(x=>x.date)))].sort().reverse().slice(0,90)}
-    $('drDate').innerHTML=all.map(d=>'<option value="'+d+'">'+d+(have.has(d)?' ✓':'')+'</option>').join('')||'<option value="">（無車縫資料）</option>';if(sel)$('drDate').value=sel}
+  function fillDates(sel){const mode=curMode();const have=new Set(DR_INDEX.map(x=>x.date));let all;
+    if(mode!=='day'){const suf=mode==='plan'?'-plan':'';const wk=weekKeys().slice(0,30).map(w=>w.key+suf);all=[...new Set(wk.concat(DR_INDEX.filter(x=>modeOfKey(x.date)===mode).map(x=>x.date)))].sort().reverse().slice(0,60)}
+    else{const ds=sewDates().slice(0,60);all=[...new Set(ds.concat(DR_INDEX.filter(x=>modeOfKey(x.date)==='day').map(x=>x.date)))].sort().reverse().slice(0,90)}
+    $('drDate').innerHTML=all.map(d=>'<option value="'+d+'">'+d.replace(/-plan$/,'')+(have.has(d)?' ✓':'')+'</option>').join('')||'<option value="">（無車縫資料）</option>';if(sel)$('drDate').value=sel}
   async function refreshIndex(){const local=await drAll();DR_INDEX=local.map(r=>({date:r.date,generatedAt:r.generatedAt,source:r.source,sentAt:r.sentAt||'',ai:!!(r.ai&&r.ai.ok),zhChars:r.zhChars||0,pieces:r.facts&&r.facts.sewing?r.facts.sewing.pieces:null,local:true}));
     for(const c of Object.values(DR_CLOUD)){if(!DR_INDEX.some(x=>x.date===c.date))DR_INDEX.push(Object.assign({},c,{local:false}))}
     DR_INDEX.sort((a,b)=>a.date<b.date?1:-1);renderHist()}
-  function renderHist(){const h=$('drHist');if(!h)return;h.innerHTML=DR_INDEX.slice(0,120).map(x=>'<div class="h'+(DR_CUR&&DR_CUR.date===x.date?' on':'')+'" onclick="drShow(\''+x.date+'\')"><span>'+(/-W\d{2}$/.test(x.date)?'📅 ':'')+x.date+(x.ai?' 🤖':'')+(x.sentAt?' ✈️':'')+(x.local?'':' ☁')+'</span><small>'+(x.pieces!=null?Number(x.pieces).toLocaleString()+' pcs · ':'')+(x.source||'')+'</small></div>').join('')||'<div class="h"><small>尚無日報</small></div>';$('drHistN').textContent=DR_INDEX.length+' 天'}
+  function renderHist(){const h=$('drHist');if(!h)return;h.innerHTML=DR_INDEX.slice(0,120).map(x=>'<div class="h'+(DR_CUR&&DR_CUR.date===x.date?' on':'')+'" onclick="drShow(\''+x.date+'\')"><span>'+(modeOfKey(x.date)==='plan'?'📋 ':modeOfKey(x.date)==='week'?'📅 ':'')+x.date.replace(/-plan$/,' 排單')+(x.ai?' 🤖':'')+(x.sentAt?' ✈️':'')+(x.local?'':' ☁')+'</span><small>'+(x.pieces!=null?Number(x.pieces).toLocaleString()+' pcs · ':'')+(x.source||'')+'</small></div>').join('')||'<div class="h"><small>尚無日報</small></div>';$('drHistN').textContent=DR_INDEX.length+' 天'}
   async function cloudIndex(){if(!gasUrl())return;try{const d=await call({action:'dailyReportList',limit:120});if(d&&d.ok){DR_CLOUD={};(d.index||[]).forEach(x=>DR_CLOUD[x.date]=x)}}catch(e){console.warn('[daily] cloud index',e.message)}}
   async function cloudUsage(){if(!gasUrl())return;try{const d=await call({action:'dailyReportUsage'});if(d&&d.ok&&d.usage){const u=d.usage;$('drUsage').textContent='Claude 用量：'+(u.configured?'本月 '+u.thisMonth.calls+' 次 · '+(u.thisMonth.inTokens+u.thisMonth.outTokens).toLocaleString()+' tokens ≈ $'+u.thisMonth.costUsd.toFixed(3)+' · 累計 $'+u.total.costUsd.toFixed(3)+(u.model?' · '+u.model:''):'GAS 尚未設定 CLAUDE_API_KEY（AI 文字版停用，規則版照常）')}}catch(_){}}
   window.drOpenTab=async function(){if(!SEW.length&&!CUT.length){status('資料尚未載入');return}await cloudIndex();await refreshIndex();fillDates();const d=$('drDate').value;if(d)await drShow(d);cloudUsage()};
   window.drShow=async function(date){if(!date)return;let rep=await drGet(date);if(!rep&&DR_CLOUD[date]&&gasUrl()){try{const d=await call({action:'dailyReportGet',date});if(d&&d.ok&&d.report){rep=d.report;await drPut(rep)}}catch(_){}}
     if(!rep){DR_CUR=null;$('drText').textContent='（'+date+' 尚未產生，按「產生」）';$('drKv').innerHTML='';$('drMeta').textContent='';$('drHead').textContent='';$('drAiBox').style.display='none';$('drDate').value=date;renderHist();return}
-    DR_CUR=rep;const isW=/-W\d{2}$/.test(date);if($('drPeriod')&&$('drPeriod').value!==(isW?'week':'day')){$('drPeriod').value=isW?'week':'day';fillDates(date)}$('drDate').value=date;render(rep);renderHist()};
+    DR_CUR=rep;const mode=modeOfKey(date);if($('drPeriod')&&$('drPeriod').value!==mode){$('drPeriod').value=mode;fillDates(date)}$('drDate').value=date;render(rep);renderHist()};
   function render(rep){const f=rep.facts,R=VRTDailyReport.helpers;const N=R.N,pct=R.pct;
     $('drHead').textContent=(f.label||f.date)+' · '+(rep.source==='gas'?'GAS 自動':'本頁')+' · '+String(rep.generatedAt||'').slice(0,16).replace('T',' ')+(rep.sentAt?' · ✈️ 已推送 '+String(rep.sentAt).slice(5,16).replace('T',' '):'');
-    const RAGC={G:'🟢',A:'🟡',R:'🔴'};const rg=k=>f.rag&&f.rag[k]?RAGC[f.rag[k]]+' ':'';const kv=[['產量 Output',N(f.sewing.pieces)+' pcs',f.prevDay.pieces!=null?(f.period==='week'?'前週 ':'前日 ')+N(f.prevDay.pieces):''],['效率 Efficiency',rg('capacity')+pct(f.sewing.eff),f.sewing.effBasis==='minutes'?'Σ分鐘':f.sewing.effBasis==='workers'?'人數加權':''],['線數 Lines',N(f.sewing.lines),''],['裁剪 Cutting',N(f.cutting.pieces)+' pcs',''],['WIP 已裁未縫',f.wip.cutNotSewn!=null?N(f.wip.cutNotSewn):'—',f.wip.daysOfOutput?'≈ '+N(f.wip.daysOfOutput)+' 天':''],['不良率 Reject',rg('quality')+(f.qc.rate!=null?pct(f.qc.rate,2):'—'),f.qc.date?'QC '+String(f.qc.date).slice(5):''],['排單 Plan',f.plan?rg('plan')+pct(f.plan.completion):'—',f.plan?'餘 '+N(f.plan.remaining)+' · 需 '+N(f.plan.requiredPerDay)+'/日':''],['本週出貨 Shipping',rg('shipping')+(f.shipping.pct!=null?pct(f.shipping.pct,0):'—'),f.shipping.open?'未出 '+N(f.shipping.open):''],['缺布 No fabric',f.fabric.hasData?N(f.fabric.noFabricPcs):'—',f.fabric.snapshotDate?String(f.fabric.snapshotDate).slice(5):''],['換針 Needles',N(f.maint.needle.qty),'非計畫 '+N(f.maint.needle.unplanned)]];
+    const RAGC={G:'🟢',A:'🟡',R:'🔴'};const rg=k=>f.rag&&f.rag[k]?RAGC[f.rag[k]]+' ':'';const Ld=f.loading;const kv=f.kind==='plan'?[['負荷 Loading',Ld?rg('loading')+pct(Ld.week.loadingPct,0):'—',Ld?N(Ld.week.scheduledLineDays)+'/'+N(Ld.week.availableLineDays)+' 組日':''],['排單 Scheduled',Ld?N(Ld.exposure)+' pcs':'—',Ld?N(Ld.runs)+' 段':''],['實績 Sewn',N(f.sewing.pieces)+' pcs',Ld&&Ld.attainment!=null?pct(Ld.attainment,0)+'（暴露量）':''],['換款／空檔',Ld?N(Ld.week.changeovers)+' / '+N(Ld.week.gapLineDays):'—',Ld&&Ld.week.emptyLines.length?'無排單 '+Ld.week.emptyLines.join('、'):''],['下週 Next week',Ld?pct(Ld.next.loadingPct,0):'—',Ld?N(Ld.next.pieces)+' pcs'+(Ld.next.emptyLines.length?' · 未排 '+Ld.next.emptyLines.join('、'):''):''],['排單 Plan',f.plan?rg('plan')+pct(f.plan.completion):'—',f.plan?'餘 '+N(f.plan.remaining)+' · 需 '+N(f.plan.requiredPerDay)+'/日':''],['本週出貨 Shipping',rg('shipping')+(f.shipping.pct!=null?pct(f.shipping.pct,0):'—'),f.shipping.open?'未出 '+N(f.shipping.open):''],['可上線 Ready',f.fabric.hasData?rg('ready')+(f.fabric.noFabricShare!=null?'無布 '+pct(f.fabric.noFabricShare,0):N(f.fabric.noFabricPcs)):'—',f.fabric.snapshotDate?String(f.fabric.snapshotDate).slice(5):''],['未填日期 Undated',Ld?N(Ld.undated):'—',''],['缺 SMV',Ld&&Ld.smv?N(Ld.smv.missing)+'/'+N(Ld.smv.styles):'—','']]:[['產量 Output',N(f.sewing.pieces)+' pcs',f.prevDay.pieces!=null?(f.period==='week'?'前週 ':'前日 ')+N(f.prevDay.pieces):''],['效率 Efficiency',rg('capacity')+pct(f.sewing.eff),f.sewing.effBasis==='minutes'?'Σ分鐘':f.sewing.effBasis==='workers'?'人數加權':''],['線數 Lines',N(f.sewing.lines),''],['裁剪 Cutting',N(f.cutting.pieces)+' pcs',''],['WIP 已裁未縫',f.wip.cutNotSewn!=null?N(f.wip.cutNotSewn):'—',f.wip.daysOfOutput?'≈ '+N(f.wip.daysOfOutput)+' 天':''],['不良率 Reject',rg('quality')+(f.qc.rate!=null?pct(f.qc.rate,2):'—'),f.qc.date?'QC '+String(f.qc.date).slice(5):''],['排單 Plan',f.plan?rg('plan')+pct(f.plan.completion):'—',f.plan?'餘 '+N(f.plan.remaining)+' · 需 '+N(f.plan.requiredPerDay)+'/日':''],['本週出貨 Shipping',rg('shipping')+(f.shipping.pct!=null?pct(f.shipping.pct,0):'—'),f.shipping.open?'未出 '+N(f.shipping.open):''],['缺布 No fabric',f.fabric.hasData?N(f.fabric.noFabricPcs):'—',f.fabric.snapshotDate?String(f.fabric.snapshotDate).slice(5):''],['換針 Needles',N(f.maint.needle.qty),'非計畫 '+N(f.maint.needle.unplanned)]];
     $('drKv').innerHTML=kv.map(k=>'<div><span>'+esc(k[0])+'</span><b>'+esc(k[1])+'</b><i>'+esc(k[2])+'</i></div>').join('');
-    const txt=rep.text||VRTDailyReport.render(f).text;$('drText').innerHTML=txt.split('\n').map(l=>/^\s{2}/.test(l)?'<span class="en">'+esc(l)+'</span>':esc(l)).join('\n');
+    const txt=curLang()==='zh'?(rep.textZh||VRTDailyReport.render(f,{lang:'zh'}).text):(rep.text||VRTDailyReport.render(f).text);$('drText').innerHTML=txt.split('\n').map(l=>/^\s{2}/.test(l)?'<span class="en">'+esc(l)+'</span>':esc(l)).join('\n');
     const ai=rep.ai;const box=$('drAiBox');if(ai&&ai.ok){box.style.display='';box.innerHTML='<b>🤖 AI 文字版（'+esc(ai.model||'')+' · '+(ai.usage?ai.usage.inTokens+'/'+ai.usage.outTokens+' tokens ≈ $'+Number(ai.costUsd||0).toFixed(4):'')+' · 數字已逐一核對 ✓）</b><div style="white-space:pre-wrap;margin-top:6px">'+esc(ai.text)+'</div>'}else if(ai&&ai.badNumbers&&ai.badNumbers.length){box.style.display='';box.innerHTML='<b>⚠️ AI 版未採用</b>：文字裡出現事實以外的數字 '+esc(ai.badNumbers.join(', '))+'，依規則保留程式版。'}else box.style.display='none';
     $('drMeta').innerHTML='<span>中文 '+(rep.zhChars||VRTDailyReport.zhCount(txt))+' 字</span><span>異常 '+f.anomalies.length+' 項</span><span>資料：車縫 '+N(f.sewing.rows)+' 列 · 裁剪 '+N(f.cutting.rows)+' · QC '+N(f.qc.reports)+' 份 · 出貨 '+N(f.shipping.allRows)+' 列 · 針 '+N(f.source.needle)+' · 件 '+N(f.source.part)+'</span>'+(rep.dataNote?'<span>'+esc(rep.dataNote)+'</span>':'');
     $('drSend').disabled=false;$('drWord').disabled=false;$('drAi').disabled=false}
   window.drGenerate=async function(date,opts){opts=opts||{};if(!SEW.length){status('沒有車縫資料，無法產生',false);return null}
-    const period=opts.period||(/-W\d{2}$/.test(date||'')?'week':curPeriod());let anchor=date||'';if(period==='week'&&/-W\d{2}$/.test(anchor)){const w=weekKeys().find(x=>x.key===anchor);anchor=w?w.anchor:''}
-    const key=period==='week'?(anchor?VRTDailyReport.helpers.isoWeekKey(anchor):(weekKeys()[0]||{}).key||''):date;
+    const mode=modeOfKey(date||'');const period=opts.period||(mode!=='day'?'week':curPeriod());const kind=opts.kind||(mode==='plan'?'plan':period==='week'?curKind():'eff');let anchor=date||'';if(period==='week'&&/-W\d{2}/.test(anchor)){const wkKey=anchor.replace(/-plan$/,'');const w=weekKeys().find(x=>x.key===wkKey);anchor=w?w.anchor:''}
+    const key=period==='week'?((anchor?VRTDailyReport.helpers.isoWeekKey(anchor):(weekKeys()[0]||{}).key||'')+(kind==='plan'?'-plan':'')):date;
     const existing=key?await drGet(key):null;if(existing&&!opts.force){DR_CUR=existing;render(existing);return existing}
-    status('⏳ 計算中…');try{const data=await drCollect();const f=VRTDailyReport.compute(data,{date:anchor||'',today:TODAY,period});const r=VRTDailyReport.render(f);
-      const rep={date:f.date,facts:f,text:r.text,html:r.html,zhChars:r.zhChars,generatedAt:f.generatedAt,source:'page',version:VRTDailyReport.version};
+    status('⏳ 計算中…');try{const data=await drCollect();const f=VRTDailyReport.compute(data,{date:anchor||'',today:TODAY,period,kind});const r=VRTDailyReport.render(f),rz=VRTDailyReport.render(f,{lang:'zh'});
+      const rep={date:f.date,kind:f.kind,facts:f,text:r.text,html:r.html,textZh:rz.text,htmlZh:rz.html,zhChars:r.zhChars,generatedAt:f.generatedAt,source:'page',version:VRTDailyReport.version};
       if(existing){rep.sentAt=existing.sentAt||'';}
       await drPut(rep);DR_CUR=rep;await refreshIndex();fillDates(rep.date);render(rep);status('✓ 已產生 '+rep.date+(opts.silent?'（自動）':''));
       if(gasUrl()){call({action:'dailyReportSave',report:rep,force:!!opts.force}).then(d=>{if(d&&d.ok){DR_CLOUD[rep.date]={date:rep.date,generatedAt:rep.generatedAt,source:'page'};if(d.kept&&d.report&&d.report.ai&&d.report.ai.ok&&!(rep.ai&&rep.ai.ok)){rep.ai=d.report.ai;drPut(rep);if(DR_CUR===rep)render(rep)}}}).catch(e=>console.warn('[daily] cloud save',e.message))}
@@ -1406,14 +1461,14 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
   window.drSend=async function(){const rep=DR_CUR;if(!rep)return;if(!gasUrl()){status('尚未設定 GAS 網址',false);return}
     const useAi=rep.ai&&rep.ai.ok?await VRTDialog.confirm('要推送 AI 文字版嗎？\n「確定」＝AI 版（數字已核對）　「取消」＝規則版',{okText:'AI 版',cancelText:'規則版'}):false;
     if(rep.sentAt&&!(await VRTDialog.confirm(rep.date+' 的日報已在 '+String(rep.sentAt).slice(0,16).replace('T',' ')+' 推送過，要再推一次？')))return;
-    $('drSend').disabled=true;status('⏳ 傳送中…');try{const text=useAi?rep.ai.html:rep.html;const d=await post({action:'sendMessage',text,parse_mode:'HTML',disable_web_page_preview:true,auditTool:'production_overview',auditType:'daily_report'});if(!d||!d.ok)throw new Error((d&&d.error)||'send failed');
+    $('drSend').disabled=true;status('⏳ 傳送中…');try{const text=useAi?rep.ai.html:(curLang()==='zh'?(rep.htmlZh||VRTDailyReport.render(rep.facts,{lang:'zh'}).html):rep.html);const d=await post({action:'sendMessage',text,parse_mode:'HTML',disable_web_page_preview:true,auditTool:'production_overview',auditType:'daily_report'});if(!d||!d.ok)throw new Error((d&&d.error)||'send failed');
       rep.sentAt=new Date().toISOString();rep.sentAi=!!useAi;await drPut(rep);call({action:'dailyReportSave',report:{date:rep.date,facts:rep.facts,sentAt:rep.sentAt,sentAi:rep.sentAi,text:rep.text,html:rep.html,generatedAt:rep.generatedAt,source:rep.source,zhChars:rep.zhChars}}).catch(()=>{});
       render(rep);refreshIndex();status('✅ 已推送到 Telegram 生產群組'+(d.data&&d.data.plainFallback?'（純文字）':''))}catch(e){status('✗ 推送失敗：'+e.message,false)}finally{$('drSend').disabled=false}};
   window.drAi=async function(){const rep=DR_CUR;if(!rep)return;if(!gasUrl()){status('尚未設定 GAS 網址',false);return}$('drAi').disabled=true;status('⏳ Claude 改寫中…（數字會逐一核對）');
-    try{const d=await call({action:'dailyReportAi',date:rep.date,facts:rep.facts});if(d&&d.notConfigured){status('GAS 尚未設定 CLAUDE_API_KEY：請在 Apps Script → 專案設定 → 指令碼屬性加入後再試',false);$('drUsage').textContent='Claude 用量：GAS 尚未設定 CLAUDE_API_KEY';return}
+    try{const d=await call({action:'dailyReportAi',date:rep.date,facts:rep.facts,lang:curLang()});if(d&&d.notConfigured){status('GAS 尚未設定 CLAUDE_API_KEY：請在 Apps Script → 專案設定 → 指令碼屬性加入後再試',false);$('drUsage').textContent='Claude 用量：GAS 尚未設定 CLAUDE_API_KEY';return}
       if(!d||!d.ai)throw new Error((d&&d.error)||'no reply');rep.ai=d.ai;await drPut(rep);render(rep);refreshIndex();if(d.ai.ok)status('✓ AI 文字版完成 · '+d.ai.usage.inTokens+'/'+d.ai.usage.outTokens+' tokens ≈ $'+Number(d.ai.costUsd||0).toFixed(4));else status('⚠️ AI 版含事實以外的數字（'+(d.ai.badNumbers||[]).join(', ')+'），未採用',false);cloudUsage()}
     catch(e){status('✗ AI 失敗：'+e.message,false)}finally{$('drAi').disabled=false}};
-  window.drWord=function(){const rep=DR_CUR;if(!rep)return;const html=VRTDailyReport.docHtml(rep.facts,(rep.ai&&rep.ai.ok?rep.ai.text+'\n\n— 規則版 Rule-based —\n':'')+rep.text);const blob=new Blob(['\ufeff'+html],{type:'application/msword;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.setAttribute('download','VRT_DailyReport_'+rep.date+'.doc');document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);status('已匯出 Word（.doc）')};
+  window.drWord=function(){const rep=DR_CUR;if(!rep)return;const html=VRTDailyReport.docHtml(rep.facts,(rep.ai&&rep.ai.ok?rep.ai.text+'\n\n— 規則版 Rule-based —\n':'')+rep.text);const blob=new Blob(['\ufeff'+html],{type:'application/msword;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.setAttribute('download',(modeOfKey(rep.date)==='plan'?'VRT_WeeklyLoading_':modeOfKey(rep.date)==='week'?'VRT_WeeklyEfficiency_':'VRT_DailyReport_')+rep.date.replace(/-plan$/,'')+'.doc');document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);status('已匯出 Word（.doc）')};
   window.drCopy=async function(){const rep=DR_CUR;if(!rep)return;try{await navigator.clipboard.writeText((rep.ai&&rep.ai.ok?rep.ai.text:rep.text));status('已複製')}catch(e){status('無法複製',false)}};
   /* auto: once per data date, right after the page has loaded its data (no Telegram send here — the ✈️ button or the GAS 10:00 job does that) */
   window.drAutoGenerate=async function(){if(DR_AUTO_DONE||!SEW.length)return;DR_AUTO_DONE=true;try{const d=sewDates()[0];if(!d)return;const have=await drGet(d);if(have)return;await drGenerate(d,{silent:true});const tb=$('tb-daily');if(tb)tb.textContent='📰 生產日報 ●'}catch(e){console.warn('[daily] auto',e)}};
