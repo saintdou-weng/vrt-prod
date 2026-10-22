@@ -18,30 +18,41 @@
 const INBOX_QUEUE_ = 'inbox_queue.json';
 const INBOX_SHEET_ = 'import_queue';
 const INBOX_MAX_BYTES_ = 20 * 1024 * 1024;
+/* v4.9: same order and patterns as the web 智慧匯入 (vrt-smart-import-v1.js ROUTES) — cutting reports are checked BEFORE the generic
+   'daily output' (a 'Daily Output & Eff% Cutting Report' used to land in sewing); ext = module by file type (customer PO PDFs → orders). */
 const INBOX_ROUTES = [
-  { re:/daily\s*needles?|needles?\s*change|換針/i,                     module:'spareparts',    page:'vrt_spare_parts_v2.html',                       zh:'機修零件（換針）' },
-  { re:/spare\s*part|part\s*change|換件/i,                          module:'spareparts',    page:'vrt_spare_parts_v2.html',                       zh:'機修零件（換件）' },
-  { re:/final\s*qc|end-?line|top\s*\d?\s*defect|qc\s*inspection/i, module:'qc',            page:'vrt_final_qc_v1.html',                          zh:'Final QC' },
-  { re:/weekly\s*open\s*order/i,                                    module:'orders',        page:'orders_v3.html',                                zh:'訂單週報' },
-  { re:/monthly\s*shipping\s*schedule/i,                            module:'monthship',     page:'vrt_monthly_shipping_control_center_v1.html',   zh:'月出貨' },
-  { re:/all\s*customer\s*statistics/i,                              module:'custstats',     page:'vrt_customer_statistics_control_center_v1.html',zh:'客戶統計' },
-  { re:/shipping\s*schedule/i,                                      module:'shipping',      page:'shipping_v2.html',                              zh:'出貨排程' },
-  { re:/fabric\s*stock|stock\s*accessor/i,                          module:'fabricstock',   page:'vrt_fabric_stock_control_v1.html',              zh:'布料庫存' },
-  { re:/greige\s*inventory/i,                                       module:'fabricdelivery',page:'vrt_fabric_delivery_greige_center_v1.html',     zh:'胚布中心' },
-  { re:/cutting\s*plan/i,                                           module:'cuttingplan',   page:'cutting_plan_v2.html',                          zh:'裁剪計劃' },
-  { re:/production\s*plan/i,                                        module:'prodplan',      page:'production_plan_capacity_v1.html',              zh:'排單產能' },
-  { re:/month(?:l)?y?\s*fg\s*stock|fg\s*stock|fg\s*inventory/i,     module:'fg',            page:'VRT_FG_Inventory_Management_v1.html',           zh:'FG 成品（快照）' },
-  { re:/daily\s*output|garment|apron|sewing\s*output/i,             module:'sewing',        page:'sewing_v5.html',                                zh:'車縫' },
-  { re:/cutting\s*report|cutting\s*daily/i,                         module:'cutting',       page:'cutting_v3.html',                               zh:'裁剪' },
-  { re:/obd|smv\s*update|approved|time\s*study|line\s*balanc/i,     module:'ie',            page:'ie_smv_report_v2_1.html',                       zh:'IE／SMV' },
-  { re:/\bpo\s*#?\s*\d{5,}|purchase\s*order/i,                      module:'podelivery',    page:'VRT_PO_Delivery_Control_Center.html',           zh:'PO 交期（採購單）' },
-  { re:/statement|invoice|對帳/i,                                   module:'spareparts',    page:'vrt_spare_parts_v2.html',                       zh:'機修零件（對帳單）' },
+  { re:/daily\s*needles?|needles?\s*change|換針/i,                       module:'spareparts',    page:'vrt_spare_parts_v2.html',                       zh:'機修零件（換針）' },
+  { re:/spare\s*parts?|part\s*change|換件|machine\s*parts?\s*stock/i,    module:'spareparts',    page:'vrt_spare_parts_v2.html',                       zh:'機修零件（換件）' },
+  { re:/final\s*qc|end-?line|top\s*\d?\s*defect|qc\s*inspection/i,     module:'qc',            page:'vrt_final_qc_v1.html',                          zh:'Final QC' },
+  { re:/weekly\s*open\s*order/i,                                        module:'orders',        page:'orders_v3.html',                                zh:'訂單週報' },
+  { re:/monthly\s*shipping\s*schedule/i,                                module:'monthship',     page:'vrt_monthly_shipping_control_center_v1.html',   zh:'月出貨' },
+  { re:/all\s*customer\s*statistics/i,                                  module:'custstats',     page:'vrt_customer_statistics_control_center_v1.html',zh:'客戶統計' },
+  { re:/shipping\s*schedule/i,                                           module:'shipping',      page:'shipping_v2.html',                              zh:'出貨排程' },
+  { re:/fabric\s*stock|stock\s*accessor|fabric\s*warehouse/i,            module:'fabricstock',   page:'vrt_fabric_stock_control_v1.html',              zh:'布料庫存' },
+  { re:/greige/i,                                                       module:'fabricdelivery',page:'vrt_fabric_delivery_greige_center_v1.html',     zh:'胚布中心' },
+  { re:/cutting\s*plan/i,                                                module:'cuttingplan',   page:'cutting_plan_v2.html',                          zh:'裁剪計劃' },
+  { re:/production\s*plan/i,                                             module:'prodplan',      page:'production_plan_capacity_v1.html',              zh:'排單產能' },
+  { re:/month(?:l)?y?\s*fg\s*stock|fg\s*stock|fg\s*inventory/i,         module:'fg',            page:'VRT_FG_Inventory_Management_v1.html',           zh:'FG 成品（快照）' },
+  { re:/cutting\s*(?:output|report|daily|eff)|daily\s*cutting/i,         module:'cutting',       page:'cutting_v3.html',                               zh:'裁剪' },
+  { re:/daily\s*(?:production\s*)?(?:sewing\s*)?output|garment|apron|sewing\s*output/i, module:'sewing', page:'sewing_v5.html',                       zh:'車縫' },
+  { re:/obd|smv\s*update|approved|time\s*study|line\s*balanc/i,         module:'ie',            page:'ie_smv_report_v2_1.html',                       zh:'IE／SMV' },
+  { re:/\bsmv\b|\bsam\b|工時/i,                                          module:'smv',           page:'smv_manager_v5_final.html',                     zh:'SMV 管理（新款估算）' },
+  { re:/\bbom\b|bill\s*of\s*materials?|用料/i,                          module:'bom',           page:'VRT_BOM_Management_v2_AI.html',                 zh:'BOM' },
+  { re:/\bpo\s*#?\s*\d{5,}|purchase\s*orders?/i,                        module:'podelivery',    page:'VRT_PO_Delivery_Control_Center.html',           zh:'PO 交期（採購單）', ext:{pdf:'orders',msg:'orders',eml:'orders'} },
+  { re:/statement|invoice|對帳|receipt|收據/i,                            module:'spareparts',    page:'vrt_spare_parts_v2.html',                       zh:'機修零件（對帳單）' },
 ];
+const INBOX_PAGES_={spareparts:['vrt_spare_parts_v2.html','機修零件'],qc:['vrt_final_qc_v1.html','Final QC'],orders:['orders_v3.html','訂單週報／客戶 PO'],monthship:['vrt_monthly_shipping_control_center_v1.html','月出貨'],custstats:['vrt_customer_statistics_control_center_v1.html','客戶統計'],shipping:['shipping_v2.html','出貨排程'],fabricstock:['vrt_fabric_stock_control_v1.html','布料庫存'],fabricdelivery:['vrt_fabric_delivery_greige_center_v1.html','胚布中心'],cuttingplan:['cutting_plan_v2.html','裁剪計劃'],prodplan:['production_plan_capacity_v1.html','排單產能'],fg:['VRT_FG_Inventory_Management_v1.html','FG 成品'],cutting:['cutting_v3.html','裁剪'],sewing:['sewing_v5.html','車縫'],ie:['ie_smv_report_v2_1.html','IE／SMV'],smv:['smv_manager_v5_final.html','SMV 管理'],bom:['VRT_BOM_Management_v2_AI.html','BOM'],podelivery:['VRT_PO_Delivery_Control_Center.html','PO 交期'],erplink:['vrt_erp_link_v1.html','ERP 對照']};
 function inboxRoutes_(){
   let extra=[]; try{ const raw=PropertiesService.getScriptProperties().getProperty('INBOX_ROUTES_JSON'); if(raw) extra=JSON.parse(raw).map(x=>({re:new RegExp(x.re,'i'),module:x.module,page:x.page||'',zh:x.zh||x.module,custom:true})); }catch(e){ console.warn('INBOX_ROUTES_JSON invalid: '+e); }
   return extra.concat(INBOX_ROUTES);
 }
-function inboxRoute_(fileName){ const n=String(fileName||'').replace(/[_\-]+/g,' '); for(const r of inboxRoutes_()){ if(r.re.test(n)) return {module:r.module,page:r.page,zh:r.zh}; } return {module:'unrouted',page:'',zh:'未分類（請在頁面指定）'}; }
+function inboxRoute_(fileName){ const n=String(fileName||'').replace(/\.[a-z0-9]{1,5}$/i,'').replace(/[_\-]+/g,' '); const ext=(String(fileName||'').toLowerCase().match(/\.([a-z0-9]{1,5})$/)||[])[1]||'';
+  for(const r of inboxRoutes_()){ if(r.re.test(n)){ const m=(r.ext&&r.ext[ext])||r.module; const pg=INBOX_PAGES_[m]; return {module:m,page:m===r.module?r.page:(pg?pg[0]:''),zh:m===r.module?r.zh:(pg?pg[1]:m)}; } } return {module:'unrouted',page:'',zh:'未分類（請在頁面指定）'}; }
+/* v4.9 content fingerprint (SHA-256 hex): the same file from Telegram, e-mail or the web 智慧匯入 is recognised as one */
+function inboxHash_(bytes){ const d=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,bytes); return d.map(b=>((b<0?b+256:b).toString(16)).padStart(2,'0')).join(''); }
+function inboxFindHash_(q,h){ if(!h) return null; let best=null; q.forEach(e=>{ if(e.contentHash===h||(Array.isArray(e.contentHashes)&&e.contentHashes.indexOf(h)>=0)){ if(!best||(best.status!=='done'&&e.status==='done')) best=e; } }); return best; }
+/* a duplicate is recorded (so the sheet shows it) but not stored again and not offered for import again */
+function inboxDupNote_(e,prev){ e.duplicateOf=prev.id; if(prev.status==='done'){ e.status='done'; e.doneAt=new Date().toISOString(); e.doneBy='auto'; e.note='同一個檔已匯入過 same file already imported ('+prev.id+(prev.source?' · '+prev.source:'')+')'; } else { e.status='skipped'; e.note='重複 duplicate of '+prev.id; } }
 /* ── queue storage ── */
 function inboxLoad_(){ const raw=loadFromDrive(INBOX_QUEUE_); let q=[]; try{ q=raw?JSON.parse(raw):[]; }catch(_){ q=[]; } return Array.isArray(q)?q:[]; }
 function inboxSave_(q){ if(q.length>2000) q=q.slice(-2000); saveToDrive(INBOX_QUEUE_, JSON.stringify(q)); return q; }
@@ -99,7 +110,8 @@ function inboxIntake_(msg,bot){
     try{
       const gf=tgBot_(bot.token,'getFile',{file_id:doc.file_id}); if(!gf.ok||!gf.result||!gf.result.file_path) throw new Error('getFile: '+(gf.description||'no file_path'));
       const res=UrlFetchApp.fetch('https://api.telegram.org/file/bot'+bot.token+'/'+gf.result.file_path,{muteHttpExceptions:true}); if(res.getResponseCode()>=300) throw new Error('download HTTP '+res.getResponseCode());
-      const blob=res.getBlob().setName(fileName); const folder=inboxFolder_(group,date); const f=folder.createFile(blob); e.driveId=f.getId(); e.driveName=f.getName();
+      const blob=res.getBlob().setName(fileName); e.contentHash=inboxHash_(blob.getBytes()); const prev=inboxFindHash_(q,e.contentHash);
+      if(prev) inboxDupNote_(e,prev); else { const folder=inboxFolder_(group,date); const f=folder.createFile(blob); e.driveId=f.getId(); e.driveName=f.getName(); }
     }catch(err){ e.status='error'; e.note=String(err&&err.message||err); }
   }
   q.push(e); inboxSave_(q); inboxSheetAppend_(e);
@@ -116,7 +128,7 @@ function inboxGmailPoll(){
     const uid='gm_'+mid+'_'+att.getName(); if(seen.has(uid)) return; const fileName=att.getName(); const route=inboxRoute_(fileName); const when=m.getDate(); const date=Utilities.formatDate(when,CFG.TZ,'yyyy-MM-dd');
     const subj=m.getSubject()||''; const subjDate=(TGS&&TGS.anyDate&&(subj.match(/\d{4}-\d{2}-\d{2}/)||[])[0])||'';
     const e={id:'ib_'+Utilities.formatDate(when,CFG.TZ,'yyyyMMddHHmmss')+'_'+mid.slice(-6)+'_'+added,receivedAt:Utilities.formatDate(when,CFG.TZ,"yyyy-MM-dd'T'HH:mm:ss"),group:'Email',chatId:'',messageId:mid,sender:m.getFrom(),fileName,size:att.getSize(),mime:att.getContentType(),fileUniqueId:uid,module:route.module,moduleZh:route.zh,page:route.page,status:'pending',driveId:'',note:'',source:'gmail',subject:subj.slice(0,200),subjectDate:subjDate};
-    if(att.getSize()>INBOX_MAX_BYTES_){ e.status='skipped'; e.note='over 20 MB'; } else { try{ const f=inboxFolder_('Email',date).createFile(att.copyBlob().setName(fileName)); e.driveId=f.getId(); }catch(err){ e.status='error'; e.note=String(err&&err.message||err); } }
+    if(att.getSize()>INBOX_MAX_BYTES_){ e.status='skipped'; e.note='over 20 MB'; } else { try{ const blob=att.copyBlob().setName(fileName); e.contentHash=inboxHash_(blob.getBytes()); const prev=inboxFindHash_(q,e.contentHash); if(prev) inboxDupNote_(e,prev); else { const f=inboxFolder_('Email',date).createFile(blob); e.driveId=f.getId(); } }catch(err){ e.status='error'; e.note=String(err&&err.message||err); } }
     q.push(e); seen.add(uid); added++; inboxSheetAppend_(e); }); }); });
   if(added) inboxSave_(q); return added;
 }
@@ -128,7 +140,19 @@ function handleInbox_(p){
   if(a==='inboxList'){ const q=inboxLoad_(); const module=p.module?String(p.module):''; const status=p.status?String(p.status):'pending'; let rows=q.filter(e=>(!module||e.module===module||(module!=='unrouted'&&p.includeUnrouted&&e.module==='unrouted'))&&(status==='all'||e.status===status)); rows=rows.slice(-Number(p.limit||200)).reverse(); const counts={}; q.forEach(e=>{ if(e.status==='pending'){ counts[e.module]=(counts[e.module]||0)+1; } }); return okCors({ok:true,rows:rows.map(inboxPublic_),counts,total:q.length}); }
   if(a==='inboxFile'){ const q=inboxLoad_(); const e=q.find(x=>x.id===p.id); if(!e) return okCors({ok:false,error:'not found'}); if(!e.driveId) return okCors({ok:false,error:'no Drive file ('+(e.note||e.status)+')'}); try{ const f=DriveApp.getFileById(e.driveId); const blob=f.getBlob(); return okCors({ok:true,id:e.id,fileName:e.fileName,mime:blob.getContentType()||e.mime,size:blob.getBytes().length,base64:Utilities.base64Encode(blob.getBytes())}); }catch(err){ return okCors({ok:false,error:String(err&&err.message||err)}); } }
   if(a==='inboxDone'){ const q=inboxLoad_(); const e=q.find(x=>x.id===p.id); if(!e) return okCors({ok:false,error:'not found'}); const st=String(p.status||'done'); if(!/^(done|skipped|pending|error)$/.test(st)) return okCors({ok:false,error:'bad status'}); e.status=st; e.doneAt=st==='pending'?'':new Date().toISOString(); e.doneBy=String(p.by||'').slice(0,80); e.note=String(p.note||'').slice(0,300); if(p.module){ const r=inboxRoutes_().find(x=>x.module===p.module); e.module=String(p.module); e.page=r?r.page:''; e.moduleZh=r?r.zh:e.module; } inboxSave_(q); inboxSheetUpdate_(e); return okCors({ok:true,row:inboxPublic_(e)}); }
-  if(a==='inboxRoutes') return okCors({ok:true,routes:inboxRoutes_().map(r=>({re:r.re.source,module:r.module,page:r.page,zh:r.zh,custom:!!r.custom}))});
+  if(a==='inboxRoutes') return okCors({ok:true,routes:inboxRoutes_().map(r=>({re:r.re.source,module:r.module,page:r.page,zh:r.zh,ext:r.ext||null,custom:!!r.custom}))});
+  /* v4.9 智慧匯入: which of these fingerprints are already known (imported / waiting), and a web upload into the same queue */
+  if(a==='inboxLedger'){ const q=inboxLoad_(); const found={}; (Array.isArray(p.hashes)?p.hashes:[]).slice(0,500).forEach(h=>{ const e=inboxFindHash_(q,String(h)); if(e) found[h]={id:e.id,status:e.status,module:e.module,fileName:e.fileName,doneAt:e.doneAt||'',receivedAt:e.receivedAt||'',source:e.source||'',group:e.group||''}; }); return okCors({ok:true,found}); }
+  if(a==='inboxUpload'){ const name=String(p.fileName||'file').slice(0,180); let bytes; try{ bytes=Utilities.base64Decode(String(p.base64||'')); }catch(err){ return okCors({ok:false,error:'bad base64'}); }
+    if(!bytes.length) return okCors({ok:false,error:'empty file'}); if(bytes.length>15*1024*1024) return okCors({ok:false,error:'over 15 MB'});
+    const h=inboxHash_(bytes); if(p.contentHash&&String(p.contentHash)!==h) return okCors({ok:false,error:'hash mismatch'});
+    const q=inboxLoad_(); const st=/^(done|pending)$/.test(String(p.status||''))?String(p.status):'done'; const prev=inboxFindHash_(q,h);
+    if(prev){ if(st==='done'&&prev.status!=='done'){ prev.status='done'; prev.doneAt=new Date().toISOString(); prev.doneBy=String(p.by||'web').slice(0,80); prev.note=String(p.note||'智慧匯入 smart import').slice(0,300); inboxSave_(q); inboxSheetUpdate_(prev); } return okCors({ok:true,dup:true,row:inboxPublic_(prev)}); }
+    const now=new Date(); const date=Utilities.formatDate(now,CFG.TZ,'yyyy-MM-dd'); const route=p.module&&INBOX_PAGES_[p.module]?{module:String(p.module),page:INBOX_PAGES_[p.module][0],zh:INBOX_PAGES_[p.module][1]}:inboxRoute_(name);
+    const e={id:'ib_'+Utilities.formatDate(now,CFG.TZ,'yyyyMMddHHmmss')+'_w'+h.slice(0,6),receivedAt:Utilities.formatDate(now,CFG.TZ,"yyyy-MM-dd'T'HH:mm:ss"),group:'Web 智慧匯入',chatId:'',messageId:'',sender:String(p.by||'web').slice(0,80),fileName:name,size:bytes.length,mime:String(p.mime||''),fileUniqueId:'web_'+h,contentHash:h,contentHashes:(Array.isArray(p.alsoHashes)?p.alsoHashes:[]).map(String).filter(x=>/^[0-9a-f]{64}$/.test(x)).slice(0,50),module:route.module,moduleZh:route.zh,page:route.page,status:st,driveId:'',note:String(p.note||'').slice(0,300),source:'web'};
+    if(st==='done'){ e.doneAt=now.toISOString(); e.doneBy=e.sender; }
+    try{ const f=inboxFolder_('Web',date).createFile(Utilities.newBlob(bytes,e.mime||'application/octet-stream',name)); e.driveId=f.getId(); }catch(err){ e.note=(e.note?e.note+' · ':'')+'Drive: '+String(err&&err.message||err); }
+    q.push(e); inboxSave_(q); inboxSheetAppend_(e); return okCors({ok:true,row:inboxPublic_(e)}); }
   if(a==='inboxRetry'){ return okCors({ok:false,error:'retry: re-send the file in the group (Telegram file ids expire)'}); }
   return okCors({ok:false,error:'unknown inbox action '+a});
 }

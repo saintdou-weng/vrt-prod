@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Assemble VRT_Production_v4.8.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
+"""Assemble VRT_Production_v4.9.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
 v4.15 (2026-10-05): the base file and the output both hold the Telegram bot token, so they live OUTSIDE the repo:
   base   : $VRT_GAS_BASE  (default ../../gas/VRT_Production_v4.2.gs, i.e. next to the repo, never inside it)
-  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.6.gs)
+  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.9.gs)
 v4.16 (2026-10-10): + vrt-daily-report-v1.js + daily_report_block.gs (D1 生產日報, Claude API hook, D2 aiSummary) + inbox_block.gs (C Telegram file intake)
 Never copy a built .gs into the repo / GitHub / a public ZIP."""
 import re,os,sys
 HERE=os.path.dirname(os.path.abspath(__file__))
 BASE=os.environ.get('VRT_GAS_BASE') or os.path.join(HERE,'..','..','gas','VRT_Production_v4.2.gs')
-OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.8.gs')
+OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.9.gs')
 src=open(BASE,encoding='utf-8').read()
 block=open(os.path.join(HERE,'period_summaries_block.gs'),encoding='utf-8').read()
 shared=open(os.path.join(HERE,'..','vrt-tg-summary-v1.js'),encoding='utf-8').read()   # repo root
@@ -360,6 +360,16 @@ rep("""    if (payload && /^inbox/.test(String(payload.action||''))) return hand
     if (payload && /^erpBridge/.test(String(payload.action||''))) return handleErpBridge_(payload);""")
 rep("""      { t:'🏢 VRT ERP ↗',          url:'https://saintdou-weng.github.io/vrt-asset/' },""",
 """      { t:'🏢 VRT ERP ↗',          url:'https://saintdou-weng.github.io/PSJERP/' },   // v4.8: repo renamed vrt-asset → PSJERP""")
+
+# 14. v4.9 (2026-10-22): 智慧匯入 — inbox content fingerprints (SHA-256) on Telegram / Gmail intake, duplicates recorded but not offered again,
+#     web actions inboxLedger / inboxUpload, routes in the same order as vrt-smart-import-v1.js (cutting before 'daily output', PO PDFs → orders)
+rep("""   VRT 生產系統 GAS 後端 v4.8 — PSJERP 雲端唯讀橋接：""",
+"""   VRT 生產系統 GAS 後端 v4.9 — 智慧匯入：群組／Email 收件與網頁「⇧ 智慧匯入」共用同一份收件紀錄，每個檔算 SHA-256 指紋，同一個檔不重複匯入；
+     收件分流表與網頁同一份（裁剪日報不再被分到車縫、客戶 PO 的 PDF 分到訂單）（10/22）
+   v4.8 — PSJERP 雲端唯讀橋接：""")
+rep("backendVersion:'4.8.0',erpBridge:true,","backendVersion:'4.9.0',smartImport:true,erpBridge:true,")
+rep("return okCors({ message: 'VRT Prod GAS v4.8 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + PSJERP BRIDGE + DAILY/WEEKLY REPORTS + INBOX', time: new Date().toISOString() });",
+    "return okCors({ message: 'VRT Prod GAS v4.9 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + PSJERP BRIDGE + DAILY/WEEKLY REPORTS + INBOX + SMART IMPORT', time: new Date().toISOString() });")
 
 # 11. extra intake bots (修改指令 C): tokens live OUTSIDE the repo in ../../gas/inbox_bots.json (or $VRT_INBOX_BOTS_FILE) and are
 #     written into CFG.INBOX_BOTS of the built .gs only — the repo block reads CFG.INBOX_BOTS / Script Property INBOX_BOTS_JSON.

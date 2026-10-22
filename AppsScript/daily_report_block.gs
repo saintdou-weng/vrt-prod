@@ -43,27 +43,40 @@ function dailyReportData_(dateOpt,today,period){
 }
 
 /* ── generate (idempotent per date) ── */
+/* v4.7: opts.kind 'eff' (效率週報, with maintenance) | 'plan' (排單週報, no maintenance) for period 'week'; key yyyy-Www or yyyy-Www-plan.
+   Telegram language: Script Property DR_TG_LANG = 'zh' (default, 中文) | 'both' (中文＋English); the stored report keeps both texts. */
+function drTgLang_(){ const v=String(claudeProps_().getProperty('DR_TG_LANG')||'zh').trim().toLowerCase(); return v==='both'?'both':'zh'; }
 function generateDailyReport(dateOpt, opts){
-  opts=opts||{}; const today=todayYmd_(); const period=opts.period==='week'?'week':'day'; const data=dailyReportData_(dateOpt||'',today,period);
-  const key=period==='week'?DR.helpers.isoWeekKey(data.date):data.date;
+  opts=opts||{}; const today=todayYmd_(); const period=opts.period==='week'?'week':'day'; const kind=period==='week'?(opts.kind==='plan'?'plan':'eff'):'day'; const data=dailyReportData_(dateOpt||'',today,period);
+  const key=period==='week'?DR.helpers.isoWeekKey(data.date)+(kind==='plan'?'-plan':''):data.date;
   const existing=dailyReportLoad_(key);
   if(existing&&!opts.force){ if(opts.send&&!existing.sentAt)return dailyReportSend_(existing); return existing; }
-  const f=DR.compute(data,{date:data.date,today,period}); const r=DR.render(f);
-  const rep={date:f.date,period,facts:f,text:r.text,html:r.html,zhChars:r.zhChars,generatedAt:f.generatedAt,source:'gas',version:DR.version,dataNote:'雲端桶 cloud buckets · WIP '+(f.wip&&f.wip.basis||'none'),doc:DR.docHtml(f,r.text)};
-  if(opts.ai!==false&&claudeKey_()){ try{ const ai=dailyReportAi_(f,'daily:'+f.date); if(ai)rep.ai=ai; }catch(e){ rep.aiError=String(e&&e.message||e); } }
+  const f=DR.compute(data,{date:data.date,today,period,kind}); const r=DR.render(f), rz=DR.render(f,{lang:'zh'});
+  const rep={date:f.date,period,kind:f.kind,facts:f,text:r.text,html:r.html,textZh:rz.text,htmlZh:rz.html,zhChars:r.zhChars,generatedAt:f.generatedAt,source:'gas',version:DR.version,dataNote:'雲端桶 cloud buckets · WIP '+(f.wip&&f.wip.basis||'none'),doc:DR.docHtml(f,r.text)};
+  if(opts.ai!==false&&claudeKey_()){ try{ const ai=dailyReportAi_(f,'daily:'+f.date,opts.lang||drTgLang_()); if(ai)rep.ai=ai; }catch(e){ rep.aiError=String(e&&e.message||e); } }
   dailyReportSave_(rep);
   if(opts.send)return dailyReportSend_(rep);
   return rep;
 }
-function dailyReportSend_(rep,chatId){
-  const useAi=rep.ai&&rep.ai.ok&&rep.ai.html;
-  const res=tgSendHtml_(chatId||CFG.CHAT_ID, useAi?rep.ai.html:rep.html, null);
-  rep.sentAt=new Date().toISOString(); rep.sentAi=!!useAi; rep.sentMessageId=res&&res.result&&res.result.message_id||null; dailyReportSave_(rep); return rep;
+function dailyReportSend_(rep,chatId,lang){
+  lang=lang||drTgLang_(); const useAi=rep.ai&&rep.ai.ok&&rep.ai.html;
+  const html=useAi?rep.ai.html:(lang==='zh'?(rep.htmlZh||DR.render(rep.facts,{lang:'zh'}).html):rep.html);
+  const res=tgSendHtml_(chatId||CFG.CHAT_ID, html, null);
+  rep.sentAt=new Date().toISOString(); rep.sentAi=!!useAi; rep.sentLang=lang; rep.sentMessageId=res&&res.result&&res.result.message_id||null; dailyReportSave_(rep); return rep;
+}
+/* v4.7 bot menu text (/prod, /prod2 底下的中文摘要按鈕): the latest report of that mode, generated on demand when none exists */
+function dailyReportMenuText_(mode){
+  mode=mode==='plan'?'plan':mode==='eff'?'eff':'day';
+  const idx=dailyReportIndex_().filter(x=>mode==='plan'?/-W\d{2}-plan$/.test(x.date):mode==='eff'?/-W\d{2}$/.test(x.date):!/-W\d{2}/.test(x.date));
+  let rep=idx.length?dailyReportLoad_(idx[0].date):null;
+  if(!rep){ try{ rep=mode==='day'?generateDailyReport('',{ai:false}):generateDailyReport(DR.helpers.addDays(todayYmd_(),-7),{period:'week',kind:mode,ai:false}); }catch(e){ return '⚠️ 無法產生'+(mode==='plan'?'排單週報':mode==='eff'?'效率週報':'生產日報')+'：'+DR.helpers.esc(String(e&&e.message||e)); } }
+  if(!rep||!rep.facts)return '⚠️ 目前沒有'+(mode==='plan'?'排單週報':mode==='eff'?'效率週報':'生產日報');
+  return rep.htmlZh||DR.render(rep.facts,{lang:'zh'}).html;
 }
 // 時間觸發器用（10:00 / 15:00）：最近有車縫資料的那一天還沒有日報就產生並推到生產群組；已產生未推送就只推送；都做過就什麼都不做
 function dailyReportTrigger(){ return generateDailyReport('',{send:true}); }
-// 週報觸發器（週一 10:30）：上一個完整週（週一～週日）；同一週只產生一次
-function weeklyReportTrigger(){ const anchor=DR.helpers.addDays(todayYmd_(),-7); return generateDailyReport(anchor,{period:'week',send:true}); }
+// 週報觸發器（週一 10:30）：上一個完整週（週一～週日）；兩份：效率週報（含換針零件）＋排單週報（負荷／換款／空檔，不含機修）；同一週只產生一次
+function weeklyReportTrigger(){ const anchor=DR.helpers.addDays(todayYmd_(),-7); const eff=generateDailyReport(anchor,{period:'week',kind:'eff',send:true}); let plan=null; try{ plan=generateDailyReport(anchor,{period:'week',kind:'plan',send:true}); }catch(e){ console.warn('weekly plan report failed: '+e); } return {eff:eff&&eff.date,plan:plan&&plan.date}; }
 function installDailyReportTrigger(){
   const fns=ScriptApp.getProjectTriggers().map(t=>t.getHandlerFunction()); const out=[];
   if(fns.indexOf('dailyReportTrigger')<0){ ScriptApp.newTrigger('dailyReportTrigger').timeBased().atHour(10).everyDays(1).inTimezone(CFG.TZ).create(); ScriptApp.newTrigger('dailyReportTrigger').timeBased().atHour(15).everyDays(1).inTimezone(CFG.TZ).create(); out.push('dailyReportTrigger 10:00 + 15:00'); } else out.push('dailyReportTrigger already installed');
@@ -72,7 +85,7 @@ function installDailyReportTrigger(){
 }
 function removeDailyReportTrigger(){ let n=0; ScriptApp.getProjectTriggers().forEach(t=>{ if(t.getHandlerFunction()==='dailyReportTrigger'||t.getHandlerFunction()==='weeklyReportTrigger'){ScriptApp.deleteTrigger(t);n++} }); return 'removed '+n; }
 // 手動測試：不發訊息，只把日報／週報文字印在記錄（previewDailyReport('2026-10-08') 或 previewDailyReport('2026-10-08','week')）
-function previewDailyReport(dateOpt,period){ const today=todayYmd_(); const data=dailyReportData_(dateOpt||'',today,period); const f=DR.compute(data,{date:data.date,today,period:period==='week'?'week':'day'}); const r=DR.render(f); console.log(r.text); console.log('zhChars',r.zhChars,'anomalies',f.anomalies.length,'rag',JSON.stringify(f.rag),'source',JSON.stringify(f.source)); return r.text; }
+function previewDailyReport(dateOpt,period,kind){ const today=todayYmd_(); const data=dailyReportData_(dateOpt||'',today,period); const f=DR.compute(data,{date:data.date,today,period:period==='week'?'week':'day',kind:kind||'eff'}); const r=DR.render(f,{lang:drTgLang_()}); console.log(r.text); console.log('zhChars',r.zhChars,'anomalies',f.anomalies.length,'rag',JSON.stringify(f.rag),'source',JSON.stringify(f.source)); return r.text; }
 
 /* ── Claude API (key stays in Script Properties) ── */
 function claudeProps_(){ return PropertiesService.getScriptProperties(); }
@@ -98,10 +111,10 @@ function claudeUsageLog_(entry){ let log=[]; try{const raw=loadFromDrive(CLAUDE_
 function claudeUsageSummary_(){ let log=[]; try{const raw=loadFromDrive(CLAUDE_USAGE_);log=raw?JSON.parse(raw):[]}catch(_){log=[]} const month=todayYmd_().slice(0,7); const sum=rows=>rows.reduce((o,e)=>{o.calls++;o.inTokens+=Number(e.inTokens||0);o.outTokens+=Number(e.outTokens||0);o.costUsd+=Number(e.costUsd||0);return o},{calls:0,inTokens:0,outTokens:0,costUsd:0}); const m=sum(log.filter(e=>String(e.at||'').slice(0,7)===month)),all=sum(log); m.costUsd=Math.round(m.costUsd*1000)/1000; all.costUsd=Math.round(all.costUsd*1000)/1000; return {month:month,thisMonth:m,total:all,configured:!!claudeKey_(),model:String(claudeProps_().getProperty('CLAUDE_MODEL')||''),priceM:claudePrice_(),last:log.slice(-5)}; }
 
 /* ── D1 AI wording: rewrite only; every number is checked against the facts ── */
-function dailyReportAi_(facts,purpose){
-  const p=DR.aiPrompt(facts); const r=claudeMessage_(p.system,p.user,p.maxTokens,purpose||'daily');
+function dailyReportAi_(facts,purpose,lang){
+  const p=DR.aiPrompt(facts,{lang:lang==='zh'?'zh':'both'}); const r=claudeMessage_(p.system,p.user,p.maxTokens,purpose||'daily');
   const chk=DR.checkAiText(r.text,facts);
-  const out={ok:chk.ok,text:r.text,html:chk.ok?DR.helpers.esc(r.text).replace(/^(📰.*|[123]️⃣.*)$/mg,'<b>$1</b>'):'',model:r.model,usage:r.usage,costUsd:r.costUsd,at:new Date().toISOString(),badNumbers:chk.bad};
+  const out={ok:chk.ok,text:r.text,html:chk.ok?DR.helpers.esc(r.text).replace(/^(📰.*|📋.*|[123]️⃣.*)$/mg,'<b>$1</b>'):'',model:r.model,usage:r.usage,costUsd:r.costUsd,lang:lang==='zh'?'zh':'both',at:new Date().toISOString(),badNumbers:chk.bad};
   return out;
 }
 /* ── D2 per-module AI summary: rewrite a computed summary (vrt-tg-summary text); numbers must all come from the input text ── */
@@ -139,9 +152,11 @@ function handleDailyReport_(p){
     rep.source=rep.source||'page'; dailyReportSave_(rep); return okCors({ok:true,report:rep})}
   if(a==='dailyReportSend'){let rep=dailyReportLoad_(p.date); if(!rep&&p.report)rep=p.report; if(!rep)return okCors({ok:false,error:'no report for '+p.date}); if(p.useAi===false||p.useAi==='false'){const t=rep.ai;rep.ai=null;dailyReportSend_(rep,p.chat_id);rep.ai=t;dailyReportSave_(rep)}else dailyReportSend_(rep,p.chat_id); return okCors({ok:true,sentAt:rep.sentAt,sentAi:rep.sentAi})}
   if(a==='dailyReportAi'){if(!claudeKey_())return okCors({ok:false,error:'CLAUDE_API_KEY 未設定（GAS 指令碼屬性）',notConfigured:true}); const facts=p.facts||(dailyReportLoad_(p.date)||{}).facts; if(!facts)return okCors({ok:false,error:'facts required'});
-    try{const ai=dailyReportAi_(facts,'daily:'+(facts.date||p.date||'')); const rep=dailyReportLoad_(facts.date); if(rep&&ai.ok){rep.ai=ai;dailyReportSave_(rep)} return okCors({ok:ai.ok,ai:ai,usage:claudeUsageSummary_()})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
+    try{const ai=dailyReportAi_(facts,'daily:'+(facts.date||p.date||''),p.lang==='zh'?'zh':'both'); const rep=dailyReportLoad_(facts.date); if(rep&&ai.ok){rep.ai=ai;dailyReportSave_(rep)} return okCors({ok:ai.ok,ai:ai,usage:claudeUsageSummary_()})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
+  if(a==='dailyReportText'){ /* v4.7 portal panel: latest report text of a mode (zh) */ try{const mode=String(p.mode||'day'); const idx=dailyReportIndex_().filter(x=>mode==='plan'?/-W\d{2}-plan$/.test(x.date):mode==='eff'?/-W\d{2}$/.test(x.date):!/-W\d{2}/.test(x.date)); const rep=idx.length?dailyReportLoad_(idx[0].date):null; if(!rep)return okCors({ok:false,error:'no report',mode}); const zh=p.lang!=='both'; return okCors({ok:true,mode,date:rep.date,generatedAt:rep.generatedAt,sentAt:rep.sentAt||'',text:zh?(rep.textZh||DR.render(rep.facts,{lang:'zh'}).text):rep.text,html:zh?(rep.htmlZh||DR.render(rep.facts,{lang:'zh'}).html):rep.html,ai:rep.ai&&rep.ai.ok?rep.ai.text:''})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
   if(a==='dailyReportUsage')return okCors({ok:true,usage:claudeUsageSummary_()});
   if(a==='aiSummary'){if(!claudeKey_())return okCors({ok:false,error:'CLAUDE_API_KEY 未設定（GAS 指令碼屬性）',notConfigured:true}); try{const ai=aiSummary_(String(p.kind||''),String(p.text||''),p.period,p.lang); return okCors({ok:ai.ok,ai:ai,usage:claudeUsageSummary_()})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
   return okCors({ok:false,error:'unknown daily report action '+a});
 }
+function checkProductionV47(){ const r=checkProductionV46(); r.weeklyPlanReport=true; r.portalSummaryButtons=['prod','prod2'].every(k=>{const kb=buildMenu(k,0).markup.inline_keyboard;return kb.some(row=>row.some(b=>b.callback_data==='drplan'))&&kb.some(row=>row.some(b=>b.callback_data==='drday'))}); r.tgLang=drTgLang_(); console.log(JSON.stringify(r,null,2)); return r; }
 function checkProductionV46(){ const r=checkProductionV45(); r.dailyReport=true; r.weeklyReport=true; r.claudeConfigured=!!claudeKey_(); r.claudeModel=String(claudeProps_().getProperty('CLAUDE_MODEL')||'(auto)'); r.dailyReportTriggers=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='dailyReportTrigger').length; r.reports=dailyReportIndex_().slice(0,5); console.log(JSON.stringify(r,null,2)); return r; }
