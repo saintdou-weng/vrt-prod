@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="zh-TW"><head>
-<script src="vrt-deploy-config.js?v=4.18.0"></script>
-<script src="vrt-platform-v40.js?v=4.18.0"></script><meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="vrt-deploy-config.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.19.0"></script><meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT ERP 對照中心 v1.1</title><script src="vendor/xlsx.full.min.js"></script><style>
 *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:"Microsoft JhengHei","Noto Sans TC","Noto Sans Khmer",Arial,sans-serif;background:#eef1f7;color:#1e2640;font-size:13px}
 .header{background:linear-gradient(135deg,#1e2640,#2d3658);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -43,7 +43,7 @@ details.more summary{cursor:pointer;color:#4a5578;font-weight:700;margin:6px 0}.
   <div><div class="htitle">ERP 對照中心 <span style="font-size:12px;font-weight:400;color:#c4b5fd">ERP LINK · v1.1</span></div><div class="hsub">PSJERP 雲端（唯讀）↔ PROD · 訂單／出貨 · 客戶下單出貨比 · BOM 核查 · 日報草稿 · 不寫回 ERP、不改 PROD 資料</div></div>
   <div class="grow"></div>
   <div class="hstats"><div class="hstat"><b id="hsOrders">0</b><span>ERP 訂單行</span></div><div class="hstat"><b id="hsShip">0</b><span>ERP 出貨行</span></div><div class="hstat"><b id="hsAsOf">—</b><span>ERP 資料日</span></div></div>
-  <a class="hbtn" href="portal_v2.html?v=4.18.0">🏭 入口</a>
+  <a class="hbtn" href="portal_v2.html?v=4.19.0">🏭 入口</a>
   <a class="hbtn erp" href="https://saintdou-weng.github.io/PSJERP/" target="_blank" rel="noopener">🏢 VRT ERP ↗</a>
   <button class="hbtn erp" onclick="psjUpdate(true)" title="叫 PROD GAS 檢查 PSJERP 雲端，有更新就下載">↻ PSJERP</button>
   <button class="hbtn" onclick="cloudPull()">☁↓ 拉取</button><button class="hbtn" onclick="cloudPush()">☁↑ 推送</button>
@@ -238,12 +238,12 @@ details.more summary{cursor:pointer;color:#4a5578;font-weight:700;margin:6px 0}.
 <div class="modal" id="modal"><div class="modalbox"><div class="mtitle"><span id="modalTitle"></span><span class="x" onclick="closeModal()">×</span></div><div id="modalBody"></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="vrt-prod-storage-vnext.js?v=4.18.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
-<script src="vrt-erp-link-core-v1.js?v=4.18.0"></script>
-<script src="vrt-tg-summary-v1.js?v=4.18.0"></script>
-<script src="vrt-telegram-v1.js?v=4.18.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.19.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-erp-link-core-v1.js?v=4.19.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.19.0"></script>
+<script src="vrt-telegram-v1.js?v=4.19.0"></script>
 <script>
 'use strict';
 /* ═══ VRT ERP 對照中心 v1.1 (2026-10-18) — UI over vrt-erp-link-core-v1.js. Own store: IndexedDB VRT_ERPLink. PROD stores are opened read-only (no create / upgrade).
@@ -524,4 +524,7 @@ try{VRTTelegram.init({kind:'erplink',tool:TOOL,getData:()=>{if(!CMP.orders&&PROD
   custInput:{erpOrders:liveOrders(),erpShip:liveShip(),custstats:PROD.custstats,customerMap:custMapNow(),today:today()},bom:CMP.bom}}})}catch(e){console.warn('VRTTelegram init',e)}
 window.ERPLINK={get DB(){return DB},get PROD(){return PROD},get CMP(){return CMP},get DEMO(){return DEMO},get PSJ(){return PSJ},psjUpdate,psjForget,psjConvert,setErpSrc,erpSrc,runCust,runBom,custMapNow,bomFocus,addCustMap,load,readProd,runCompare,importFile,previewImport,commitImport,loadDemo,clearDemo,renderDaily,dailyInput,cloudRecords,cloudMeta,applyCloud,cloudPush,cloudPull,addCrosswalk,backupAll,clearAll,get IMP(){return IMP},get DAILY(){return DAILY}};
 </script>
+<!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
+<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
+<script>/* v4.19 智慧匯入：本頁收哪些檔、交給哪個匯入器 */try{VRTSmartImport.init({module:'erplink',feed:f=>{showTab('import');return importFile(f)}})}catch(e){console.warn('VRTSmartImport init',e)}</script>
 </body></html>

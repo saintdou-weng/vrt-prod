@@ -1,0 +1,48 @@
+{
+  "release": "4.17",
+  "date": "2026-10-17",
+  "base": "4.16 (2026-10-10)",
+  "request": "Paul 10/16: (1) 生產 PROD 摘要也要在 portal 1 & 2 底下，先只放中文 (2) IE 智慧匯入 SMV Update 附件，匯入已核可報告時系統要自動把待簽核改為核可 (3) 生產總覽甘特圖：有的組空好幾天、沒全寫進、沒標示何時換款 (4) 每週排單報告不要加入機修，機修放每週效率週報 (5) 報告要更接近既有報告的模式、語氣、段落、用詞，不要太制式 (6) PSJERP 互動（訂單總數／客戶下單出貨／BOM 核查）— 本批未做，缺 ERP 資料，見交付說明的問題",
+  "principles": "1 nothing deleted or rewritten in existing cloud / IndexedDB data (IE approve-in-place keeps the previous values in history; old IE versions untouched) · 2 module versions + PROD_MODULE_TEST_MATRIX_v4.17.csv updated, tested with the user's files (Approved 10/16 SMV report, Production Plan workbook, sewing backup) · 3 no native confirm/prompt/alert · 4 every number computed by code; AI only rewrites text and every number it returns is checked (now also with Chinese-only output)",
+  "appsScript": {
+    "production": "VRT_Production_v4.7.gs — delivered separately (NOT in this repo: it holds the bot tokens). Paste over the existing project, deploy a NEW VERSION of the existing deployment (/exec unchanged, triggers unchanged). v4.7: weeklyReportTrigger (Monday 10:30, already installed by v4.6) now produces TWO reports — 效率週報 (daily_report_yyyy-Www.json, with needles / parts) and 排單週報 (daily_report_yyyy-Www-plan.json, loading / changeovers / gaps, no maintenance); Telegram text is Chinese by default (Script Property DR_TG_LANG=both for 中英); /prod and /prod2 end with a fixed footer row 📰 生產日報 · 📋 排單週報 · 📅 效率週報 (callbacks drday/drplan/dreff send the latest report in Chinese, generating it on demand); new web actions dailyReportText (portal panel) and dailyReportAi lang; checkProductionV47(). backendVersion 4.7.0, capabilities weeklyPlanReport / portalSummary.",
+    "erp": "PSJERP_AppsScript專用_v0.4.4.gs unchanged.",
+    "securityNote": "Built .gs files live outside the repo (../gas/out). Tokens never appear in the repo, zips, tests or docs."
+  },
+  "changedFiles": [
+    "ie_smv_report_v2_1.html v2.5 — IE weekly / monthly SMV update report smart import: every row is compared with the platform's current version of that style (VRTData39.weeklyDecisions): 待簽核／退回 + same SMV + report says 已簽核 → approved IN PLACE (same record id, previous values kept in history, approvedFrom = file, linked OBD style approved too); only dates / notes / category / adjusted SMV differ → filled in, no new version; SMV changed → new version (old kept); identical → unchanged; an older report never downgrades an approved row. Preview = one summary table (改為已簽核 / 新增 / 補欄位 / 新版本 / 不變 / 不降級, per-row 略過) instead of 90 cards. dd/mm/yyyy approval dates (16/10/2026) parsed; chef coat / scrub / trousers / skirt categories. Inbox: feed = importSmart (auto mode applies a report with no SMV change by itself; a file with SMV changes or OBD files is left for a person with the question as note). The old ✓ 套用已核可週報 button is kept, marked (舊).",
+    "vrt-data-core-v39.js — weeklyDecisions / applyWeeklyDecisions / mergeWeeklyMeta / smvEq (pure, shared with the tests).",
+    "production_v4.html v4.5 — 排產甘特 rebuilt: same style on a line merged into one run (PO count), parallel styles in separate lanes (row grows), hatched 空 N 天 between runs, 尚未排 N 天 after the last plan, 本期無排單 for a line with plan nearby but nothing this period, ⇄ 換款 marker + date once per changeover day (a style starting where it was not running the day before), undated rows listed under the chart instead of month-long bars, today / Sunday shading, per-line label with 換款 / 空檔 counts, meta line totals. ROOT CAUSE FIX: addDays / planWeekStart used toISOString() → in UTC+7 the day headers were shifted / duplicated and week keys were Sundays; now local dates. 📰 tab: 日報 / 效率週報 / 排單週報 selector (keys yyyy-MM-dd / yyyy-Www / yyyy-Www-plan), 中文 ／ 中＋英 toggle (default 中文, remembered), plan-kind tiles (負荷 / 排單 / 實績 / 換款／空檔 / 下週 / 可上線 / 未填日期 / 缺 SMV), SMV_MAP handed to the builder, Word names VRT_DailyReport_ / VRT_WeeklyEfficiency_ / VRT_WeeklyLoading_, ✈️ sends the Chinese text when 中文 is selected, AI request carries the language.",
+    "vrt-daily-report-v1.js v1.2 — compute(..., {period:'week', kind:'plan'|'eff'}); loadingFacts from the Production Plan rows (runs, line-days, loading %, gaps, changeovers, next-week preview, customer / style concentration, SMV coverage when a map is given, undated rows); plan-kind highlights / conclusion / anomalies (empty lines, next week not loaded, gaps, attainment, frequent changeovers, undated, missing SMV, concentration, overdue shipping, month plan, no fabric) / actions / basis (no maintenance by design); render(f,{lang:'zh'}) Chinese-only; docHtml plan layout (九 sections after the 10 月排單更新); conclusion rewritten as narrative in the factory's style (facts → 管理判定 「不是…而是…」 → 月末壓力); strings in facts (style / PO codes) count as facts for checkAiText; aiPrompt per kind and language.",
+    "portal_v2.html — 📰 生產摘要（中文）panel at the bottom: 日報 / 排單週報 / 效率週報 tabs, latest text from GAS dailyReportText (AI text when accepted), link to production_v4.",
+    "vrt-inbox-v1.js v1.1 — autoOn exported.",
+    "AppsScript/daily_report_block.gs, AppsScript/build_gas.py — v4.7 (see appsScript).",
+    "vrt-i18n-en.js / vrt-i18n-km.js — 8,560 keys (+96 UI strings); vrt-daily-report-v1.js is report content (own zh/en fields, shown with data-no-i18n) and is no longer scanned as UI.",
+    "vrt-platform-v40.js — PROD v4.17 badge; every ?v= tag 4.17.0.",
+    "qa/v417/test_ie_weekly.js (4/4), test_reports_v12.js (4/4), test_gas_v47.js (3/3), browser_v417.js (4/4 Chromium in Asia/Phnom_Penh with the real plan), README.md; qa/v416/test_daily_report.js wording assertions updated to the new titles / verdict labels; qa/v414/i18n_extract.js excludes the report builder; qa/v41/gas_harness.js prefers ../gas/out/VRT_Production_v4.7.gs."
+  ],
+  "notDone": [
+    "PSJERP 互動（訂單總數 vs 客戶下單／出貨比、BOM 核查）— no ERP data available here (ERP_export/K,Q,R,X on the PC are empty, the PSJERP site cannot be read from this session); the ERP link centre keeps its v4.15 order / shipment comparison. Question for Paul in the delivery note.",
+    "A1–A4 PDF imports, B4 B5 B6 B9 B10 (from the 10/09 instruction) still open.",
+    "Live acceptance: F-C (file in a test group → pending list within 30 min), F-D1 (3 consecutive days), first Monday with two weekly reports, the /prod footer buttons in the real groups."
+  ],
+  "tests": {
+    "qa/v417/test_ie_weekly.js": "4/4",
+    "qa/v417/test_reports_v12.js": "4/4",
+    "qa/v417/test_gas_v47.js": "3/3",
+    "qa/v417/browser_v417.js (Chromium, Asia/Phnom_Penh, real plan + sewing)": "4/4",
+    "qa/v416/test_daily_report.js": "9/9",
+    "qa/v416/test_orders_weekly.js": "6/6",
+    "qa/v416/test_fixes_b.js": "9/9",
+    "qa/v416/test_inbox.js": "5/5",
+    "qa/v414/test_sync_fixes.js": "10/10",
+    "qa/v414/test_tg_page.js": "13/13",
+    "qa/v414/test_portal_overview.js": "5/5",
+    "qa/v414/test_telegram.js (GAS v4.7)": "18/18",
+    "qa/v415/test_erp_link_core.js": "11/11",
+    "qa/v413/test_balancing.js": "12/12",
+    "qa/v414/test_i18n_layer.js": "6/6 (8,560 keys)",
+    "qa/v39/qa_ie_runtime.js": "4 pre-existing failures (58 vs 56 updates after a double import of the 9/12 files) — identical on the untouched v4.15 baseline, not caused by this release",
+    "real Telegram / Drive / Claude": "NOT TESTED against the live services (stubbed)"
+  }
+}

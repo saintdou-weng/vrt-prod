@@ -1,0 +1,55 @@
+{
+ "release": "4.19",
+ "date": "2026-10-22",
+ "base": "4.18 (2026-10-18)",
+ "request": "Paul 10/21: one 總智慧匯入 on the portal and every page — any Outlook mail / Excel / PDF / photo / zip dropped in one place is routed to its module and imported; already imported parts are never imported again (like the full sync); afterwards offer 發摘要 / 核可 where it applies. Agreed four points: (1) one fixed ⇧ 智慧匯入 button + drop window, module detected, ask only when unsure; (2) same file again = 0 new; (3) after import ✈️ 發摘要 / ✅ 核可; (4) Telegram group / Email intake and the manual drop share one importer and one record.",
+ "principles": "1 each module's own importer and preview stay the place where data is written (the window only routes and hands files over; nothing is saved without the page's own confirm / 儲存) · 2 a file is recognised by its contents (SHA-256), not its name: local ledger in IndexedDB VRT_SmartImport + the GAS inbox ledger, so another computer knows too · 3 one route table for the web window and the GAS intake (tested identical) · 4 no new trigger, no new Script Property, no token or key in the repo; PROD keeps polling, ERP keeps its webhook · 5 the 提醒大家發摘要／核可 reminder is NOT restored (§11.2): 發摘要 is a button the user presses, 核可 only where a page registers it",
+ "appsScript": {
+  "production": "VRT_Production_v4.9.gs — delivered separately (NOT in this repo: it holds the PROD bot token and the @ga_po_adminpw_bot token). Paste over the existing project, deploy a NEW VERSION of the existing deployment (/exec unchanged; all triggers unchanged; includes the v4.8 PSJERP bridge, so if v4.8 was not installed yet this one replaces it — the v4.8 steps PSJERP_READ_KEY / installErpBridgeTrigger / checkErpBridge still apply once). inbox_block v4.9: inboxHash_ (SHA-256 hex of the bytes) on Telegram (PROD bot + intake bots) and Gmail intake BEFORE the Drive save; a duplicate is recorded (status skipped, duplicateOf) and not stored or offered; a copy of something already imported is recorded done 'already imported'; web actions inboxLedger {hashes} → {found: hash → id / status / module / when / source} and inboxUpload {fileName, mime, base64, module, contentHash, alsoHashes, status, by, note} → Drive PROD_Inbox/Web/<date>/ (≤15 MB, fingerprint verified; a bot-pending entry with the same fingerprint is marked done instead of storing a second copy); INBOX_ROUTES = the web ROUTES (cutting before the generic daily output, PO PDF / msg / eml → orders). backendVersion 4.9.0, capability smartImport.",
+  "scriptProperties": "none new (v4.8 / v4.6 keys unchanged).",
+  "erp": "PSJERP_AppsScript專用_v0.4.4.gs and the PSJERP web app unchanged.",
+  "securityNote": "Built .gs files live outside the repo (../gas/out). Zips scanned for bot tokens: none. Files uploaded by the window go only to the PROD project's own Drive (PROD_Inbox/Web) when the 雲端收件匣 box is ticked; the POST body carries the file, never the URL."
+ },
+ "changedFiles": [
+  "vrt-smart-import-v1.js (new, v1.0.0) — the ⇧ 智慧匯入 button (fixed, top right; phones top left) and window on every page: drop / 選檔案 / 拍照 (camera) / ☁ 群組／Email 已收到的; Outlook .msg (CFB) and .eml (MIME) opened, inline signature images skipped, a mail whose attachments all go to one module that reads mails itself is handed over whole (sewing / SMV); zip opened (UTF-8 names); routing: remembered choice → file name (ROUTES, same as GAS) → mail subject → header sniff (abstains when close) → GAS inbox route; per-row module select (choice remembered for the next issue of the same report); statuses 新檔 / 已匯入過 / 已匯入過（雲端紀錄）/ 重複 / 等著匯入 / 請選模組 / 模組不收; ⇧ 開始匯入: this page's files go to its own importer, others are queued in IndexedDB VRT_SmartImport (handoff) and the page opens and imports them by itself (#smartimport or <30 min); sequential feeding for single-preview importers (next file after the preview closes), all-at-once for list importers; progress chip with 下一檔 / ✈️ 發摘要 (VRTTelegram) / ✅ 核可 (VRTSmartImport.hook) / → other modules; optional copy to the GAS inbox (inboxUpload, default on); EN / ខ្មែរ text rebuilt when the dictionary arrives or the language is switched.",
+  "22 pages — <script src=\"vrt-smart-import-v1.js?v=4.19.0\"> before </body>; VRTInbox.init gains commit / multi / feedAll where the page needs it (sewing / cutting / cutting plan / PO delivery / fabric stock: commit + multi; FG / QC / orders: feedAll); VRTSmartImport.init on spare parts (Excel one at a time, photo / PDF → 🤖 智慧OCR), BOM (PDF → handlePdfFiles, Excel → importExcelFiles), SMV (msg / eml → #inp-msg, Excel → #inp-xlsx), ERP link (manual import tab).",
+  "portal_v2.html — orange 智慧匯入 card at the top (click or drop), overview comparison panel scrolls inside itself on phones (was 419 px wide at 390 px).",
+  "AppsScript/inbox_block.gs v4.9, AppsScript/build_gas.py → VRT_Production_v4.9.gs, AppsScript/README.md (v4.9).",
+  "vrt-platform-v40.js — PROD v4.19 badge, version 4.19.0; every ?v= tag 4.19.0 (vrt-i18n-v1.js dictionary tag too).",
+  "vrt-deploy-config.js — the PROD /exec (…AKfycbxKAEMe…INVytEtvv/exec, confirmed by Paul 2026-10-23) is the site default: a phone or new browser with nothing saved is connected at once; a URL saved on the device still wins; off on localhost / 127.0.0.1 / *.test so test runs never reach the real backend.",
+  "vrt-i18n-en.js / vrt-i18n-km.js — 8,932 keys (+74 smart-import / portal card strings); qa/v414/i18n_extract.js reads vrt-smart-import-v1.js.",
+  "qa/v419/* (new); qa/v41/gas_harness.js prefers ../gas/out/VRT_Production_v4.9.gs and computeDigest accepts byte arrays; qa/v416/test_inbox.js uses distinct file contents (fingerprints); qa/v418/test_erp_bridge_gas.js accepts backend 4.9; qa/v414/test_tg_page.js monthly-shipping seed uses the current month; PROD_MODULE_TEST_MATRIX_v4.19.csv."
+ ],
+ "notDone": [
+  "✅ 核可 in the chip appears only for a module that registers VRTSmartImport.hook(module,{approve}) — none does yet; IE approval stays in the IE smart preview (改為已簽核). Which approvals Paul wants there is to be decided.",
+  "Imports through the window were exercised end-to-end on 機修零件, 車縫, 訂單 and the portal handoff; the other pages use their existing importers (routing + registration tested, the import itself not re-run).",
+  "A1–A4 PDF imports, B4 B5 B6 B9 B10 (10/09 instruction); qa/v39 IE runtime 4 pre-existing failures; live acceptance F-C / F-D1 / two Monday weekly reports / /prod footer buttons; v4.18 install + Paul's 3 answers (customer code map, Rib, retention)."
+ ],
+ "tests": {
+  "qa/v419/test_smart_import_core.js": "6/6",
+  "qa/v419/test_inbox_v49_gas.js (GAS v4.9)": "4/4",
+  "qa/v419/browser_v419.js (Chromium, Paul's real mails / reports)": "9/9",
+  "qa/v418/test_erp_bridge_core.js": "5/5",
+  "qa/v418/test_erp_bridge_gas.js (on v4.9)": "9/9",
+  "qa/v418/browser_v418.js": "7/7",
+  "qa/v415/test_erp_link_core.js": "11/11",
+  "qa/v415/browser_erp_link.js": "10/10",
+  "qa/v417/test_ie_weekly.js": "4/4",
+  "qa/v417/test_reports_v12.js": "4/4",
+  "qa/v417/test_gas_v47.js (on v4.9)": "3/3",
+  "qa/v417/browser_v417.js": "4/4",
+  "qa/v416/test_daily_report.js": "9/9",
+  "qa/v416/test_orders_weekly.js": "6/6",
+  "qa/v416/test_fixes_b.js": "9/9",
+  "qa/v416/test_inbox.js": "5/5",
+  "qa/v414/test_sync_fixes.js": "10/10",
+  "qa/v414/test_tg_page.js": "13/13",
+  "qa/v414/test_portal_overview.js": "5/5",
+  "qa/v414/test_telegram.js (GAS v4.9)": "18/18",
+  "qa/v413/test_balancing.js": "12/12",
+  "qa/v414/test_i18n_layer.js": "6/6 (8,932 keys)",
+  "live Telegram / Gmail / Drive / iPhone Safari": "NOT TESTED (stubbed; Chromium 390 px only)",
+  "qa/v419/test_deploy_url.js (live host served locally, GAS stubbed)": "3/3"
+ },
+ "decisions": "2026-10-23 Paul (照妳想的) on the v4.18 questions: ERP customer codes stay learned automatically from shared POs (small customers flagged 請確認, manual entry wins); Rib stays a trim in the BOM check; GAS keeps orders / shipments 3 years (open older orders kept) and BOM 2 years. ✅ 核可 hooks: later (不急)."
+}

@@ -10,7 +10,7 @@
    done; a file whose importer asks a question (VRTDialog.confirm / prompt) is left pending with that question as the note — 有警示的留給人工確認. */
 (function(g){'use strict';
   if(g.VRTInbox)return;
-  const VERSION='1.0.0';let cfg=null,rows=[],counts={},els={},busy=false,lastErr='';
+  const VERSION='1.1.0';let cfg=null,rows=[],counts={},els={},busy=false,lastErr='';
   const L=(zh,en)=>{const I=g.VRTI18n,l=I&&I.lang;if(!l||l==='zh')return zh;if(l==='en')return en;const k=I.translate?I.translate(zh):'';return k?String(k).trim():en};
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const N=n=>Number(n||0).toLocaleString('en-US');const kb=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?Math.round(n/1024)+' KB':n+' B';
@@ -68,6 +68,6 @@
   let autoRan=false;
   async function autoRun(){if(!cfg||!cfg.feed||!autoOn()||autoRan)return;autoRan=true;await refresh(false);const mine=rows.filter(r=>r.module===cfg.module&&r.driveId&&!/需人工確認|needs confirmation|import failed/.test(r.note||''));if(!mine.length)return;toggle(true);for(const r of mine){await importRow(r.id,true)}autoRan=false}
   function init(c){cfg=Object.assign({autoDone:false},c||{});if(!cfg.module)throw new Error('VRTInbox.init: module required');const start=()=>{ui();paint();refresh(false).then(()=>{if(autoOn())autoRun()})};if(document.body)setTimeout(start,0);else document.addEventListener('DOMContentLoaded',start);return api}
-  const api={version:VERSION,init,open:()=>toggle(true),close:()=>toggle(false),refresh:()=>refresh(true),importRow:id=>importRow(id,false),setAuto,get rows(){return rows},get cfg(){return cfg},fetchFile};
+  const api={version:VERSION,init,open:()=>toggle(true),close:()=>toggle(false),refresh:()=>refresh(true),importRow:id=>importRow(id,false),setAuto,autoOn,get rows(){return rows},get cfg(){return cfg},fetchFile};
   g.VRTInbox=api;
 })(typeof window!=='undefined'?window:globalThis);

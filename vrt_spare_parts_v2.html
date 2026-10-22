@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.18.0"></script>
-<script src="vrt-platform-v40.js?v=4.18.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
+<script src="vrt-deploy-config.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.19.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 機修零件與機針管理 · Spare Parts &amp; Needle v4.13</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -222,12 +222,12 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-data-core-v39.js?v=4.18.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.18.0"></script>
-<script src="vrt-import-core-v40.js?v=4.18.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.18.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-data-core-v39.js?v=4.19.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.19.0"></script>
+<script src="vrt-import-core-v40.js?v=4.19.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.19.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.19.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 <style>
 #app .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}.v39-table{min-width:1000px}.v39-table td{min-width:75px}.v39-table td:nth-child(2),.v39-table td:nth-child(4){min-width:150px}.toolbar input,.toolbar select{max-width:100%;min-height:38px}.toolbar .tb-group{min-width:0}.tabs .tab{min-height:44px}
@@ -1764,12 +1764,15 @@ window.VRT_LOCAL_READY=(async function init(){
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'spareparts',lockKey:'spareparts',pull:async function(){return await (window.cloudDownload&&window.cloudDownload(true));},push:async function(){return await (window.cloudUpload&&window.cloudUpload(true));},canSync:function(){return !!((window.SET&&SET.gasUrl)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto spareparts]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.18.0"></script>
-<script src="vrt-telegram-v1.js?v=4.18.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.19.0"></script>
+<script src="vrt-telegram-v1.js?v=4.19.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"spareparts",tool:"spareparts",getData:()=>{const s=VRTParts39.getState();const m=s.maintenance||{};return {needle:m.needleChanges||[],part:m.partChanges||[],txns:s.txns||[]}}})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
-<script src="vrt-inbox-v1.js?v=4.18.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"spareparts",label:"🔧 機修零件",feed:f=>importExcel(f)})}catch(e){console.warn("VRTInbox init",e)}</script>
+<script src="vrt-inbox-v1.js?v=4.19.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"spareparts",label:"🔧 機修零件",feed:f=>importExcel(f)})}catch(e){console.warn("VRTInbox init",e)}</script>
+<!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
+<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
+<script>/* v4.19 智慧匯入：本頁收哪些檔、交給哪個匯入器 */try{VRTSmartImport.init({module:'spareparts',feedAll:async fs=>{const media=f=>/\.(jpe?g|png|heic|heif|webp|pdf)$/i.test(f.name);const xl=fs.filter(f=>!media(f)),ph=fs.filter(media);for(let i=0;i<xl.length;i++){await importExcel(xl[i]);if(i<xl.length-1)await VRTSmartImport.waitGone('#mask.on')}if(ph.length){if(xl.length)await VRTSmartImport.waitGone('#mask.on');goTab('ocr',null);ocrFiles(ph)}}})  /* Excel: one preview at a time (next file after 儲存/取消); photos / PDF → 🤖 智慧OCR */}catch(e){console.warn('VRTSmartImport init',e)}</script>
 </body>
 </html>

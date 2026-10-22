@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.18.0"></script>
-<script src="vrt-platform-v40.js?v=4.18.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
+<script src="vrt-deploy-config.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.19.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 生產進度總表 v4.5</title>
 <style>
@@ -167,10 +167,10 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.19.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
-<script src="vrt-data-core-v39.js?v=4.18.0"></script>
+<script src="vrt-data-core-v39.js?v=4.19.0"></script>
 </head>
 <body>
 
@@ -1395,7 +1395,7 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 
 
 
-<script src="vrt-daily-report-v1.js?v=4.18.0"></script>
+<script src="vrt-daily-report-v1.js?v=4.19.0"></script>
 <script>
 /* ═══ v4.16 D1 生產日報 Daily production report — numbers computed by code (vrt-daily-report-v1.js), AI only rewrites text ═══ */
 (function(){
@@ -1479,5 +1479,7 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'production_overview',lockKey:'production_overview',pull:async function(){return await (window.vcAutoPullOverview&&window.vcAutoPullOverview());},push:async function(){return await (Promise.resolve(true));},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:5000});}catch(e){console.warn('[VRT Auto production_overview]',e)}},0)},{once:true});
 </script>
+<!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
+<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
 </body>
 </html>

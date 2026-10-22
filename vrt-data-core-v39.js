@@ -96,6 +96,79 @@
   }
   function mergeReports(old,incoming){const m=new Map((old||[]).map(x=>[x.id,copy(x)]));let added=0,updated=0,unchanged=0;for(const r of incoming){const prior=m.get(r.id);if(prior?.fingerprint===r.fingerprint){unchanged++;continue}const merged=copy(r);if(prior){const items=new Map(prior.items.map(i=>[i.id,i]));r.items.forEach(i=>items.set(i.id,{...items.get(i.id),...i}));merged.deletedItemIds=prior.deletedItemIds||[];merged.items=[...items.values()].filter(i=>!merged.deletedItemIds.includes(i.id));if(hash(merged.items)===prior.fingerprint){unchanged++;continue}merged.history=[...(prior.history||[]),{fingerprint:prior.fingerprint,updatedAt:prior.updatedAt,items:prior.items,sourceDocumentId:prior.sourceDocumentId}];updated++}else added++;merged.fingerprint=hash(merged.items);merged.updatedAt=new Date().toISOString();m.set(r.id,merged)}return{records:[...m.values()],added,updated,unchanged}}
   function partUnit(v){const u=norm(v).replace(/\.$/,'');for(const [key,terms] of Object.entries({PCS:['PCS','PC','PIECE','PIECES','個','顆','件','支','根'],SET:['SET','SETS','套','組'],PACK:['PACK','PACKS','PK','包'],BOX:['BOX','BOXES','盒'],CARTON:['CARTON','CTN','箱'],BOTTLE:['BOTTLE','BTL','瓶'],CAN:['CAN','CANS','罐'],DOZEN:['DOZEN','DOZ','打'],MACHINE:['台'],METER:['M','METER','METRE','公尺','米'],YARD:['YD','YDS','YARD','YARDS','碼']}))if(terms.includes(u))return key;return u}
-  root.VRTData39={partUnit,copy,norm,number,stable,hash,ymd,family,revision,initIE,insertIE,currentIE,eligibleIE,mergeIE,officialRows,resolveOfficial,officialByStyle,snapshotFingerprint,parsePartsWorkbook,mergeReports};
+  /* v4.17 — IE weekly / monthly SMV update report (「IE更新 IE Update」 sheet): smart reconciliation instead of one new version per row.
+     weeklyDecisions(state, records, opts) classifies every parsed row against the CURRENT version of its style family
+     (same rule as currentIE: latest testDate, then createdAt; an OBD-derived update counts):
+       new      — style family not in the platform → inserted as today (insertIE)
+       approve  — platform row is 待簽核 / 退回, the report says 已簽核 and the SMV values are the same → approved IN PLACE (same id, history kept),
+                  the linked OBD style (detailId or same family, same SMV) is approved too
+       meta     — same approval + same SMV, only dates / notes / category / adjusted SMV differ → filled in place (no new version)
+       version  — the SMV changed → new version, old one kept (insertIE)
+       same     — nothing to change (file name is recorded as a source)
+       older    — the report row is still pending / returned but the platform already holds the approved version with the same SMV
+                  (an older report imported after the approved one) → never downgraded
+     applyWeeklyDecisions(state, decisions, {file, stamp}) performs them; both are pure (no DOM, no storage). */
+  const SMV_EPS=0.0005;
+  const smvEq=(a,b)=>number(a)!=null&&number(b)!=null&&Math.abs(number(a)-number(b))<=SMV_EPS;
+  const PROGRESS_RANK={not_tested:0,testing:1,smv_missing:1,test_complete:2,effective:3};
+  function familyCurrent(s,r){const xs=(s.updates||[]).filter(x=>!x.deleted&&family(x)===family(r));if(!xs.length)return null;return xs.reduce((a,x)=>!a||String(x.testDate||'')>String(a.testDate||'')||(x.testDate===a.testDate&&String(x.createdAt||'')>=String(a.createdAt||''))?x:a,null)}
+  function styleKeyOf(v){return norm(v).replace(/\s+/g,'')}
+  function sameModule(a,b){return full(a)&&full(b)||(!full(a)&&!full(b)&&norm(a)===norm(b))}
+  /* fallback when the customer is spelled differently (WPL vs WHITE PLAINS LINEN): one and only one family with this style + module */
+  function styleOnlyCurrent(s,r){const k=styleKeyOf(r.style),fams=new Set();(s.updates||[]).forEach(x=>{if(x.deleted||styleKeyOf(x.style)!==k||!sameModule(x.module,r.module))return;fams.add(family(x))});if(fams.size!==1)return null;const fam=[...fams][0];const xs=(s.updates||[]).filter(x=>!x.deleted&&family(x)===fam);return xs.reduce((a,x)=>!a||String(x.testDate||'')>String(a.testDate||'')||(x.testDate===a.testDate&&String(x.createdAt||'')>=String(a.createdAt||''))?x:a,null)}
+  /* merge the report row's descriptive fields into a copy of the platform row; returns {next, changed} — SMV values and approval are NOT touched here */
+  function mergeWeeklyMeta(cur,r){
+    const next=copy(cur);let changed=false;const set=(k,v)=>{if(v!==undefined&&v!==null&&v!==''&&next[k]!==v){next[k]=v;changed=true}};
+    if(r.approvalDate&&!next.approvalDate)set('approvalDate',r.approvalDate);else if(r.approvalDate&&next.approvalDate!==r.approvalDate&&next.approval===r.approval)set('approvalDate',r.approvalDate);
+    if(r.effectiveDate)set('effectiveDate',r.effectiveDate);
+    if(r.notes&&!String(next.notes||'').includes(String(r.notes)))set('notes',(next.notes?next.notes+'\n':'')+r.notes);
+    if(r.adjustedSmv!=null&&!smvEq(next.adjustedSmv,r.adjustedSmv))set('adjustedSmv',number(r.adjustedSmv));
+    if(r.adjustmentRate!=null&&number(next.adjustmentRate)!==number(r.adjustmentRate))set('adjustmentRate',number(r.adjustmentRate));
+    if((!next.category||next.category==='other')&&r.category&&r.category!=='other')set('category',r.category);
+    if(!next.testedBy&&r.testedBy)set('testedBy',r.testedBy);
+    if(!next.testDate&&r.testDate)set('testDate',r.testDate);
+    if(r.previousSmv!=null&&number(next.previousSmv)==null)set('previousSmv',number(r.previousSmv));
+    if((PROGRESS_RANK[r.progress]||0)>(PROGRESS_RANK[next.progress]||0))set('progress',r.progress);
+    ['reportFrequency','reportStart','reportEnd','preparedBy','styleType'].forEach(k=>{if(r[k]&&!next[k])set(k,r[k])});
+    return {next,changed};
+  }
+  function weeklyDecisions(s,records,opts){
+    initIE(s);opts=opts||{};const out=[];
+    for(const rec of records){
+      const r=copy(rec.record||rec);if(!norm(r.style)||norm(r.style)==='TO-CONFIRM'){out.push({rec,r,action:'skip',reason:'款式空白'});continue}
+      r.previousSmv=number(r.previousSmv);r.currentSmv=number(r.currentSmv);
+      let cur=familyCurrent(s,r),via='family';if(!cur&&opts.styleOnly!==false){cur=styleOnlyCurrent(s,r);if(cur)via='style'}
+      if(!cur){out.push({rec,r,action:'new',reason:'平台沒有這款'});continue}
+      const same=smvEq(cur.currentSmv,r.currentSmv)&&(number(cur.previousSmv)==null||r.previousSmv==null||smvEq(cur.previousSmv,r.previousSmv));
+      if(!same){out.push({rec,r,cur,via,action:'version',reason:'SMV 不同：平台 '+(number(cur.currentSmv)==null?'—':cur.currentSmv)+' → 報告 '+(r.currentSmv==null?'—':r.currentSmv)});continue}
+      if(r.approval==='approved'&&cur.approval!=='approved'){out.push({rec,r,cur,via,action:'approve',reason:(cur.approval==='returned'?'退回':'待簽核')+' → 已簽核'+(r.approvalDate?' '+r.approvalDate:'')});continue}
+      if(r.approval!=='approved'&&cur.approval==='approved'){out.push({rec,r,cur,via,action:'older',reason:'平台已核可，報告仍為'+(r.approval==='returned'?'退回':'待簽核')+'，不降級'});continue}
+      const m=mergeWeeklyMeta(cur,r);
+      if(m.changed)out.push({rec,r,cur,via,action:'meta',reason:'補簽核日／生效日／備註等，不另開版本'});else out.push({rec,r,cur,via,action:'same',reason:'已是相同內容'});
+    }
+    return out;
+  }
+  function applyWeeklyDecisions(s,decisions,opts){
+    initIE(s);opts=opts||{};const file=opts.file||'',stamp=opts.stamp||new Date().toISOString();
+    const tot={added:0,approved:0,meta:0,versions:0,unchanged:0,older:0,skipped:0,styles:0,operations:0};
+    const snap=x=>{const h=copy(x);delete h.history;return h};
+    for(const d of decisions){
+      if(d.skip||d.action==='skip'){tot.skipped++;continue}
+      if(d.action==='new'||d.action==='version'){const rr=copy(d.r);rr.sourceFiles=[...new Set([...(rr.sourceFiles||[]),file].filter(Boolean))];const res=insertIE(s,{kind:'update',record:rr,file,detectedType:'ie_master'});tot.added+=res.added;tot.versions+=res.versions;tot.unchanged+=res.unchanged;continue}
+      const cur=(s.updates||[]).find(x=>x.id===d.cur.id);if(!cur){tot.skipped++;continue}
+      if(d.action==='same'||d.action==='older'){sources(cur,{sourceFiles:[file]});if(d.action==='older')tot.older++;else tot.unchanged++;continue}
+      const m=mergeWeeklyMeta(cur,d.r),before=snap(cur);Object.assign(cur,m.next);
+      if(d.action==='approve'){cur.approval='approved';if(d.r.approvalDate)cur.approvalDate=d.r.approvalDate;if(!cur.effectiveDate&&d.r.effectiveDate)cur.effectiveDate=d.r.effectiveDate;cur.approvedFrom=file;tot.approved++}else tot.meta++;
+      cur.history=[...(cur.history||[]),before].slice(-10);cur.updatedAt=stamp;sources(cur,{sourceFiles:[file]});cur.fingerprint=revision(cur);
+      if(d.action==='approve'){
+        (s.styles||[]).forEach(st=>{if(st.deleted||st.approval==='approved')return;if(!(st.id===cur.detailId||family(st)===family(cur)))return;if(!smvEq(st.currentSmv,cur.currentSmv))return;
+          const b=snap(st);st.history=[...(st.history||[]),b].slice(-10);st.approval='approved';st.approvalDate=cur.approvalDate||st.approvalDate||'';st.effectiveDate=cur.effectiveDate||st.effectiveDate||'';st.approvedFrom=file;st.updatedAt=stamp;sources(st,{sourceFiles:[file]});tot.styles++});
+      }
+      s.importLog.push({id:'WK-'+hash([cur.id,stamp,d.action]),timestamp:stamp,file,detectedType:'ie_master',result:cur.style+' · '+(d.action==='approve'?'改為已簽核（原版本保留於 history）':'補齊欄位，不另開版本')});
+    }
+    if(decisions.length)s.importLog.push({id:'WKS-'+hash([file,stamp]),timestamp:stamp,file,detectedType:'ie_master_summary',result:'核可 '+tot.approved+' · 新增 '+tot.added+' · 新版本 '+tot.versions+' · 補欄位 '+tot.meta+' · 不變 '+tot.unchanged+(tot.older?' · 舊檔不降級 '+tot.older:'')+(tot.skipped?' · 略過 '+tot.skipped:'')});
+    return tot;
+  }
+  root.VRTData39={partUnit,copy,norm,number,stable,hash,ymd,family,revision,initIE,insertIE,currentIE,eligibleIE,mergeIE,officialRows,resolveOfficial,officialByStyle,snapshotFingerprint,parsePartsWorkbook,mergeReports,weeklyDecisions,applyWeeklyDecisions,mergeWeeklyMeta,smvEq};
   if(typeof module!=='undefined'&&module.exports)module.exports=root.VRTData39;
 })(typeof window!=='undefined'?window:globalThis);

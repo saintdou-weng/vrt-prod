@@ -5,9 +5,9 @@
      慣例：GAS POST text/plain;charset=utf-8｜日期一律本地時區 getters｜Telegram parse_mode HTML + escapeHtml｜SheetJS cellDates:false,raw:true｜onclick 全部 window-scoped -->
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.18.0"></script>
-<script src="vrt-platform-v40.js?v=4.18.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
+<script src="vrt-deploy-config.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.19.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT Fabric Delivery & Greige Inventory Summary Center</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -154,9 +154,9 @@ td[contenteditable]:focus{outline:2px solid #f59e0b;background:#fff}
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-prod-storage-vnext.js?v=4.18.0"></script>
-<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.19.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.19.0"></script>
 </head>
 <body>
 
@@ -1356,6 +1356,8 @@ window.cycleLang=cycleLang;
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'fabricdelivery',lockKey:'fabricdelivery',pull:async function(){return await (window.gasDownload&&window.gasDownload(true));},push:async function(){return await (window.gasUpload&&window.gasUpload(true));},canSync:function(){return !!((window.S&&S.cfg&&S.cfg.gasEndpoint)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto fabricdelivery]',e)}},0)},{once:true});
 </script>
-<script src="vrt-inbox-v1.js?v=4.18.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"fabricdelivery",label:"🧶 胚布中心",input:'#impFile'})}catch(e){console.warn("VRTInbox init",e)}</script>
+<script src="vrt-inbox-v1.js?v=4.19.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"fabricdelivery",label:"🧶 胚布中心",input:'#impFile'})}catch(e){console.warn("VRTInbox init",e)}</script>
+<!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
+<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
 </body>
 </html>

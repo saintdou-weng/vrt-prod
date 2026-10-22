@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<script src="vrt-deploy-config.js?v=4.18.0"></script>
-<script src="vrt-platform-v40.js?v=4.18.0"></script>
-<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
+<script src="vrt-deploy-config.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.19.0"></script>
+<meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 訂單管理系統 v3.6</title>
 <script src="vendor/xlsx.full.min.js"></script>
@@ -184,8 +184,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
   window.vrtCloudJson=async function(input,init){const r=await window.fetch(input,init),txt=await r.text();let d;try{d=txt?JSON.parse(txt):{}}catch(_){throw new Error('GAS 回傳非 JSON：'+txt.replace(/\s+/g,' ').slice(0,180))}if(!r.ok||d&&d.ok===false)throw new Error((d&&d.error)||('HTTP '+r.status));return d};
 })();
 </script>
-<script src="vrt-smart-sync-v3.js?v=4.18.0"></script>
-<script src="vrt-auto-sync-v3.js?v=4.18.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-auto-sync-v3.js?v=4.19.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
 </head>
 <body>
@@ -3254,12 +3254,14 @@ init();
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'orders',lockKey:'orders',pull:async function(){return await (window.ordCloudPull&&window.ordCloudPull());},push:async function(){return await (window.ordCloudPush&&window.ordCloudPush());},canSync:function(){return !!VRTPlatform.getGasUrl();},startDelay:1200});}catch(e){console.warn('[VRT Auto orders]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.18.0"></script>
-<script src="vrt-telegram-v1.js?v=4.18.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.19.0"></script>
+<script src="vrt-telegram-v1.js?v=4.19.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
 try{VRTTelegram.init({kind:"orders",tool:"orders",getData:()=>({lines:APP.orders||[],headers:APP.headers||[],weekly:APP.weekly||[]})})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
-<script src="vrt-inbox-v1.js?v=4.18.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"orders",label:"📦 訂單週報",feed:f=>importQueue([f]),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
+<script src="vrt-inbox-v1.js?v=4.19.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"orders",label:"📦 訂單週報",feed:f=>importQueue([f]),feedAll:fs=>importQueue(fs),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
+<!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
+<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-<script src="vrt-deploy-config.js?v=4.18.0"></script>
-<script src="vrt-platform-v40.js?v=4.18.0"></script>
+<script src="vrt-deploy-config.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.19.0"></script>
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="vrt-cost-sheet-v44.js?v=4.18.0"></script>
-<script src="vrt-bom-cost-core-v39.js?v=4.18.0"></script>
-  <meta charset="utf-8"><script src="vrt-dialog-v1.js?v=4.18.0"></script><script src="vrt-i18n-v1.js?v=4.18.0"></script>
+<script src="vrt-cost-sheet-v44.js?v=4.19.0"></script>
+<script src="vrt-bom-cost-core-v39.js?v=4.19.0"></script>
+  <meta charset="utf-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1f36">
   <title>VRT BOM 成本與報價反推中心 · SMV Linked</title>
@@ -293,5 +293,7 @@
     const viewReady39=boot();window.VRT_BOM_COSTING_VIEW39={ready:viewReady39,getState:()=>structuredClone(state),applyParentContext,save,calculate:()=>calc(),importFiles:filesChosen,exportExcel};viewReady39.catch(e=>{console.error(e);toast(e.message)});
   })();
   </script>
+<!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
+<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
 </body>
 </html>
