@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Assemble VRT_Production_v4.9.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
+"""Assemble VRT_Production_v4.9.1.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
 v4.15 (2026-10-05): the base file and the output both hold the Telegram bot token, so they live OUTSIDE the repo:
   base   : $VRT_GAS_BASE  (default ../../gas/VRT_Production_v4.2.gs, i.e. next to the repo, never inside it)
-  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.9.gs)
+  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.9.1.gs)
 v4.16 (2026-10-10): + vrt-daily-report-v1.js + daily_report_block.gs (D1 生產日報, Claude API hook, D2 aiSummary) + inbox_block.gs (C Telegram file intake)
 Never copy a built .gs into the repo / GitHub / a public ZIP."""
 import re,os,sys
 HERE=os.path.dirname(os.path.abspath(__file__))
 BASE=os.environ.get('VRT_GAS_BASE') or os.path.join(HERE,'..','..','gas','VRT_Production_v4.2.gs')
-OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.9.gs')
+OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.9.1.gs')
 src=open(BASE,encoding='utf-8').read()
 block=open(os.path.join(HERE,'period_summaries_block.gs'),encoding='utf-8').read()
 shared=open(os.path.join(HERE,'..','vrt-tg-summary-v1.js'),encoding='utf-8').read()   # repo root
@@ -370,6 +370,14 @@ rep("""   VRT 生產系統 GAS 後端 v4.8 — PSJERP 雲端唯讀橋接：""",
 rep("backendVersion:'4.8.0',erpBridge:true,","backendVersion:'4.9.0',smartImport:true,erpBridge:true,")
 rep("return okCors({ message: 'VRT Prod GAS v4.8 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + PSJERP BRIDGE + DAILY/WEEKLY REPORTS + INBOX', time: new Date().toISOString() });",
     "return okCors({ message: 'VRT Prod GAS v4.9 SMART SYNC + QC WEEKLY + BILINGUAL PERIOD SUMMARIES + ERP LINK + PSJERP BRIDGE + DAILY/WEEKLY REPORTS + INBOX + SMART IMPORT', time: new Date().toISOString() });")
+
+# 15. v4.9.1 (2026-10-23): 機修零件採購金額 — the shared summary (vrt-tg-summary-v1.js 1.2, copied above) counts a purchase once: an old
+#     stock-in line (type IN) repeating a statement line (same invoice no., part, qty) is dropped (Jan–Jun 2026 had been doubled)
+rep("""   VRT 生產系統 GAS 後端 v4.9 — 智慧匯入：""",
+"""   VRT 生產系統 GAS 後端 v4.9.1 — 機修零件採購摘要：舊的入庫（IN）列與對帳單同一張發票、同零件、同數量時只算一次（1–6 月原本重複加總）（10/23）
+   v4.9 — 智慧匯入：""")
+rep("backendVersion:'4.9.0',smartImport:true,","backendVersion:'4.9.1',smartImport:true,purchaseDedupe:true,")
+rep("return okCors({ message: 'VRT Prod GAS v4.9 SMART SYNC","return okCors({ message: 'VRT Prod GAS v4.9.1 SMART SYNC")
 
 # 11. extra intake bots (修改指令 C): tokens live OUTSIDE the repo in ../../gas/inbox_bots.json (or $VRT_INBOX_BOTS_FILE) and are
 #     written into CFG.INBOX_BOTS of the built .gs only — the repo block reads CFG.INBOX_BOTS / Script Property INBOX_BOTS_JSON.
