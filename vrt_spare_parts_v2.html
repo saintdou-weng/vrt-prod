@@ -1282,6 +1282,8 @@ function restoreLocal(file){if(!file)return;const rd=new FileReader();
    只把採購/進貨視為 Purchase；OUT/領料不參與雲端採購摘要。
    Auto Sync 整合時這組函式曾遺漏，會造成 latestPurchaseMonth is not defined。 */
 function purchaseTxns(){
+  // v4.19.1: 同一張發票同一零件同數量，舊的入庫（IN）列＋對帳單（PURCHASE）列只算一次 — 共用 VRTTgSummary.purchaseLines（網頁、Telegram、入口頁同一套）
+  if(window.VRTTgSummary&&VRTTgSummary.purchaseLines)return VRTTgSummary.purchaseLines((TXNS||[]).filter(Boolean));
   return (TXNS||[]).filter(x=>{
     const t=String(x&&x.type||'PURCHASE').trim().toUpperCase();
     return t!=='OUT'&&t!=='ISSUE'&&t!=='CONSUME';

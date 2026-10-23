@@ -138,9 +138,18 @@
   const reasonLine=o=>Object.entries(o.reason).sort((a,b)=>b[1]-a[1]).map(([k,v])=>esc((REASON_ZH[k]||k)+' '+(REASON_EN[k]||''))+' '+N(v)).join(' · ');
   const isPurchase=x=>String(x.type||'PURCHASE').toUpperCase()!=='OUT'&&String(x.type||'').toUpperCase()!=='ISSUE'&&String(x.type||'').toUpperCase()!=='CONSUME';
   const amount=x=>Number(x.amount)||((Number(x.qty)||0)*(Number(x.unitPrice)||0));
+  /* v4.19.1 one purchase = one line: an old stock-in line (type IN, from the first import or an OCR receipt) that repeats a statement
+     purchase line (same invoice no. — a "(2)" suffix ignored —, same part no., same qty) is the same purchase recorded twice → keep the statement line, drop the IN line.
+     Matched over ALL lines before any period filter (an IN dated 01-02 can belong to a statement line of another month). */
+  const invKey=x=>{let v=x.invoiceNo||x.invoice||'';if(!v){const r=String(x.remark||'');const m=r.match(/\bInv\.?\s*#?\s*([A-Za-z0-9][\w\-\/]*)/i)||r.match(/\b([A-Z]{1,6}-\d{3,})\b/);v=m?m[1]:''}return String(v).toUpperCase().replace(/\s+/g,'').replace(/\(\d+\)$/,'')};
+  const dupKey=x=>{const i=invKey(x);return i?i+'|'+String(x.partNo||'').toUpperCase().trim()+'|'+(Number(x.qty)||0):''};
+  const isIn=x=>String(x.type||'').toUpperCase()==='IN';
+  function purchaseLines(txns){const xs=(txns||[]).filter(isPurchase),pool=new Map();
+    xs.forEach(x=>{if(isIn(x))return;const k=dupKey(x);if(k)pool.set(k,(pool.get(k)||0)+1)});if(!pool.size)return xs;
+    return xs.filter(x=>{if(!isIn(x))return true;const k=dupKey(x),n=k?pool.get(k)||0:0;if(n>0){pool.set(k,n-1);return false}return true})}
   function spareparts(data,P,prev){
     data=data||{};const nc=chgAgg(filterPeriod(data.needle,P)),np=chgAgg(prev?filterPeriod(data.needle,prev):[]),pc=chgAgg(filterPeriod(data.part,P)),pp=chgAgg(prev?filterPeriod(data.part,prev):[]);
-    const tx=filterPeriod(data.txns,P).filter(isPurchase),txp=prev?filterPeriod(data.txns,prev).filter(isPurchase):[];
+    const allTx=purchaseLines(data.txns),tx=filterPeriod(allTx,P),txp=prev?filterPeriod(allTx,prev):[];
     if(!nc.rows&&!pc.rows&&!tx.length)return {text:noData(P),empty:true};const L=[];
     if(nc.rows){L.push('<b>🪡 機針更換 Needle changes</b>: <b>'+N(nc.qty)+'</b> 支 pcs'+(prev&&np.qty?esc(delta(nc.qty,np.qty)):'')+'（'+N(Object.keys(nc.days).length)+' 天 days · '+N(nc.rows)+' 列 rows）');
       L.push('　換款 Planned: '+N(nc.planned)+'（'+pct(nc.qty?nc.planned/nc.qty*100:null,0)+'） · 非計畫 Unplanned (damage+broken): <b>'+N(nc.unplanned)+'</b>（'+pct(nc.qty?nc.unplanned/nc.qty*100:null,0)+'） · 其他／未填 Other/blank: '+N(nc.qty-nc.planned-nc.unplanned));
@@ -288,5 +297,5 @@
   }
   const clip=(text,max)=>{text=String(text||'');max=max||4000;if(text.length<=max)return text;let cut=text.lastIndexOf('\n',max-100);if(cut<1000)cut=max-100;return text.slice(0,cut)+'\n… ✂️ 訊息過長已截短 / message truncated（Telegram 4096 限制）'};
   const plain=html=>String(html||'').replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-  g.VRTTgSummary={version:'1.1',PERIODS,PERIOD_LABEL,KINDS,REASON_ZH,REASON_EN,esc,N,pct,delta,top,periodOf,monthsIn,isoWeekKey,addDays,localToday,filterPeriod,latestDate,periodOptions,rowsOf,dateFnOf,build,header,clip,plain,anyDate,builders:BUILDERS,agg:{sewAgg,cutAgg,qcAgg,kpiAgg,chgAgg,qcPick,cutDaily}};
+  g.VRTTgSummary={version:'1.2',purchaseLines,PERIODS,PERIOD_LABEL,KINDS,REASON_ZH,REASON_EN,esc,N,pct,delta,top,periodOf,monthsIn,isoWeekKey,addDays,localToday,filterPeriod,latestDate,periodOptions,rowsOf,dateFnOf,build,header,clip,plain,anyDate,builders:BUILDERS,agg:{sewAgg,cutAgg,qcAgg,kpiAgg,chgAgg,qcPick,cutDaily}};
 })(typeof globalThis!=='undefined'?globalThis:this);

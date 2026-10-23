@@ -1,0 +1,25 @@
+{
+ "release": "4.19.1",
+ "date": "2026-10-23",
+ "base": "4.19 (2026-10-23, live)",
+ "request": "Paul 10/23 (screenshot of 機修零件 2026 各月份彙整): monthly spend $5,220 / $3,701.80 / $6,064 / $3,472 / $5,145 / $5,523.50 for Jan–Jun is wrong — a month is never more than about $3,000; duplicated import or double sum?",
+ "finding": "Live cloud data (smart_spareparts buckets m:2026-01…06, read-only): 152 old stock-in lines (type IN, user 'Import', remark 'YI-000xxx …', fake ts 1700000…) repeat the YI NEW SEWING MACHINE statement lines (type PURCHASE with invoiceNo / statementMonth) one for one — 151 exact (invoice, part, qty) + 1 with the '(2)' invoice suffix. purchaseTxns() and the shared Telegram builder counted every non-OUT line, so each Jan–Jun purchase was summed twice. Jul–Oct and 2025 have statement lines only (unchanged).",
+ "fix": "vrt-tg-summary-v1.js 1.2: purchaseLines(txns) — purchases = non-OUT/ISSUE/CONSUME lines, minus an IN line whose (invoice no. without '(n)', part no., qty) matches a statement line (each statement line absorbs one IN line); matched over all lines before any period filter; IN lines without a statement twin (OCR receipt not on a statement yet, local stock-in without invoice) still count. vrt_spare_parts_v2.html purchaseTxns() uses it (KPIs, 年度月別採購金額, 各月份彙整, year tables, purchase lists, cloud summary); vrt-portal-overview-v1.js purchase count uses it; GAS v4.9.1 carries the same builder (bot /sum, portal panel). No data deleted: the IN lines stay in the transaction history.",
+ "result": "2026 monthly spend (statement month): Jan 2,610.00 · Feb 1,850.90 · Mar 3,032.00 · Apr 1,736.00 · May 2,572.50 · Jun 2,761.75 · Jul 2,091.25 · Aug 1,652.30 · Sep 1,465.50 · Oct 558.00 (lines 26/17/29/18/31/31/33/29/21/11).",
+ "appsScript": "VRT_Production_v4.9.1.gs (outside the repo): only the copied summary builder + header + backendVersion 4.9.1 / purchaseDedupe change; existing deployment → new version.",
+ "tests": {
+  "qa/v4191/test_parts_purchase_dedupe.js": "6/6",
+  "qa/v4191/browser_parts_month.js": "2/2",
+  "qa/v414/test_telegram.js (GAS v4.9.1)": "18/18",
+  "qa/v414/test_tg_page.js": "13/13",
+  "qa/v414/test_portal_overview.js": "5/5",
+  "qa/v416/test_daily_report.js": "9/9",
+  "qa/v416/test_inbox.js": "5/5",
+  "qa/v417/test_gas_v47.js": "3/3",
+  "qa/v418/test_erp_bridge_gas.js": "9/9",
+  "qa/v418/browser_v418.js": "7/7",
+  "qa/v419/test_inbox_v49_gas.js": "4/4",
+  "qa/v419/test_smart_import_core.js": "6/6",
+  "qa/v414/test_i18n_layer.js": "6/6"
+ }
+}
