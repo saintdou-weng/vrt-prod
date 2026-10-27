@@ -141,3 +141,28 @@ function checkTelegramSetup(){ const triggers=ScriptApp.getProjectTriggers().map
   const r={backendVersion:productionCapabilities_().backendVersion,pollTrigger:triggers.indexOf('pollTelegram')>=0,triggers,bot:me.ok?'@'+me.result.username:('ERROR '+me.description),group:chat.ok?chat.result.title:('ERROR '+chat.description),offset:PropertiesService.getScriptProperties().getProperty('tg_offset')||'0',webAppUrl:ScriptApp.getService().getUrl()||'',
     hint:triggers.indexOf('pollTelegram')>=0?'OK：群組打 /prod /prod2 /sum /day 會回應（每分鐘輪詢一次）':'沒有 pollTelegram 觸發器 → 執行 ensurePollingTrigger()'};
   console.log(JSON.stringify(r,null,2));return r; }
+
+/* ── v4.10.1 (2026-10-27) 維護工具：修復「狀態摘要」(snap_<tool>) ──
+   背景：doPost 收到帶 tool 但 action 不認得的 JSON 時，會走「單批上傳」把它當成整包存檔（覆寫 <tool>.json、
+   把 chunk_<tool>_* 丟進垃圾桶、snap_<tool> 寫成 0 筆）。智慧同步的 smart_<tool>_* 檔案不受影響，網頁讀資料也優先讀智慧清單，
+   所以資料本身沒事；但 /status 與入口頁的「最後同步」會顯示 0 筆。這個函式用智慧清單把 snap_ 修回來、刪掉那個垃圾 <tool>.json、
+   並把一小時內被丟進垃圾桶的 chunk_<tool>_* 救回來。只動指定 tools，其他都不碰。 */
+function repairLegacySnap_(tools){
+  tools=tools||['sewing','cutting']; const out={}; const props=PropertiesService.getScriptProperties();
+  const folderId=getOrCreateFolder().getId();
+  tools.forEach(t=>{
+    const r={};
+    try{
+      const m=readSmartManifest_(t);
+      if(m){ const total=Number(m.recordCount||0), summary=m.summary||{};
+        const snap={tool:t,timestamp:m.updatedAt||new Date().toISOString(),recordCount:t==='qc'?Number(summary.reports||total):total,transportRecordCount:total,summary};
+        props.setProperty('snap_'+t,JSON.stringify(snap)); r.snap=snap.recordCount; r.snapAt=snap.timestamp; }
+      else r.snap='(no smart manifest, untouched)';
+    }catch(e){ r.snapError=String(e&&e.message||e); }
+    try{ const f=newestDriveFile_(t+'.json'); if(f){ const raw=f.getBlob().getDataAsString(); if(raw.length<300&&/"tool"\s*:\s*"/.test(raw)&&!/"records"/.test(raw)){ f.setTrashed(true); r.removedGarbage=f.getName(); } else r.keptFile=raw.length; } }catch(e){ r.fileError=String(e&&e.message||e); }
+    try{ const it=DriveApp.getTrashedFiles(); const names=[]; while(it.hasNext()){ const x=it.next(); const n=x.getName(); if(n.indexOf('chunk_'+t+'_')!==0)continue; let inFolder=false; const ps=x.getParents(); while(ps.hasNext()){ if(ps.next().getId()===folderId)inFolder=true; } if(!inFolder)continue; x.setTrashed(false); names.push(n); } r.untrashed=names; }catch(e){ r.trashError=String(e&&e.message||e); }
+    out[t]=r;
+  });
+  console.log(JSON.stringify(out,null,2)); return out;
+}
+function repairLegacySnapV410(){ return repairLegacySnap_(['sewing','cutting']); }
