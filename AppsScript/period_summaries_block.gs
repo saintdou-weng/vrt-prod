@@ -30,6 +30,11 @@ const PERIOD_TOOLS = {
 const DIGEST_KEYS = ['sew','cut','qcsum','sp','plansum'];
 const PERIOD_CMD = { '/day':'day', '/week':'week', '/month':'month', '/year':'year', '/today':'day' };
 const esc_ = TGS.esc;
+// v4.10 (2026-10-27): every summary / report message ends with buttons back to the site (like the other VRT bots)
+const PROD_SITE_ = 'https://saintdou-weng.github.io/vrt-prod/';
+const SITE_PAGES_ = { portal:['🏭 生產入口','portal_v2.html'], overview:['📊 生產總覽','production_v4.html'], sewing:['🧵 車縫','sewing_v5.html'], cutting:['✂️ 裁剪','cutting_v3.html'], qc:['✅ Final QC','vrt_final_qc_v1.html'], spareparts:['🔧 機針零件','vrt_spare_parts_v2.html'], prodplan:['📅 排單','production_plan_capacity_v1.html'], monthship:['🗓 月出貨','vrt_monthly_shipping_control_center_v1.html'], shipping:['🚢 出貨','shipping_v2.html'], orders:['📦 訂單','orders_v3.html'], weekly:['📑 週報產生器','vrt_production_weekly_report_generator_v3.html'] };
+function siteBtn_(key){ const p=SITE_PAGES_[key]||SITE_PAGES_.portal; return { text:p[0], url:PROD_SITE_+p[1] }; }
+function siteRow_(keys){ const seen={}; return (keys||['overview','portal']).filter(k=>SITE_PAGES_[k]&&!seen[k]&&(seen[k]=1)).map(siteBtn_); }
 function todayYmd_(){ return Utilities.formatDate(new Date(),CFG.TZ,'yyyy-MM-dd'); }
 function periodOf_(period,anchor){ return TGS.periodOf(period,anchor,todayYmd_()); }
 
@@ -82,6 +87,7 @@ function periodKeyboard_(cb,period,anchor){
     PERIODS.map(p=>({text:(p===period?'● ':'')+PERIOD_LABEL[p].zh+' '+PERIOD_LABEL[p].en,callback_data:'s:'+cb+':'+p+':'+anchor})),
     [{text:'◀ 上期 Prev',callback_data:'s:'+cb+':'+period+':'+P.prevAnchor},{text:'📍 最新 Latest',callback_data:'s:'+cb+':'+period+':latest'},{text:'下期 Next ▶',callback_data:'s:'+cb+':'+period+':'+P.nextAnchor}],
     [{text:'📆 全部門 Digest',callback_data:'d:'+period+':'+anchor},{text:'📋 摘要選單 Menu',callback_data:'m:sum:0'}],
+    siteRow_([(PERIOD_TOOLS[cb]||{}).kind,'overview','portal']),
   ]};
 }
 // 全部門一頁摘要：每個部門 2～3 行，按鈕可展開明細
@@ -99,6 +105,7 @@ function digestSummary_(period,anchor){
   const rows=[];for(let i=0;i<buttons.length;i+=3)rows.push(buttons.slice(i,i+3));
   rows.push(PERIODS.map(p=>({text:(p===period?'● ':'')+PERIOD_LABEL[p].zh+' '+PERIOD_LABEL[p].en,callback_data:'d:'+p+':'+(useAnchor||'latest')})));
   rows.push([{text:'◀ 上期 Prev',callback_data:'d:'+period+':'+P0.prevAnchor},{text:'📍 最新 Latest',callback_data:'d:'+period+':latest'},{text:'下期 Next ▶',callback_data:'d:'+period+':'+P0.nextAnchor}]);
+  rows.push(siteRow_(['overview','portal']));
   return {text:tgClip_(text),markup:{inline_keyboard:rows}};
 }
 // ─── 傳送（HTML，失敗改純文字重送）─────────────────────────

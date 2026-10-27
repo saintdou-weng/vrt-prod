@@ -1,4 +1,6 @@
-/* v4.16 D1 — 生產日報: numbers computed by code (vrt-daily-report-v1.js), fixed bilingual layout, once per date, AI text checked
+/* v4.20 note: these layout assertions are for the v1.2 compact Telegram layout, kept as R.renderCompact(); the live render() is the
+   v1.3 readable layout tested in qa/v420/test_readable_report.js. Numbers (compute) are unchanged.
+   v4.16 D1 — 生產日報: numbers computed by code (vrt-daily-report-v1.js), fixed bilingual layout, once per date, AI text checked
    number by number. Real data: sewing backup 2026-09-28 (5,009 rows), cutting backup 2026-09-30 (18,663 rows), plus the seeded mock
    GAS (orders / plan / spare parts / QC) for the page and the GAS job. No Google / Telegram / Claude network: UrlFetchApp is stubbed. */
 const fs=require('fs'),path=require('path'),assert=require('assert');
@@ -43,19 +45,19 @@ function synth(D){const prev=R.helpers.addDays(D,-1),lw=R.helpers.addDays(D,-7);
    assert.deepStrictEqual(f.rag,{capacity:'G',quality:'G',plan:null,shipping:'R',wip:'G'},JSON.stringify(f.rag));assert.equal(f.lines.find(x=>x.line==='Line 4').risk,'quality');assert(f.lines.every(x=>x.verdict==='ok'));
    return 'pieces 4600 · eff '+f.sewing.eff.toFixed(1)+'% · WIP 3500 · QC '+f.qc.rate.toFixed(2)+'% top '+f.qc.top.map(x=>x.name).join('/')+' · ship 60% overdue PO-2 · fabric 1200 · needle flag Line 2 · anomalies '+kinds.join(',')});
  await test('render — fixed bilingual layout (3 highlights, key-number table vs prev/last week, ≤3 issues with line/PO + who), about 250 Chinese characters; Telegram HTML escapes data; checkAiText accepts its own text and rejects changed numbers',async()=>{
-   const D='2026-10-08';const f=R.compute(synth(D),{date:D,today:'2026-10-09'});const r=R.render(f);const t=r.text;
+   const D='2026-10-08';const f=R.compute(synth(D),{date:D,today:'2026-10-09'});const r=R.renderCompact(f);const t=r.text;
    assert(/^📰 VRT 生產日報 Daily Production Report · 2026-10-08（四 Thu）/.test(t));assert(/1️⃣ 今日重點 Highlights/.test(t)&&/2️⃣ 關鍵數字 Key numbers/.test(t)&&/3️⃣ 異常與建議 Issues & actions/.test(t));
    const hl=t.split('\n').filter(l=>/^• /.test(l));assert.equal(hl.length,3+Math.min(3,f.anomalies.length));const en=t.split('\n').filter(l=>/^  /.test(l));assert.equal(en.length,hl.length,'one English line per Chinese line');
    assert(/產量 Output: 4,600 pcs │ 4,200 \(\+9\.5%\) │ 5,400 \(−14\.8%\)/.test(t),t);assert(/退修率 Reject rate: 4\.38% \(114\/2,600\) │ 2\.00% \(\+2\.4 pt\)/.test(t),t);assert(/管理判定 Verdict: 產能 🟢 GREEN · 品質 🟢 GREEN · 排單 — · 出貨 🔴 RED · WIP 🟢 GREEN/.test(t),t);assert(/WIP 已裁未縫 Cut-not-sewn: 3,500 pcs/.test(t));assert(/出貨 Shipping（本週 week .*: 60% · 已出 shipped 6,000 \/ 計畫 plan 10,000 · 未出 open 4,000/.test(t));
    assert(/PO PO-2/.test(t)&&/→ 請 出貨／船務 處理/.test(t)&&/→ Shipping/.test(t));assert(r.zhChars<=300,'zh chars '+r.zhChars);
-   assert(/<b>📰/.test(r.html)&&!/<script/.test(r.html));const h=R.render(R.compute(Object.assign(synth(D),{shipping:[{cust:'<b>X</b>',po:'P&1',style:'S',orig:10,shipped:0,open:10,etd:R.helpers.addDays(D,-1),status:'outstanding'}]}),{date:D,today:'2026-10-09'})).html;assert(/&lt;b&gt;X&lt;\/b&gt;/.test(h)&&/P&amp;1/.test(h),'html escaped');
+   assert(/<b>📰/.test(r.html)&&!/<script/.test(r.html));const h=R.renderCompact(R.compute(Object.assign(synth(D),{shipping:[{cust:'<b>X</b>',po:'P&1',style:'S',orig:10,shipped:0,open:10,etd:R.helpers.addDays(D,-1),status:'outstanding'}]}),{date:D,today:'2026-10-09'})).html;assert(/&lt;b&gt;X&lt;\/b&gt;/.test(h)&&/P&amp;1/.test(h),'html escaped');
    const ok=R.checkAiText(t,f);assert(ok.ok,'own text flagged: '+ok.bad.join(','));const bad=R.checkAiText(t.replace('4,600','4,650').replace('60%','61%'),f);assert(!bad.ok&&bad.bad.includes('4,650')&&bad.bad.includes('61'),JSON.stringify(bad));
    const p=R.aiPrompt(f);assert(/不能自己計算/.test(p.system)&&/never compute/.test(p.system)&&p.user.includes(t));
    const g=R.checkNumbersAgainstText('產出 4,600 pcs 效率 79%','產出 4,600 pcs 效率 78.5%');assert(!g.ok&&g.bad[0]==='79');
    assert(/先講管理判定與結論/.test(p.system),'style guide in the prompt');return 'zh '+r.zhChars+' chars · '+hl.length+' points · verdict line · html escaped · own text ok · altered numbers 4,650/61 rejected · prompt '+(p.system.length+p.user.length)+' chars'});
  await test('render — a date without data says so (no fake zeros as highlights); Word export is a self-contained HTML document with the numbers table',async()=>{
-   const f=R.compute({sewing:[],cutting:[]},{date:'2026-10-05',today:'2026-10-09'});const r=R.render(f);assert(/沒有車縫／裁剪／QC 資料/.test(r.text));assert(!f.hasData);
-   const D='2026-10-08';const f2=R.compute(synth(D),{date:D,today:'2026-10-09'});const doc=R.docHtml(f2,R.render(f2).text);assert(/<html/.test(doc)&&/WordDocument/.test(doc)&&/4,600/.test(doc)&&/<table/.test(doc)&&/生產日報 2026-10-08/.test(doc));return 'no-data message · doc '+doc.length+' chars'});
+   const f=R.compute({sewing:[],cutting:[]},{date:'2026-10-05',today:'2026-10-09'});const r=R.renderCompact(f);assert(/沒有車縫／裁剪／QC 資料/.test(r.text));assert(!f.hasData);
+   const D='2026-10-08';const f2=R.compute(synth(D),{date:D,today:'2026-10-09'});const doc=R.docHtml(f2,R.renderCompact(f2).text);assert(/<html/.test(doc)&&/WordDocument/.test(doc)&&/4,600/.test(doc)&&/<table/.test(doc)&&/生產日報 2026-10-08/.test(doc));return 'no-data message · doc '+doc.length+' chars'});
  await test('management-analysis layout — synthetic week with a dual-risk line and a month plan: RAG per area, line 判讀 (可接受/偏低/低效) + risk class (dual/quality/capacity), plan position (completion vs elapsed working days, required/day), per-day table, QC reconciliation, actions with owners, 資料口徑; Word doc carries KPI tiles, 管理結論, 9 sections and the action table',async()=>{
    const D='2026-10-08';const d=synth(D);
    // make Line 3 weak (eff ≈ 20%) with a high reject (dual risk) and give Line 3 a QC report; add a month plan
@@ -71,7 +73,7 @@ function synth(D){const prev=R.helpers.addDays(D,-1),lw=R.helpers.addDays(D,-7);
    assert(f.qcReconcile&&f.qcReconcile.qcOutput===0||f.qcReconcile===null,'synthetic QC rows carry no output → no reconcile claim');
    const kinds=f.anomalies.map(a=>a.kind);assert(kinds.includes('dual')&&!kinds.includes('qc'),'dual-risk replaces the single QC item: '+kinds.join(','));assert(f.actions.some(a=>/雙重風險/.test(a.item)&&/IE/.test(a.owner)),JSON.stringify(f.actions));assert(f.actions.length<=8);
    assert(/管理判定：產能/.test(f.conclusion.zh)&&/Management verdict: capacity/.test(f.conclusion.en));assert(/雙重風險線（低效＋高退修）：Line 3/.test(f.conclusion.zh));assert(f.basis.zh.length===6&&f.basis.en.length===6);assert(/≥35% GREEN/.test(f.basis.zh[1]));
-   const r=R.render(f);assert(/生產週報 Weekly Production Report · 2026-W41（10\/05–10\/11）/.test(r.text));assert(/日均 Daily avg: 4,400 pcs \(2 天 days\)/.test(r.text));assert(/日別 By day: 10\/07 4,200 \(\d+%\) · 10\/08 4,600 \(\d+%\)/.test(r.text),r.text);assert(/線別風險 Line risks: .*Line 3 \d+%\/\d+% 雙重 dual/.test(r.text),r.text);assert(r.zhChars<=450,'zh '+r.zhChars);assert(R.checkAiText(r.text,f).ok,JSON.stringify(R.checkAiText(r.text,f)));
+   const r=R.renderCompact(f);assert(/生產週報 Weekly Production Report · 2026-W41（10\/05–10\/11）/.test(r.text));assert(/日均 Daily avg: 4,400 pcs \(2 天 days\)/.test(r.text));assert(/日別 By day: 10\/07 4,200 \(\d+%\) · 10\/08 4,600 \(\d+%\)/.test(r.text),r.text);assert(/線別風險 Line risks: .*Line 3 \d+%\/\d+% 雙重 dual/.test(r.text),r.text);assert(r.zhChars<=450,'zh '+r.zhChars);assert(R.checkAiText(r.text,f).ok,JSON.stringify(R.checkAiText(r.text,f)));
    const doc=R.docHtml(f,r.text);for(const must of ['生產產能、計劃執行與品質關聯週報','Weekly Production Capacity, Plan Execution & Quality Correlation Report','管理結論 Management Conclusion','一、本週每日產能 | 1. Daily Capacity','二、生產計劃 vs 實績 | 2. Production Plan vs Actual','三、各組產能與品質','四、品質','五、出貨排程','六、WIP 與物料','七、換針與零件','八、管理結論與行動','九、資料口徑與分析限制','雙重風險 / Dual risk','AMBER','Required action','Appendix: Telegram summary'])assert(doc.includes(must),'doc missing: '+must);
    assert((doc.match(/<table/g)||[]).length>=10,'tables');assert(!/<script/.test(doc));
    return 'W41 · 2 days 8,800 pcs · Line 3 dual (eff '+l3.eff.toFixed(0)+'% / rej '+l3.rejectRate.toFixed(0)+'%) · plan 14,200/110,000 req '+f.plan.requiredPerDay+'/day RAG '+f.rag.plan+' · '+f.actions.length+' actions · doc '+doc.length+' chars, '+(doc.match(/<table/g)||[]).length+' tables'});
@@ -79,7 +81,7 @@ function synth(D){const prev=R.helpers.addDays(D,-1),lw=R.helpers.addDays(D,-7);
    const f=R.compute({sewing:SEW,cutting:CUT},{date:'2026-09-25',today:'2026-09-29',period:'week'});assert.equal(f.date,'2026-W39');assert.equal(f.start,'2026-09-21');assert.equal(f.end,'2026-09-27');
    const exp=TGS.build('sewing',SEW,'week','2026-09-25').stats;assert.equal(f.sewing.pieces,exp.pieces,'week pieces = shared builder');assert.equal(f.days.length,exp.dayCount);
    const prevExp=TGS.build('sewing',SEW,'week','2026-09-18').stats;assert.equal(f.prevDay.pieces,prevExp.pieces);const cutExp=TGS.build('cutting',CUT,'week','2026-09-25').stats;assert.equal(f.cutting.pieces,cutExp.pieces);
-   assert.equal(f.plan,null);assert.equal(f.rag.plan,null);assert.equal(f.qc.rate,null);assert(f.actions.some(a=>/排單資料/.test(a.item)));const r=R.render(f);assert(r.text.length<4000);assert(/管理判定 Verdict: 產能 .* · 品質 — · 排單 — · 出貨 — · WIP —/.test(r.text));
+   assert.equal(f.plan,null);assert.equal(f.rag.plan,null);assert.equal(f.qc.rate,null);assert(f.actions.some(a=>/排單資料/.test(a.item)));const r=R.renderCompact(f);assert(r.text.length<4000);assert(/管理判定 Verdict: 產能 .* · 品質 — · 排單 — · 出貨 — · WIP —/.test(r.text));
    return 'W39 '+f.sewing.pieces+' pcs over '+f.days.length+' days (prev W38 '+f.prevDay.pieces+') · cutting '+f.cutting.pieces+' · text '+r.text.length+' chars'});
  /* ── page: production_v4 「📰 生產日報」 with the seeded mock cloud ── */
  const g=createGas();const seeded=await seedAll(g);

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Assemble VRT_Production_v4.9.1.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
+"""Assemble VRT_Production_v4.10.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
 v4.15 (2026-10-05): the base file and the output both hold the Telegram bot token, so they live OUTSIDE the repo:
   base   : $VRT_GAS_BASE  (default ../../gas/VRT_Production_v4.2.gs, i.e. next to the repo, never inside it)
-  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.9.1.gs)
+  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.10.gs)
 v4.16 (2026-10-10): + vrt-daily-report-v1.js + daily_report_block.gs (D1 生產日報, Claude API hook, D2 aiSummary) + inbox_block.gs (C Telegram file intake)
 Never copy a built .gs into the repo / GitHub / a public ZIP."""
 import re,os,sys
 HERE=os.path.dirname(os.path.abspath(__file__))
 BASE=os.environ.get('VRT_GAS_BASE') or os.path.join(HERE,'..','..','gas','VRT_Production_v4.2.gs')
-OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.9.1.gs')
+OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.10.gs')
 src=open(BASE,encoding='utf-8').read()
 block=open(os.path.join(HERE,'period_summaries_block.gs'),encoding='utf-8').read()
 shared=open(os.path.join(HERE,'..','vrt-tg-summary-v1.js'),encoding='utf-8').read()   # repo root
@@ -173,7 +173,7 @@ rep("""  const map = { sew: sewTxt, cut: cutTxt, ord: ordTxt, ship: shipTxt, sta
                 cutplan: cutplanTxt, pod: podTxt, bom: bomTxt, fg: fgTxt, fstock: fabricStockTxt,
                 smvsum: smvSummaryTxt_, custsum: custSummaryTxt_, mshipsum: monthShipSummaryTxt_, fabdel: fabricDeliverySummaryTxt_ };
   const fn  = map[data];
-  if (fn) { tgSendHtml_(chatId, fn() + '\\n\\n👆 /prod　/prod2　/sum', { inline_keyboard: [[{ text:'📋 摘要選單 Menu', callback_data:'m:sum:0' }]] }); if(auditMap[data])try{prodAuditMarkSent_(auditMap[data],'summary',null)}catch(_){} }""")
+  if (fn) { tgSendHtml_(chatId, fn() + '\\n\\n👆 /prod　/prod2　/sum', { inline_keyboard: [[{ text:'📋 摘要選單 Menu', callback_data:'m:sum:0' }], siteRow_(['overview','portal'])] }); if(auditMap[data])try{prodAuditMarkSent_(auditMap[data],'summary',null)}catch(_){} }""")
 
 # 6. bot commands
 rep("""  cmds.push({ command:'status', description:'同步狀態' });
@@ -244,6 +244,8 @@ rep("""    const payload = {
     const body = JSON.parse(res.getContentText() || '{}');
     if (!body.ok) throw new Error(body.description || ('Telegram HTTP '+res.getResponseCode()));""",
 """    const payload = { chat_id: chatId, text: text, disable_web_page_preview: true };
+    // v4.10: pages may send inline buttons (URL buttons back to the site); accepted as an object or a JSON string
+    if (p.reply_markup) { try { payload.reply_markup = typeof p.reply_markup === 'string' ? JSON.parse(p.reply_markup) : p.reply_markup; } catch (_) {} }
     const pm = p.plain === true || p.plain === 'true' ? '' : (p.parse_mode === undefined ? 'HTML' : String(p.parse_mode || ''));
     if (pm && pm.toLowerCase() !== 'none') payload.parse_mode = pm;
     let res = UrlFetchApp.fetch(TG() + '/sendMessage', {
@@ -255,6 +257,7 @@ rep("""    const payload = {
     // v4.3: a page sent HTML that Telegram cannot parse → resend the same content as plain text so the message still goes out
     if (!body.ok && payload.parse_mode && /parse|entit|tag/i.test(String(body.description || ''))) {
       const plain = { chat_id: chatId, disable_web_page_preview: true, text: String(text).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') };
+      if (payload.reply_markup) plain.reply_markup = payload.reply_markup;
       res = UrlFetchApp.fetch(TG() + '/sendMessage', { method:'post', contentType:'application/json', muteHttpExceptions:true, payload: JSON.stringify(plain) });
       body = JSON.parse(res.getContentText() || '{}'); plainFallback = body.ok;
     }
@@ -340,7 +343,7 @@ rep("""  // 有日／週／月／年的部門：先送「日」摘要＋期間�
 """  // v4.7 生產摘要（中文）按鈕：drday / drplan / dreff → 最新的一份（沒有就當場產生）
   if (/^dr(day|plan|eff)$/.test(data)) {
     const t = dailyReportMenuText_(data.slice(2));
-    tgSendHtml_(chatId, t + '\\n\\n👆 /prod　/prod2　/sum', { inline_keyboard: [[{ text:'📰 日報', callback_data:'drday' },{ text:'📋 排單週報', callback_data:'drplan' },{ text:'📅 效率週報', callback_data:'dreff' }]] });
+    tgSendHtml_(chatId, t + '\\n\\n👆 /prod　/prod2　/sum', drKeyboard_(data.slice(2)));   // v4.10: + site buttons
     return;
   }
   // 有日／週／月／年的部門：先送「日」摘要＋期間按鈕
@@ -378,6 +381,15 @@ rep("""   VRT 生產系統 GAS 後端 v4.9 — 智慧匯入：""",
    v4.9 — 智慧匯入：""")
 rep("backendVersion:'4.9.0',smartImport:true,","backendVersion:'4.9.1',smartImport:true,purchaseDedupe:true,")
 rep("return okCors({ message: 'VRT Prod GAS v4.9 SMART SYNC","return okCors({ message: 'VRT Prod GAS v4.9.1 SMART SYNC")
+
+# 16. v4.10 (2026-10-27): readable Telegram reports (vrt-daily-report-v1.js 1.3: one fact per line, verdict first, plain words, numbered 要處理
+#     with owner, data-time footer) + URL buttons (page / 生產總覽 / 生產入口) under every daily & weekly report, period summary and digest
+rep("""   VRT 生產系統 GAS 後端 v4.9.1 — 機修零件採購摘要：""",
+"""   VRT 生產系統 GAS 後端 v4.10 — 日報／週報改成人看得懂的寫法（一行一件事、先結論、白話、「要處理」寫明誰做什麼、資料時間），
+     每則摘要底下有「頁面／生產總覽／生產入口」按鈕（10/27）
+   v4.9.1 — 機修零件採購摘要：""")
+rep("backendVersion:'4.9.1',smartImport:true,purchaseDedupe:true,","backendVersion:'4.10.0',readableReports:true,reportButtons:true,smartImport:true,purchaseDedupe:true,")
+rep("return okCors({ message: 'VRT Prod GAS v4.9.1 SMART SYNC","return okCors({ message: 'VRT Prod GAS v4.10 SMART SYNC")
 
 # 11. extra intake bots (修改指令 C): tokens live OUTSIDE the repo in ../../gas/inbox_bots.json (or $VRT_INBOX_BOTS_FILE) and are
 #     written into CFG.INBOX_BOTS of the built .gs only — the repo block reads CFG.INBOX_BOTS / Script Property INBOX_BOTS_JSON.

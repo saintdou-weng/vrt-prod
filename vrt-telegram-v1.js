@@ -68,7 +68,9 @@
   async function copy(){try{await navigator.clipboard.writeText(TGS().plain(els._last&&els._last.text||''));toast(L('已複製','Copied'))}catch(e){toast(L('無法複製','Copy failed'))}}
   async function sendText(text,chatId){const url=gasUrl();if(!url)throw new Error(L('尚未設定 GAS 網址，請先在平台設定','GAS URL not set; set it in the portal first'));
     const post=async body=>{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow'});let d=null;try{d=await r.json()}catch(_){}if(!d)throw new Error('GAS no JSON reply');return d};
-    const base={action:'sendMessage',text:TGS().clip(text,4000),parse_mode:'HTML',disable_web_page_preview:true,auditTool:(cfg&&(cfg.tool||cfg.kind))||'portal',auditType:'summary'};if(chatId)base.chat_id=chatId;
+    // v1.2 (2026-10-27): buttons under the message — this page, 生產總覽, 生產入口 (same as the bot's own summaries; GAS ≥ v4.10 forwards reply_markup)
+    const site=String(location.href).replace(/[#?].*$/,'').replace(/[^\/]*$/,''),page=String(location.pathname).split('/').pop()||'';const kb=[];if(page&&!/portal_v2|production_v4/.test(page))kb.push({text:'📄 '+L('本頁','This page'),url:site+page});kb.push({text:'📊 '+L('生產總覽','Overview'),url:site+'production_v4.html'},{text:'🏭 '+L('生產入口','Portal'),url:site+'portal_v2.html'});
+    const base={action:'sendMessage',text:TGS().clip(text,4000),parse_mode:'HTML',disable_web_page_preview:true,reply_markup:{inline_keyboard:[kb]},auditTool:(cfg&&(cfg.tool||cfg.kind))||'portal',auditType:'summary'};if(chatId)base.chat_id=chatId;
     let d=await post(base);
     if(!d.ok){const plain=Object.assign({},base,{text:TGS().clip(TGS().plain(text),4000),parse_mode:'none',plain:true});const d2=await post(plain);if(!d2.ok)throw new Error(d2.error||d.error||'send failed');return {ok:true,plain:true,data:d2.data}}
     return {ok:true,plain:!!(d.data&&d.data.plainFallback),data:d.data}}

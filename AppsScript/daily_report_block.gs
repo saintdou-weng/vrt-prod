@@ -58,10 +58,17 @@ function generateDailyReport(dateOpt, opts){
   if(opts.send)return dailyReportSend_(rep);
   return rep;
 }
+/* v4.10 (2026-10-27): buttons under every report — the page it came from, the production overview and the portal (URL buttons),
+   plus the three on-demand report buttons; the text itself is the readable v1.3 layout of vrt-daily-report-v1.js */
+function drKeyboard_(mode){
+  mode=mode==='plan'?'plan':mode==='eff'?'eff':'day';
+  const page=mode==='plan'?'prodplan':mode==='eff'?'sewing':'overview';
+  return { inline_keyboard: [ siteRow_([page,'overview','portal']), [{ text:'📰 日報', callback_data:'drday' },{ text:'📋 排單週報', callback_data:'drplan' },{ text:'📅 效率週報', callback_data:'dreff' }] ] };
+}
 function dailyReportSend_(rep,chatId,lang){
   lang=lang||drTgLang_(); const useAi=rep.ai&&rep.ai.ok&&rep.ai.html;
-  const html=useAi?rep.ai.html:(lang==='zh'?(rep.htmlZh||DR.render(rep.facts,{lang:'zh'}).html):rep.html);
-  const res=tgSendHtml_(chatId||CFG.CHAT_ID, html, null);
+  const html=useAi?rep.ai.html:drText_(rep,lang).html;
+  const res=tgSendHtml_(chatId||CFG.CHAT_ID, html, drKeyboard_(rep.kind||'day'));
   rep.sentAt=new Date().toISOString(); rep.sentAi=!!useAi; rep.sentLang=lang; rep.sentMessageId=res&&res.result&&res.result.message_id||null; dailyReportSave_(rep); return rep;
 }
 /* v4.7 bot menu text (/prod, /prod2 底下的中文摘要按鈕): the latest report of that mode, generated on demand when none exists */
@@ -71,8 +78,11 @@ function dailyReportMenuText_(mode){
   let rep=idx.length?dailyReportLoad_(idx[0].date):null;
   if(!rep){ try{ rep=mode==='day'?generateDailyReport('',{ai:false}):generateDailyReport(DR.helpers.addDays(todayYmd_(),-7),{period:'week',kind:mode,ai:false}); }catch(e){ return '⚠️ 無法產生'+(mode==='plan'?'排單週報':mode==='eff'?'效率週報':'生產日報')+'：'+DR.helpers.esc(String(e&&e.message||e)); } }
   if(!rep||!rep.facts)return '⚠️ 目前沒有'+(mode==='plan'?'排單週報':mode==='eff'?'效率週報':'生產日報');
-  return rep.htmlZh||DR.render(rep.facts,{lang:'zh'}).html;
+  return drHtmlZh_(rep);
 }
+// v4.10: a report stored by an older library keeps its facts; the text shown is always rendered with the current (readable) layout
+function drHtmlZh_(rep){ return rep.version===DR.version&&rep.htmlZh?rep.htmlZh:DR.render(rep.facts,{lang:'zh'}).html; }
+function drText_(rep,lang){ if(rep.version===DR.version){ if(lang==='zh'&&rep.textZh)return {text:rep.textZh,html:rep.htmlZh}; if(lang!=='zh'&&rep.text)return {text:rep.text,html:rep.html}; } const r=DR.render(rep.facts,{lang:lang==='zh'?'zh':'both'}); return {text:r.text,html:r.html}; }
 // 時間觸發器用（10:00 / 15:00）：最近有車縫資料的那一天還沒有日報就產生並推到生產群組；已產生未推送就只推送；都做過就什麼都不做
 function dailyReportTrigger(){ return generateDailyReport('',{send:true}); }
 // 週報觸發器（週一 10:30）：上一個完整週（週一～週日）；兩份：效率週報（含換針零件）＋排單週報（負荷／換款／空檔，不含機修）；同一週只產生一次
@@ -153,10 +163,11 @@ function handleDailyReport_(p){
   if(a==='dailyReportSend'){let rep=dailyReportLoad_(p.date); if(!rep&&p.report)rep=p.report; if(!rep)return okCors({ok:false,error:'no report for '+p.date}); if(p.useAi===false||p.useAi==='false'){const t=rep.ai;rep.ai=null;dailyReportSend_(rep,p.chat_id);rep.ai=t;dailyReportSave_(rep)}else dailyReportSend_(rep,p.chat_id); return okCors({ok:true,sentAt:rep.sentAt,sentAi:rep.sentAi})}
   if(a==='dailyReportAi'){if(!claudeKey_())return okCors({ok:false,error:'CLAUDE_API_KEY 未設定（GAS 指令碼屬性）',notConfigured:true}); const facts=p.facts||(dailyReportLoad_(p.date)||{}).facts; if(!facts)return okCors({ok:false,error:'facts required'});
     try{const ai=dailyReportAi_(facts,'daily:'+(facts.date||p.date||''),p.lang==='zh'?'zh':'both'); const rep=dailyReportLoad_(facts.date); if(rep&&ai.ok){rep.ai=ai;dailyReportSave_(rep)} return okCors({ok:ai.ok,ai:ai,usage:claudeUsageSummary_()})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
-  if(a==='dailyReportText'){ /* v4.7 portal panel: latest report text of a mode (zh) */ try{const mode=String(p.mode||'day'); const idx=dailyReportIndex_().filter(x=>mode==='plan'?/-W\d{2}-plan$/.test(x.date):mode==='eff'?/-W\d{2}$/.test(x.date):!/-W\d{2}/.test(x.date)); const rep=idx.length?dailyReportLoad_(idx[0].date):null; if(!rep)return okCors({ok:false,error:'no report',mode}); const zh=p.lang!=='both'; return okCors({ok:true,mode,date:rep.date,generatedAt:rep.generatedAt,sentAt:rep.sentAt||'',text:zh?(rep.textZh||DR.render(rep.facts,{lang:'zh'}).text):rep.text,html:zh?(rep.htmlZh||DR.render(rep.facts,{lang:'zh'}).html):rep.html,ai:rep.ai&&rep.ai.ok?rep.ai.text:''})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
+  if(a==='dailyReportText'){ /* v4.7 portal panel: latest report text of a mode (zh) */ try{const mode=String(p.mode||'day'); const idx=dailyReportIndex_().filter(x=>mode==='plan'?/-W\d{2}-plan$/.test(x.date):mode==='eff'?/-W\d{2}$/.test(x.date):!/-W\d{2}/.test(x.date)); const rep=idx.length?dailyReportLoad_(idx[0].date):null; if(!rep)return okCors({ok:false,error:'no report',mode}); const zh=p.lang!=='both'; const tt=drText_(rep,zh?'zh':'both'); return okCors({ok:true,mode,date:rep.date,generatedAt:rep.generatedAt,sentAt:rep.sentAt||'',text:tt.text,html:tt.html,ai:rep.ai&&rep.ai.ok?rep.ai.text:''})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
   if(a==='dailyReportUsage')return okCors({ok:true,usage:claudeUsageSummary_()});
   if(a==='aiSummary'){if(!claudeKey_())return okCors({ok:false,error:'CLAUDE_API_KEY 未設定（GAS 指令碼屬性）',notConfigured:true}); try{const ai=aiSummary_(String(p.kind||''),String(p.text||''),p.period,p.lang); return okCors({ok:ai.ok,ai:ai,usage:claudeUsageSummary_()})}catch(e){return okCors({ok:false,error:String(e&&e.message||e)})}}
   return okCors({ok:false,error:'unknown daily report action '+a});
 }
+function checkProductionV410(){ const r=checkProductionV47(); r.readableReports=DR.version; r.reportButtons=drKeyboard_('plan').inline_keyboard[0].map(b=>b.text+' → '+b.url); r.digestButtons=digestSummary_('day','').markup.inline_keyboard.slice(-1)[0].map(b=>b.text+' → '+b.url); console.log(JSON.stringify(r,null,2)); return r; }
 function checkProductionV47(){ const r=checkProductionV46(); r.weeklyPlanReport=true; r.portalSummaryButtons=['prod','prod2'].every(k=>{const kb=buildMenu(k,0).markup.inline_keyboard;return kb.some(row=>row.some(b=>b.callback_data==='drplan'))&&kb.some(row=>row.some(b=>b.callback_data==='drday'))}); r.tgLang=drTgLang_(); console.log(JSON.stringify(r,null,2)); return r; }
 function checkProductionV46(){ const r=checkProductionV45(); r.dailyReport=true; r.weeklyReport=true; r.claudeConfigured=!!claudeKey_(); r.claudeModel=String(claudeProps_().getProperty('CLAUDE_MODEL')||'(auto)'); r.dailyReportTriggers=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='dailyReportTrigger').length; r.reports=dailyReportIndex_().slice(0,5); console.log(JSON.stringify(r,null,2)); return r; }
