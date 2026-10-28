@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Assemble VRT_Production_v4.10.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
+"""Assemble VRT_Production_v4.10.2.gs from the v4.2 base + the shared summary builders (vrt-tg-summary-v1.js) + the period-summary block.
 v4.15 (2026-10-05): the base file and the output both hold the Telegram bot token, so they live OUTSIDE the repo:
   base   : $VRT_GAS_BASE  (default ../../gas/VRT_Production_v4.2.gs, i.e. next to the repo, never inside it)
-  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.10.gs)
+  output : $VRT_GAS_OUT   (default ../../gas/out/VRT_Production_v4.10.2.gs)
 v4.16 (2026-10-10): + vrt-daily-report-v1.js + daily_report_block.gs (D1 生產日報, Claude API hook, D2 aiSummary) + inbox_block.gs (C Telegram file intake)
 Never copy a built .gs into the repo / GitHub / a public ZIP."""
 import re,os,sys
 HERE=os.path.dirname(os.path.abspath(__file__))
 BASE=os.environ.get('VRT_GAS_BASE') or os.path.join(HERE,'..','..','gas','VRT_Production_v4.2.gs')
-OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.10.gs')
+OUT=os.environ.get('VRT_GAS_OUT') or os.path.join(HERE,'..','..','gas','out','VRT_Production_v4.10.2.gs')
 src=open(BASE,encoding='utf-8').read()
 block=open(os.path.join(HERE,'period_summaries_block.gs'),encoding='utf-8').read()
 shared=open(os.path.join(HERE,'..','vrt-tg-summary-v1.js'),encoding='utf-8').read()   # repo root
@@ -390,6 +390,18 @@ rep("""   VRT 生產系統 GAS 後端 v4.9.1 — 機修零件採購摘要：""",
    v4.9.1 — 機修零件採購摘要：""")
 rep("backendVersion:'4.9.1',smartImport:true,purchaseDedupe:true,","backendVersion:'4.10.0',readableReports:true,reportButtons:true,smartImport:true,purchaseDedupe:true,")
 rep("return okCors({ message: 'VRT Prod GAS v4.9.1 SMART SYNC","return okCors({ message: 'VRT Prod GAS v4.10 SMART SYNC")
+
+# 17. v4.10.2 (2026-10-28): doPost guard — a JSON body that names an action the backend does not know must never fall through to the
+#     legacy snapshot save (it overwrote <tool>.json, trashed chunk_<tool>_* and reset snap_<tool> when a stray {action:'status',tool}
+#     arrived on 10/27; repaired with repairLegacySnapV410()). Only the legacy upload shapes (no action, or push/save/upload) continue.
+rep("""    if (!tool) throw new Error('Missing tool');
+""","""    if (!tool) throw new Error('Missing tool');
+    // v4.10.2 (2026-10-28) guard: a JSON body that names an action this backend does not know must never fall through to the
+    // legacy snapshot save below (it overwrites <tool>.json, trashes chunk_<tool>_* and resets snap_<tool>). Only the legacy upload
+    // shapes (no action, or action push / save / upload) may continue.
+    if (payload.action && !/^(push|save|upload)$/i.test(String(payload.action))) return failCors('Unknown action: ' + payload.action);
+""")
+rep("backendVersion:'4.10.0',readableReports:true,","backendVersion:'4.10.2',readableReports:true,unknownActionGuard:true,")
 
 # 11. extra intake bots (修改指令 C): tokens live OUTSIDE the repo in ../../gas/inbox_bots.json (or $VRT_INBOX_BOTS_FILE) and are
 #     written into CFG.INBOX_BOTS of the built .gs only — the repo block reads CFG.INBOX_BOTS / Script Property INBOX_BOTS_JSON.
