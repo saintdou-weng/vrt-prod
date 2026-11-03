@@ -12,7 +12,7 @@
    Pure helpers (route / sniff / msg / eml / zip) are exported for the tests (Node: require this file, pass XLSX). */
 (function(g){'use strict';
   if(g.VRTSmartImport&&g.VRTSmartImport.version)return;
-  const VERSION='1.0.0';
+  const VERSION='1.1.0';
   /* ── modules: page + file types each page's own importer takes; msgWhole = the page reads .msg/.eml itself (keeps the mail name / date) ── */
   const MODULES={
     sewing:{zh:'🧵 車縫',en:'🧵 Sewing',page:'sewing_v5.html',ext:'xlsx xls csv eml msg',msgWhole:true},
@@ -132,7 +132,7 @@
   async function gas(body){const url=gasUrl();if(!url)throw new Error(L('尚未設定 GAS 網址','GAS URL not set'));const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow'});let d=null;try{d=await r.json()}catch(_){}if(!d)throw new Error('GAS no JSON');if(d.ok===false)throw new Error(d.error||'GAS error');const x=d.data||{};if(x.ok===false)throw new Error(x.error||'error');return x}
   /* ── IndexedDB VRT_SmartImport: handoff (files waiting for their page) + ledger (sha256 → imported where / when) ── */
   const DBN='VRT_SmartImport';let dbp=null;
-  function db(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const q=indexedDB.open(DBN,1);q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains('handoff'))d.createObjectStore('handoff',{keyPath:'id'});if(!d.objectStoreNames.contains('ledger'))d.createObjectStore('ledger',{keyPath:'hash'})};q.onsuccess=()=>{q.result.onversionchange=()=>{try{q.result.close()}catch(_){}dbp=null};res(q.result)};q.onerror=()=>{dbp=null;rej(q.error)}});return dbp}
+  function db(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const q=indexedDB.open(DBN,2);q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains('handoff'))d.createObjectStore('handoff',{keyPath:'id'});if(!d.objectStoreNames.contains('ledger'))d.createObjectStore('ledger',{keyPath:'hash'});if(!d.objectStoreNames.contains('dirs'))d.createObjectStore('dirs',{keyPath:'id'})};q.onsuccess=()=>{q.result.onversionchange=()=>{try{q.result.close()}catch(_){}dbp=null};res(q.result)};q.onerror=()=>{dbp=null;rej(q.error)}});return dbp}
   /* an IDBRequest from this or another realm (test shims) → its result */
   const isReq=o=>!!o&&typeof o==='object'&&((typeof IDBRequest!=='undefined'&&o instanceof IDBRequest)||('readyState' in o&&'result' in o&&'onsuccess' in o));
   async function tx(store,mode,fn){const d=await db();return new Promise((res,rej)=>{const t=d.transaction(store,mode),s=t.objectStore(store);let out;try{out=fn(s)}catch(e){rej(e);return}t.oncomplete=()=>res(isReq(out)?out.result:out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
@@ -204,14 +204,14 @@
     const b=document.createElement('button');b.id='vrtSiBtn';b.type='button';b.setAttribute('data-no-i18n','');b.title=L('智慧匯入：Excel／msg／PDF／照片／zip 丟進來，自動判斷模組','Smart import: drop Excel / msg / PDF / photo / zip, the module is detected');b.innerHTML='⇧ '+esc(L('智慧匯入','Smart import'))+' <span class="n" id="vrtSiN">0</span>';b.onclick=()=>open();document.body.appendChild(b);els.btn=b;
     const m=document.createElement('div');m.id='vrtSiMask';m.setAttribute('data-no-i18n','');m.innerHTML='<div id="vrtSiBox" role="dialog" aria-modal="true"><div class="hd"><span style="font-size:22px">⇧</span><div><b>'+esc(L('智慧匯入','Smart import'))+'</b><small>'+esc(L('Excel／CSV、Outlook 信（.msg／.eml）、PDF、照片、zip 都丟這裡 · 自動判斷模組 · 已匯入過的自動略過','Excel / CSV, Outlook mail (.msg / .eml), PDF, photos, zip · module detected · already imported = skipped'))+'</small></div><button class="x" type="button" data-act="close">&times;</button></div>'+
       '<div class="bd"><div id="vrtSiDrop"><div class="big">📂 '+esc(L('把檔案拖到這裡，或點這裡選檔','Drop files here, or tap to choose'))+'</div><div class="sm">'+esc(L('可以一次很多檔；信件與 zip 會自動打開取附件','many files at once; mails and zips are opened for their attachments'))+'</div></div>'+
-      '<div class="bt"><button class="b" type="button" data-act="pick">📂 '+esc(L('選檔案','Choose files'))+'</button><button class="b" type="button" data-act="cam">📷 '+esc(L('拍照','Take photo'))+'</button><button class="b" type="button" data-act="inbox">☁ '+esc(L('群組／Email 已收到的','Collected by the bots'))+' <span id="vrtSiInN"></span></button></div>'+
+      '<div class="bt"><button class="b" type="button" data-act="pick">📂 '+esc(L('選檔案','Choose files'))+'</button><button class="b" type="button" data-act="cam">📷 '+esc(L('拍照','Take photo'))+'</button><button class="b" type="button" data-act="inbox">☁ '+esc(L('群組／Email 已收到的','Collected by the bots'))+' <span id="vrtSiInN"></span></button>'+(FS_OK?'<button class="b" type="button" data-act="scan">📁 '+esc(L('掃描資料夾','Scan folder'))+'</button>':'')+'</div>'+(FS_OK?'<div id="vrtSiDirs" class="sm" style="margin:6px 0 0;font-size:11.5px;color:#475569;display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>':'')+
       '<input type="file" id="vrtSiFile" multiple hidden><input type="file" id="vrtSiCam" accept="image/*" capture="environment" hidden>'+
       '<div id="vrtSiPend"></div><div id="vrtSiList"></div><div id="vrtSiInbox"></div><div id="vrtSiRes"></div></div>'+
       '<div class="ft"><label style="font-size:11.5px;color:#475569;display:flex;gap:5px;align-items:center"><input type="checkbox" id="vrtSiUp"> '+esc(L('同時存一份到雲端收件匣（備份、換電腦也知道已匯入）','also keep a copy in the cloud inbox (backup; other devices know it was imported)'))+'</label><span class="msg" id="vrtSiMsg"></span><button class="b" type="button" data-act="clear">'+esc(L('清空','Clear'))+'</button><button class="b p" type="button" data-act="go" id="vrtSiGo" disabled>⇧ '+esc(L('開始匯入','Import'))+'</button></div></div>';
-    document.body.appendChild(m);els.mask=m;els.box=m.querySelector('#vrtSiBox');const $=id=>m.querySelector('#'+id);Object.assign(els,{drop:$('vrtSiDrop'),file:$('vrtSiFile'),cam:$('vrtSiCam'),list:$('vrtSiList'),inbox:$('vrtSiInbox'),res:$('vrtSiRes'),pend:$('vrtSiPend'),msg:$('vrtSiMsg'),go:$('vrtSiGo'),up:$('vrtSiUp'),inN:$('vrtSiInN'),n:document.getElementById('vrtSiN')});
+    document.body.appendChild(m);els.mask=m;els.box=m.querySelector('#vrtSiBox');const $=id=>m.querySelector('#'+id);Object.assign(els,{dirs:$('vrtSiDirs'),drop:$('vrtSiDrop'),file:$('vrtSiFile'),cam:$('vrtSiCam'),list:$('vrtSiList'),inbox:$('vrtSiInbox'),res:$('vrtSiRes'),pend:$('vrtSiPend'),msg:$('vrtSiMsg'),go:$('vrtSiGo'),up:$('vrtSiUp'),inN:$('vrtSiInN'),n:document.getElementById('vrtSiN')});
     els.up.checked=uploadOn();els.up.onchange=()=>ls('vrt_si_upload',els.up.checked?'1':'0');
     m.addEventListener('click',e=>{if(e.target===m){close();return}const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;
-      if(a==='close')close();else if(a==='pick')els.file.click();else if(a==='cam')els.cam.click();else if(a==='go')go();else if(a==='clear'){rows=[];lastResult=null;paint()}else if(a==='inbox')loadInbox(true);
+      if(a==='close')close();else if(a==='pick')els.file.click();else if(a==='cam')els.cam.click();else if(a==='go')go();else if(a==='clear'){rows=[];lastResult=null;paint()}else if(a==='inbox')loadInbox(true);else if(a==='scan')scanFolders({manual:true});else if(a==='adddir')addFolder();else if(a==='rmdir')removeFolder(t.dataset.id);
       else if(a==='inadd')addInbox(t.dataset.id);else if(a==='inall')addInbox('*');else if(a==='nav')location.href=t.dataset.href;else if(a==='tg')summary();else if(a==='ap')approve(t.dataset.m);else if(a==='recv')receive(true);else if(a==='drophand')dropHandoff(t.dataset.m);else if(a==='rm'){rows=rows.filter(r=>r.id!==t.dataset.id);paint()}});
     m.addEventListener('change',e=>{const t=e.target;if(t.dataset&&t.dataset.act==='mod'){const r=rows.find(x=>x.id===t.dataset.id);if(r){r.module=t.value;r.reason=L('手動','chosen');learn(r.name,t.value);r.status=r.status==='seen'?'seen':(t.value?(accepts(t.value,r.name)?(r.status==='inbox'?'inbox':'new'):'type'):'ask');r.include=r.status==='new'||r.status==='inbox';r.note=r.status==='type'?mz(r.module)+L(' 不收這種檔',' does not take this file type'):r.note;paint()}}
       else if(t.dataset&&t.dataset.act==='inc'){const r=rows.find(x=>x.id===t.dataset.id);if(r){r.include=t.checked;paint()}}});
@@ -220,7 +220,7 @@
     if(!keyOn){keyOn=true;document.addEventListener('keydown',e=>{if(e.key==='Escape'&&els.mask&&els.mask.classList.contains('open'))close()})}}
   /* the window is data-no-i18n (its text comes from L), so rebuild it once the Khmer dictionary has arrived or the language is switched */
   let keyOn=false;function relabel(){if(!els.box)return;const wasOpen=els.mask.classList.contains('open');const chipEl=els.chip;try{els.btn.remove();els.mask.remove()}catch(_){}for(const k of Object.keys(els))delete els[k];if(chipEl)els.chip=chipEl;ui();paintPending();if(wasOpen)open()}
-  function open(){ui();els.mask.classList.add('open');paint();paintPending();if(!inboxLoaded)loadInbox(false)}
+  function open(){ui();els.mask.classList.add('open');paint();paintPending();paintDirs();if(!inboxLoaded)loadInbox(false)}
   function close(){if(els.mask)els.mask.classList.remove('open')}
   function msg(t){if(els.msg)els.msg.textContent=t||''}
   async function add(files){if(!files.length)return;if(busy)return;busy=true;lastResult=null;msg('⏳ '+L('讀取 ','reading ')+files.length+L(' 個檔…',' file(s)…'));
@@ -244,13 +244,13 @@
     try{for(const r of list){msg('⏳ '+L('下載 ','downloading ')+r.fileName);try{const d=await gas({action:'inboxFile',id:r.id});const u8=b64bytes(d.base64||'');const f=new File([u8],d.fileName||r.fileName,{type:d.mime||r.mime||''});const n0=rows.length;await ingest(f,{module:MODULES[r.module]?r.module:'',inboxId:r.id,group:r.group});rows.slice(n0).forEach(x=>{x.inboxId=r.id;if(!x.module&&MODULES[r.module]){x.module=r.module;x.reason=L('群組收件分類','inbox route')}});inboxRows=inboxRows.filter(x=>x.id!==r.id)}catch(e){msg('❌ '+r.fileName+'：'+e.message)}}
       await check();rows.forEach(x=>{if(x.inboxId&&x.status==='new')x.status='inbox'})}finally{busy=false}paint();loadInbox(true)}
   /* ── import: this page now, the others through the handoff store ── */
-  async function go(){const P=plan();if(!P.sel.length||busy)return;busy=true;els.go.disabled=true;const here=pageModule();const batch='b'+Date.now().toString(36);const result={here:null,away:{},at:new Date().toISOString()};
+  async function go(gopt){gopt=gopt||{};const P=plan();if(!P.sel.length||busy)return;busy=true;els.go.disabled=true;const here=pageModule();const batch='b'+Date.now().toString(36);const result={here:null,away:{},at:new Date().toISOString()};
     try{for(const m of Object.keys(P.by)){const list=P.by[m];
-        if(m===here&&reg()){close();await feedHere(list.map(toFile));result.here={module:m,n:list.length};}
+        if(m===here&&reg()){if(!gopt.auto)close();await feedHere(list.map(toFile));result.here={module:m,n:list.length};}
         else{for(const r of list)await idb.put('handoff',{id:batch+'_'+r.id,batch,module:m,name:r.name,type:r.type||'',lastModified:r.lastModified||Date.now(),data:r.u8,hash:r.hash,kids:(r.kids||[]).map(k=>k.hash),inboxId:r.inboxId||'',from:pageFile(),subject:r.subject||(r.from&&r.from.subject)||'',createdAt:new Date().toISOString()});result.away[m]=list.length}
         for(const r of list)await record(r,m,m===here?'handed':'queued')}
       rows=rows.filter(r=>!P.sel.includes(r));lastResult=result;await paintPending();paint();
-      const aw=Object.keys(result.away);if(result.here)await chipDone(result.here.module,result.here.n);else if(aw.length===1){msg('→ '+mz(aw[0]));setTimeout(()=>{location.href=MODULES[aw[0]].page+VQ+'#smartimport'},700)}
+      const aw=Object.keys(result.away);if(result.here)await chipDone(result.here.module,result.here.n);else if(aw.length===1&&!gopt.auto){msg('→ '+mz(aw[0]));setTimeout(()=>{location.href=MODULES[aw[0]].page+VQ+'#smartimport'},700)}
     }catch(e){msg('❌ '+e.message)}finally{busy=false;paint()}
     upload(P.sel)}
   const toFile=r=>new File([r.u8||r.data],r.name,{type:r.type||'',lastModified:r.lastModified||Date.now()});
@@ -272,7 +272,7 @@
   function waitGone(sel,maxMs){const t0=Date.now();return new Promise(res=>{const tick=()=>{const el=typeof sel==='function'?sel():document.querySelector(sel);if(!el||Date.now()-t0>(maxMs||45*60000))return res(true);setTimeout(tick,300)};setTimeout(tick,300)})}
   /* ── the chip: non-modal status bar while the page's own preview is on screen ── */
   function chip(html,buttons){ui();if(!els.chip){const c=document.createElement('div');c.id='vrtSiChip';c.setAttribute('data-no-i18n','');document.body.appendChild(c);els.chip=c;
-      c.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;if(a==='x')chipHide();else if(a==='nav')location.href=t.dataset.href;else if(a==='tg'){chipHide();summary()}else if(a==='ap')approve(t.dataset.m);else if(a==='next'&&els.chipNext){const f=els.chipNext;els.chipNext=null;f()}else if(a==='stop'&&els.chipStop){const f=els.chipStop;els.chipStop=null;f()}})}
+      c.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;if(a==='x')chipHide();else if(a==='nav')location.href=t.dataset.href;else if(a==='tg'){chipHide();summary()}else if(a==='ap')approve(t.dataset.m);else if(a==='siopen'){chipHide();open()}else if(a==='next'&&els.chipNext){const f=els.chipNext;els.chipNext=null;f()}else if(a==='stop'&&els.chipStop){const f=els.chipStop;els.chipStop=null;f()}})}
     els.chip.innerHTML='<span class="t">⇧ '+html+'</span>'+(buttons||'')+'<button type="button" class="x" data-act="x" title="'+esc(L('關閉','close'))+'">×</button>';els.chip.classList.add('on')}
   function chipHide(){if(els.chip)els.chip.classList.remove('on')}
   function chipWait(i,n,next){return new Promise(res=>{els.chipNext=()=>res(true);els.chipStop=()=>res(false);chip(esc(L('第 ','file '))+i+'／'+n+esc(L(' 檔已交給本頁 — 在頁面上確認後，按「下一檔」',' handed to the page — confirm on the page, then tap Next')),'<button type="button" class="b p" data-act="next">'+esc(L('下一檔 →','Next →'))+' '+esc(next.slice(0,40))+'</button>')})}
@@ -303,9 +303,54 @@
   /* ── API ── */
   function init(c){REG=Object.assign({},c||{});if(!REG.module)throw new Error('VRTSmartImport.init: module required');return api}
   function hook(m,h){HOOKS[m]=Object.assign(HOOKS[m]||{},h||{});return api}
-  const api=Object.assign({version:VERSION,init,hook,open,close,add,receive,waitGone,chipHide,get rows(){return rows},get reg(){return reg()},pageModule,pending,ledger:()=>idb.all('ledger'),forget:h=>idb.del('ledger',h),learned,learn},pure);
+  const api=Object.assign({version:VERSION,init,hook,open,close,add,receive,waitGone,chipHide,get rows(){return rows},get reg(){return reg()},pageModule,pending,scanFolders,folders,ledger:()=>idb.all('ledger'),forget:h=>idb.del('ledger',h),learned,learn},pure);
   g.VRTSmartImport=api;
+
+  /* v1.1 (PROD v4.20.1) 📁 掃描資料夾: the browser remembers folders the user picked (File System Access API, Chrome / Edge desktop).
+     Scan = files modified in the last N days whose NAME matches a module route (the same table as the group / Email intake), not imported
+     before (fingerprint in the local ledger or the GAS inbox ledger) → rows in this window. 「自動」: scan on every page open when the browser
+     still allows the folder, and hand the new files straight to their modules (no page change; each module imports when it is opened).
+     A name / size / date cache skips files already fingerprinted, so a scan only reads new files. */
+  const FS_OK=typeof g.showDirectoryPicker==='function';
+  const SCAN_EXT={xlsx:1,xls:1,xlsm:1,csv:1,msg:1,eml:1,pdf:1,zip:1},SCAN_SKIP=/^(_to_delete|node_modules|\.git|\$recycle\.bin|appdata|archive.*|00_reports.*|06_ai.*|versions.*|.*舊版.*|.*重複.*|pst匯入暫存)$/i,
+    // working copies / analyses made FROM a report (not the report itself): never picked by a scan
+    SCAN_NAME_SKIP=/ac_hra|hra_pay|payroll|nssf|nursing|canteen|attendance|crosscheck|costing\s*sheet|reviewed|provisional|2columns|fixedhdr|unicodehdr|fmt2026|_clean\b|_fixed\b|backup|稽核|分析|對照|整理/i;
+  const scanDays=()=>{const n=Number(ls('vrt_si_scan_days'));return n>0?n:14},scanAuto=()=>ls('vrt_si_scan_auto')==='1';
+  function scanCache(){try{return JSON.parse(ls('vrt_si_scan_seen')||'{}')}catch(_){return{}}}
+  function scanCacheSave(c){const ks=Object.keys(c);if(ks.length>3000)ks.sort((a,b)=>c[a].t-c[b].t).slice(0,ks.length-3000).forEach(k=>delete c[k]);ls('vrt_si_scan_seen',JSON.stringify(c))}
+  async function folders(){try{return (await idb.all('dirs'))||[]}catch(_){return[]}}
+  async function paintDirs(){if(!els.dirs)return;const ds=await folders();
+    els.dirs.innerHTML='<span>📁 '+esc(L('資料夾','Folders'))+'：</span>'+(ds.length?ds.map(d=>'<span style="background:#f1f5f9;border-radius:6px;padding:2px 6px">'+esc(d.name)+' <a href="javascript:void 0" data-act="rmdir" data-id="'+esc(d.id)+'" style="color:#94a3b8;text-decoration:none">✕</a></span>').join(''):'<i>'+esc(L('還沒設定','none yet'))+'</i>')+
+      '<button class="b" type="button" data-act="adddir" style="padding:3px 8px;font-size:11.5px">＋ '+esc(L('加資料夾','Add folder'))+'</button>'+
+      '<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="vrtSiScanAuto"'+(scanAuto()?' checked':'')+'> '+esc(L('開頁時自動掃描並匯入','auto scan & import on page open'))+'</label>'+
+      '<label style="display:flex;gap:4px;align-items:center">'+esc(L('最近','last'))+' <select id="vrtSiScanDays">'+[3,7,14,30,60,120].map(n=>'<option'+(n===scanDays()?' selected':'')+'>'+n+'</option>').join('')+'</select> '+esc(L('天','days'))+'</label>';
+    const a=els.dirs.querySelector('#vrtSiScanAuto'),dd=els.dirs.querySelector('#vrtSiScanDays');if(a)a.onchange=()=>{ls('vrt_si_scan_auto',a.checked?'1':'0');if(a.checked)ls('vrt_si_scan_auto_from',String(Date.now()-36e5))};if(dd)dd.onchange=()=>ls('vrt_si_scan_days',dd.value)}
+  async function addFolder(){if(!FS_OK)return;let h;try{h=await g.showDirectoryPicker({id:'vrt-smart-import',mode:'read'})}catch(_){return}
+    const ds=await folders();for(const d of ds){try{if(d.handle&&await d.handle.isSameEntry(h)){msg(L('這個資料夾已經在清單裡','already in the list'));return}}catch(_){}}
+    await idb.put('dirs',{id:'d'+Date.now().toString(36),name:h.name,handle:h,addedAt:new Date().toISOString()});await paintDirs();await scanFolders({manual:true})}
+  async function removeFolder(id){try{await idb.del('dirs',id)}catch(_){}paintDirs()}
+  async function* walk(dir,depth,path){for await(const ent of dir.values()){if(ent.kind==='directory'){if(depth<3&&!SCAN_SKIP.test(ent.name))yield* walk(ent,depth+1,path+ent.name+'/')}else yield{ent,path}}}
+  let scanning=false;
+  async function scanFolders(o){o=o||{};if(!FS_OK||scanning||busy)return{found:0};const ds=o.dirs||await folders();if(!ds.length){if(o.manual){ui();open();await addFolder()}return{found:0}}
+    scanning=true;const autoFrom=Number(ls('vrt_si_scan_auto_from'))||0,since=Math.max(Date.now()-scanDays()*864e5,o.auto?autoFrom:0),cache=scanCache(),picked=[];let looked=0,skippedKnown=0,blocked=0;
+    try{if(o.manual)msg('⏳ '+L('掃描資料夾…','scanning folders…'));
+      for(const d of ds){const h=d.handle;if(!h)continue;let perm='prompt';try{perm=await h.queryPermission({mode:'read'})}catch(_){}
+        if(perm!=='granted'&&o.manual){try{perm=await h.requestPermission({mode:'read'})}catch(_){}}
+        if(perm!=='granted'){blocked++;continue}
+        for await(const {ent,path} of walk(h,0,d.name+'/')){const e=extOf(ent.name);if(!SCAN_EXT[e])continue;if(SCAN_NAME_SKIP.test(ent.name)||!routeName(ent.name))continue;looked++;
+          let f;try{f=await ent.getFile()}catch(_){continue}if(f.lastModified<since||f.size>25*1048576||!f.size)continue;
+          const ck=path+ent.name+'|'+f.size+'|'+f.lastModified;if(cache[ck]&&cache[ck].done){skippedKnown++;continue}picked.push({f,ck,path})}}
+      picked.sort((a,b)=>b.f.lastModified-a.f.lastModified);const take=picked.slice(0,60);
+      if(take.length){busy=true;try{for(const x of take){const n0=rows.length;try{await ingest(x.f,{scan:x.path})}catch(_){}for(const r of rows.slice(n0))r.scanKey=x.ck}await check()}finally{busy=false}}
+      // already imported (local or cloud fingerprint) → remember and leave the list; new ones stay
+      let seen=0;rows=rows.filter(r=>{if(!r.scanKey)return true;if(r.status==='seen'||r.status==='queued'){cache[r.scanKey]={done:1,t:Date.now()};seen++;return false}return true});scanCacheSave(cache);
+      const fresh=rows.filter(r=>r.scanKey&&(r.status==='new'||r.status==='ask'));
+      if(o.auto&&fresh.length){const ok=fresh.filter(r=>r.status==='new'&&r.module);rows.forEach(r=>{r.include=ok.includes(r)});if(ok.length){await go({auto:true});const done=ok.filter(r=>!rows.includes(r));for(const r of done)cache[r.scanKey]={done:1,t:Date.now()};scanCacheSave(cache);chip('📁 '+esc(L('資料夾自動匯入：','folder auto import: '))+done.length+esc(L(' 個新檔已交給模組',' new file(s) handed to their modules'))+(fresh.length>ok.length?' · '+(fresh.length-ok.length)+esc(L(' 個要選模組',' need a module')):''),'<button type="button" class="b" data-act="siopen">⇧ '+esc(L('看清單','Open list'))+'</button>')}}
+      const txt=L('掃描完成：新檔 ','scan done: new ')+fresh.length+L('｜已匯入過 ',' | imported before ')+(seen+skippedKnown)+(picked.length>60?L('｜還有 ',' | more: ')+(picked.length-60):'')+(blocked?L('｜',' | ')+blocked+L(' 個資料夾要先按「📁 掃描資料夾」允許讀取',' folder(s) need permission (press 📁 Scan folder)'):'');
+      if(o.manual||fresh.length)msg(txt);paint();return{found:fresh.length,seen:seen+skippedKnown,blocked}
+    }catch(e){msg('❌ '+e.message);return{found:0,error:e.message}}finally{scanning=false}}
   function start(){ui();paintPending();try{const I=g.VRTI18n;if(I&&I.lang&&I.lang!=='zh'&&I.lang!=='en'&&I.load)I.load(I.lang).then(d=>{if(d)relabel()});g.addEventListener('vrt:lang',e=>{const l=e&&e.detail&&e.detail.lang;const I2=g.VRTI18n;if(l&&l!=='zh'&&l!=='en'&&I2&&I2.load)I2.load(l).then(()=>relabel());else relabel()})}catch(_){}const here=pageModule();if(here){pending().then(all=>{const mine=all.filter(h=>h.module===here);if(!mine.length)return;const fresh=mine.some(h=>Date.now()-Date.parse(h.createdAt||0)<30*60000);if(/smartimport/.test(location.hash)||fresh)receive(false).catch(e=>{try{console.warn('[smart import]',e&&e.message||e)}catch(_){}});else{open()}}).catch(()=>{})}
-    if(/#smartimport-open/.test(location.hash))open()}
+    if(/#smartimport-open/.test(location.hash))open();
+    if(FS_OK&&scanAuto())setTimeout(()=>{scanFolders({auto:true}).catch(()=>{})},here?6000:2500)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,50));else setTimeout(start,50);
 })(typeof window!=='undefined'?window:globalThis);

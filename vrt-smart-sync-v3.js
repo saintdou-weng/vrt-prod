@@ -9,7 +9,7 @@
 (function(g){
   'use strict';
   if(g.VRTSmartSync && /^4\.5(?:\.|$)/.test(String(g.VRTSmartSync.version||''))) return;
-  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.5.1';
+  const DB_NAME='VRT_SmartSync_v3', STORE='sync_state', VERSION='4.6.0';
   const LS_PREFIX='vrt_smart_sync_v32_state_';
   const SHRINK_PREFIX='vrt_smart_sync_v37_shrink_';
   const RESUME_PREFIX='vrt_smart_sync_v42_resume_';
@@ -140,6 +140,25 @@
   const cacheKey=(url,tool,key)=>url.split('?')[0]+'|'+tool+'|'+key;
   async function cacheRead(url,tool,key){const d=await cacheOpen();try{return await new Promise((res,rej)=>{const q=d.transaction('buckets').objectStore('buckets').get(cacheKey(url,tool,key));q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}finally{d.close()}}
   async function cacheSave(url,tool,key,hash,records){const d=await cacheOpen();try{await new Promise((res,rej)=>{const tx=d.transaction('buckets','readwrite');tx.objectStore('buckets').put({hash,records},cacheKey(url,tool,key));tx.oncomplete=res;tx.onabort=tx.onerror=()=>rej(tx.error)})}finally{d.close()}}
+  /* v4.6 (PROD v4.20.1): cloud bucket reader shared by push verification and pull, and the "same day already replaced" test.
+     A cloud row that this device does not have is SUPERSEDED when this device holds rows for the same business date (+ section):
+     a re-import replaced that day. It is MISSING when the device has nothing for that date (+ section): it must be brought back. */
+  async function getCloudBucket(url,tool,k,hash,count,net){let cached=null;try{cached=await cacheRead(url,tool,k)}catch(_){}
+    if(cached&&cached.hash===hash)return{rows:cached.records,cached:true};
+    const bj=await jsonFetch(url+(url.includes('?')?'&':'?')+'action=smartBucket&tool='+enc(tool)+'&bucket='+enc(k)+'&hash='+enc(hash),Object.assign({redirect:'follow'},net||{})),rows=(bj.data&&bj.data.records)||bj.records;
+    if(!Array.isArray(rows))throw new Error('Cloud bucket 格式不完整：'+k);
+    const response=bj.data||bj;if(response.hash&&response.hash!==hash)throw new Error('雲端此區已更新，請重試：'+k);
+    if(response.contentHash){const verified=await hashText(JSON.stringify(rows));if(verified!==response.contentHash&&verified!==response.contentHashFallback)throw new Error('Cloud bucket 內容核對失敗：'+k)}
+    if(count!=null&&rows.length!==Number(count))throw new Error('Cloud bucket 筆數不一致：'+k);
+    try{await cacheSave(url,tool,k,hash,rows)}catch(_){}return{rows,cached:false};
+  }
+  function coverKey(r){const d=recordDate(r);return d?d+'|'+String((r&&r.section)||''):''}
+  function splitCloudExtra(localRows,cloudRows){const have=new Set((localRows||[]).map(semanticKey)),cover=new Set((localRows||[]).map(coverKey).filter(Boolean));const missing=[],superseded=[];
+    for(const r of cloudRows||[]){if(have.has(semanticKey(r)))continue;const c=coverKey(r);if(c&&cover.has(c))superseded.push(r);else missing.push(r)}return{missing,superseded}}
+  async function verifyShrink(url,tool,net,local,localH,remoteH,remoteC){let missing=0,superseded=0;const buckets=[],missingBuckets=[];
+    for(const k of Object.keys(remoteH).sort()){if((localH[k]||'')===remoteH[k])continue;const got=await getCloudBucket(url,tool,k,remoteH[k],remoteC[k],net);const sp=splitCloudExtra(local[k]?local[k].records:[],got.rows);
+      if(sp.superseded.length){superseded+=sp.superseded.length;buckets.push(k)}if(sp.missing.length){missing+=sp.missing.length;missingBuckets.push(k+' '+sp.missing.length)}}
+    return{ok:!missing,missing,superseded,buckets,missingBuckets}}
   const flights=new Map();
   async function guarded(kind,fn,opts){const key=String((g.VRTPlatform&&g.VRTPlatform.getGasUrl())||opts.url||'')+'|'+opts.tool;while(flights.has(key)){try{await flights.get(key)}catch(_){}}const work=fn(opts);flights.set(key,work);try{return await work}catch(e){status(kind,e.message,'err');throw e}finally{if(flights.get(key)===work)flights.delete(key)}}
   let ui=null;
@@ -208,7 +227,17 @@
     // Less-over-more protection. A first/stale client or a parser regression may
     // never replace a larger cloud dataset. Explicit UI delete/clear actions grant
     // a short authorization through Auto Sync; imports do not.
-    if(rm.exists&&!opts.forceBaseline){const rt=totalCount(remoteC),bt=totalCount(lastLocal),localShrank=bt>records.length,noBaseline=!bt;if(rt>records.length&&(localShrank||noBaseline)&&!opts.allowShrink&&!shrinkAuthorized(tool)){const msg=`已阻擋少覆多｜雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜先拉取核對`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,shrinkBlocked:true,cloudCount:rt,recordCount:records.length,uploaded:0}}}
+    // v4.6: the old test summed the baseline HASH map (always 0 → "no baseline"), so any device with fewer rows than the cloud was
+    // blocked forever, and Pull kept the local re-imported buckets as they were → deadlock (sewing 10/2026: cloud 75,437 > local 74,926).
+    // Now every differing cloud bucket is read and compared row by row: rows of a day this device re-imported are superseded (allowed),
+    // rows of a day this device does not have at all are missing → still blocked, and Pull brings them back.
+    let verifiedShrink=false;
+    if(rm.exists&&!opts.forceBaseline){const rt=totalCount(remoteC);if(rt>records.length&&!opts.allowShrink&&!shrinkAuthorized(tool)){
+      status('push',`雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜逐區核對…`,'busy');onStatus('雲端筆數較多：逐區核對是否為重新匯入已取代的舊列…');
+      let chk;try{chk=await verifyShrink(url,tool,net,local,localH,remoteH,remoteC)}catch(e){chk={ok:false,missing:0,error:String(e&&e.message||e),missingBuckets:[]}}
+      if(!chk.ok){const msg=chk.error?`已阻擋少覆多｜雲端 ${rt.toLocaleString()} > 本機 ${records.length.toLocaleString()}｜核對失敗：${chk.error}`:`已阻擋少覆多｜雲端有 ${chk.missing.toLocaleString()} 筆本機沒有的日期資料（${chk.missingBuckets.slice(0,4).join('、')}）｜先拉取補回`;status('push',msg,'warn');onStatus(msg);return{ok:false,needsPull:true,shrinkBlocked:true,cloudCount:rt,recordCount:records.length,missingRows:chk.missing,uploaded:0}}
+      verifiedShrink=true;const msg=`雲端多出的 ${chk.superseded.toLocaleString()} 筆是本機重新匯入同一天已取代的舊列（${chk.buckets.join('、')}）→ 以本機為準`;status('push',msg,'busy');onStatus(msg);
+    }}
 
     if(rm.exists&&mapsEqual(localH,remoteH)&&localMH===remoteMH&&!rm.summaryNeedsRefresh){
       await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:localH,localCounts:localC,remoteMetaHash:remoteMH,localMetaHash:localMH,lastPushAt:now(),updatedAt:now()});
@@ -281,7 +310,7 @@
     status('push',`提交雲端索引／Manifest… · ${changed.length} 區`,'busy');onStatus(`提交雲端索引／Manifest… · ${changed.length} 區`);
     let commit;
     try{
-      commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.forceBaseline||!!opts.allowShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
+      commit=await jsonFetch(url,Object.assign({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'smartCommit',tool,uploadId,baseRevision,contentHashes,allowShrink:!!opts.forceBaseline||!!opts.allowShrink||verifiedShrink||shrinkAuthorized(tool),hashes:localH,counts:localC,deleted,changedBuckets:changed,recordCount:records.length,meta:localMeta,summary:(localMeta&&localMeta.summary)||opts.summary||{}}),redirect:'follow'},net));
     }catch(e){
       const msg=/PRIOR_WRITE_NEEDS_RECONCILIATION|single writer|protected/i.test(String(e&&e.message||''))?'受保護，需由 Windows 任務上傳；最後 Manifest 未提交':('Manifest 提交失敗：'+String(e&&e.message||e));
       status('push',msg,'err');onStatus(msg);throw e;
@@ -381,7 +410,7 @@
 
     const outBuckets={};let downloaded=0,same=0,pendingUpload=0,conflicts=metaConflict?1:0;const pendingBuckets=[],missingBuckets=[];
     const cloudKeys=Object.keys(remoteH).sort().reverse(); // recent periods first
-    const needed=cloudKeys.filter(k=>{const lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';return !(lh===rh&&local[k])&&!((bl||br)&&rh===br&&local[k])});
+    const needed=cloudKeys.filter(k=>{const lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';if(lh===rh&&local[k])return false;if((bl||br)&&rh===br&&local[k])return Number(remoteC[k]||0)>Number(localC[k]||0);return true});let restored=0;
     const ready=new Map();let cursor=0,done=0;
     async function fetchBucket(k){let cached=null;try{cached=await cacheRead(url,tool,k)}catch(_){}
       if(cached&&cached.hash===remoteH[k])return{rows:cached.records,cached:true};
@@ -398,7 +427,10 @@
       const k=cloudKeys[i],lh=localH[k]||'',rh=remoteH[k]||'',bl=lastLocal[k]||'',br=lastRemote[k]||'';
       if(lh===rh&&local[k]){outBuckets[k]=local[k].records;same+=local[k].count;continue}
       const haveBaseline=!!(bl||br);
-      if(haveBaseline){const localChanged=lh!==bl,cloudChanged=rh!==br;if(!cloudChanged&&localChanged&&local[k]){outBuckets[k]=local[k].records;pendingUpload+=local[k].count;pendingBuckets.push({bucket:k,count:local[k].count,reason:'local-changed'});continue}}
+      if(haveBaseline){const localChanged=lh!==bl,cloudChanged=rh!==br;if(!cloudChanged&&localChanged&&local[k]){const got=ready.get(k);let rows=local[k].records;
+        // v4.6: a day the cloud holds but this device does not (not replaced by a re-import) is brought back
+        if(got){const add=splitCloudExtra(rows,got.rows).missing;if(add.length){rows=rows.concat(add);restored+=add.length;if(got.cached)same+=0;else downloaded+=add.length}}
+        outBuckets[k]=rows;pendingUpload+=rows.length;pendingBuckets.push({bucket:k,count:rows.length,reason:'local-changed'});continue}}
       status('pull',`下載變更 ${i+1}/${cloudKeys.length} · ${k}`,'busy');onStatus(`下載變更 · ${k}`);
       const received=ready.get(k);if(!received){
         // Manifest may reference a bucket whose staged content never committed. Preserve local rows
@@ -424,7 +456,7 @@
     let actual=merged;if(opts.apply){const applied=await opts.apply(merged,effectiveMeta);if(Array.isArray(applied))actual=applied}
     const mb=await buildBuckets(actual),mergedH=hashMap(mb),mergedC=countMap(mb),effMH=await metaHash(effectiveMeta);
     await statePut(tool,{remoteHashes:remoteH,remoteCounts:remoteC,localHashes:mergedH,localCounts:mergedC,remoteMetaHash:remoteMH,localMetaHash:effMH,lastPullAt:now(),updatedAt:now()});
-    const normalizedAway=Math.max(0,merged.length-actual.length);let msg=`完成｜本機 ${actual.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(normalizedAway)msg+=`｜去重 ${normalizedAway.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;if(missingBuckets.length)msg+=`｜雲端缺區 ${missingBuckets.length}`;status('pull',(missingBuckets.length?'⚠ ':'')+msg,(conflicts||missingBuckets.length)?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:actual,rawMergedCount:merged.length,normalizedAway,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts,missingBuckets,partial:missingBuckets.length>0};
+    const normalizedAway=Math.max(0,merged.length-actual.length);let msg=`完成｜本機 ${actual.length.toLocaleString()}｜下載 ${downloaded.toLocaleString()}｜未變 ${same.toLocaleString()}`;if(normalizedAway)msg+=`｜去重 ${normalizedAway.toLocaleString()}`;if(restored)msg+=`｜補回 ${restored.toLocaleString()}`;if(pendingUpload)msg+=`｜待上傳 ${pendingUpload.toLocaleString()}`;if(pendingMeta)msg+='｜設定待上傳';if(conflicts)msg+=`｜合併衝突 ${conflicts}`;if(missingBuckets.length)msg+=`｜雲端缺區 ${missingBuckets.length}`;status('pull',(missingBuckets.length?'⚠ ':'')+msg,(conflicts||missingBuckets.length)?'warn':(pendingUpload||pendingMeta?'warn':'ok'));onStatus(msg);return{ok:true,records:actual,restored,rawMergedCount:merged.length,normalizedAway,meta:effectiveMeta,downloaded,unchanged:same,pendingUpload,pendingBuckets,pendingMetaUpload:pendingMeta,conflicts,missingBuckets,partial:missingBuckets.length>0};
   }
 
   // Universal status for legacy/non-smart requests. Smart requests are handled above.
