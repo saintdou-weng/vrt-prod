@@ -1,0 +1,32 @@
+{
+ "at": "2026-11-03T16:23:35.198Z",
+ "pass": 5,
+ "total": 5,
+ "results": [
+  {
+   "name": "first scan: report files anywhere under the folder (sub-folders too, _to_delete skipped) are found and routed by name; an unrelated .docx is ignored",
+   "status": "PASS",
+   "detail": "spareparts ← VRT_Daily_Spare_Part_1-29 Oct2026_REVISED.xlsx · spareparts ← VRT_Daily_Needles_1-29 Oct2026_REVISED.xlsx · qc ← Final Qc Inspection Report by Line as of 31-October - 2026.xlsx"
+  },
+  {
+   "name": "開始匯入 → the files go to their modules; the next scan finds 0 new (\"已匯入過\"), and reads nothing again (name/size/date cache)",
+   "status": "PASS",
+   "detail": "scan 2: new 0 · imported before 3 · scan 3 from cache: 3"
+  },
+  {
+   "name": "「開頁時自動掃描並匯入」: a new report dropped into the folder is handed to its module by itself when a page opens — no click, no page change",
+   "status": "PASS",
+   "detail": "queued: qc ← Final Qc Inspection Report by Line as of 01-November - 2026.xlsx · chip \"⇧ 📁 資料夾自動匯入：1 個新檔已交給模組⇧ 看清單×\""
+  },
+  {
+   "name": "the queued file is imported when that module is opened (QC page receives it from the handoff)",
+   "status": "PASS",
+   "detail": "qc queue emptied by the page"
+  },
+  {
+   "name": "no page errors",
+   "status": "PASS",
+   "detail": "0"
+  }
+ ]
+}

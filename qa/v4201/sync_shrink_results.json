@@ -1,0 +1,32 @@
+{
+ "at": "2026-11-03T16:23:18.034Z",
+ "pass": 5,
+ "total": 5,
+ "results": [
+  {
+   "name": "device A pushes Jul–Oct (cloud baseline)",
+   "status": "PASS",
+   "detail": "cloud 584"
+  },
+  {
+   "name": "device B pulls, re-imports Aug days 1–10 (one source per day → fewer rows) and adds Oct 17–31 → before the fix push said \"已阻擋少覆多\"; now the cloud rows of the re-imported days are recognised as replaced and the push goes through",
+   "status": "PASS",
+   "detail": "cloud 584 → 576 (= device B) · uploaded 368"
+  },
+  {
+   "name": "device A (still holding the old rows) pulls → gets B's version; its own push then has nothing to send",
+   "status": "PASS",
+   "detail": "A 576 · re-push uploaded 0"
+  },
+  {
+   "name": "a device that LOST whole days (no re-import of those days) is still blocked from shrinking the cloud, and Pull brings the days back (\"補回\")",
+   "status": "PASS",
+   "detail": "blocked (16 rows of 09-05/09-06 missing) → pull 補回 16 → push ok · cloud 577"
+  },
+  {
+   "name": "opening a page again (pull + push with nothing new) transfers nothing",
+   "status": "PASS",
+   "detail": "second open: manifest check only · 0 bucket uploads"
+  }
+ ]
+}
