@@ -12,7 +12,7 @@
    Pure helpers (route / sniff / msg / eml / zip) are exported for the tests (Node: require this file, pass XLSX). */
 (function(g){'use strict';
   if(g.VRTSmartImport&&g.VRTSmartImport.version)return;
-  const VERSION='1.1.0';
+  const VERSION='1.1.1';
   /* ── modules: page + file types each page's own importer takes; msgWhole = the page reads .msg/.eml itself (keeps the mail name / date) ── */
   const MODULES={
     sewing:{zh:'🧵 車縫',en:'🧵 Sewing',page:'sewing_v5.html',ext:'xlsx xls csv eml msg',msgWhole:true},
@@ -315,6 +315,8 @@
   const SCAN_EXT={xlsx:1,xls:1,xlsm:1,csv:1,msg:1,eml:1,pdf:1,zip:1},SCAN_SKIP=/^(_to_delete|node_modules|\.git|\$recycle\.bin|appdata|archive.*|00_reports.*|06_ai.*|versions.*|.*舊版.*|.*重複.*|pst匯入暫存)$/i,
     // working copies / analyses made FROM a report (not the report itself): never picked by a scan
     SCAN_NAME_SKIP=/ac_hra|hra_pay|payroll|nssf|nursing|canteen|attendance|crosscheck|costing\s*sheet|reviewed|provisional|2columns|fixedhdr|unicodehdr|fmt2026|_clean\b|_fixed\b|backup|稽核|分析|對照|整理/i;
+  // v1.1.1 (PROD v4.20.2): Chrome refuses Downloads / Desktop / Documents themselves ("contains system files") — only their sub-folders.
+  const HINT_DL='選不到？Chrome 不讓網頁讀整個「下載」，請選裡面的子資料夾（例如「下載收件匣」）';
   const scanDays=()=>{const n=Number(ls('vrt_si_scan_days'));return n>0?n:14},scanAuto=()=>ls('vrt_si_scan_auto')==='1';
   function scanCache(){try{return JSON.parse(ls('vrt_si_scan_seen')||'{}')}catch(_){return{}}}
   function scanCacheSave(c){const ks=Object.keys(c);if(ks.length>3000)ks.sort((a,b)=>c[a].t-c[b].t).slice(0,ks.length-3000).forEach(k=>delete c[k]);ls('vrt_si_scan_seen',JSON.stringify(c))}
@@ -325,7 +327,7 @@
       '<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="vrtSiScanAuto"'+(scanAuto()?' checked':'')+'> '+esc(L('開頁時自動掃描並匯入','auto scan & import on page open'))+'</label>'+
       '<label style="display:flex;gap:4px;align-items:center">'+esc(L('最近','last'))+' <select id="vrtSiScanDays">'+[3,7,14,30,60,120].map(n=>'<option'+(n===scanDays()?' selected':'')+'>'+n+'</option>').join('')+'</select> '+esc(L('天','days'))+'</label>';
     const a=els.dirs.querySelector('#vrtSiScanAuto'),dd=els.dirs.querySelector('#vrtSiScanDays');if(a)a.onchange=()=>{ls('vrt_si_scan_auto',a.checked?'1':'0');if(a.checked)ls('vrt_si_scan_auto_from',String(Date.now()-36e5))};if(dd)dd.onchange=()=>ls('vrt_si_scan_days',dd.value)}
-  async function addFolder(){if(!FS_OK)return;let h;try{h=await g.showDirectoryPicker({id:'vrt-smart-import',mode:'read'})}catch(_){return}
+  async function addFolder(){if(!FS_OK)return;let h;try{h=await g.showDirectoryPicker({id:'vrt-smart-import',mode:'read',startIn:'downloads'})}catch(_){msg(L(HINT_DL,'Can\'t pick it? Chrome blocks the whole Downloads folder — choose a sub-folder inside it (e.g. the download inbox folder)'));return}
     const ds=await folders();for(const d of ds){try{if(d.handle&&await d.handle.isSameEntry(h)){msg(L('這個資料夾已經在清單裡','already in the list'));return}}catch(_){}}
     await idb.put('dirs',{id:'d'+Date.now().toString(36),name:h.name,handle:h,addedAt:new Date().toISOString()});await paintDirs();await scanFolders({manual:true})}
   async function removeFolder(id){try{await idb.del('dirs',id)}catch(_){}paintDirs()}
