@@ -271,7 +271,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ui);font-size:13px;m
         <div class="sh"><span class="st">Gemini AI 解析</span></div>
         <div class="sb" style="padding:9px">
           <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;margin-bottom:7px">
-            <input type="checkbox" id="use-ai" onchange="saveSets()">啟用 Gemini AI（未知格式用）
+            <input type="checkbox" id="use-ai" onchange="saveSets()">啟用 Gemini AI（沒有 GAS 時才用；有 GAS 會自動改用 Claude）
           </label>
           <label class="sl" style="font-size:9px">API KEY（免費）</label>
           <input type="password" class="si" id="ki" placeholder="AIza…" onchange="saveSets()" style="font-size:11px">
@@ -1747,6 +1747,28 @@ PO TEXT:\n${text.substring(0,3500)}`;
   }
 }
 
+/* v4.21 (2026-11-05) ClaudeParser：解析器讀不出來或總額對不上時，把 PDF 文字交給 GAS 的 Claude（金鑰只在 GAS 指令碼屬性），
+   讀回來的行數／總額再核對一次；對不上就標「請確認」，不會蓋掉原本的結果。 */
+class ClaudeParser{
+  constructor(){this.id='Claude';}
+  static gas(){try{return (VRTPlatform.getGasUrl()||'').trim()}catch(_){return ''}}
+  async parse(text,ctx={}){
+    const empty={header:{customer:'UNKNOWN',format:'Claude'},records:[]};const url=ClaudeParser.gas();if(!url)return empty;
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'aiParsePO',fileName:ctx.fileName||'',text:String(text||'').slice(0,30000)})});
+      const j=await r.json();const d=j&&j.data||j;if(!d||!d.ok){if(typeof log==='function')log('Claude 解析未成功：'+((d&&d.error)||'無回應'),'warn');return empty}
+      const p=JSON.parse(String(d.text||'').replace(/```json|```/g,'').trim());
+      const recs=(p.lines||[]).map((l,i)=>normRecord({
+        customer:p.customer||'UNKNOWN',po:p.po||null,line_num:l.line_num||i+1,itemCode:l.itemCode||null,style:l.style||l.itemCode||null,
+        color:nc(l.color||''),size:ns(l.size||''),description:l.description||null,qty:num(l.qty),unitPrice:num(l.unitPrice),amount:num(l.amount),
+        orderDate:DateEngine.normalize(p.order_date),shipDate:DateEngine.normalize(l.shipDate),cancelDate:DateEngine.normalize(l.cancelDate),
+        sourceFile:ctx.fileName||null,parser:'Claude',status:'open'}));
+      if(typeof log==='function')log('🤖 Claude 讀出 '+recs.length+' 行（約 US$'+(d.costUsd||0)+'）','info');
+      return{header:{customer:p.customer||'UNKNOWN',po:p.po||null,orderDate:DateEngine.normalize(p.order_date),format:'Claude'},records:recs,declaredTotal:num(p.declared_total)||null};
+    }catch(e){if(typeof log==='function')log('Claude 解析失敗: '+e.message,'err');return empty}
+  }
+}
+
 /* ════════════════ PARSER FACTORY（Factory Pattern） ════════════════ */
 const ParserFactory=(()=>{
   // 由 template library 建立 strategy 實例（每個 template 一個 BaseParser）
@@ -1816,7 +1838,19 @@ const MasterParser={
     // rowBased template（如 FGCL）→ 改用座標列式文字 rowText
     const src=(parser.tpl&&parser.tpl.rowBased&&ctx.rowText)?ctx.rowText:text;
     let res=parser.parse(src,ctx);
-    // 命中 Generic 且結果薄弱、且啟用 AI → 改用 Gemini
+    // v4.21：讀不出來（0 行）或總額對不上 → 先試 Claude（經 GAS）；Claude 的結果總額要比較接近才採用
+    const sumAmt=x=>(x.records||[]).reduce((t,r)=>t+num(r.amount),0),sumQty=x=>(x.records||[]).reduce((t,r)=>t+num(r.qty),0);
+    const off=x=>{const dt=num(x.declaredTotal);if(!dt||!x.records||!x.records.length)return null;return Math.abs(sumAmt(x)-dt)/dt};
+    const bad=res.records.length===0||(off(res)!=null&&off(res)>0.01);
+    if(bad&&ClaudeParser.gas()){
+      if(typeof log==='function')log(`${parser.id} ${res.records.length?'總額對不上':'讀到 0 行'} → 改請 Claude 讀`,'info');
+      const c=await new ClaudeParser().parse(text,ctx);
+      if(c.records.length){if(!c.declaredTotal&&res.declaredTotal)c.declaredTotal=res.declaredTotal;const oc=off(c),or=off(res);
+        if(res.records.length===0||(oc!=null&&(or==null||oc<or))){if(oc!=null&&oc>0.01){c.records.forEach(r=>{r.needsReview=true});if(typeof log==='function')log('⚠ Claude 讀出的總額仍差 '+(oc*100).toFixed(1)+'%，標「請確認」','warn')}
+          res=c;parser={id:'Claude'}}
+        else if(typeof log==='function')log('Claude 的結果沒有比原本接近總額，保留原本的解析','info')}
+    }
+    // 命中 Generic 且結果薄弱、且啟用 AI → 改用 Gemini（舊路徑：沒有 GAS 時）
     if((res.records.length===0)&&parser.id!=='Gemini'&&ctx.useAi&&ctx.apiKey){
       if(typeof log==='function')log(`${parser.id} 解析到 0 行 → 改用 Gemini AI`,'info');
       const g=new GeminiParser(ctx.apiKey);

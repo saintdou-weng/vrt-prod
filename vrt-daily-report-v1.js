@@ -498,6 +498,9 @@
     const nextShip=Object.values(byKey).map(x=>({etd:x.etd,cust:x.cust,open:x.open,pos:Object.keys(x.pos).filter(Boolean).length})).sort((a,b)=>a.etd<b.etd?-1:a.etd>b.etd?1:b.open-a.open);
     const cap=m1&&m1.pieces?m1.pieces:null;const ready=f.fabric.notSewn!=null?Math.max(0,f.fabric.notSewn-(f.fabric.noFabricPcs||0)):null;
     f.outlook={nextShip:nextShip.slice(0,6),nextShipPcs:nextShip.reduce((s2,x)=>s2+x.open,0),capacityMonth:cap,capacityLabel:m1?m1.label:'',readyNotSewn:ready,backlogMonths:ready!=null&&cap?Math.round(ready/cap*10)/10:null,notSewnMonths:f.fabric.notSewn!=null&&cap?Math.round(f.fabric.notSewn/cap*10)/10:null};
+    /* 客戶統計太舊（超過 14 天）就不拿來判斷缺布和接單月數，改成提醒更新 */
+    {const sd=f.fabric.snapshotDate&&/^\d{4}-\d{2}-\d{2}$/.test(f.fabric.snapshotDate)?f.fabric.snapshotDate:'';let age=null;if(sd){age=0;for(let d=sd;d<endRef&&age<400;d=addDays(d,1))age++}
+      f.fabric.ageDays=age;f.fabric.stale=age!=null&&age>14;if(f.fabric.stale){f.outlook.backlogMonths=null;f.outlook.readyNotSewn=null}}
     f.manpowerTrend={cur:f.sewing.manpower||null,monthAvg:m1?m1.manpower:null,vsMonthPct:f.sewing.manpower&&m1&&m1.manpower?delta(f.sewing.manpower,m1.manpower):null};
     f.mixShift=f.sewing.avgSmv!=null&&m1&&m1.avgSmv?delta(f.sewing.avgSmv,m1.avgSmv):null;
     /* 資料完整度：今天回報的線數和上個月平均每天的線數比 */
@@ -526,7 +529,7 @@
     if(mpLow&&!PL&&!partial)add('manpower',50,'車縫人力 '+N(f.sewing.manpower)+' 人，比'+(M.prev?M.prev.label:'上個月')+'每天平均 '+N(f.manpowerTrend.monthAvg)+' 人'+pctTxt(f.manpowerTrend.vsMonthPct)+'。人少了排單還照原本的件數排，後面每一天都會追得很辛苦，要請 HRA 盤一下缺員和補人進度。');
     if(f.mixShift!=null&&Math.abs(f.mixShift)>=20&&s.rows&&!PL&&!partial)add('mix',35,(f.mixShift<0?'這'+(W?'週':'天')+'做的款比較短工時（平均每件 '+N(s.avgSmv)+' 分，'+(M.prev?M.prev.label:'上月')+' '+N(M.prev.avgSmv)+' 分），件數多不代表做得多，要看標準工時。':'這'+(W?'週':'天')+'做的款工時比較長（平均每件 '+N(s.avgSmv)+' 分，'+(M.prev?M.prev.label:'上月')+' '+N(M.prev.avgSmv)+' 分），件數少一點是正常的，效率才是重點。'));
     if(!PL&&(f.riskLines.dual.length||(f.qc.rate!=null&&f.rag.quality==='R')))add('quality',58,f.riskLines.dual.length?lineList(f.riskLines.dual)+' 效率低、退修又高，同一組兩個問題一起處理，先找出主要缺點是哪一道工序做出來的。':'Final QC 退修率 '+pct(f.qc.rate,1)+'，偏高。'+(f.qc.top.length?'最多的是'+f.qc.top.slice(0,2).map(x=>x.name).join('、')+'。':'')+'退修會吃掉後段的人和時間，要先壓下來。');
-    if(f.fabric.noFabricShare!=null&&f.fabric.noFabricShare>=40)add('fabric',40,'還沒車縫的單裡，有 '+pct(f.fabric.noFabricShare,0)+'（'+N(f.fabric.noFabricPcs)+' 件）還沒有布。訂單看起來很多，真正能上線的要扣掉這一塊，排單要跟著到布日走。');
+    if(f.fabric.noFabricShare!=null&&f.fabric.noFabricShare>=40&&!f.fabric.stale)add('fabric',40,'還沒車縫的單裡，有 '+pct(f.fabric.noFabricShare,0)+'（'+N(f.fabric.noFabricPcs)+' 件）還沒有布。訂單看起來很多，真正能上線的要扣掉這一塊，排單要跟著到布日走。');
     if(f.wip.daysOfOutput!=null&&f.wip.daysOfOutput>=TH.wipR&&!PL)add('wipPile',38,'已裁未縫 '+N(f.wip.cutNotSewn)+' 件，夠車縫做 '+N(f.wip.daysOfOutput)+' 天。裁得比縫得快，裁片放久了容易掉片、混批，裁剪可以先放慢，把人力讓給車縫或後段。');
     if(o.nextShip&&o.nextShip.length)add('shipping',f.shipping.overdueRows?57:42,(f.shipping.overdueRows?'有 '+f.shipping.overdueRows+' 筆已過 ETD 還沒出（'+N(f.shipping.overdueOpen)+' 件），':'')+'接下來兩週要出 '+o.nextShip.length+' 批：'+o.nextShip.slice(0,3).map(x=>md(x.etd)+' '+x.cust+' '+N(x.open)+' 件').join('、')+'。生產順序要跟著船期排。');
     else if(f.shipping.overdueRows)add('shipping',57,'有 '+f.shipping.overdueRows+' 筆已過 ETD 還沒出（'+N(f.shipping.overdueOpen)+' 件），要和船務確認實際裝櫃日，出貨表也要更新。');
@@ -578,9 +581,10 @@
     const o=f.outlook||{};if(o.nextShip&&o.nextShip.length)bullet('出貨　'+o.nextShip.slice(0,4).map(x=>md(x.etd)+' '+x.cust+' '+N(x.open)+' 件').join('；'));else if(f.shipping.rows)bullet('出貨　這週 '+N(f.shipping.shipped)+' / '+N(f.shipping.orig)+' 件已出'+(f.shipping.overdueRows?'，逾期 '+f.shipping.overdueRows+' 筆':''));
     if(f.shipping.overdueRows)bullet('逾期　'+f.shipping.overdue.slice(0,3).map(x=>x.cust+' PO '+x.po+' '+N(x.open)+' 件（ETD '+md(x.etd)+'）').join('；'));
     if(o.backlogMonths!=null&&(W||PL))bullet('接單　有布可做 '+N(o.readyNotSewn)+' 件 ≈ '+o.backlogMonths+' 個月（以'+o.capacityLabel+'實做 '+N(o.capacityMonth)+' 件計）');
-    if(f.fabric.noFabricPcs>0)bullet('缺布　'+N(f.fabric.noFabricPcs)+' 件'+(f.fabric.top.length?'（'+f.fabric.top.slice(0,2).map(x=>x.customer+' '+x.po).join('、')+'）':''));
+    if(f.fabric.stale&&f.fabric.hasData)bullet('缺布　客戶統計停在 '+md(f.fabric.snapshotDate)+'（已 '+f.fabric.ageDays+' 天），缺布和接單數字先不看，請匯入最新的客戶統計');
+    else if(f.fabric.noFabricPcs>0)bullet('缺布　'+N(f.fabric.noFabricPcs)+' 件'+(f.fabric.top.length?'（'+f.fabric.top.slice(0,2).map(x=>x.customer+' '+x.po).join('、')+'）':''));
     /* 要處理 */
-    sec('要處理');const an=f.anomalies.slice(0,5);if(!an.length)bullet('沒有特別要處理的事');an.forEach((a,i)=>{const t=todoLine(a,f);line((i+1)+'. '+t.zh)});
+    sec('要處理');const an=f.anomalies.filter(a=>!(f.fabric.stale&&a.kind==='fabric')).slice(0,5);if(f.fabric.stale&&f.fabric.hasData)an.push({kind:'_stale',who:WHO.plan,zh:'客戶統計停在 '+md(f.fabric.snapshotDate)+'，請匯入最新的客戶統計（缺布、未車縫、接單月數才會準）',en:''});if(!an.length)bullet('沒有特別要處理的事');an.forEach((a,i)=>{const t=todoLine(a,f);line((i+1)+'. '+t.zh)});
     return finish();
     function finish(){const srcZh=[f.sewing.rows?'車縫 '+N(f.sewing.rows)+' 筆':'',f.cutting.rows?'裁剪 '+N(f.cutting.rows)+' 筆':'',f.qc.reports?'QC '+N(f.qc.reports)+' 份':'',f.fabric.hasData&&f.fabric.snapshotDate?'客戶統計 '+md(f.fabric.snapshotDate):''].filter(Boolean);
       const gen=String(f.generatedAt||'').slice(5,16).replace('T',' ').replace('-','/');gap();const foot='資料：'+(srcZh.join('、')||'—')+'；產生 '+gen;line(foot,'<i>'+esc(foot)+'</i>');
