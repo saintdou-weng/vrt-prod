@@ -20,7 +20,7 @@ function synth(D){const prev=R.helpers.addDays(D,-1),lw=R.helpers.addDays(D,-7);
   return {sewing:sew,cutting:cut,qc:{records:qc,kpi:[]},spareparts:{needle,part:[{date:D,line:'Line 3',qty:2,reasonClass:'damage',partType:'Looper'}]},shipping:ship,custstats,styles,prodplan}}
 const D='2026-10-22';const d=synth(D);
 for(const [period,kind] of [['day','day'],['week','eff'],['week','plan']]){
-  const f=R.compute(d,{date:D,today:'2026-10-27',period,kind});const r=R.render(f,{lang:process.argv[2]||'zh'});
+  const f=R.compute(d,{date:D,today:'2026-10-27',period,kind});const r=R.renderV13(f,{lang:process.argv[2]||'zh'});
   console.log('==== '+period+' '+kind+' · zh '+r.zhChars+' chars · text '+r.text.length+' · html '+r.html.length);console.log(r.text);
   const chk=R.checkAiText(r.text,f);console.log('checkAiText own text:',chk.ok,chk.bad.join(','));
   assert(chk.ok,'own text must pass the number check');
@@ -31,6 +31,6 @@ for(const [period,kind] of [['day','day'],['week','eff'],['week','plan']]){
   if(period==='day')assert(/今天 4,600 件（4 條線、80 人）/.test(t),t);
 }
 /* both: every Chinese bullet has an English line under it */
-{const f=R.compute(d,{date:D,today:'2026-10-27',period:'day'});const r=R.render(f,{lang:'both'});const ls=r.text.split('\n');let zhB=0,enL=0;ls.forEach(l=>{if(/^• /.test(l))zhB++;if(/^  \S/.test(l))enL++});assert(enL>=zhB,'English lines '+enL+' < bullets '+zhB);
+{const f=R.compute(d,{date:D,today:'2026-10-27',period:'day'});const r=R.renderV13(f,{lang:'both'});const ls=r.text.split('\n');let zhB=0,enL=0;ls.forEach(l=>{if(/^• /.test(l))zhB++;if(/^  \S/.test(l))enL++});assert(enL>=zhB,'English lines '+enL+' < bullets '+zhB);
  const c=R.renderCompact(f);assert(/1️⃣/.test(c.text),'compact layout still available for the Word export tests');console.log('both-language check ok ·',zhB,'bullets /',enL,'English lines · compact ok')}
 console.log('ALL PASS');
