@@ -12,7 +12,7 @@
    docHtml(facts, text) → full management report (Word-compatible HTML, .doc)   aiPrompt / checkAiText / checkNumbersAgainstText */
 (function(g){'use strict';
   if(g.VRTDailyReport)return;
-  const VERSION='1.3.0';
+  const VERSION='2.0.0';
   /* ── small helpers (standalone so the file does not depend on vrt-tg-summary-v1.js) ── */
   const num=v=>{const n=Number(v);return isFinite(n)?n:0};
   const N=n=>{const v=Number(n||0);return (Number.isInteger(v)?v:Math.round(v*10)/10).toLocaleString('en-US')};
@@ -60,12 +60,12 @@
   function chgAgg(rows){const o={qty:0,rows:0,planned:0,unplanned:0,lines:{},items:{},reasons:{}};(rows||[]).forEach(v=>{if(!v||v.deleted)return;const q=num(v.qty);o.rows++;o.qty+=q;const rc=v.reasonClass||'unknown';o.reasons[rc]=(o.reasons[rc]||0)+q;if(rc==='changeover')o.planned+=q;else if(rc==='damage'||rc==='broken'||rc==='lost')o.unplanned+=q;const ln=String(v.line||'—');const L=o.lines[ln]=o.lines[ln]||{line:ln,qty:0,unplanned:0};L.qty+=q;if(rc==='damage'||rc==='broken'||rc==='lost')L.unplanned+=q;const it=String((v.needleType||v.partType||'?')+(v.size?' '+v.size:'')).replace(/\s+/g,' ').trim();o.items[it]=(o.items[it]||0)+q});
     o.byLine=Object.values(o.lines).sort((a,b)=>b.unplanned-a.unplanned||b.qty-a.qty);o.topItems=top(o.items,3).map(([k,v])=>({item:k,qty:v}));o.byReason=top(o.reasons,6).map(([k,v])=>({reason:k,qty:v}));delete o.lines;delete o.items;delete o.reasons;return o}
   const inRange=(d,a,b)=>d&&d>=a&&d<=b;
-  const workdaysBetween=(a,b)=>{let n=0;for(let d=a;d&&d<=b;d=addDays(d,1))if(dowMon0(d)<6)n++;return n};   // Mon–Sat (holidays unknown to the code)
+  const workdaysBetween=(a,b)=>{let n=0;for(let d=a;d&&d<=b;d=addDays(d,1))if(isWorkday(d))n++;return n};   // v2.0: Mon–Sat minus Cambodian public holidays (HOLIDAYS_KH / data.calendar)
   const monthEnd=ym=>{const p=ymdParts(ym+'-01');return ymdUtc(p[0],p[1]+1,0)};
 
   /* ── compute: every number of the report ── */
   function compute(data,opts){
-    data=data||{};opts=opts||{};const today=dayKey(opts.today)||localToday();const period=opts.period==='week'?'week':'day';const kind=period==='week'?(opts.kind==='plan'?'plan':'eff'):'day';
+    data=data||{};opts=opts||{};setCalendar(data.calendar||opts.calendar);const today=dayKey(opts.today)||localToday();const period=opts.period==='week'?'week':'day';const kind=period==='week'?(opts.kind==='plan'?'plan':'eff'):'day';
     const sewDays=sewPick(data.sewing);const sewDates=Object.keys(sewDays).filter(d=>d<=today).sort();
     let A=dayKey(opts.date)||'';if(!A){A=sewDates.length?sewDates[sewDates.length-1]:(opts.today?today:addDays(today,-1))}
     const P=period==='week'?{start:addDays(A,-dowMon0(A)),end:addDays(A,6-dowMon0(A))}:{start:A,end:A};
@@ -133,6 +133,7 @@
     if(kind==='plan'){f.rag.loading=f.loading?rag(f.loading.week.loadingPct,TH.loadG,TH.loadA,true):null;f.rag.ready=f.fabric.noFabricShare!=null?rag(f.fabric.noFabricShare,TH.fabG,TH.fabA,false):null;
       f.hasData=!!(f.loading||f.sewing.rows||f.shipping.rows);f.anomalies=planAnomalies(f);f.highlights=planHighlights(f);f.conclusion=planConclusion(f);f.actions=planActions(f);f.basis=planBasis(f)}
     else{f.anomalies=anomalies(f);f.highlights=highlights(f);f.hasData=f.sewing.rows>0||f.cutting.rows>0||f.qc.reports>0;f.conclusion=conclusion(f);f.actions=actions(f);f.basis=basis(f)}
+    enrich(f,data,sewDays);
     return f;
   }
   /* ── v1.2 排單負荷 / loading facts (Production Plan rows only; same reading as the 排產甘特) ── */
@@ -361,7 +362,7 @@
       needle:[r+' 非計畫換針偏高，檢查機台、針型和操作','unplanned needle changes high on '+r+': check machines, needle type and handling'],
       wip:['已裁未縫 '+N(f.wip.cutNotSewn)+' 件，按線／款／客戶拆開排進車縫','split the '+N(f.wip.cutNotSewn)+' cut-not-sewn pcs by line/style/customer and schedule them']}[a.kind];
     if(!map)return {zh:w+'：'+a.zh,en:we+': '+a.en};return {zh:w+'：'+map[0],en:we+': '+map[1]}}
-  function render(f,opts){opts=opts||{};const ZH=opts.lang==='zh';const L=[],H=[];const W=f.period==='week',PL=f.kind==='plan';
+  function renderV13(f,opts){opts=opts||{};const ZH=opts.lang==='zh';const L=[],H=[];const W=f.period==='week',PL=f.kind==='plan';
     const b=s2=>'<b>'+esc(s2)+'</b>';
     const line=(t,html)=>{L.push(t);H.push(html==null?esc(t):html)};
     const P=(zh,en)=>{line('• '+zh);if(!ZH&&en)line('  '+en,'  <i>'+esc(en)+'</i>')};          // one bullet (+ English line)
@@ -453,6 +454,161 @@
     line('');const foot='ℹ️ 資料：'+srcZh.join('、')+'；產生 '+gen+(f.ai?'；AI 改寫':'');line(foot,'<i>'+esc(foot)+'</i>');
     const text=L.join('\n');return {text,html:H.join('\n'),zhChars:zhCount(text)}}
   const zhCount=t=>(String(t||'').match(/[一-鿿]/g)||[]).length;
+  /* ══ v2.0 (2026-11-05) 中文人性化版：行事曆、月度比較、接下來、情境寫法 ══
+     Paul 11/05：只要中文；排列整齊、易懂；數據清楚正確；不要一套公式寫到完 —— 看行事曆、比較當月／上月／前月，
+     考慮接單、出貨、人力與各類事件；至少十來種情境。寫法參考他自己的週報（W44 10 月月結、11 月排單）：
+     先講發生什麼、為什麼，再給數字；比較要扣掉假日（用每個生產日來比）；件數和標準工時分開看；每件事寫明誰做什麼、到哪天。
+     所有數字仍由這裡的程式算出（compute／enrich），AI 只改寫文字並經 checkAiText 核對。 */
+  /* 柬埔寨國定假日（官方公告，2026；工廠臨時調班可用 data.calendar 覆寫：{off:{'yyyy-mm-dd':'名稱'}, on:['yyyy-mm-dd']}） */
+  const HOLIDAYS_KH={'2026-01-01':'元旦','2026-01-07':'勝利日','2026-03-08':'婦女節','2026-04-14':'高棉新年','2026-04-15':'高棉新年','2026-04-16':'高棉新年','2026-05-01':'勞動節','2026-05-05':'御耕節','2026-05-14':'國王誕辰','2026-06-18':'太后誕辰','2026-09-24':'憲法日','2026-10-10':'亡人節','2026-10-11':'亡人節','2026-10-12':'亡人節','2026-10-15':'太皇紀念日','2026-10-29':'國王登基日','2026-11-09':'獨立日','2026-11-23':'送水節','2026-11-24':'送水節','2026-11-25':'送水節','2026-12-29':'和平日'};
+  let CAL={off:Object.assign({},HOLIDAYS_KH),on:{}};
+  function setCalendar(c){CAL={off:Object.assign({},HOLIDAYS_KH,(c&&c.off)||{}),on:{}};((c&&c.on)||[]).forEach(d=>{CAL.on[d]=1;delete CAL.off[d]})}
+  const holidayName=d=>CAL.off[d]||'';
+  const isWorkday=d=>!!d&&(CAL.on[d]||(dowMon0(d)<6&&!CAL.off[d]));
+  const workdaysCal=(a,b)=>{let n=0;for(let d=a;d&&d<=b;d=addDays(d,1))if(isWorkday(d))n++;return n};
+  const zhNum=n=>['零','一','二','三','四','五','六','七','八','九','十'][n]||String(n);
+  const md=d=>Number(String(d).slice(5,7))+'/'+Number(String(d).slice(8,10));
+  const mdw=d=>md(d)+'（'+DOW_ZH[dowMon0(d)]+'）';
+  const monLabel=ym=>Number(String(ym).slice(5,7))+'月';
+  const prevYm=ym=>{const p=ymdParts(ym+'-01');return ymdUtc(p[0],p[1]-1,1).slice(0,7)};
+  /* holiday runs: consecutive off days sharing a name → {name,start,end,days} */
+  function holidayRuns(a,b){const out=[];for(let d=a;d&&d<=b;d=addDays(d,1)){const n=holidayName(d);if(!n||CAL.on[d])continue;const last=out[out.length-1];if(last&&last.name===n&&addDays(last.end,1)===d)last.end=d,last.days++;else out.push({name:n,start:d,end:d,days:1})}return out}
+  const runLabel=r=>r.days>1?md(r.start)+'–'+md(r.end)+' '+r.name+'（'+zhNum(r.days)+'天）':mdw(r.start)+' '+r.name;
+  function monthStats(sewDays,ym,upto){const rows=Object.keys(sewDays).filter(d=>d.slice(0,7)===ym&&(!upto||d<=upto)).sort().reduce((a,d)=>a.concat(sewDays[d]),[]);if(!rows.length)return null;const g2=sewAgg(rows);
+    /* 完成標準工時：日報有 producedMinutes 就用；沒有就用 件數×SMV（和 Paul 週報同一個算法） */
+    let em=0,emRows=0;rows.forEach(r=>{const pm=num(r.producedMinutes),sm=num(r.smv);if(pm>0){em+=pm;emRows++}else if(sm>0){em+=num(r.pieces)*sm;emRows++}});const prodMin=emRows>=rows.length*0.8?em:g2.prodMin;
+    const earnedH=prodMin>0?Math.round(prodMin/60):null;g2.prodMin=prodMin;return {ym,label:monLabel(ym),pieces:g2.pieces,days:g2.dayCount,perDay:g2.dayCount?Math.round(g2.pieces/g2.dayCount):0,earnedH,earnedHPerDay:earnedH!=null&&g2.dayCount?Math.round(g2.prodMin/60/g2.dayCount):null,eff:g2.eff!=null?Math.round(g2.eff*10)/10:null,manpower:Math.round(g2.manpower),avgSmv:g2.pieces>0&&g2.prodMin>0?Math.round(g2.prodMin/g2.pieces*100)/100:null,garmentShare:g2.pieces?Math.round(g2.garment/g2.pieces*1000)/10:null}}
+  function enrich(f,data,sewDays){const A=f.anchor;const W=f.period==='week';const ym=A.slice(0,7),ym1=prevYm(ym),ym2=prevYm(ym1);const upto=W?f.end:A;
+    /* 月度比較：本月到今天 vs 上月 vs 前月（每個生產日來比，扣掉假日的影響） */
+    const cur=monthStats(sewDays,ym,upto),m1=monthStats(sewDays,ym1),m2=monthStats(sewDays,ym2);
+    f.months={cur,prev:m1,prev2:m2,perDayVsPrev:cur&&m1?delta(cur.perDay,m1.perDay):null,ehVsPrev:cur&&m1&&cur.earnedHPerDay!=null&&m1.earnedHPerDay!=null?delta(cur.earnedHPerDay,m1.earnedHPerDay):null,effVsPrevPt:cur&&m1&&cur.eff!=null&&m1.eff!=null?Math.round((cur.eff-m1.eff)*10)/10:null,prevVsPrev2:m1&&m2?{perDay:delta(m1.perDay,m2.perDay),earnedHPerDay:m1.earnedHPerDay!=null&&m2.earnedHPerDay!=null?delta(m1.earnedHPerDay,m2.earnedHPerDay):null,effPt:m1.eff!=null&&m2.eff!=null?Math.round((m1.eff-m2.eff)*10)/10:null,days:m1.days-m2.days}:null};
+    /* 行事曆 */
+    const mEnd=monthEnd(ym),endRef=W?f.end:A;const afterGap=(()=>{let d=addDays(f.start,-1),gap=[];while(d&&!isWorkday(d)&&gap.length<10){gap.push(d);d=addDays(d,-1)}return gap})();
+    const breakNames=[...new Set(afterGap.map(holidayName).filter(Boolean))];
+    const ahead=holidayRuns(addDays(endRef,1),addDays(endRef,W?14:10));const thisMonth=holidayRuns(ym+'-01',mEnd);
+    const wdLeft=workdaysCal(addDays(endRef,1),mEnd),wdMonth=workdaysCal(ym+'-01',mEnd);
+    const nextOff=ahead[0]||null;const wdToNextOff=nextOff?workdaysCal(addDays(endRef,1),addDays(nextOff.start,-1)):null;
+    const sewDatesM=Object.keys(sewDays).filter(d=>d.slice(0,7)===ym&&d<=endRef).sort();
+    f.cal={afterBreak:afterGap.length>=2||breakNames.length>0?{days:afterGap.length,names:breakNames}:null,ahead,nextOff,wdToNextOff,thisMonth,workdaysLeft:wdLeft,workdaysMonth:wdMonth,productionDaysSoFar:sewDatesM.length,monthStart:sewDatesM.length>0&&sewDatesM.length<=2&&!W,monthEnd:wdLeft<=3,monthLabel:monLabel(ym)};
+    /* 用行事曆重算月目標剩餘工作日（排除國定假日） */
+    if(f.plan){const left=wdLeft;f.plan.workdaysLeft=left;f.plan.totalWorkdays=wdMonth;f.plan.elapsedWorkdays=wdMonth-left;f.plan.elapsedShare=wdMonth?Math.round((wdMonth-left)/wdMonth*1000)/10:null;f.plan.requiredPerDay=left?Math.round(Math.max(0,f.plan.planQty-f.plan.mtd)/left):null;f.plan.calendar='holidays'}
+    /* 接下來：未來 14 天的出貨（ETD）、接單可做幾個月 */
+    const ship=(data.shipping||[]).filter(r=>r&&!r._demo);const s14=ship.filter(r=>{const d=anyDate(r.etd);return d&&d>endRef&&d<=addDays(endRef,14)&&num(r.open)>0&&String(r.status||'')!=='shipped'});
+    const byKey={};s14.forEach(r=>{const d=anyDate(r.etd),c=String(r.cust||r.customer||'—'),k=d+'|'+c;const x=byKey[k]=byKey[k]||{etd:d,cust:c,open:0,pos:{}};x.open+=num(r.open);x.pos[String(r.po||'')]=1});
+    const nextShip=Object.values(byKey).map(x=>({etd:x.etd,cust:x.cust,open:x.open,pos:Object.keys(x.pos).filter(Boolean).length})).sort((a,b)=>a.etd<b.etd?-1:a.etd>b.etd?1:b.open-a.open);
+    const cap=m1&&m1.pieces?m1.pieces:null;const ready=f.fabric.notSewn!=null?Math.max(0,f.fabric.notSewn-(f.fabric.noFabricPcs||0)):null;
+    f.outlook={nextShip:nextShip.slice(0,6),nextShipPcs:nextShip.reduce((s2,x)=>s2+x.open,0),capacityMonth:cap,capacityLabel:m1?m1.label:'',readyNotSewn:ready,backlogMonths:ready!=null&&cap?Math.round(ready/cap*10)/10:null,notSewnMonths:f.fabric.notSewn!=null&&cap?Math.round(f.fabric.notSewn/cap*10)/10:null};
+    f.manpowerTrend={cur:f.sewing.manpower||null,monthAvg:m1?m1.manpower:null,vsMonthPct:f.sewing.manpower&&m1&&m1.manpower?delta(f.sewing.manpower,m1.manpower):null};
+    f.mixShift=f.sewing.avgSmv!=null&&m1&&m1.avgSmv?delta(f.sewing.avgSmv,m1.avgSmv):null;
+    /* 資料完整度：今天回報的線數和上個月平均每天的線數比 */
+    const typLines=(()=>{const ds=Object.keys(sewDays).filter(d=>d.slice(0,7)===ym1);if(!ds.length)return null;const n=ds.map(d=>new Set(sewDays[d].map(r=>String(r.lineNo||''))).size).sort((a,b)=>a-b);return n[Math.floor(n.length/2)]})();
+    f.coverage={lines:f.sewing.lines,typicalLines:typLines,partial:!W&&typLines&&f.sewing.rows?f.sewing.lines<typLines*0.6:false};
+    f.scenarios=scenarios(f);f.version=VERSION;return f}
+  /* ── 情境：從事實判斷今天是什麼樣的一天；每種情境有自己的開頭寫法（2–3 種說法輪替，不會每天同一句） ── */
+  const seedOf=s=>{let h=0;for(const ch of String(s))h=(h*31+ch.charCodeAt(0))>>>0;return h};
+  const pick=(arr,key)=>arr[seedOf(key)%arr.length];
+  const pts=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(1)+' 點';
+  const pctTxt=v=>(v>=0?'多 ':'少 ')+Math.abs(v).toFixed(1)+'%';
+  const lineList=ls=>ls.map(lineShort).join('、');
+  function scenarios(f){const S=[];const s=f.sewing,c=f.compare,M=f.months||{},cal=f.cal||{},o=f.outlook||{},W=f.period==='week',PL=f.kind==='plan';const when=W?'這週':'今天',prevW=W?'上週':'昨天';const key=f.date;
+    const add=(id,w,zh)=>S.push({id,w,zh});
+    if(!f.hasData){add('nodata',100,pick([when+'系統裡還沒有車縫、裁剪或 QC 的資料，可能是報表還沒進來。下面先列已知的行事曆和出貨，資料到了會再補一份。',when+'還收不到生產報表，所以沒辦法看產量和效率。先把接下來的假日和出貨列出來，報表進來後系統會重算。'],key));return S}
+    const partial=f.coverage&&f.coverage.partial;
+    if(partial)add('partial',90,pick([when+'只收到 '+s.lines+' 條線的日報（平常每天 '+f.coverage.typicalLines+' 條），下面的件數、人力和效率都不完整，先不要拿來和昨天比。其他組的報表進來後會再重算。','日報還沒到齊：'+when+'只有 '+s.lines+' 條線（平常 '+f.coverage.typicalLines+' 條）。現在的 '+N(s.pieces)+' 件只是部分數字，等其他組補進來再看。'],key));
+    if(cal.afterBreak&&!PL){const nm=cal.afterBreak.names.join('、');add('afterBreak',80,pick([(nm?'剛放完'+nm:'剛休了 '+cal.afterBreak.days+' 天')+'回來，'+when+'是復工'+(W?'週':'第一天')+'。'+(s.rows?'做了 '+N(s.pieces)+' 件'+(s.eff!=null?'，效率 '+pct(s.eff):'')+'。':'')+'假後頭一兩天人到不齊、機台和節奏都要暖，數字先不用和假前硬比。',(nm?nm:'假期')+'結束後'+(W?'這一週':'第一天')+(s.rows?'出了 '+N(s.pieces)+' 件':'')+'。復工通常要一兩天才回到假前的節奏，今天先看出勤和缺料，效率明天再一起看。'],key))}
+    if(cal.nextOff&&cal.wdToNextOff!=null&&cal.wdToNextOff<=3){const r=cal.nextOff;add('beforeHoliday',70,pick([runLabel(r)+'要放假，'+(cal.wdToNextOff===0?'明天就放。':'放假前只剩 '+cal.wdToNextOff+' 個工作日。')+'假前要先把裁片、輔料和要出的櫃收好，放假那幾天的產量排單上要扣掉。','再過 '+cal.wdToNextOff+' 個工作日就是'+r.name+'（'+md(r.start)+(r.days>1?'–'+md(r.end):'')+'），各組手上的款最好在假前收尾，別讓半成品放過假。'],key))}
+    if(cal.monthStart&&M.prev&&!PL){const p1=M.prev,p2=M.prev2;add('monthStart',75,pick([monLabel(f.anchor.slice(0,7))+'剛開始，先回頭看'+p1.label+'：'+N(p1.pieces)+' 件、'+p1.days+' 個生產日，每天 '+N(p1.perDay)+' 件'+(p1.eff!=null?'，效率 '+pct(p1.eff):'')+(p2&&M.prevVsPrev2&&M.prevVsPrev2.earnedHPerDay!=null?'。和'+p2.label+'比，每個生產日的標準工時'+pctTxt(M.prevVsPrev2.earnedHPerDay)+(M.prevVsPrev2.days?'（生產日'+(M.prevVsPrev2.days>0?'多':'少')+' '+Math.abs(M.prevVsPrev2.days)+' 天）':''):'')+'。',p1.label+'結算 '+N(p1.pieces)+' 件、'+p1.days+' 個生產日'+(p1.earnedH!=null?'，完成標準工時 '+N(p1.earnedH)+' 小時':'')+'。月份天數不同時，用每個生產日來比比較公平'+(p2?'：'+p1.label+'每天 '+N(p1.perDay)+' 件，'+p2.label+' '+N(p2.perDay)+' 件':'')+'。'],key))}
+    if(f.plan&&cal.monthEnd&&!PL){const req=f.plan.requiredPerDay;add('monthEnd',65,pick([monLabel(f.plan.month)+'只剩 '+f.plan.workdaysLeft+' 個工作日。目標 '+N(f.plan.planQty)+' 件已做 '+N(f.plan.mtd)+'（'+pct(f.plan.completion)+'）'+(f.plan.remaining?'，還差 '+N(f.plan.remaining)+' 件，每天要 '+N(req)+' 件'+(s.perDay&&req>s.perDay*1.15?'，比現在的日均 '+N(s.perDay)+' 高不少，月底前要先講清楚哪些 PO 會跨月':''):'，已經做到')+'。','月底了，'+monLabel(f.plan.month)+'目標還差 '+N(f.plan.remaining)+' 件、剩 '+f.plan.workdaysLeft+' 個工作日。做不完的部分要按 PO 列出來，和客人、船務先對好交期，不要等到最後一天。'],key))}
+    if(f.plan&&f.plan.elapsedShare!=null&&!cal.monthEnd){const gap=f.plan.completion-f.plan.elapsedShare;if(gap<=-10)add('behind',60,pick(['這個月進度落後：時間過了 '+pct(f.plan.elapsedShare,0)+'，目標只做到 '+pct(f.plan.completion,0)+'。剩下 '+f.plan.workdaysLeft+' 個工作日每天要 '+N(f.plan.requiredPerDay)+' 件'+(s.perDay?'，現在日均 '+N(s.perDay):'')+'。',monLabel(f.plan.month)+'目標做到 '+pct(f.plan.completion,0)+'，但工作日已經過了 '+pct(f.plan.elapsedShare,0)+'，差距要靠後面每天多做 '+N(Math.max(0,(f.plan.requiredPerDay||0)-(s.perDay||0)))+' 件來補，或把部分 PO 移到下個月。'],key));else if(gap>=8)add('ahead',30,monLabel(f.plan.month)+'進度比時間快：工作日過了 '+pct(f.plan.elapsedShare,0)+'，目標已做到 '+pct(f.plan.completion,0)+'。後面可以把有布的單提前排，或安排該做的保養。')}
+    const mpLow=f.manpowerTrend&&f.manpowerTrend.vsMonthPct!=null&&f.manpowerTrend.vsMonthPct<=-6;
+    if(c.effVsPrevPt!=null&&s.eff!=null&&!PL&&!partial){if(c.effVsPrevPt>=3)add('effUp',45,pick([when+'效率 '+pct(s.eff)+'，比'+prevW+' '+pts(c.effVsPrevPt)+'。'+(c.manpowerVsPrev!=null&&c.manpowerVsPrev<=0?'人沒有增加，是做得順了。':'')+(f.lines.length?'表現最好的是 '+f.lines.filter(x=>x.eff!=null).sort((a,b)=>b.eff-a.eff).slice(0,2).map(x=>lineShort(x.line)+' '+pct(x.eff,0)).join('、')+'。':''),'效率回到 '+pct(s.eff)+'（'+prevW+' '+pct(f.prevDay.eff)+'）。'+(f.mixShift!=null&&f.mixShift<=-15?'這次做的款平均工時比上個月短，件數會好看一點，標準工時要一起看。':'各組大致都有跟上。')],key));
+      else if(c.effVsPrevPt<=-3){const mpDown=c.manpowerVsPrev!=null&&c.manpowerVsPrev<-5&&!mpLow;const weak=f.lines.filter(x=>x.verdict==='weak'&&x.eff!=null).sort((a,b2)=>a.eff-b2.eff).map(x=>x.line);add('effDown',55,pick([when+'效率 '+pct(s.eff)+'，比'+prevW+'低了 '+Math.abs(c.effVsPrevPt).toFixed(1)+' 點。'+(mpDown?'人少了 '+N(Math.abs(c.manpowerVsPrev))+' 位，先看是請假還是離職。':mpLow?'':'人數差不多，要看是哪幾組拖住。')+(weak.length?'偏低的是 '+lineList(weak.slice(0,3))+'。':''),'效率掉到 '+pct(s.eff)+'。'+(weak.length?lineList(weak.slice(0,3))+' 明顯偏低'+(mpLow?'。':'，'):'')+(mpDown?'出勤也少了 '+N(Math.abs(c.manpowerVsPrev))+' 人。':mpLow?'':'人力沒有少，比較可能是換款、缺料或工序沒排順。')],key))}}
+    if(mpLow&&!PL&&!partial)add('manpower',50,'車縫人力 '+N(f.sewing.manpower)+' 人，比'+(M.prev?M.prev.label:'上個月')+'每天平均 '+N(f.manpowerTrend.monthAvg)+' 人'+pctTxt(f.manpowerTrend.vsMonthPct)+'。人少了排單還照原本的件數排，後面每一天都會追得很辛苦，要請 HRA 盤一下缺員和補人進度。');
+    if(f.mixShift!=null&&Math.abs(f.mixShift)>=20&&s.rows&&!PL&&!partial)add('mix',35,(f.mixShift<0?'這'+(W?'週':'天')+'做的款比較短工時（平均每件 '+N(s.avgSmv)+' 分，'+(M.prev?M.prev.label:'上月')+' '+N(M.prev.avgSmv)+' 分），件數多不代表做得多，要看標準工時。':'這'+(W?'週':'天')+'做的款工時比較長（平均每件 '+N(s.avgSmv)+' 分，'+(M.prev?M.prev.label:'上月')+' '+N(M.prev.avgSmv)+' 分），件數少一點是正常的，效率才是重點。'));
+    if(!PL&&(f.riskLines.dual.length||(f.qc.rate!=null&&f.rag.quality==='R')))add('quality',58,f.riskLines.dual.length?lineList(f.riskLines.dual)+' 效率低、退修又高，同一組兩個問題一起處理，先找出主要缺點是哪一道工序做出來的。':'Final QC 退修率 '+pct(f.qc.rate,1)+'，偏高。'+(f.qc.top.length?'最多的是'+f.qc.top.slice(0,2).map(x=>x.name).join('、')+'。':'')+'退修會吃掉後段的人和時間，要先壓下來。');
+    if(f.fabric.noFabricShare!=null&&f.fabric.noFabricShare>=40)add('fabric',40,'還沒車縫的單裡，有 '+pct(f.fabric.noFabricShare,0)+'（'+N(f.fabric.noFabricPcs)+' 件）還沒有布。訂單看起來很多，真正能上線的要扣掉這一塊，排單要跟著到布日走。');
+    if(f.wip.daysOfOutput!=null&&f.wip.daysOfOutput>=TH.wipR&&!PL)add('wipPile',38,'已裁未縫 '+N(f.wip.cutNotSewn)+' 件，夠車縫做 '+N(f.wip.daysOfOutput)+' 天。裁得比縫得快，裁片放久了容易掉片、混批，裁剪可以先放慢，把人力讓給車縫或後段。');
+    if(o.nextShip&&o.nextShip.length)add('shipping',f.shipping.overdueRows?57:42,(f.shipping.overdueRows?'有 '+f.shipping.overdueRows+' 筆已過 ETD 還沒出（'+N(f.shipping.overdueOpen)+' 件），':'')+'接下來兩週要出 '+o.nextShip.length+' 批：'+o.nextShip.slice(0,3).map(x=>md(x.etd)+' '+x.cust+' '+N(x.open)+' 件').join('、')+'。生產順序要跟著船期排。');
+    else if(f.shipping.overdueRows)add('shipping',57,'有 '+f.shipping.overdueRows+' 筆已過 ETD 還沒出（'+N(f.shipping.overdueOpen)+' 件），要和船務確認實際裝櫃日，出貨表也要更新。');
+    if(o.backlogMonths!=null&&(W||PL)){const b=o.backlogMonths;if(b>=2)add('backlogHigh',44,'有布可做的單 '+N(o.readyNotSewn)+' 件，約等於 '+o.capacityLabel+'實做量的 '+b+' 個月。單已經排到兩個月以後，'+(b>=3?'可以開始考慮加組、招人':'可以考慮加班')+'。');else if(b<1)add('backlogLow',44,'有布可做的單只剩 '+N(o.readyNotSewn)+' 件，不到 '+o.capacityLabel+'一個月的量（'+b+' 個月）。後面要盯接單和到布，排不滿的組先併組，真的沒單再提局部停工。');else add('backlogOk',20,'有布可做的單約 '+b+' 個月的量，屬於正常排的範圍，先補人、不用加班。')}
+    if(!S.length||S.every(x=>x.w<40))add('steady',25,pick([when+(s.rows?'做了 '+N(s.pieces)+' 件'+(s.eff!=null?'，效率 '+pct(s.eff):''):'')+'，'+(c.piecesVsPrev!=null?'和'+prevW+'差不多（'+fmtDelta(c.piecesVsPrev)+'）':'沒有特別的狀況')+'。整體平穩，下面只列要盯的幾件事。',when+'沒有大起大落'+(s.rows?'：'+N(s.pieces)+' 件'+(s.eff!=null?'、效率 '+pct(s.eff):''):'')+'。照計畫走就好，留意下面幾條。'],key));
+    return S.sort((a,b)=>b.w-a.w)}
+  /* ── 中文版（Telegram 預設）：開頭用情境寫一段話，接著整齊的數字，再看月度、各組、接下來、要處理 ── */
+  function renderStory(f){const L=[],H=[];const W=f.period==='week',PL=f.kind==='plan';const b=s2=>'<b>'+esc(s2)+'</b>';
+    const line=(t,html)=>{L.push(t);H.push(html==null?esc(t):html)};const gap=()=>{if(L.length&&L[L.length-1]!=='')line('')};
+    const sec=t=>{gap();line(t,b(t))};const item=(label,val)=>line('・'+label+'　'+val,'・'+b(label)+'　'+esc(val));const bullet=t=>line('・'+t);
+    const wk=weekNo(f.week);
+    const title=PL?'📋 排單週報｜'+md(f.start)+'–'+md(f.end)+(wk?'（第 '+wk.n+' 週）':''):W?'📅 生產週報｜'+md(f.start)+'–'+md(f.end)+(wk?'（第 '+wk.n+' 週）':''):'📰 生產日報｜'+mdw(f.anchor);
+    line(title,b(title));gap();
+    const sc=f.scenarios||[];const lead=sc.slice(0,2).map(x=>x.zh);
+    /* 開頭沒講到車縫時，先用一句話交代今天的產量 */
+    const PROD_IDS=['effUp','effDown','steady','afterBreak','partial','monthEnd','behind','manpower','nodata'];
+    if(f.hasData&&!PL&&f.sewing.rows&&!sc.slice(0,2).some(x=>PROD_IDS.includes(x.id))){const s0=f.sewing,p0=f.prevDay;lead.unshift((W?'這週':'今天')+'車縫 '+N(s0.pieces)+' 件'+(s0.eff!=null?'，效率 '+pct(s0.eff):'')+(p0.eff!=null&&s0.eff!=null?'（'+(W?'上週':'昨天')+' '+pct(p0.eff)+'）':'')+'。')}
+    line(lead.join(''));
+    if(!f.hasData){if(f.cal&&f.cal.ahead.length){sec('接下來');f.cal.ahead.forEach(r=>bullet(runLabel(r)+'放假'))}return finish()}
+    const s=f.sewing,c=f.compare,p=f.prevDay,M=f.months||{};
+    if(PL){
+      /* 排單週報：沿用 v1.3 的負荷段落（數字不變），前面換成情境開頭 */
+      const old=renderV13(f,{lang:'zh'});const ol=old.text.split('\n'),oh=old.html.split('\n');let start=ol.findIndex(t=>t.startsWith('整體：'));let end=ol.findIndex(t=>t==='要處理');if(end<0)end=ol.length;
+      for(let i=start+1;i<end;i++){const t=ol[i];if(t===''){gap();continue}L.push(t.replace(/^• /,'・'));H.push(oh[i].replace(/^• /,'・'))}
+    }else{
+      sec(W?'這週的數字':'今天的數字');
+      if(s.rows){item('車縫',N(s.pieces)+' 件｜'+N(s.lines)+' 條線｜'+N(s.manpower)+' 人'+(W?'｜'+s.dayCount+' 個生產日，日均 '+N(s.perDay):''));
+        if(p.pieces!=null||f.lastWeek.pieces!=null)item('比較',[p.pieces!=null?(W?'上週 ':'昨天 ')+N(p.pieces)+'（'+fmtDelta(c.piecesVsPrev)+'）':'',!W&&f.lastWeek.pieces!=null?'上週同一天 '+N(f.lastWeek.pieces)+'（'+fmtDelta(c.piecesVsLastWeek)+'）':''].filter(Boolean).join('｜'));
+        item('效率',s.eff!=null?pct(s.eff)+(p.eff!=null?'（'+(W?'上週':'昨天')+' '+pct(p.eff)+'，'+pts(s.eff-p.eff)+'）':''):'日報沒有工時，算不出來')}
+      else item('車縫','還沒有日報');
+      if(f.cutting.rows)item('裁剪',N(f.cutting.pieces)+' 件'+(f.cutting.prevPieces!=null?'（'+(W?'上週':'昨天')+' '+N(f.cutting.prevPieces)+'）':''));
+      if(f.wip.cutNotSewn!=null)item('已裁未縫',N(f.wip.cutNotSewn)+' 件'+(f.wip.daysOfOutput?'，約 '+N(f.wip.daysOfOutput)+' 天的車縫量':''));
+      if(f.qc.rate!=null)item('品質','退修率 '+pct(f.qc.rate,1)+'（檢 '+N(f.qc.inspected)+'、退 '+N(f.qc.rejected)+(f.qc.asOf?'，'+md(f.qc.date)+' 的報告':'')+'）'+(f.qc.top.length?'，最多：'+f.qc.top.slice(0,2).map(x=>x.name+' '+N(x.qty)).join('、'):''));
+      else item('品質','沒有 Final QC 報告');
+      if(W&&f.days&&f.days.length){sec('每天');f.days.forEach(d=>bullet(md(d.date)+'（'+d.dow+'）　'+N(d.pieces)+' 件'+(d.eff!=null?'　'+pct(d.eff,0):'')+(d.manpower?'　'+N(d.manpower)+' 人':'')))}
+      /* 月度比較 */
+      if(M.cur||M.prev){sec('跟前幾個月比（以每個生產日計）');const row=m=>m?bullet(m.label+(m===M.cur?'到'+(W?md(f.end):'今天'):'')+'　'+m.days+' 天｜日均 '+N(m.perDay)+' 件'+(m.earnedHPerDay!=null?'｜每天標準工時 '+N(m.earnedHPerDay)+' 小時':'')+(m.eff!=null?'｜效率 '+pct(m.eff):'')):null;
+        row(M.cur);row(M.prev);row(M.prev2);
+        if(M.cur&&M.prev&&M.ehVsPrev!=null)bullet('本月每天的標準工時比'+M.prev.label+pctTxt(M.ehVsPrev)+(M.effVsPrevPt!=null?'，效率 '+pts(M.effVsPrevPt):'')+(M.cur.days<=3?'（才 '+M.cur.days+' 天，先參考）':''))}
+      /* 各組 */
+      const withEff=f.lines.filter(x=>x.eff!=null);if(withEff.length>=3){sec('各組');const best=withEff.slice().sort((a,b2)=>b2.eff-a.eff).slice(0,3);const watch=f.lines.filter(x=>x.risk!=='normal'||x.verdict==='weak').slice(0,4);
+        bullet('做得好　'+best.map(x=>lineShort(x.line)+' '+pct(x.eff,0)).join('、'));
+        if(watch.length)bullet('要盯　'+watch.map(x=>lineShort(x.line)+' '+(x.eff!=null?pct(x.eff,0):'—')+(x.rejectRate!=null&&x.rejVerdict!=='normal'?'（退修 '+pct(x.rejectRate,0)+'）':'')).join('、'))}
+    }
+    /* 接下來：月目標、假日、出貨、接單 */
+    sec('接下來');
+    if(f.plan)bullet(monLabel(f.plan.month)+'目標　已做 '+N(f.plan.mtd)+' / '+N(f.plan.planQty)+' 件（'+pct(f.plan.completion,0)+'），剩 '+f.plan.workdaysLeft+' 個工作日'+(f.plan.remaining?'，每天要 '+N(f.plan.requiredPerDay)+' 件'+(s.perDay?'（目前日均 '+N(s.perDay)+'）':''):''));
+    if(f.cal){const hs=f.cal.ahead;if(hs.length)bullet('假日　'+hs.map(runLabel).join('；'));else if(f.cal.thisMonth.length)bullet('假日　'+f.cal.monthLabel+'的假（'+f.cal.thisMonth.map(r=>md(r.start)+(r.days>1?'–'+md(r.end):'')+' '+r.name).join('、')+'）都已經過了')}
+    const o=f.outlook||{};if(o.nextShip&&o.nextShip.length)bullet('出貨　'+o.nextShip.slice(0,4).map(x=>md(x.etd)+' '+x.cust+' '+N(x.open)+' 件').join('；'));else if(f.shipping.rows)bullet('出貨　這週 '+N(f.shipping.shipped)+' / '+N(f.shipping.orig)+' 件已出'+(f.shipping.overdueRows?'，逾期 '+f.shipping.overdueRows+' 筆':''));
+    if(f.shipping.overdueRows)bullet('逾期　'+f.shipping.overdue.slice(0,3).map(x=>x.cust+' PO '+x.po+' '+N(x.open)+' 件（ETD '+md(x.etd)+'）').join('；'));
+    if(o.backlogMonths!=null&&(W||PL))bullet('接單　有布可做 '+N(o.readyNotSewn)+' 件 ≈ '+o.backlogMonths+' 個月（以'+o.capacityLabel+'實做 '+N(o.capacityMonth)+' 件計）');
+    if(f.fabric.noFabricPcs>0)bullet('缺布　'+N(f.fabric.noFabricPcs)+' 件'+(f.fabric.top.length?'（'+f.fabric.top.slice(0,2).map(x=>x.customer+' '+x.po).join('、')+'）':''));
+    /* 要處理 */
+    sec('要處理');const an=f.anomalies.slice(0,5);if(!an.length)bullet('沒有特別要處理的事');an.forEach((a,i)=>{const t=todoLine(a,f);line((i+1)+'. '+t.zh)});
+    return finish();
+    function finish(){const srcZh=[f.sewing.rows?'車縫 '+N(f.sewing.rows)+' 筆':'',f.cutting.rows?'裁剪 '+N(f.cutting.rows)+' 筆':'',f.qc.reports?'QC '+N(f.qc.reports)+' 份':'',f.fabric.hasData&&f.fabric.snapshotDate?'客戶統計 '+md(f.fabric.snapshotDate):''].filter(Boolean);
+      const gen=String(f.generatedAt||'').slice(5,16).replace('T',' ').replace('-','/');gap();const foot='資料：'+(srcZh.join('、')||'—')+'；產生 '+gen;line(foot,'<i>'+esc(foot)+'</i>');
+      const text=L.join('\n');return {text,html:H.join('\n'),zhChars:zhCount(text)}}
+  }
+  /* ── 寫作規則（給 AI；程式版也照這個寫）：取自 Paul 的週報與 human-writing 的五條規則 ── */
+  const STYLE_ZH=[
+    '你在幫 VRT 成衣廠的廠協理寫每天發到生產群組的報告。讀的人是組長、生管、QC、倉庫和台北的主管，要一眼看懂今天發生什麼、為什麼、誰要做什麼。',
+    '只寫繁體中文，不要英文句子（客戶名、款號、PO、Line 照原樣）。',
+    '先講發生了什麼和原因，再給數字。判斷直接說，依據放在旁邊。',
+    '不要用「不是A，而是B」「與其說」「真正的問題是」「值得注意的是」「說白了」「先說結論」這類翻案或套話；不要三項以上的整齊排比；不要用破折號；不要黑話（賦能、抓手、閉環、底層邏輯）。',
+    '句子先交出主幹：誰、做了什麼、多少，再補原因。長短句交錯，平常的地方用平常的句子結束，不要每段都用一句口號收尾。',
+    '月份之間比較要用每個生產日來比（假日會讓月總量自然變少）；件數和標準工時分開看（短工時的款件數多、工時少）；退修率是檢驗紀錄，不能直接從產量扣。',
+    '要處理的事寫明哪一組／哪張 PO、誰負責（車縫主管、生管、QC、倉庫、船務、HRA、IE）、最好有日期。',
+    '資料沒有的不要猜，不知道就說「資料還沒進來」。數字一個都不能改，也不能自己算新的數字。'
+  ].join('\n');
+  /* 參考：Paul 自己寫的報告片段（只學語氣，不抄數字） */
+  const STYLE_SAMPLES='範例一（月結）：10月有亡人節假期，生產日由9月25天降至21天，月完成標準工時少了是合理的；但每日完成標準工時由645增至661小時，效率由29.6%升至30.8%，按工作日看反而小幅改善。\n範例二（線別）：10/31第6、8組新車縫數為0，兩組其實在做既有成品拆包、換標和熱轉印，應記入補標工序，不能算成車縫閒置。\n範例三（排單）：前半月合理，11個組都有物料齊全的單；後半月靠11/13那櫃布，到廠當天驗布、11/14裁、11/16上線比較實際。\n範例四（行動）：HRA核實車縫缺員，第5組26、第6組23、第7組27人，先補到28–29人。';
+  function aiPromptZh(f,opts){opts=opts||{};const base=renderStory(f);const W=f.period==='week',PL=f.kind==='plan';const nameZh=PL?'排單週報':W?'生產週報':'生產日報';
+    const sc=(f.scenarios||[]).slice(0,4).map(x=>'• '+x.id+'：'+x.zh).join('\n');
+    const system='你是 VRT 成衣廠的生產助理。'+STYLE_ZH+'\n\n'+STYLE_SAMPLES+'\n\n只輸出報告本文。';
+    const user='【今天的情境（程式判斷，依重要度排序）】\n'+(sc||'• 平穩')+'\n\n【事實 JSON（唯一的數字來源）】\n'+JSON.stringify(slim(f))+'\n\n【程式版'+nameZh+'（版面與數字照用）】\n'+base.text+'\n\n【要求】\n1. 第一行照用標題「'+base.text.split('\n')[0]+'」。\n2. 標題下寫一段 2–4 句的開頭，用情境的角度講今天（或這週）是怎樣的一天，像廠協理在群組裡跟大家說話。\n3. 接著保留程式版的各段標題與「・」數字行（可以刪掉不重要的行，但不能改數字、不能加新數字）。\n4. 「要處理」最多 4 點，寫明誰做什麼。\n5. 最後一行照用「資料：…」那一行。\n6. 全文約 '+(W||PL?'500':'300')+' 個中文字以內。';
+    return {system,user,maxTokens:opts.maxTokens||(W||PL?2200:1400)}}
+
+  /* v2.0: lang 'zh' (Telegram default, 網頁中文) → 人性化中文版；'both' → v1.3 中＋英 */
+  function render(f,opts){opts=opts||{};return opts.lang==='zh'&&f.scenarios?renderStory(f):renderV13(f,opts)}
+  /* AI 文字 → Telegram HTML：標題與段落標題加粗 */
+  function aiHtml(text){return esc(text).split('\n').map((t,i)=>{const plain=t.trim();return plain&&(i===0||(!/^[・•\d]/.test(plain)&&plain.length<=24&&!/[。，；：]/.test(plain)))?'<b>'+t+'</b>':t}).join('\n')}
 
   /* ── AI wording step (optional): prompt + number check ── */
   function factNumbers(f){const set=new Set();const add=v=>{if(v==null||!isFinite(v))return;const n=Number(v);[n,Math.round(n),Math.round(n*10)/10,Math.round(n*100)/100].forEach(x=>{set.add(String(x));set.add(x.toLocaleString('en-US'));set.add(Math.abs(x).toFixed(1));set.add(Math.abs(x).toFixed(2));set.add(Math.abs(x).toFixed(0));set.add(String(Math.abs(x)))})};
@@ -468,7 +624,7 @@
     for(const m of scrub.matchAll(/\d[\d,]*(?:\.\d+)?/g)){const raw=m[0].replace(/,/g,'');if(/^0+$/.test(raw)||raw==='1'||raw==='2'||raw==='3')continue;const n=Number(raw);if(have.has(raw)||have.has(String(n))||have.has(n.toLocaleString('en-US')))continue;bad.push(m[0])}
     return {ok:bad.length===0,bad:[...new Set(bad)]}}
   const STYLE_GUIDE='寫法照工廠既有的管理報告（VRT 生產產能週報／10 月排單更新）：先講事實再下管理判定（「本週不是…，而是…」「更大的問題在月末」「真正需要控制的是」），再給數據；段落式敘述而不是制式條列；明確區分概念（排單負荷≠效率、件數≠標準工時、退修不再從產量扣除、排單是暴露量不是核實餘量）；指出線別的雙重風險（低效＋高退修）與「高產但高退修」；該說「不能據此斷定」就說，資料沒有的不猜；每個異常寫明線別／PO／日期與建議負責人。\nFollow the factory\'s management-report style (VRT weekly capacity report / October loading update): verdict and conclusion first, then the numbers; every point one Chinese line + one English line; keep concepts apart (loading ≠ efficiency, piece count ≠ standard minutes, rejects are not deducted from output twice); call out dual-risk lines (weak efficiency + high reject) and high-output/high-reject lines; say when the data does not support a claim and never guess missing data; name the line / PO and the owner for every issue.';
-  function aiPrompt(f,opts){opts=opts||{};const base=render(f,{lang:opts.lang});const W=f.period==='week',PL=f.kind==='plan',ZH=opts.lang==='zh';const nameZh=PL?'排單週報':W?'效率週報':'日報';
+  function aiPrompt(f,opts){opts=opts||{};if(opts.lang==='zh'&&f.scenarios)return aiPromptZh(f,opts);const base=renderV13(f,{lang:opts.lang});const W=f.period==='week',PL=f.kind==='plan',ZH=opts.lang==='zh';const nameZh=PL?'排單週報':W?'效率週報':'日報';
     const system='你是 VRT 成衣廠的生產助理。你只能改寫文字，絕對不能自己計算、推算、四捨五入或補充任何數字；所有數字必須逐字沿用「事實 JSON」與「規則版」中已出現的數字（含百分比、件數、天數、線別、PO）。不得新增事實 JSON 沒有的結論。只輸出報告本文，不要加說明。\nYou are the production assistant of VRT garment factory. You only rephrase; you must never compute, derive, round or add any number — copy every number verbatim from the facts JSON / rule-based report. No claims beyond the facts. Output the report body only.\n'+STYLE_GUIDE;
     const user='【事實 JSON Facts】\n'+JSON.stringify(slim(f))+'\n\n【規則版'+nameZh+' Rule-based report（格式與數字都要沿用 keep layout and numbers）】\n'+base.text+'\n\n【要求 Requirements】\n1. 保持段落：管理判定一行、1️⃣ '+(W?'管理摘要':'今日重點')+' 3 點、2️⃣ 關鍵數字（逐行照抄 copy the table lines verbatim）、3️⃣ 異常與建議 最多 3 點（每點寫明線別或 PO、建議找誰 who）。'+(ZH?'只寫中文，不要英文。':'每點中文一行＋English 一行。')+'\n2. 中文總字數約 '+(W?'450':'250')+' 字以內 (about '+(W?'450':'250')+' Chinese characters max)。\n3. 語氣照工廠既有報告：先講事實再講判定，用「不是…而是…」「不能據此斷定」「真正要控制的是」這類句子說明因果與限制；'+(PL?'排單負荷≠效率、排單是暴露量不是核實餘量、空檔與換款要點名組別與日期；不提機修。':'件數≠標準工時、退修不再從產量扣除、雙重風險線要點名；')+'避免制式條列腔，但數字一個都不能改 — numbers must stay identical.';
     return {system,user,maxTokens:opts.maxTokens||(W?2000:1200)}}
@@ -569,5 +725,5 @@
     f.basis.zh.forEach((z,i)=>{s+=para(z,f.basis.en[i]||'')});
     s+=footer();return shell(s,W?'生產效率週報':'生產日報','')}
 
-  g.VRTDailyReport={version:VERSION,TH,STYLE_GUIDE,compute,render,renderCompact,aiPrompt,checkAiText,checkNumbersAgainstText,docHtml,zhCount,helpers:{sewPick,sewAgg,cutAgg,qcPick,qcAgg,chgAgg,anyDate,addDays,dayKey,dowMon0,isoWeekKey,N,pct,esc,planRuns,weekLoading,lineShort}};
+  g.VRTDailyReport={version:VERSION,TH,STYLE_GUIDE,STYLE_ZH,HOLIDAYS_KH,compute,render,renderStory,renderV13,aiHtml,holidayRuns,isWorkday,renderCompact,aiPrompt,checkAiText,checkNumbersAgainstText,docHtml,zhCount,helpers:{sewPick,sewAgg,cutAgg,qcPick,qcAgg,chgAgg,anyDate,addDays,dayKey,dowMon0,isoWeekKey,N,pct,esc,planRuns,weekLoading,lineShort}};
 })(typeof window!=='undefined'?window:globalThis);
