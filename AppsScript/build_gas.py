@@ -308,7 +308,7 @@ rep("""function handleMsg(msg) {
 rep("""    if (payload && payload.action === 'auditSent') return handleProdAuditSent_(payload);""",
 """    if (payload && payload.action === 'auditSent') return handleProdAuditSent_(payload);
     // v4.6: 生產日報 / Claude 文字 / 群組檔案收件
-    if (payload && /^(dailyReport|aiSummary)/.test(String(payload.action||''))) return handleDailyReport_(payload);
+    if (payload && /^(dailyReport|aiSummary|aiParse)/.test(String(payload.action||''))) return handleDailyReport_(payload);
     if (payload && /^inbox/.test(String(payload.action||''))) return handleInbox_(payload);""")
 
 # 12. v4.7 (2026-10-17): 排單週報 + 效率週報, 中文 Telegram 版, /prod 與 /prod2 底下的生產摘要按鈕 (portal 1 & 2), dailyReportText for the portal page
