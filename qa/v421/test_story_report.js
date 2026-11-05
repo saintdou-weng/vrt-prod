@@ -51,6 +51,8 @@ test('接單可做幾個月（週報）：≥2 個月可考慮加班、<1 個月
   const f2=run(factory({custstats:mk(50000)}),{date:'2026-11-04',period:'week'});assert(ids(f2).includes('backlogLow'),ids(f2).join());
   const f3=run(factory({custstats:mk(f1.months.prev.pieces*1.4)}),{date:'2026-11-04',period:'week'});assert(ids(f3).includes('backlogOk'),ids(f3).join());
   [f1,f2,f3].forEach((f,i)=>checkText(f,'backlog'+i));return f1.outlook.backlogMonths+' / '+f2.outlook.backlogMonths+' / '+f3.outlook.backlogMonths+' months'});
+test('客戶統計太舊（9/29 → 11/5，超過 14 天）：不拿來判斷缺布和接單，改成提醒匯入（Paul 11/05：30 多萬缺布不對）',()=>{const cs={overall:{actualNotSewn:400000,noFabric:303987},details:[{customer:'WPL',po:'1010',style:'X',noFabric:303987}],snapshotDate:'2026-09-29'};
+  const f=run(factory({custstats:cs}),{date:'2026-11-05'});assert(f.fabric.stale&&f.fabric.ageDays>30);assert(!ids(f).includes('fabric'));const t=checkText(f,'stale').text;assert(!/303,987/.test(t),t);assert(/客戶統計停在 9\/29/.test(t),t);return 'age '+f.fabric.ageDays+' days'});
 test('平穩日與沒有資料的日子',()=>{const f=run(factory(),{date:'2026-11-12'});assert(ids(f).includes('steady'),ids(f).join());checkText(f,'steady');const n=run({sewing:[],cutting:[]},{date:'2026-11-12'});assert.equal(ids(n)[0],'nodata');checkText(n,'nodata');return 'ok'});
 test('至少十來種情境都出現過；同一種情境換日期會換說法',()=>{assert(seen.size>=15,'only '+seen.size+': '+[...seen].join());
   const texts=new Set();['2026-11-11','2026-11-12','2026-11-13','2026-11-14','2026-11-16','2026-11-17'].forEach(d=>{const f=run(factory(),{date:d});const s=f.scenarios.find(x=>x.id==='steady');if(s)texts.add(s.zh.replace(/[\d,.%]+/g,'#'))});assert(texts.size>=2,'steady openings never vary');return seen.size+' scenarios: '+[...seen].join(' ')});
