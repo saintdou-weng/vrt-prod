@@ -33,7 +33,8 @@ function drRowsMonths_(tool,prefixes,months){ const m=readSmartManifest_(tool); 
 function dailyReportData_(dateOpt,today,period){
   let D=dateOpt||''; if(!D){ D=latestDataDate_('sewing',['m'])||DR.helpers.addDays(today,-1); }
   const months=drMonthsFor_(D);
-  const sew=drRowsMonths_('sewing',['m'],months), cut=drRowsMonths_('cutting',['m'],months), qc=drRowsMonths_('qc',['m','p:kpi'],months), sp=drRowsMonths_('spareparts',['p:maint_needle','p:maint_part','m'],months), ship=drRowsMonths_('shipping',['all'],months), cs=drRowsMonths_('custstats',['all'],months), plan=drRowsMonths_('prodplan',['m'],months);
+  const sew=drRowsMonths_('sewing',['m'],[...new Set(months.concat((()=>{const y=+D.slice(0,4),mo=+D.slice(5,7);const k=n=>new Date(Date.UTC(y,mo-1-n,1)).toISOString().slice(0,7);return [k(1),k(2)]})()))].sort()),   // v4.11: + 2 previous months for the month comparison
+   cut=drRowsMonths_('cutting',['m'],months), qc=drRowsMonths_('qc',['m','p:kpi'],months), sp=drRowsMonths_('spareparts',['p:maint_needle','p:maint_part','m'],months), ship=drRowsMonths_('shipping',['all'],months), cs=drRowsMonths_('custstats',['all'],months), plan=drRowsMonths_('prodplan',['m'],months);
   const csMeta=(cs.manifest&&cs.manifest.meta&&cs.manifest.meta.summaryData)||{};
   return {
     date:D, period:period||'day', sewing:shapeRows_('sewing',sew.rows), cutting:shapeRows_('cutting',cut.rows), qc:shapeRows_('qc',qc.rows), spareparts:shapeRows_('spareparts',sp.rows),
@@ -64,7 +65,7 @@ function generateDailyReport(dateOpt, opts){
 function drKeyboard_(mode){
   mode=mode==='plan'?'plan':mode==='eff'?'eff':'day';
   const page=mode==='plan'?'prodplan':mode==='eff'?'sewing':'overview';
-  return { inline_keyboard: [ siteRow_([page,'overview','portal']), [{ text:'📰 日報', callback_data:'drday' },{ text:'📋 排單週報', callback_data:'drplan' },{ text:'📅 效率週報', callback_data:'dreff' }] ] };
+  return { inline_keyboard: [ siteRow_([page,'overview','portal','erp']), [{ text:'📰 日報', callback_data:'drday' },{ text:'📋 排單週報', callback_data:'drplan' },{ text:'📅 效率週報', callback_data:'dreff' }] ] };
 }
 function dailyReportSend_(rep,chatId,lang){
   lang=lang||drTgLang_(); const useAi=rep.ai&&rep.ai.ok&&rep.ai.html;
@@ -125,7 +126,7 @@ function claudeUsageSummary_(){ let log=[]; try{const raw=loadFromDrive(CLAUDE_U
 function dailyReportAi_(facts,purpose,lang){
   const p=DR.aiPrompt(facts,{lang:lang==='zh'?'zh':'both'}); const r=claudeMessage_(p.system,p.user,p.maxTokens,purpose||'daily');
   const chk=DR.checkAiText(r.text,facts);
-  const out={ok:chk.ok,text:r.text,html:chk.ok?DR.helpers.esc(r.text).replace(/^(📰.*|📋.*|[123]️⃣.*)$/mg,'<b>$1</b>'):'',model:r.model,usage:r.usage,costUsd:r.costUsd,lang:lang==='zh'?'zh':'both',at:new Date().toISOString(),badNumbers:chk.bad};
+  const out={ok:chk.ok,text:r.text,html:chk.ok?(DR.aiHtml?DR.aiHtml(r.text):DR.helpers.esc(r.text)):'',model:r.model,usage:r.usage,costUsd:r.costUsd,lang:lang==='zh'?'zh':'both',at:new Date().toISOString(),badNumbers:chk.bad};
   return out;
 }
 /* ── D2 per-module AI summary: rewrite a computed summary (vrt-tg-summary text); numbers must all come from the input text ── */
@@ -147,7 +148,8 @@ function aiSummary_(kind,text,period,lang){
   const focus=AI_FOCUS_[kind]||'依資料內容整理重點與建議。';
   const system='你是 VRT 成衣廠的生產助理。你只能根據提供的「程式摘要」改寫成管理層看的中英對照摘要，絕對不能自己計算、推算、四捨五入或補充任何數字；所有數字必須逐字沿用摘要裡的數字。沒有的事不要寫。格式：每一點「中文一行＋English 一行」，最多約 200 個中文字；只輸出摘要本文。\nYou only rephrase the given computed summary into a bilingual management brief (one Chinese line + one English line per point, about 200 Chinese characters max). Never compute, derive, round or add numbers — copy them verbatim. Output the brief only.\n'+DR.STYLE_GUIDE;
   const user='【模組 Module】'+kind+'（期間 period: '+(period||'')+'）\n【重點方向 Focus】'+focus+'\n\n【程式摘要 Computed summary — 唯一的數字來源 the only source of numbers】\n'+String(text||'').replace(/<[^>]+>/g,'');
-  const r=claudeMessage_(system,user,900,'summary:'+kind);
+  const systemZh='你是 VRT 成衣廠的生產助理。只根據提供的「程式摘要」改寫成給主管看的中文摘要，數字逐字沿用，不能自己計算或補數字；沒有的事不要寫。\n'+DR.STYLE_ZH+'\n最多約 200 字，只輸出摘要本文。';   // v4.11: Chinese only unless the page asks for English
+  const r=claudeMessage_((lang==='en'||lang==='both')?system:systemZh,user,900,'summary:'+kind);
   const chk=DR.checkNumbersAgainstText(r.text,String(text||''));
   return {ok:chk.ok,text:r.text,html:chk.ok?DR.helpers.esc(r.text):'',model:r.model,usage:r.usage,costUsd:r.costUsd,badNumbers:chk.bad,at:new Date().toISOString()};
 }

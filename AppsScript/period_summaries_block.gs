@@ -32,8 +32,8 @@ const PERIOD_CMD = { '/day':'day', '/week':'week', '/month':'month', '/year':'ye
 const esc_ = TGS.esc;
 // v4.10 (2026-10-27): every summary / report message ends with buttons back to the site (like the other VRT bots)
 const PROD_SITE_ = 'https://saintdou-weng.github.io/vrt-prod/';
-const SITE_PAGES_ = { portal:['🏭 生產入口','portal_v2.html'], overview:['📊 生產總覽','production_v4.html'], sewing:['🧵 車縫','sewing_v5.html'], cutting:['✂️ 裁剪','cutting_v3.html'], qc:['✅ Final QC','vrt_final_qc_v1.html'], spareparts:['🔧 機針零件','vrt_spare_parts_v2.html'], prodplan:['📅 排單','production_plan_capacity_v1.html'], monthship:['🗓 月出貨','vrt_monthly_shipping_control_center_v1.html'], shipping:['🚢 出貨','shipping_v2.html'], orders:['📦 訂單','orders_v3.html'], weekly:['📑 週報產生器','vrt_production_weekly_report_generator_v3.html'] };
-function siteBtn_(key){ const p=SITE_PAGES_[key]||SITE_PAGES_.portal; return { text:p[0], url:PROD_SITE_+p[1] }; }
+const SITE_PAGES_ = { erp:['🏢 PSJERP','https://saintdou-weng.github.io/PSJERP/'], portal:['🏭 生產入口','portal_v2.html'], overview:['📊 生產總覽','production_v4.html'], sewing:['🧵 車縫','sewing_v5.html'], cutting:['✂️ 裁剪','cutting_v3.html'], qc:['✅ Final QC','vrt_final_qc_v1.html'], spareparts:['🔧 機針零件','vrt_spare_parts_v2.html'], prodplan:['📅 排單','production_plan_capacity_v1.html'], monthship:['🗓 月出貨','vrt_monthly_shipping_control_center_v1.html'], shipping:['🚢 出貨','shipping_v2.html'], orders:['📦 訂單','orders_v3.html'], weekly:['📑 週報產生器','vrt_production_weekly_report_generator_v3.html'] };
+function siteBtn_(key){ const p=SITE_PAGES_[key]||SITE_PAGES_.portal; return { text:p[0], url:/^https?:/.test(p[1])?p[1]:PROD_SITE_+p[1] }; }
 function siteRow_(keys){ const seen={}; return (keys||['overview','portal']).filter(k=>SITE_PAGES_[k]&&!seen[k]&&(seen[k]=1)).map(siteBtn_); }
 function todayYmd_(){ return Utilities.formatDate(new Date(),CFG.TZ,'yyyy-MM-dd'); }
 function periodOf_(period,anchor){ return TGS.periodOf(period,anchor,todayYmd_()); }
