@@ -13,6 +13,7 @@ const DR = VRTDailyReport;
 const DR_FILE_ = d => 'daily_report_' + String(d).replace(/[^0-9A-Za-z-]/g,'') + '.json';   // date yyyy-MM-dd or week yyyy-Www
 const DR_INDEX_ = 'daily_report_index.json';
 const CLAUDE_USAGE_ = 'claude_usage_log.json';
+// v4.10.4 (2026-11-05): newer Claude models reject `temperature` and spend output tokens on thinking → no temperature, max_tokens ≥ 4000, ** markdown stripped (Telegram HTML).
 const CLAUDE_API_ = 'https://api.anthropic.com/v1';
 const CLAUDE_VERSION_ = '2023-06-01';
 
@@ -109,10 +110,10 @@ function claudeModel_(){ const p=claudeProps_(); const set=String(p.getProperty(
 function claudeMessage_(system,user,maxTokens,purpose){
   const key=claudeKey_(); if(!key)throw new Error('CLAUDE_API_KEY 未設定（Apps Script → 專案設定 → 指令碼屬性）');
   const model=claudeModel_();
-  const res=UrlFetchApp.fetch(CLAUDE_API_+'/messages',{method:'post',contentType:'application/json',headers:claudeHeaders_(),muteHttpExceptions:true,payload:JSON.stringify({model:model,max_tokens:maxTokens||1200,temperature:0.2,system:system,messages:[{role:'user',content:user}]})});
+  const res=UrlFetchApp.fetch(CLAUDE_API_+'/messages',{method:'post',contentType:'application/json',headers:claudeHeaders_(),muteHttpExceptions:true,payload:JSON.stringify({model:model,max_tokens:Math.max(4000,(maxTokens||1200)*3),system:system,messages:[{role:'user',content:user}]})});
   const code=res.getResponseCode(); let body={}; try{body=JSON.parse(res.getContentText()||'{}')}catch(_){}
   if(code>=300)throw new Error('Claude API HTTP '+code+': '+(body.error&&body.error.message||res.getContentText().slice(0,200)));
-  const text=(body.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('').trim();
+  const text=(body.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('').trim().replace(/\*\*([^*\n]+)\*\*/g,'$1');
   const u=body.usage||{}; const price=claudePrice_(); const cost=(Number(u.input_tokens||0)*price.inM+Number(u.output_tokens||0)*price.outM)/1e6;
   claudeUsageLog_({at:new Date().toISOString(),purpose:purpose||'',model:model,inTokens:Number(u.input_tokens||0),outTokens:Number(u.output_tokens||0),costUsd:Math.round(cost*1e5)/1e5});
   return {text:text,model:model,usage:{inTokens:Number(u.input_tokens||0),outTokens:Number(u.output_tokens||0)},costUsd:Math.round(cost*1e5)/1e5,priceM:price};
