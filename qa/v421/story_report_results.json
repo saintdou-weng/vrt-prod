@@ -1,0 +1,92 @@
+[
+ {
+  "name": "行事曆：柬埔寨 2026 國定假日；11 月扣掉週日、獨立日、送水節 = 21 個工作天（Paul 11 月排單報告）；10 月有亡人節",
+  "status": "PASS",
+  "detail": "Nov workdays 21 · 2026-11-09 獨立日, 2026-11-23 送水節"
+ },
+ {
+  "name": "月度比較用每個生產日：本月到今天、上月、前月；標準工時＝件數×SMV（日報沒有 producedMinutes 時）",
+  "status": "PASS",
+  "detail": "Oct 23 days, 4950/day · Sep earned 16500 h"
+ },
+ {
+  "name": "月初：先回頭看上月（含和前月比）",
+  "status": "PASS",
+  "detail": "11月剛開始，先回頭看10月：113,850 件、23 個生產日，每天 4,950 件，效率 30.0%。和9月比，每個"
+ },
+ {
+  "name": "節後復工：送水節後第一天",
+  "status": "PASS",
+  "detail": "剛放完送水節回來，今天是復工第一天。做了 4,950 件，效率 30.0%。假後頭一兩天人到不齊、機"
+ },
+ {
+  "name": "假前：獨立日前 3 個工作日內",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "月底＋落後：月目標還差很多",
+  "status": "PASS",
+  "detail": "monthEnd left 1 · behind 5% vs 42.9%"
+ },
+ {
+  "name": "超前：月目標做得比時間快",
+  "status": "PASS",
+  "detail": "74.3%"
+ },
+ {
+  "name": "效率上升／下滑（下滑時點名低效組）",
+  "status": "PASS",
+  "detail": "up 8.0 · down -8.2"
+ },
+ {
+  "name": "人力下降（比上月每天平均少 6% 以上）→ 請 HRA 盤缺員",
+  "status": "PASS",
+  "detail": "-24.0%"
+ },
+ {
+  "name": "產品組合：本月款式工時短很多 → 件數多不代表做得多",
+  "status": "PASS",
+  "detail": "-50%"
+ },
+ {
+  "name": "日報沒到齊：只有 2 條線 → 不拿來比，也不觸發人力／效率情境",
+  "status": "PASS",
+  "detail": "日報還沒到齊：今天只有 2 條線（平常 11 條）。現在的 900 件只是部分數"
+ },
+ {
+  "name": "品質：雙重風險線（低效＋高退修）",
+  "status": "PASS",
+  "detail": "Line 3"
+ },
+ {
+  "name": "出貨：未來兩週的船期 + 逾期；缺布；已裁未縫堆積",
+  "status": "PASS",
+  "detail": "next ship 1 · overdue 1"
+ },
+ {
+  "name": "接單可做幾個月（週報）：≥2 個月可考慮加班、<1 個月併組；以上月實做為一個月產能",
+  "status": "PASS",
+  "detail": "7.9 / 0.4 / 1.4 months"
+ },
+ {
+  "name": "平穩日與沒有資料的日子",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "至少十來種情境都出現過；同一種情境換日期會換說法",
+  "status": "PASS",
+  "detail": "20 scenarios: beforeHoliday monthStart afterBreak monthEnd behind ahead steady effUp effDown manpower mix partial quality shipping fabric wipPile backlogHigh backlogLow backlogOk nodata"
+ },
+ {
+  "name": "週報與排單週報：只有中文、整齊（・項目）、有每天、月比較、接下來；排單週報保留負荷段落",
+  "status": "PASS",
+  "detail": "week 731 chars · plan 371 chars"
+ },
+ {
+  "name": "AI 提示詞：只要中文、照 Paul 週報語氣（範例）、禁用翻案句與破折號、數字只能來自事實；AI 結果標題加粗",
+  "status": "PASS",
+  "detail": "system 758 chars"
+ }
+]
