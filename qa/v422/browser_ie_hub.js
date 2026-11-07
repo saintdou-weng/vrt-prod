@@ -60,7 +60,7 @@ const SHOTS=process.env.VRT_SHOTS||'';
   ok('款式頁：OBD 圖 '+sp.img[0].w+'px、#style= 連結、每日產量圖、SMV 核對、機台需要 vs L5 現有');
   if(SHOTS)await p.screenshot({path:SHOTS+'/style_page.png',fullPage:false});
   if(SHOTS){await p.evaluate(()=>document.getElementById('ieHubStyle').scrollTo(0,900));await p.waitForTimeout(200);await p.screenshot({path:SHOTS+'/style_page2.png'})}
-  const pending=await p.evaluate(()=>document.getElementById('ieHubStyle').innerText.match(/OBD 未核准|SMV 與核可差[^\n]*/g));assert(pending&&pending.length,'flags');ok('款式頁旗標：'+pending.join(' / '));
+  const pending=await p.evaluate(()=>document.getElementById('ieHubStyle').innerText.match(/OBD 未核准|排產用[^\n]*|日報用[^\n]*/g));assert(pending&&pending.length,'flags');ok('款式頁旗標：'+pending.join(' / '));
   await p.click('[data-hub-act="balance"]');await p.waitForTimeout(600);const bal=await p.evaluate(()=>({tab:document.querySelector('.tab-btn.active').getAttribute('data-tab'),txt:document.getElementById('content').innerText}));assert.equal(bal.tab,'balancing');assert(/工序平衡表/.test(bal.txt));ok('⚖ 排線試算：帶著同一款同一筆排產跳到排線');
   await p.evaluate(()=>{const b=[...document.querySelectorAll('[data-bal-view]')].find(x=>x.getAttribute('data-bal-view')==='machine');b.click()});await p.waitForTimeout(400);const mt=await p.evaluate(()=>document.getElementById('content').innerText);assert(/機台清冊 50/.test(mt)&&/全廠可用/.test(mt),mt.slice(0,600));ok('排線 → 機台需求：讀到機台清冊、顯示全廠可用與本線');
   if(SHOTS)await p.screenshot({path:SHOTS+'/balance_machine.png',fullPage:true});
