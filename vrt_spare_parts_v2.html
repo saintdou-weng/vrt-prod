@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <script src="vrt-deploy-config.js?v=4.19.0"></script>
-<script src="vrt-platform-v40.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.22.0"></script>
 <meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT 機修零件與機針管理 · Spare Parts &amp; Needle v4.13</title>
@@ -223,9 +223,10 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
 })();
 </script>
 <script src="vrt-data-core-v39.js?v=4.19.0"></script>
-<script src="vrt-domain-sync-v39.js?v=4.19.0"></script>
+<script src="vrt-domain-sync-v39.js?v=4.22.0"></script>
 <script src="vrt-import-core-v40.js?v=4.19.0"></script>
-<script src="vrt-maintenance-v39.js?v=4.19.0"></script>
+<script src="vrt-machine-register-v1.js?v=4.22.0"></script>
+<script src="vrt-maintenance-v39.js?v=4.22.0"></script>
 <script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
 <script src="vrt-auto-sync-v3.js?v=4.19.0"></script>
 <!-- VRT SMART SYNC 3.2 persistent incremental baseline -->
@@ -284,6 +285,7 @@ select,input[type=text],input[type=number],input[type=date]{background:var(--car
   <div class="tab" onclick="goTab('inventory',this)" data-zh="🔧 零件清單" data-en="🔧 Parts" data-km="🔧 បញ្ជីគ្រឿង">🔧 零件清單</div>
   <div class="tab" onclick="goTab('history',this)" data-zh="🧾 採購記錄" data-en="🧾 Purchases" data-km="🧾 ការទិញ">🧾 採購記錄</div>
   <div class="tab" onclick="goTab('machine',this)" data-zh="🔩 機台零件庫存" data-en="🔩 Machine Parts Stock" data-km="🔩 ស្តុកគ្រឿងម៉ាស៊ីន">🔩 機台零件庫存</div>
+  <div class="tab" onclick="goTab('machines',this)" data-zh="🏭 機台清冊" data-en="🏭 Machine Register" data-km="🏭 បញ្ជីម៉ាស៊ីន">🏭 機台清冊</div>
   <div class="tab" onclick="goTab('needle',this)" data-zh="🪡 機針庫存" data-en="🪡 Needle Stock" data-km="🪡 ស្តុកម្ជុល">🪡 機針庫存</div>
   <div class="tab" onclick="goTab('needlechange',this)" data-zh="🪡 換針紀錄" data-en="🪡 Needle Change" data-km="🪡 ដូរម្ជុល">🪡 換針紀錄</div>
   <div class="tab" onclick="goTab('partchange',this)" data-zh="🔧 換零件紀錄" data-en="🔧 Part Change" data-km="🔧 ដូរគ្រឿង">🔧 換零件紀錄</div>
@@ -686,7 +688,7 @@ function goTab(name,el){
   _curTab=name;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   if(el)el.classList.add('on');
-  else{const m={dashboard:0,inventory:1,history:2,machine:3,needle:4,needlechange:5,partchange:6,changeanalysis:7,monthly:8,price:9,reports:10,ocr:11,settings:12};
+  else{const m={dashboard:0,inventory:1,history:2,machine:3,machines:4,needle:5,needlechange:6,partchange:7,changeanalysis:8,monthly:9,price:10,reports:11,ocr:12,settings:13};
        document.querySelectorAll('.tab')[m[name]]?.classList.add('on');}
   renderTab(name);
 }
