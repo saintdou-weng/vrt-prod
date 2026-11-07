@@ -58,9 +58,12 @@
      還沒重測的款：舊 SMV 扣 35%。排產表、車縫日報應該用這個值。 ── */
   const OLD_CUT=0.35;
   function cutRule(prev,cur){if(!(prev>0&&cur>0))return 0;const ch=(cur-prev)/prev;return ch>=0?0:ch<=-0.2?0.15:ch<=-0.1?0.10:0.05}
-  function prodSmv(key){const ie=src&&src.ie||{},ups=(ie.updates||[]).filter(u=>!u.deleted&&u.approval==='approved'&&num(u.currentSmv)>0&&sm(u.style,key)>=2).sort((a,b)=>(sm(b.style,key)-sm(a.style,key))||String(b.effectiveDate||b.approvalDate||b.testDate||'').localeCompare(String(a.effectiveDate||a.approvalDate||a.testDate||'')));
-    if(!ups.length)return null;const u=ups[0],prev=num(u.previousSmv),cur=num(u.currentSmv),cut=cutRule(prev,cur),adj=num(u.adjustedSmv);
-    return {u,prev,cur,cut,change:prev>0?(cur-prev)/prev:null,smv:adj>0&&Math.abs(adj-cur*(1-cut))/cur<0.02?adj:cur*(1-cut),old:prev>0?prev*(1-OLD_CUT):null}}
+  function prodSmv(key){const ie=src&&src.ie||{},dt=u=>String(u.effectiveDate||u.approvalDate||u.testDate||''),all=(ie.updates||[]).filter(u=>!u.deleted&&u.approval==='approved'&&num(u.currentSmv)>0&&sm(u.style,key)>=2);
+    if(!all.length)return null;const best=Math.max(...all.map(u=>sm(u.style,key))),ups=all.filter(u=>sm(u.style,key)===best).sort((a,b)=>dt(a).localeCompare(dt(b))||String(a.testDate||'').localeCompare(String(b.testDate||'')));
+    /* 同一款可能重測多次：扣幾 % 看「最早的舊 SMV → 最新的新 SMV」；排產／日報用任何一個舊 SMV −35% 都算「還用舊的」 */
+    const u=ups[ups.length-1],first=ups.find(x=>num(x.previousSmv)>0),prev=first?num(first.previousSmv):0,cur=num(u.currentSmv),cut=cutRule(prev,cur),adj=num(u.adjustedSmv);
+    const olds=[...new Set(ups.map(x=>num(x.previousSmv)).filter(v=>v>0))].map(v=>v*(1-OLD_CUT));
+    return {u,prev,cur,cut,change:prev>0?(cur-prev)/prev:null,smv:adj>0&&Math.abs(adj-cur*(1-cut))/cur<0.02?adj:cur*(1-cut),old:prev>0?prev*(1-OLD_CUT):null,olds}}
   const ft=v=>v>0?Number(v).toFixed(3).replace(/\.?0+$/,''):'—';
   const pctS=c=>(c*100).toFixed(c*100%1?1:0)+'%';
   function styleStatus(key,planRowsForStyle){const obd=latestObd(key,planRowsForStyle[0]&&planRowsForStyle[0].customer),st=obd?B().obdStatus(obd):null,planSmv=modeOf(planRowsForStyle.map(p=>num(p.smv))),sewSmv=modeOf(sewRows().filter(r=>sm(r.styleNo,key)>=2).slice(-40).map(r=>num(r.smv))),ie=approved(key,obd,0),pr=prodSmv(key);
@@ -68,7 +71,7 @@
     const ap=pr?{smv:pr.smv,source:'prod',pr,ie}:planSmv?{smv:planSmv,source:'plan',ie}:sewSmv?{smv:sewSmv,source:'sew',ie}:{smv:0,source:'none',ie};
     const near=(a,b,t)=>a>0&&b>0&&Math.abs(a-b)/b<=(t||0.03),flags=[];
     if(!obd)flags.push({k:'noobd',t:L('沒有 OBD 工序','No OBD'),c:''});else if(!st.formal)flags.push({k:'pending',t:L('OBD 未核准','OBD pending'),c:'orange'});
-    const chk=(v,who,k)=>{if(!pr||!(v>0)||near(v,pr.smv))return;if(pr.old&&near(v,pr.old))flags.push({k:k+'old',t:who+L('還用舊 SMV −35%（',' still uses old −35% (')+ft(v)+L('），應改 ','), should be ')+ft(pr.smv),c:'orange',old:true});else flags.push({k,t:who+L('用 ',' uses ')+ft(v)+L('，應為 ',', should be ')+ft(pr.smv),c:'red'})};
+    const chk=(v,who,k)=>{if(!pr||!(v>0)||near(v,pr.smv))return;const o=(pr.olds||[]).find(x=>near(v,x));if(o)flags.push({k:k+'old',t:who+L('還用舊 SMV −35%（',' still uses old −35% (')+ft(v)+L('），應改 ','), should be ')+ft(pr.smv),c:'orange',old:true});else flags.push({k,t:who+L('用 ',' uses ')+ft(v)+L('，應為 ',', should be ')+ft(pr.smv),c:'red'})};
     chk(planSmv,L('排產','Plan'),'smvplan');chk(sewSmv,L('日報','Report'),'smvsew');
     if(!(ap.smv>0))flags.push({k:'nosmv',t:L('沒有 SMV','No SMV'),c:'red'});
     const color=flags.some(f=>f.c==='red')?'#ef4444':flags.some(f=>f.c==='orange')?'#f59e0b':!obd?'#94a3b8':'#22c55e';
@@ -168,7 +171,7 @@
     // 3. SMV 核對
     const sewSm=st.sewSmv,planSm=st.planSmv,obdSum=ops.reduce((s,o)=>s+num(o.smv),0),pr=st.pr,ref=st.ap.smv,
       okT='<span style="color:var(--green)">'+L('一致','match')+'</span>',
-      cmp=v=>!(v>0)||!(ref>0)?'—':Math.abs(v-ref)/ref<=0.03?okT:pr&&pr.old&&Math.abs(v-pr.old)/pr.old<=0.03?'<span style="color:#b45309"><b>'+L('還用舊 SMV −35%','still old SMV −35%')+'</b></span>':'<span style="color:var(--red)"><b>'+(v>ref?'+':'')+pct((v-ref)/ref,1)+'</b></span>',
+      cmp=v=>!(v>0)||!(ref>0)?'—':Math.abs(v-ref)/ref<=0.03?okT:pr&&(pr.olds||[]).some(o=>Math.abs(v-o)/o<=0.03)?'<span style="color:#b45309"><b>'+L('還用舊 SMV −35%','still old SMV −35%')+'</b></span>':'<span style="color:var(--red)"><b>'+(v>ref?'+':'')+pct((v-ref)/ref,1)+'</b></span>',
       cmpIE=v=>!(v>0)||!(pr&&pr.cur)?'—':Math.abs(v-pr.cur)/pr.cur<=0.03?okT:'<span style="color:var(--red)"><b>'+(v>pr.cur?'+':'')+pct((v-pr.cur)/pr.cur,1)+'</b></span>'+L(' （和 IE 新 SMV 比）',' (vs IE new SMV)');
     const smvRows=[['<b>'+L('生產用 SMV（基準）','Production SMV (reference)')+'</b>','<b>'+fmt(ref,3)+'</b>',esc(srcLbl),'—']];
     if(pr){smvRows.push([L('IE 新 SMV（測試值）','IE new SMV (tested)'),fmt(pr.cur,3),esc((pr.u.testDate||'')+' · '+L('舊 ','old ')+ft(pr.prev)+(pr.change!=null?' → '+(pr.change>0?'+':'')+pct(pr.change,1):'')+' → '+(pr.cut?L('扣 ','cut ')+pctS(pr.cut):L('不扣','no cut'))),'—']);if(pr.old)smvRows.push([L('舊 SMV −35%','Old SMV −35%'),fmt(pr.old,3),esc(L('舊 ','old ')+ft(pr.prev)+' × 0.65 '+L('（還沒換新時用的值）','(the value used before the update)')),'—'])}
