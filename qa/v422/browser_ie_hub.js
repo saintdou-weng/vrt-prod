@@ -67,6 +67,13 @@ const SHOTS=process.env.VRT_SHOTS||'';
   /* 7. 深連結 + 款式庫點名 */
   const p2=await ctx.newPage();p2.on('pageerror',e=>errs.push(e.message));await p2.goto(BASE+'ie_smv_report_v2_1.html#style=5209');await p2.waitForSelector('#ieHubStyle',{timeout:15000});const t2=await p2.evaluate(()=>document.getElementById('ieHubStyle').innerText);assert(/5209/.test(t2));ok('網址 #style=5209 直接開款式頁');
   await p2.keyboard.press('Escape');await p2.evaluate(()=>VRT_IE_SMV_APP.setTab('library'));await p2.waitForTimeout(300);await p2.click('#content .style-name a');await p2.waitForSelector('#ieHubStyle');ok('款式庫點款號 → 款式頁');
+  /* 7b. 生產用 SMV 規則（IE 週報 Cut off 欄，11/05 週報 111 款逐一相符）＋款式頁「排產還用舊 −35%」 */
+  const cuts=await p.evaluate(()=>[[1.188,1.615],[10,9.492],[12.23,11.434],[11,9.273],[13.5,11.042],[11.428571,9.055],[37.5,27.215931],[10.5,10.151]].map(([a,b])=>VRTIEHub.cutRule(a,b)));
+  assert.deepEqual(cuts,[0,0.05,0.05,0.1,0.1,0.15,0.15,0.05]);
+  await p.evaluate(async()=>{const s=VRT_IE_SMV_APP.getState();s.updates.push({id:'UPD-T-HA',style:'A2642K',customer:'ADI',previousSmv:10.5,currentSmv:10.151,approval:'approved',testDate:'2026-09-10',effectiveDate:'2026-09-16',styleType:'current_old'});await VRT_IE_SMV_APP.setState(s);await VRTIEHub.data(true);VRTIEHub.openStyle('A2642K')});await p.waitForTimeout(600);
+  const sp2=await p.evaluate(()=>document.getElementById('ieHubStyle').innerText);
+  assert(/9\.643/.test(sp2)&&/扣 5%/.test(sp2),sp2.slice(0,800));assert(/排產還用舊 SMV −35%|還用舊 SMV −35%/.test(sp2)||/排產用 6\.9，應為 9\.643/.test(sp2),'plan flag');ok('生產用 SMV：10.5→10.151（−3.3%）扣 5% = 9.643；規則 8 個例子都對');
+  await p.keyboard.press('Escape');
   /* 8. DNC 不再被當雙針 */
   const fam=await p.evaluate(()=>[VRTIEBalancing.familyOf('DNC'),VRTIEBalancing.familyOf('DN'),VRTIEBalancing.familyOf('5ovl'),VRTIEBalancing.familyOf('Bt')]);assert.deepEqual(fam,['Chainstitch','Double Needle','5-thread Overlock','Bartack']);ok('機台別名：DNC→鏈縫、DN→雙針');
   assert(!errs.length,errs.join(' | '));console.log(pass+'/'+pass+' passed');await b.close()})().catch(e=>{console.log('FAIL',e.stack||e.message);process.exit(1)});
