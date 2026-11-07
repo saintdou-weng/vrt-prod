@@ -60,6 +60,12 @@ const SHOTS=process.env.VRT_SHOTS||'';
   ok('款式頁：OBD 圖 '+sp.img[0].w+'px、#style= 連結、每日產量圖、SMV 核對、機台需要 vs L5 現有');
   if(SHOTS)await p.screenshot({path:SHOTS+'/style_page.png',fullPage:false});
   if(SHOTS){await p.evaluate(()=>document.getElementById('ieHubStyle').scrollTo(0,900));await p.waitForTimeout(200);await p.screenshot({path:SHOTS+'/style_page2.png'})}
+  /* 6b. 像 PSJERP：往下捲接下一款、上方標題跟著換、◀ ▶ 在右邊；排線摘要在款式頁 */
+  const lb=await p.evaluate(()=>document.getElementById('ieHubStyle').innerText);assert(/排線摘要/.test(lb)&&/需要人數/.test(lb)&&/最忙的 5 道工序/.test(lb),'line balance section');
+  const navPos=await p.evaluate(()=>{const hd=document.getElementById('hubHead'),b=hd.querySelector('[data-hub-nav]:not([disabled])'),r=b.getBoundingClientRect();return {x:r.left,w:hd.getBoundingClientRect().width,txt:hd.innerText}});assert(navPos.x>navPos.w*0.55,'nav on right '+navPos.x);assert(/下一款/.test(navPos.txt)&&/1 \/ 3/.test(navPos.txt),navPos.txt);
+  const sc=await p.evaluate(async()=>{const el=document.getElementById('ieHubStyle');for(let i=0;i<6;i++){el.scrollTop=el.scrollHeight;el.dispatchEvent(new Event('scroll'));await new Promise(r=>setTimeout(r,250))}await new Promise(r=>setTimeout(r,300));return {cards:el.querySelectorAll('.hub-card').length,head:document.getElementById('hubHead').innerText.split('\n')[1]||document.getElementById('hubHead').innerText}});
+  assert(sc.cards>=2,'cards '+sc.cards);ok('款式頁一直往下捲：接到 '+sc.cards+' 款；上方標題換成 '+sc.head.slice(0,30)+'；◀ ▶ 在右邊；有排線摘要');
+  if(SHOTS){await p.evaluate(()=>document.getElementById('ieHubStyle').scrollTo(0,0));await p.waitForTimeout(300);await p.screenshot({path:SHOTS+'/style_head.png'})}
   const pending=await p.evaluate(()=>document.getElementById('ieHubStyle').innerText.match(/OBD 未核准|排產用[^\n]*|日報用[^\n]*/g));assert(pending&&pending.length,'flags');ok('款式頁旗標：'+pending.join(' / '));
   await p.click('[data-hub-act="balance"]');await p.waitForTimeout(600);const bal=await p.evaluate(()=>({tab:document.querySelector('.tab-btn.active').getAttribute('data-tab'),txt:document.getElementById('content').innerText}));assert.equal(bal.tab,'balancing');assert(/工序平衡表/.test(bal.txt));ok('⚖ 排線試算：帶著同一款同一筆排產跳到排線');
   await p.evaluate(()=>{const b=[...document.querySelectorAll('[data-bal-view]')].find(x=>x.getAttribute('data-bal-view')==='machine');b.click()});await p.waitForTimeout(400);const mt=await p.evaluate(()=>document.getElementById('content').innerText);assert(/機台清冊 50/.test(mt)&&/全廠可用/.test(mt),mt.slice(0,600));ok('排線 → 機台需求：讀到機台清冊、顯示全廠可用與本線');
