@@ -13,7 +13,7 @@ function drCompactHtml_(f){
   else{
     L.push('🧵 <b>車縫</b>　'+n(s.pieces)+' 件'+arrow(cmp.piecesVsPrev));
     var sub=[]; if(s.lines)sub.push(n(s.lines)+' 線'); if(s.manpower)sub.push(p1(s.manpower).replace(/\.0$/,'')+' 人');
-    if(s.eff!=null)sub.push('效率 '+p1(s.eff)+'%'+(pv.eff!=null?'（昨 '+p1(pv.eff)+'%）':'')+' '+light(s.eff));
+    if(s.eff!=null)sub.push('效率 '+p1(s.eff)+'%'+(pv.eff!=null?'（昨 '+p1(pv.eff)+'%）':'')+light(s.eff));
     if(sub.length)L.push('　'+sub.join('・'));
     if(f.mix&&f.mix.length>1)L.push('　'+f.mix.filter(function(m){return m.pieces>0}).map(function(m){return (m.product==='Apron'?'圍裙':m.product==='Garment'?'成衣':e(m.product))+' '+n(m.pieces)}).join('｜'));
   }
@@ -26,14 +26,17 @@ function drCompactHtml_(f){
   if(q&&q.reports){ L.push('🔍 <b>QC</b>　退修率 '+(q.rate!=null?p1(q.rate)+'%':'—')+'・檢驗 '+n(q.inspected)+'・退修 '+n(q.rejected)); }
   else L.push('🔍 <b>QC</b>　今天沒有報告');
   var an=(f.anomalies||[]).slice().sort(function(a,b){return (b.sev||0)-(a.sev||0)});
+  var SHORT={eff:'查換款、工序平衡、SMV、人員',fabric:'追到布日，回寫排單',quality:'查前三大缺點，當天回覆改善',capacity:'確認人力與排單',wip:'安排裁片上線，避免堆積',shipping:'確認出貨日與裝箱',maint:'檢查機台與換針紀錄'};
+  var shortText=function(a){ var t=String(a.zh||'');
+    if(a.kind==='eff'){ var m=t.match(/L\d+\s*\d+%/g); if(m)return '低效線 '+m.map(function(x){return x.replace(/\s+/,' ')}).join('｜')+'（低於 25%）'; }
+    if(a.kind==='fabric'){ var q=t.match(/([\d,]+)\s*件/); return '缺布 '+(q?q[1]+' 件':'')+(a.ref?'・主要 PO '+String(a.ref).replace(/,\s*/g,'、'):''); }
+    t=t.replace(/（客戶統計 ?[\d-]+）/,''); return t.length>60?t.slice(0,58)+'…':t; };
   if(an.length){
     L.push(HR); L.push('⚠️ <b>要處理</b>');
     an.slice(0,4).forEach(function(a,i){
-      var t=String(a.zh||'').replace(/（客戶統計 ?([\d-]+)）/,'（客統 $1）');
-      if(t.length>90)t=t.slice(0,88)+'…';
-      L.push((i+1)+'. '+e(t));
-      var act=(f.actions||[])[i]; var req=act&&act.req?String(act.req).split(' / ')[0]:'';
-      if(req&&req.length>60)req=req.slice(0,58)+'…';
+      var act=(f.actions||[])[i]; var req=SHORT[a.kind]||(act&&act.req?String(act.req).split(' / ')[0]:'');
+      if(req.length>40)req=req.slice(0,38)+'…';
+      L.push((i+1)+'. '+e(shortText(a)));
       L.push('　→ '+e(a.who&&a.who.zh||act&&String(act.owner||'').split(' / ')[0]||'負責人')+(req?'：'+e(req):''));
     });
   }
