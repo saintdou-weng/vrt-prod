@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <script src="vrt-deploy-config.js?v=4.19.0"></script>
-<script src="vrt-platform-v40.js?v=4.19.0"></script>
+<script src="vrt-platform-v40.js?v=4.22.0"></script>
 <meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VRT BOM／Costing Sheet · v4.4</title>
@@ -395,7 +395,7 @@ textarea.inp{height:auto;padding:9px 11px;resize:vertical;min-height:62px;width:
 const I18N = {
   zh:{
     'app.title':'VRT BOM 智慧管理系統',
-    'tab.dashboard':'儀表板','tab.bom':'BOM','tab.costing':'Costing Sheet／報價','tab.material':'物料','tab.analysis':'分析',
+    'tab.card':'👕 款式卡','tab.dashboard':'儀表板','tab.bom':'BOM','tab.costing':'Costing Sheet／報價','tab.material':'物料','tab.analysis':'分析',
     'tab.reports':'報表','tab.import':'匯入','tab.settings':'設定','tab.help':'說明',
     'rg.file':'檔案','rg.edit':'編輯','rg.version':'版本','rg.io':'匯入匯出','rg.tool':'工具',
     'rg.view':'檢視','rg.ai':'AI 智慧','rg.cloud':'雲端','rg.report':'報表','rg.sys':'系統',
@@ -424,7 +424,7 @@ const I18N = {
   },
   en:{
     'app.title':'VRT BOM Management AI',
-    'tab.dashboard':'Dashboard','tab.bom':'BOM','tab.costing':'Costing Sheet / Quote','tab.material':'Material','tab.analysis':'Analysis',
+    'tab.card':'👕 Style card','tab.dashboard':'Dashboard','tab.bom':'BOM','tab.costing':'Costing Sheet / Quote','tab.material':'Material','tab.analysis':'Analysis',
     'tab.reports':'Reports','tab.import':'Import','tab.settings':'Settings','tab.help':'Help',
     'rg.file':'File','rg.edit':'Edit','rg.version':'Version','rg.io':'Import/Export','rg.tool':'Tools',
     'rg.view':'View','rg.ai':'AI','rg.cloud':'Cloud','rg.report':'Reports','rg.sys':'System',
@@ -453,7 +453,7 @@ const I18N = {
   },
   km:{
     'app.title':'ប្រព័ន្ធគ្រប់គ្រង BOM VRT',
-    'tab.dashboard':'ផ្ទាំង','tab.bom':'BOM','tab.costing':'Costing Sheet / តម្លៃលក់','tab.material':'សម្ភារៈ','tab.analysis':'វិភាគ',
+    'tab.card':'👕 កាតម៉ូដ','tab.dashboard':'ផ្ទាំង','tab.bom':'BOM','tab.costing':'Costing Sheet / តម្លៃលក់','tab.material':'សម្ភារៈ','tab.analysis':'វិភាគ',
     'tab.reports':'របាយការណ៍','tab.import':'នាំចូល','tab.settings':'ការកំណត់','tab.help':'ជំនួយ',
     'rg.file':'ឯកសារ','rg.edit':'កែ','rg.version':'កំណែ','rg.io':'នាំចូល/ចេញ','rg.tool':'ឧបករណ៍',
     'rg.view':'មើល','rg.ai':'AI','rg.cloud':'ពពក','rg.report':'របាយការណ៍','rg.sys':'ប្រព័ន្ធ',
@@ -537,6 +537,7 @@ function detectUnit(txt){
    RIBBON CONFIG — primary tabs + contextual secondary toolbar
    ==================================================================== */
 const TABS = [
+  {id:'card', icon:'bi-person-badge', label:'tab.card'},
   {id:'dashboard', icon:'bi-grid-1x2-fill', label:'tab.dashboard'},
   {id:'bom',       icon:'bi-list-columns-reverse', label:'tab.bom'},
   {id:'costing',   icon:'bi-cash-coin', label:'tab.costing'},
@@ -840,7 +841,7 @@ function catTag(c){ return `<span class="tag ${CAT_CLASS[c]||'cOthers'}">${esc(c
 /* ====================================================================
    PART 3 — Ribbon system · Router · Dashboard · BOM list
    ==================================================================== */
-let CURRENT='dashboard';
+let CURRENT='card';
 let SELECTED_ID=null;
 let FILTER={cust:'',status:'',q:''};
 let MATFILTER={cust:'',cat:'',q:''};
@@ -883,6 +884,7 @@ function render(){
   buildRibbon1(); renderRibbon2();
   const m=MAIN(); if(!m)return;
   switch(CURRENT){
+    case 'card': if(window.VRTBomCard){VRTBomCard.render(m);break} renderDashboard(); break;
     case 'dashboard': renderDashboard(); break;
     case 'bom': renderBoms(); break;
     case 'costing': renderCosting(); break;
@@ -1388,6 +1390,7 @@ async function loadAccFlowCosts(preferCloud=false){let rows=preferCloud?await lo
 /* ====================================================================
    INTEGRATED COSTING — separate page, shared BOM/style record
    ==================================================================== */
+window.VRTBomPage={getDB:()=>DB,lang:()=>LANG,setCostingStyle:id=>{COSTING_STYLE_ID=id},current:()=>CURRENT};
 let COSTING_STYLE_ID='', COSTING_FRAME_READY=false, COSTING_PENDING_MODE='load', COSTING_CHILD_DIRTY=false;
 function openSelectedCosting(){ if(SELECTED_ID)COSTING_STYLE_ID=SELECTED_ID; go('costing'); }
 function selectedCostingStyle(){
@@ -2237,7 +2240,7 @@ async function init(){
   const existed=await loadState();
   if(!existed){ DB.styles=[]; DB.customers=[]; DB.activity=[]; await persist(); }
   const fromSmv=await applySmvHandoff();
-  buildRibbon1(); setFabs(); go(fromSmv||new URLSearchParams(location.search).get('tab')==='costing'?'costing':'dashboard');
+  buildRibbon1(); setFabs(); go(fromSmv||new URLSearchParams(location.search).get('tab')==='costing'?'costing':'card');
   if(fromSmv)setTimeout(()=>toast('✓ 已接收 SMV Manager 的 Production SMV，請確認 Costing Base Minutes 後再儲存報價','good'),250);
   setCloudTag(DB.meta&&DB.meta.lastSync?'synced':'local');
   let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(CURRENT==='dashboard')drawDashCharts(); else if(CURRENT==='analysis')render(); },250); });
@@ -2254,7 +2257,7 @@ window.addEventListener('load',function(){setTimeout(function(){try{if(window.VR
 </script>
 <script src="vrt-cost-sheet-v44.js?v=4.19.0"></script>
 <script src="vrt-bom-import-v39.js?v=4.19.0"></script>
-<script src="vrt-bom-costing-ui-v44.js?v=4.19.0"></script>
+<script src="vrt-bom-costing-ui-v44.js?v=4.19.0"></script><script src="vrt-bom-card-v1.js?v=4.22.5"></script>
 <!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
 <script src="vrt-smart-import-v1.js?v=4.19.0"></script>
 <script>/* v4.19 智慧匯入：本頁收哪些檔、交給哪個匯入器 */try{VRTSmartImport.init({module:'bom',feedAll:fs=>{const p=fs.filter(f=>/\.pdf$/i.test(f.name)),x=fs.filter(f=>!/\.pdf$/i.test(f.name));if(x.length)importExcelFiles(x);if(p.length)return handlePdfFiles(p)}})}catch(e){console.warn('VRTSmartImport init',e)}</script>
