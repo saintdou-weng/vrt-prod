@@ -1,7 +1,9 @@
-var SK_KNOWN=null;
-function knownStyles(){ if(SK_KNOWN)return SK_KNOWN; const k=new Set(); const add=v=>{const x=nsk(v);if(x&&x.length>=3)k.add(x)};
-  (CUT||[]).forEach(r=>add(r.styleNo)); (SEW||[]).forEach(r=>add(r.styleNo)); (PLAN||[]).forEach(r=>add(r.style)); Object.keys(SMV_MAP||{}).forEach(add); SK_KNOWN=k; return k }
-function resolveSk(raw){ const k=nsk(raw); if(!k)return ''; const K=knownStyles(); if(K.has(k))return k; for(let n=k.length-1;n>=3;n--){ const p=k.slice(0,n); if(K.has(p))return p } return k }
+var SK_KNOWN=null, SK_ACT=null;
+function knownStyles(){ if(SK_KNOWN)return SK_KNOWN; const k=new Set(), a=new Set(); const add=(v,act)=>{const x=nsk(v);if(x&&x.length>=3){k.add(x);if(act)a.add(x)}};
+  (CUT||[]).forEach(r=>add(r.styleNo,1)); (SEW||[]).forEach(r=>add(r.styleNo,1)); (PLAN||[]).forEach(r=>add(r.style,1)); Object.keys(SMV_MAP||{}).forEach(v=>add(v,0)); SK_KNOWN=k; SK_ACT=a; return k }
+function resolveSk(raw){ const k=nsk(raw); if(!k)return ''; const K=knownStyles(); if(SK_ACT.has(k))return k;
+  for(let n=k.length-1;n>=3;n--){ const p=k.slice(0,n); if(SK_ACT.has(p))return p }   /* 先找有裁剪／車縫／排產紀錄的款 */
+  if(K.has(k))return k; for(let n=k.length-1;n>=3;n--){ const p=k.slice(0,n); if(K.has(p))return p } return k }
 function buildStyles(){
   SK_KNOWN=null;
   // Orders
@@ -17,13 +19,14 @@ function buildStyles(){
     if(sd) oM[sk].sDs.push(sd);
   });
 
-  // 排產表的款（目前與未來，近 60 天內還在做的）也納入；客戶 PO 沒有的款用排產量
-  const PLAN_EV=(typeof planAggEvents==='function')?planAggEvents():[]; const recent=addDays(TODAY,-60); const planStart={};
-  PLAN_EV.forEach(e=>{ if(!e.sk)return; if(e.start&&(!planStart[e.sk]||e.start<planStart[e.sk]))planStart[e.sk]=e.start;
-    if((e.end||e.start||'')<recent)return;
-    if(!oM[e.sk]) oM[e.sk]={qty:0,pos:new Set(),custs:new Set(),oDs:[],sDs:[],planOnly:true,planQty:0};
-    const x=oM[e.sk]; if(x.planOnly){ x.planQty+=e.qty||0; x.qty=x.planQty; if(e.po&&e.po!=='Mixed')x.pos.add(e.po); if(e.customer)x.custs.add(e.customer); if(e.shipDate)x.sDs.push(e.shipDate) } });
-  const fromDate={}; Object.keys(oM).forEach(sk=>{ const c=[...(oM[sk].oDs||[])]; if(planStart[sk])c.push(planStart[sk]); c.sort(); fromDate[sk]=c.length?addDays(c[0],-14):addDays(TODAY,-120) });
+  // 排產表的款（目前／未來／近 30 天內剛做完）：數量用排產量；裁剪車縫從排產開始日前 7 天起算
+  const PLAN_EV=(typeof planAggEvents==='function')?planAggEvents():[]; const recent=addDays(TODAY,-30); const pS={}, pQ={}, pPo={}, pCu={}, pShip={};
+  PLAN_EV.forEach(e=>{ if(!e.sk)return; if((e.end||e.start||'')<recent)return;
+    pQ[e.sk]=(pQ[e.sk]||0)+(e.qty||0); if(e.start&&(!pS[e.sk]||e.start<pS[e.sk]))pS[e.sk]=e.start;
+    (pPo[e.sk]=pPo[e.sk]||new Set()); if(e.po&&e.po!=='Mixed')pPo[e.sk].add(e.po); (pCu[e.sk]=pCu[e.sk]||new Set()); if(e.customer)pCu[e.sk].add(e.customer); if(e.shipDate)(pShip[e.sk]=pShip[e.sk]||[]).push(e.shipDate) });
+  Object.keys(pQ).forEach(sk=>{ if(!oM[sk])oM[sk]={qty:0,pos:new Set(),custs:new Set(),oDs:[],sDs:[],planOnly:true}; const x=oM[sk]; x.poQty=x.qty; x.planQty=pQ[sk]; x.qty=pQ[sk]||x.qty;
+    pPo[sk].forEach(v=>x.pos.add(v)); if(!x.custs.size)pCu[sk].forEach(v=>x.custs.add(v)); (pShip[sk]||[]).forEach(v=>x.sDs.push(v)) });
+  const fromDate={}; Object.keys(oM).forEach(sk=>{ fromDate[sk]=pS[sk]?addDays(pS[sk],-7):addDays(TODAY,-60) });
   const orderKeys=new Set(Object.keys(oM));
   // Cutting — only current order styles; historical orphan styles are ignored in this overview.
   const cM = {};
@@ -82,7 +85,7 @@ function buildStyles(){
       qty, cutPcs, sewPcs, balance:Math.max(0,qty-sewPcs),
       cutPct, sewPct,
       orderDate: o.oDs.sort()[0]||'', shipDate: o.sDs.sort()[0]||'',
-      status: calcSt(cutPcs,sewPcs,qty), src: o.planOnly?'plan':'po', fromDate: fromDate[sk]||'',
+      status: calcSt(cutPcs,sewPcs,qty), src: o.planOnly?'plan':(o.planQty?'both':'po'), planQty:o.planQty||0, poQty:o.poQty!=null?o.poQty:o.qty, fromDate: fromDate[sk]||'',
       secs: allSecs, lines: s.lines,
       latestAct: actDs[actDs.length-1]||'',
     });
