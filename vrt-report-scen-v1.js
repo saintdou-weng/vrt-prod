@@ -61,6 +61,8 @@
   /* ── 情境：今天（這週）是哪一種日子。w＝重要度（開頭只講最重的一件，其餘變標籤）；tone＝燈號；focus＝哪一段排最前面 ── */
   function scenarios(f){const S=[];const x=f.x||{};const s=f.sewing||{},c=f.compare||{},pv=f.prevDay||{},M=f.months||{},cal=f.cal||{},o=f.outlook||{},q=f.qc||{},fb=f.fabric||{},w=f.wip||{},sh=f.shipping||{},pl=f.plan,L=f.loading;
     const W=f.period==='week',PL=f.kind==='plan';const when=W?'這週':'今天',prevW=W?'上週':'昨天';
+    /* 舊版存下來的報告沒有 stale 旗標：客戶統計快照超過 14 天一律當過期，不拿來判斷缺布 */
+    if(fb.snapshotDate&&/^\d{4}-\d{2}-\d{2}$/.test(fb.snapshotDate)&&fb.stale==null){let age=0;for(let d=fb.snapshotDate;d<f.end&&age<400;d=addDays(d,1))age++;if(age>14)fb.stale=true}
     const add=(id,wt,tone,tag,head,focus,who,act)=>S.push({id,w:wt,tone,tag,head,focus:focus||'',who:who||'',act:act||''});
     const has=id=>(f.scenarios||[]).some(z=>z.id===id);
     const hol=(x.holidays||[]);const holTxt=hol.map(r=>r.name+(r.days>1?' '+r.days+' 天':'')).join('、');
