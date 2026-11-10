@@ -1,0 +1,67 @@
+[
+ {
+  "name": "平穩日：一句結論＋色條＋各組燈號；不超過 26 行",
+  "status": "PASS",
+  "detail": "16 行"
+ },
+ {
+  "name": "沒有資料／日報沒到齊",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "放假：假前、收假、假日加班、週內放假（短週）",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "停工：日報（中間幾天沒日報）與週報（這週少做幾天）",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "加班、加減組、少人、人力比上月少",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "料／機台／突發：現場回報原因與備註；手動備註置頂",
+  "status": "PASS",
+  "detail": "ach 90.9%"
+ },
+ {
+  "name": "效率：下滑（點名）、上升、全廠紅燈、全線綠燈、本月最高／最低、款式工時",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "品質、QC 對不上、沒 QC、裁片堆／快斷、沒裁剪、差太多先查",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "月初、月底、落後、超前、出貨逾期／兩週內出貨、缺布、客戶統計過期、代工",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "效率週報：每天色條、接單月數",
+  "status": "PASS",
+  "detail": "22 行"
+ },
+ {
+  "name": "排單週報：空線、中途空檔、下週未排、沒填日期、達成、集中度、負荷色條；沒有排單資料",
+  "status": "PASS",
+  "detail": "35 行"
+ },
+ {
+  "name": "目標沒達成（現場沒勾原因）",
+  "status": "PASS",
+  "detail": "71.4%"
+ },
+ {
+  "name": "情境至少 40 種都被測到；圖表資料",
+  "status": "PASS",
+  "detail": "55 種；未測到：needle nextChange smvMissing"
+ }
+]
