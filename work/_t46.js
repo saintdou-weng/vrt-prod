@@ -1,11 +1,11 @@
-var SK_KNOWN=null, SK_ACT=null;
-function knownStyles(){ if(SK_KNOWN)return SK_KNOWN; const k=new Set(), a=new Set(); const add=(v,act)=>{const x=nsk(v);if(x&&x.length>=3){k.add(x);if(act)a.add(x)}};
-  (CUT||[]).forEach(r=>add(r.styleNo,1)); (SEW||[]).forEach(r=>add(r.styleNo,1)); (PLAN||[]).forEach(r=>add(r.style,1)); Object.keys(SMV_MAP||{}).forEach(v=>add(v,0)); SK_KNOWN=k; SK_ACT=a; return k }
-function resolveSk(raw){ const k=nsk(raw); if(!k)return ''; const K=knownStyles(); if(SK_ACT.has(k))return k;
-  for(let n=k.length-1;n>=3;n--){ const p=k.slice(0,n); if(SK_ACT.has(p))return p }   /* 先找有裁剪／車縫／排產紀錄的款 */
-  if(K.has(k))return k; for(let n=k.length-1;n>=3;n--){ const p=k.slice(0,n); if(K.has(p))return p } return k }
+var SK_SETS=null;
+function knownStyles(){ if(SK_SETS)return SK_SETS; const mk=()=>new Set(), S={plan:mk(),sew:mk(),cut:mk(),smv:mk()}; const add=(set,v)=>{const x=nsk(v);if(x&&x.length>=3)set.add(x)};
+  (PLAN||[]).forEach(r=>add(S.plan,r.style)); (SEW||[]).forEach(r=>add(S.sew,r.styleNo)); (CUT||[]).forEach(r=>add(S.cut,r.styleNo)); Object.keys(SMV_MAP||{}).forEach(v=>add(S.smv,v)); SK_SETS=S; return S }
+function resolveSk(raw){ const k=nsk(raw); if(!k)return ''; const S=knownStyles();
+  for(const set of [S.plan,S.sew,S.cut,S.smv]){ for(let n=k.length;n>=3;n--){ const p=k.slice(0,n); if(set.has(p))return p } }   /* 先對排產表的款號，再對車縫、裁剪、SMV；SKU 去掉顏色尺寸 */
+  return k }
 function buildStyles(){
-  SK_KNOWN=null;
+  SK_SETS=null;
   // Orders
   const oM = {};
   ORDERS.forEach(o=>{
