@@ -5,7 +5,7 @@
 <script src="vrt-platform-v40.js?v=4.19.0"></script>
 <meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VRT 生產進度總表 v4.5</title>
+<title>VRT 生產進度總表 v4.6</title>
 <style>
 :root{
   --bg:#f0f2f7;--s1:#fff;--s2:#f7f8fc;--s3:#eef1f8;--bd:#e2e6f0;--bd2:#d0d5e8;
@@ -181,7 +181,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 
 <!-- HEADER -->
 <div class="hdr">
-  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.5 · 排產計畫為主 · 訂單/裁剪/車縫/SMV 只做進度核對 · 📰 生產日報</div></div>
+  <div><div class="logo">VRT <span>PROD</span></div><div class="sub">生產進度總表 v4.6 · 排產計畫為主 · 訂單/裁剪/車縫/SMV 只做進度核對 · 📰 生產日報</div></div>
   <div style="font-size:11px;color:#8bb5d8;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <span><span class="dot" id="d-ord"></span><span id="l-ord">訂單…</span></span>
     <span><span class="dot" id="d-cut"></span><span id="l-cut">裁剪…</span></span>
@@ -379,6 +379,14 @@ body{background:var(--bg);color:var(--t1);font-family:var(--ui);min-height:100vh
 <div id="pane-info" class="pane">
   <div style="max-width:820px;background:var(--s1);border:1px solid var(--bd);border-radius:9px;padding:18px;box-shadow:0 1px 4px rgba(30,38,64,.05)">
     <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:14px">🔗 四表連動說明</div>
+    <div style="background:#eef5ff;border:1px solid #bfdbfe;border-radius:7px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--t2);line-height:1.9">
+      <b style="color:var(--t1)">📌 進度總表怎麼算（v4.6）</b><br>
+      ① <b>款從哪來</b>：排產表正在做／要做（含近 30 天剛做完）的款＋客戶 PO 的款。排單甘特與進度總表是同一批款；PO 還沒進來的標「排產」，沒排產的標「未排產」。<br>
+      ①-2 <b>數量</b>：有排產就用排產量（跟甘特一樣），沒有排產才用客戶 PO 量。<br>
+      ② <b>款號怎麼對</b>：客戶 PO 常寫 SKU（例 0882KGLDLGCMB＝款 0882K＋顏色＋尺寸），系統自動對回裁剪／車縫用的款號 0882K。<br>
+      ③ <b>裁剪、車縫算哪段</b>：只算這批排產開始日前 7 天起（沒有排產看近 60 天），不把同款往年的產量算進來。<br>
+      ④ <b>狀態</b>：有車縫＝車縫中；車縫量 ≥ 訂單量＝完成；只有裁剪＝裁剪中；都沒有＝未開始。
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:7px;padding:12px">
         <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:5px">✅ 同一 Chrome 自動共用</div>
@@ -581,11 +589,24 @@ async function loadAll(){
 // ══════════════════════════════════════════════════
 const nsk = s => (s||'').trim().toUpperCase();
 
+// ★ v4.6（2026-11-10）進度總表對齊排單：
+//   1. 款從哪來：排產表「目前／未來／近 30 天內剛做完」的款＋客戶 PO 的款。排單甘特和進度總表看的是同一批款。
+//   2. 數量：有排產就用排產量（甘特上的數量）；沒有排產才用客戶 PO 量。
+//   3. 客戶 PO 的款號常是 SKU（款號＋顏色＋尺寸，如 0882KGLDLGCMB），自動對回裁剪／車縫用的款號（0882K）。
+//   4. 裁剪、車縫只算這批排產開始以後（開始日前 7 天起；沒有排產看近 60 天），不再把同款往年的產量算進來
+//      （以前會出現 訂單 95,847／車縫 265,749、261 款「未開始」其實正在做）。
+let SK_SETS=null;
+function knownStyles(){ if(SK_SETS)return SK_SETS; const mk=()=>new Set(), S={plan:mk(),sew:mk(),cut:mk(),smv:mk()}; const add=(set,v)=>{const x=nsk(v);if(x&&x.length>=3)set.add(x)};
+  (PLAN||[]).forEach(r=>add(S.plan,r.style)); (SEW||[]).forEach(r=>add(S.sew,r.styleNo)); (CUT||[]).forEach(r=>add(S.cut,r.styleNo)); Object.keys(SMV_MAP||{}).forEach(v=>add(S.smv,v)); SK_SETS=S; return S }
+function resolveSk(raw){ const k=nsk(raw); if(!k)return ''; const S=knownStyles();
+  for(const set of [S.plan,S.sew,S.cut,S.smv]){ for(let n=k.length;n>=3;n--){ const p=k.slice(0,n); if(set.has(p))return p } }   /* 先對排產表的款號，再對車縫、裁剪、SMV；SKU 去掉顏色尺寸 */
+  return k }
 function buildStyles(){
+  SK_SETS=null;
   // Orders
   const oM = {};
   ORDERS.forEach(o=>{
-    const sk = nsk(o.style_code); if(!sk) return;
+    const sk = resolveSk(o.style_code||o.sku); if(!sk) return;
     if(!oM[sk]) oM[sk]={qty:0,pos:new Set(),custs:new Set(),oDs:[],sDs:[]};
     oM[sk].qty += parseFloat(o.qty)||0;
     if(o.po_number) oM[sk].pos.add(o.po_number);
@@ -595,11 +616,19 @@ function buildStyles(){
     if(sd) oM[sk].sDs.push(sd);
   });
 
+  // 排產表的款（目前／未來／近 30 天內剛做完）：數量用排產量；裁剪車縫從排產開始日前 7 天起算
+  const PLAN_EV=(typeof planAggEvents==='function')?planAggEvents():[]; const recent=addDays(TODAY,-30); const pS={}, pQ={}, pPo={}, pCu={}, pShip={};
+  PLAN_EV.forEach(e=>{ if(!e.sk)return; if((e.end||e.start||'')<recent)return;
+    pQ[e.sk]=(pQ[e.sk]||0)+(e.qty||0); if(e.start&&(!pS[e.sk]||e.start<pS[e.sk]))pS[e.sk]=e.start;
+    (pPo[e.sk]=pPo[e.sk]||new Set()); if(e.po&&e.po!=='Mixed')pPo[e.sk].add(e.po); (pCu[e.sk]=pCu[e.sk]||new Set()); if(e.customer)pCu[e.sk].add(e.customer); if(e.shipDate)(pShip[e.sk]=pShip[e.sk]||[]).push(e.shipDate) });
+  Object.keys(pQ).forEach(sk=>{ if(!oM[sk])oM[sk]={qty:0,pos:new Set(),custs:new Set(),oDs:[],sDs:[],planOnly:true}; const x=oM[sk]; x.poQty=x.qty; x.planQty=pQ[sk]; x.qty=pQ[sk]||x.qty;
+    pPo[sk].forEach(v=>x.pos.add(v)); if(!x.custs.size)pCu[sk].forEach(v=>x.custs.add(v)); (pShip[sk]||[]).forEach(v=>x.sDs.push(v)) });
+  const fromDate={}; Object.keys(oM).forEach(sk=>{ fromDate[sk]=pS[sk]?addDays(pS[sk],-7):addDays(TODAY,-60) });
   const orderKeys=new Set(Object.keys(oM));
   // Cutting — only current order styles; historical orphan styles are ignored in this overview.
   const cM = {};
   CUT.filter(r=>r.src!=='ref'&&r.pieces>0).forEach(r=>{
-    const sk = nsk(r.styleNo); if(!sk||!orderKeys.has(sk)) return;
+    const sk = nsk(r.styleNo); if(!sk||!orderKeys.has(sk)) return; if(r.date&&r.date<fromDate[sk]) return;
     if(!cM[sk]) cM[sk]={pcs:0,dates:[],secs:new Set()};
     cM[sk].pcs += r.pieces;
     if(r.date)    cM[sk].dates.push(r.date);
@@ -629,7 +658,7 @@ function buildStyles(){
   })();
   const sM = {};
   _sewDedup.filter(r=>r.pieces>0).forEach(r=>{
-    const sk = nsk(r.styleNo); if(!sk||!orderKeys.has(sk)) return;
+    const sk = nsk(r.styleNo); if(!sk||!orderKeys.has(sk)) return; if(r.date&&r.date<fromDate[sk]) return;
     if(!sM[sk]) sM[sk]={pcs:0,dates:[],secs:new Set(),lines:new Set()};
     sM[sk].pcs += r.pieces;
     if(r.date)   sM[sk].dates.push(r.date);
@@ -653,7 +682,7 @@ function buildStyles(){
       qty, cutPcs, sewPcs, balance:Math.max(0,qty-sewPcs),
       cutPct, sewPct,
       orderDate: o.oDs.sort()[0]||'', shipDate: o.sDs.sort()[0]||'',
-      status: calcSt(cutPcs,sewPcs,qty),
+      status: calcSt(cutPcs,sewPcs,qty), src: o.planOnly?'plan':(o.planQty?'both':'po'), planQty:o.planQty||0, poQty:o.poQty!=null?o.poQty:o.qty, fromDate: fromDate[sk]||'',
       secs: allSecs, lines: s.lines,
       latestAct: actDs[actDs.length-1]||'',
     });
@@ -827,7 +856,7 @@ function renderKrow(){
 //  PROGRESS TABLE
 // ══════════════════════════════════════════════════
 function populateFilters(){
-  const custs=[...new Set(ORDERS.map(o=>o.customer).filter(Boolean))].sort();
+  const custs=[...new Set(STYLES.flatMap(r=>[...r.custs]).filter(Boolean))].sort();
   document.getElementById('f-cu').innerHTML='<option value="">全部客戶</option>'+custs.map(c=>`<option>${esc(c)}</option>`).join('');
 }
 
@@ -879,7 +908,7 @@ function renderProgress(){
       <td><span class="chip ${pl.c}">${pl.t}</span></td>
       <td style="font-weight:700;font-family:var(--mono)">${r.sk}</td>
       <td style="font-size:11px;color:var(--t2);max-width:130px;overflow:hidden;text-overflow:ellipsis">${esc(r.customer.split(',')[0])}</td>
-      <td style="font-size:11px;color:var(--muted)">${r.pos.size?r.pos.size+' PO':'—'}</td>
+      <td style="font-size:11px;color:var(--muted)">${r.pos.size?r.pos.size+' PO':'—'}${r.src==='plan'?'<br><span title="客戶 PO 還沒進來，數量用排產表" style="font-size:10px;color:#7c3aed">排產</span>':r.src==='po'?'<br><span title="沒有排產，數量用客戶 PO" style="font-size:10px;color:#64748b">未排產</span>':''}</td>
       <td class="r">${r.qty?fmt(r.qty):'<span style="color:var(--muted)">—</span>'}</td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--t2)">${r.orderDate||'—'}</td>
       <td style="font-family:var(--mono);font-size:11px;color:${r.shipDate?'var(--amber)':'var(--muted)'}">${r.shipDate||'—'}</td>
