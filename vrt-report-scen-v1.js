@@ -1,4 +1,5 @@
-/* VRT 情境報告 v1.0 (2026-11-11) — 日報／效率週報／排單週報的「情境開頭＋色條」版面
+/* VRT 情境報告 v1.1 (2026-11-11 下午：照 11/11 生產與出貨報告第六節的六點改善，加 planOutlook)
+   v1.0 (2026-11-11) — 日報／效率週報／排單週報的「情境開頭＋色條」版面
    Paul 11/11：日報、週報、月報至少要 10～40 種情境（放假、停工、加班、少人、加減組、料有問題、接代工、突發事件…）；
    不一定每天從同一個地方寫起，但開頭結論要準、重點一眼看到；精實不囉嗦、數字精準、口氣像他自己；多用色條、圖表。
    純邏輯（無 DOM／網路／Drive）：瀏覽器、Node（qa/v423）、GAS 都能跑。數字全部來自 VRTDailyReport.compute 的 facts
@@ -7,7 +8,7 @@
    chart(f) → {title,labels[],values[],tones[],unit}（給 GAS Charts 畫圖用） */
 (function(g){'use strict';
   const DR=g.VRTDailyReport;if(!DR){return}
-  const H=DR.helpers,TH=DR.TH,VERSION='1.0.0';
+  const H=DR.helpers,TH=DR.TH,VERSION='1.1.0';
   const num=v=>{const n=Number(v);return isFinite(n)?n:0};
   const N=v=>v==null||isNaN(v)?'—':Math.round(Number(v)).toLocaleString('en-US');
   const P1=v=>v==null||isNaN(v)?'—':(Math.round(Number(v)*10)/10).toFixed(1);
@@ -34,6 +35,64 @@
     const lines=wk.lines.map(z=>{const gapSet={};(z.gaps||[]).forEach(d=>{gapSet[d]=1});const cells=days.map(d=>!DR.isWorkday(d)?'🎌':gapSet[d]?'⬜':'🟦');const sched=real.filter(d=>!gapSet[d]).length,gap=real.length-sched;return {short:z.short,cells:cells.join(''),sched,gap,empty:sched===0,pieces:z.pieces,changeovers:z.changeovers,attainment:z.attainment}});
     const avail=real.length*lines.length,sched=lines.reduce((a,z)=>a+z.sched,0);
     return {start:wk.start,end:wk.end,workdays:real.length,holidays:days.length-real.length,lines,lineCount:lines.length,avail,sched,pct:avail?Math.round(sched/avail*1000)/10:null,emptyLines:lines.filter(z=>z.empty).map(z=>z.short),gaps:lines.filter(z=>!z.empty&&z.gap>=2),pieces:wk.pieces,styles:wk.styles,changeovers:wk.changeovers}}
+
+  /* ── planOutlook（11/11 報告第六節的規格）：各組剩多少、照表與保守估兩個完工日（扣假期）、件數＋標準工時、
+        假期前後空檔、交期對出櫃、排單表資料檢查。全部由排單列、車縫實績、客戶統計、出貨表算出。 ── */
+  const normSty=v=>String(v||'').replace(/[\s\-_\/]/g,'').toUpperCase();
+  const wdList=(a,b)=>{const o=[];for(let d=a;d&&d<=b&&o.length<400;d=addDays(d,1))if(DR.isWorkday(d))o.push(d);return o};
+  const nextWd=d=>{let x=d;for(let i=0;i<40&&!DR.isWorkday(x);i++)x=addDays(x,1);return x};
+  function planOutlook(data,f){const rows=(data.prodplan||[]).filter(r=>r&&r.line&&num(r.sewingQty)>0&&String(r.style||'').trim());if(!rows.length)return null;
+    const sewAll=(data.sewing||[]).filter(r=>r),days=H.sewPick(sewAll);const dataDates=Object.keys(days).sort();const lastData=dataDates[dataDates.length-1]||'';
+    const T=f.today||f.end;const from=nextWd(T);const ym=from.slice(0,7);const mEnd=(()=>{let d=ym+'-28';while(addDays(d,1).slice(0,7)===ym)d=addDays(d,1);return d})();
+    const lineKey=l=>'L'+lno(l);
+    /* 一列一筆（同組同款同色連續的合併） */
+    const runs=[];rows.forEach(r=>{const st=dayKey(r.startDate),en=dayKey(r.endDate)||dayKey(r.finishDate)||st;if(!st)return;const k=lineKey(r.line)+'|'+normSty(r.style)+'|'+String(r.color||'').trim().toUpperCase();
+      const x=runs.find(q=>q.k===k&&!(st>addDays(q.end,3)||en<addDays(q.start,-3)));const smv=num(r.smv);
+      if(x){if(st<x.start)x.start=st;if(en>x.end)x.end=en;x.qty+=num(r.sewingQty);x.cut+=num(r.cutQty);x.daily=Math.max(x.daily,num(r.dailyOutput));if(!x.smv&&smv)x.smv=smv;if(r.po&&x.pos.indexOf(String(r.po))<0)x.pos.push(String(r.po))}
+      else runs.push({k,line:lineKey(r.line),style:String(r.style).trim(),color:String(r.color||'').trim(),customer:String(r.customer||'').trim(),start:st,end:en<st?st:en,qty:num(r.sewingQty),cut:num(r.cutQty),daily:num(r.dailyOutput),smv,ship:dayKey(r.shipmentDate)||'',pos:r.po?[String(r.po)]:[],remark:String(r.remark||'')})});
+    /* 實績：每組每款從上線日起已車多少（款號去空白比對） */
+    const done=(line,style,start)=>{let q=0,hit=false;dataDates.forEach(d=>{if(d<addDays(start,-2))return;days[d].forEach(r=>{if(lineKey(r.lineNo)!==line)return;const a=normSty(r.styleNo||r.style),b=normSty(style);if(a&&b&&(a===b||a.indexOf(b)>=0||b.indexOf(a)>=0)){q+=num(r.pieces);hit=true}})});return hit?q:null};
+    /* 實際速度：最近 20 個有資料的工作天，各組實做 ÷ 當天排單日產目標 */
+    let aSum=0,tSum=0;dataDates.slice(-20).forEach(d=>{const by={};days[d].forEach(r=>{const l=lineKey(r.lineNo);by[l]=(by[l]||0)+num(r.pieces)});Object.keys(by).forEach(l=>{const tg=runs.filter(r=>r.line===l&&r.start<=d&&r.end>=d&&r.daily>0).reduce((m,r)=>Math.max(m,r.daily),0);if(tg>0){aSum+=by[l];tSum+=tg}})});
+    let pace=tSum>0?aSum/tSum:null;const paceBasis=pace!=null?'actual':'default';if(pace==null)pace=0.75;pace=Math.max(0.5,Math.min(1,pace));
+    const lines=[...new Set(runs.filter(r=>r.end>=addDays(from,-31)).map(r=>r.line))].filter(l=>lno(l)!==12).sort((a,b)=>lno(a)-lno(b));
+    const hol=(f.cal&&f.cal.nextOff&&f.cal.nextOff.start<=mEnd&&f.cal.nextOff.start>=from)?f.cal.nextOff:null;
+    const preDays=hol?wdList(from,addDays(hol.start,-1)):wdList(from,mEnd),postDays=hol?wdList(addDays(hol.end,1),mEnd):[];
+    let slip=0,remAll=0,hrsAll=0,smvMiss=new Set();const out=lines.map(l=>{const rs=runs.filter(r=>r.line===l&&r.end>=from).sort((a,b)=>a.start.localeCompare(b.start));
+      let cur=from,cautious='',planEnd='',rem=0,hrs=0,late=0;const items=[];
+      rs.forEach(r=>{const d0=done(l,r.style,r.start);const total=wdList(r.start,r.end).length||1,left=wdList(r.start>from?r.start:from,r.end).length;let q=r.start>=from?r.qty:(d0!=null?Math.max(0,r.qty-d0):Math.round(r.qty*left/total));if(q<=0)return;
+        const rate=(r.daily>0?r.daily:r.qty/total)*pace;const st=nextWd(r.start>cur?r.start:cur);const need=Math.max(1,Math.ceil(q/Math.max(rate,1)));let d=st,n=1;while(n<need){d=addDays(d,1);if(DR.isWorkday(d))n++}
+        cur=addDays(d,1);cautious=d;if(r.end>planEnd)planEnd=r.end;rem+=q;if(r.smv>0)hrs+=q*r.smv/60;else smvMiss.add(r.style);
+        if(d>mEnd){const over=wdList(addDays(mEnd,1),d).length;late+=Math.min(q,Math.round(over*rate))}
+        items.push({style:r.style,customer:r.customer,qty:Math.round(q),uncut:r.cut<=0,end:r.end,cautious:d})});
+      const busy={};rs.forEach(r=>wdList(r.start>from?r.start:from,r.end).forEach(d=>{busy[d]=1}));
+      const emptyPre=preDays.filter(d=>!busy[d]).length,emptyPost=postDays.filter(d=>!busy[d]).length;
+      slip+=late;remAll+=rem;hrsAll+=hrs;
+      return {line:l,rem:Math.round(rem),hours:Math.round(hrs),planEnd,cautious,late:Math.round(late),items:items.slice(0,3),styles:items.length,emptyPre,emptyPost,noWork:!items.length,uncut:items.filter(z=>z.uncut).reduce((a,z)=>a+z.qty,0)}});
+    /* 月排單：件數與標準工時；可用工時＝目前人數×8×剩餘工作天×上月效率 */
+    const month=rows.filter(r=>String(r.month||'').slice(0,7)===ym);const mQty=month.reduce((a,r)=>a+num(r.sewingQty),0),mHrs=month.reduce((a,r)=>a+num(r.sewingQty)*num(r.smv)/60,0);
+    const eff=(f.months&&f.months.prev&&f.months.prev.eff)||(f.sewing&&f.sewing.eff)||null,mp=(f.sewing&&f.sewing.manpower)||(f.months&&f.months.prev&&f.months.prev.manpower)||0;const wdLeft=preDays.length+postDays.length;
+    const availH=eff&&mp?Math.round(mp*8*wdLeft*eff/100):null;
+    /* 排單表資料檢查 */
+    const dupMap={};runs.filter(r=>r.end>=from).forEach(r=>{const k=normSty(r.style)+'|'+r.color.toUpperCase()+'|'+r.pos.join('/');(dupMap[k]=dupMap[k]||[]).push(r)});
+    const dups=Object.values(dupMap).filter(a=>new Set(a.map(r=>r.line)).size>1).map(a=>({style:a[0].style,lines:[...new Set(a.map(r=>r.line))]})).slice(0,5);
+    const finished=runs.filter(r=>r.end>=from&&r.start<from).filter(r=>{const d0=done(r.line,r.style,r.start);return d0!=null&&d0>=r.qty}).map(r=>({style:r.style,line:r.line})).slice(0,5);
+    const undated=rows.filter(r=>!dayKey(r.startDate)&&String(r.month||'').slice(0,7)>=ym).length;
+    /* 交期（客戶統計 ETD）到月底＋7 天內、還沒做完的：依客戶列未完成、已入成品倉、未車；排單表找不到的款另列；對不到櫃的客戶標出 */
+    const det=(data.custstats&&data.custstats.details)||[];const planSty=new Set(rows.filter(r=>String(r.month||'').slice(0,7)>=ym).map(r=>normSty(r.style)));
+    const due=det.filter(d=>{const e=dayKey(d.etd);return e&&e<=addDays(mEnd,7)&&num(d.balanceQty||d.openOrder)>0});const byCust={};const missing=[];
+    due.forEach(d=>{const c=String(d.customer||'—').trim();const o=byCust[c]=byCust[c]||{customer:c,open:0,fg:0,notSewn:0,noFabric:0,overdue:0};const bal=num(d.balanceQty||d.openOrder);o.open+=bal;o.fg+=num(d.fgPcs);o.notSewn+=num(d.actualNotSewn);o.noFabric+=num(d.noFabric);if(dayKey(d.etd)<from)o.overdue+=bal;
+      if(num(d.actualNotSewn)>0&&!planSty.has(normSty(d.style)))missing.push({style:String(d.style||''),customer:c,qty:num(d.actualNotSewn),etd:dayKey(d.etd)})});
+    const ships=(data.shipping||[]).filter(z=>z&&num(z.open)>0&&dayKey(z.etd)>=from);const hasBox=c=>ships.some(z=>String(z.cust||z.customer||'').toUpperCase().indexOf(c.toUpperCase().slice(0,3))>=0);
+    const dueList=Object.values(byCust).sort((a,b)=>b.open-a.open).slice(0,5).map(o=>Object.assign(o,{open:Math.round(o.open),fg:Math.round(o.fg),notSewn:Math.round(o.notSewn),noFabric:Math.round(o.noFabric),overdue:Math.round(o.overdue),container:hasBox(o.customer)}));
+    const missAgg={};missing.forEach(m=>{const k=normSty(m.style);const o=missAgg[k]=missAgg[k]||{style:m.style,customer:m.customer,qty:0,etd:m.etd};o.qty+=m.qty;if(m.etd<o.etd)o.etd=m.etd});
+    return {from,monthEnd:mEnd,month:ym,lastData,dataLagDays:lastData?wdList(addDays(lastData,1),addDays(from,-1)).length:null,pace:Math.round(pace*100),paceBasis,holiday:hol?{name:hol.name,start:hol.start,end:hol.end,days:hol.days}:null,preDays:preDays.length,postDays:postDays.length,
+      lines:out,remaining:Math.round(remAll),hours:Math.round(hrsAll),slip:Math.round(slip),slipShare:remAll>0?Math.round(slip/remAll*1000)/10:0,slipLines:out.filter(z=>z.late>0).map(z=>z.line),
+      monthQty:Math.round(mQty),monthHours:Math.round(mHrs),availHours:availH,useShare:availH&&hrsAll?Math.round(hrsAll/availH*100):null,
+      emptyPre:out.reduce((a,z)=>a+z.emptyPre,0),emptyPost:out.reduce((a,z)=>a+z.emptyPost,0),idleAfter:out.filter(z=>postDays.length&&z.emptyPost===postDays.length).map(z=>z.line),lineDaysPre:preDays.length*out.length,lineDaysPost:postDays.length*out.length,
+      check:{smvMissing:[...smvMiss].slice(0,6),smvMissingCount:smvMiss.size,dups,finished,undated,unscheduled:Object.values(missAgg).sort((a,b)=>b.qty-a.qty).slice(0,5).map(z=>Object.assign(z,{qty:Math.round(z.qty)})),unscheduledQty:Math.round(Object.values(missAgg).reduce((a,z)=>a+z.qty,0))},
+      due:dueList}}
+
   /* ── extras：facts 裡沒有、要從原始列補的事實（加班、目標達成與現場回報、停工日、假日、本月排名、代工） ── */
   function extras(data,f){data=data||{};const x={};const sewAll=(data.sewing||[]).filter(r=>r);const days=H.sewPick(sewAll);
     const inP=d=>d&&d>=f.start&&d<=f.end;const W=f.period==='week';
@@ -44,7 +103,8 @@
     {const t=sewAll.filter(r=>r.tSrc==='target'&&inP(dayKey(r.date))&&num(r.target)>0);let tg=0,ac=0;const iss={},rem=[],low=[];
       t.forEach(r=>{tg+=num(r.target);ac+=num(r.pieces);const is=r.issue||{};const hit=ISSUE_KEYS.filter(k=>is[k]);hit.forEach(k=>{(iss[k]=iss[k]||{}),iss[k][LS(r.lineNo)]=1});const a=num(r.target)>0?num(r.pieces)/num(r.target)*100:null;if(r.remark&&String(r.remark).trim())rem.push({line:LS(r.lineNo),date:dayKey(r.date),text:String(r.remark).trim(),ach:a});if(a!=null&&a<80)low.push({line:LS(r.lineNo),ach:Math.round(a),why:hit.map(k=>ISSUE_ZH[k])})});
       const issues=ISSUE_KEYS.filter(k=>iss[k]).map(k=>({key:k,zh:ISSUE_ZH[k],lines:Object.keys(iss[k]).sort((a,b)=>lno(a)-lno(b))})).sort((a,b)=>b.lines.length-a.lines.length);
-      x.target=t.length?{target:Math.round(tg),actual:Math.round(ac),ach:tg>0?Math.round(ac/tg*1000)/10:null,rows:t.length,issues,remarks:rem.sort((a,b)=>(a.ach==null?999:a.ach)-(b.ach==null?999:b.ach)).slice(0,4),low:low.sort((a,b)=>a.ach-b.ach).slice(0,4)}:null}
+      const byLineT={};t.forEach(r=>{const o=byLineT[LS(r.lineNo)]=byLineT[LS(r.lineNo)]||{target:0,actual:0};o.target+=num(r.target);o.actual+=num(r.pieces)});
+      x.target=t.length?{byLine:byLineT,target:Math.round(tg),actual:Math.round(ac),ach:tg>0?Math.round(ac/tg*1000)/10:null,rows:t.length,issues,remarks:rem.sort((a,b)=>(a.ach==null?999:a.ach)-(b.ach==null?999:b.ach)).slice(0,4),low:low.sort((a,b)=>a.ach-b.ach).slice(0,4)}:null}
     /* 停工／沒生產的工作天：週報＝這週內（到今天為止）；日報＝上一個有資料的日子到今天中間 */
     {const from=W?f.start:(f.prevDay&&f.prevDay.date?addDays(f.prevDay.date,1):''),to=W?(f.end<f.today?f.end:f.today):addDays(f.anchor,-1);const stop=[];if(from)for(let d=from;d&&d<=to&&stop.length<31;d=addDays(d,1))if(DR.isWorkday(d)&&!days[d])stop.push(d);x.stopDays=stop;
       x.holidays=DR.holidayRuns(f.start,f.end).map(r=>({name:r.name,start:r.start,end:r.end,days:r.days}));
@@ -56,6 +116,8 @@
     {const ym=f.end.slice(0,7);const rows=(data.prodplan||[]).filter(r=>r&&String(r.month||'').slice(0,7)===ym);const tot=rows.reduce((s,r)=>s+(num(r.sewingQty)||num(r.orderQty)),0);const c=rows.filter(r=>/CMT|代工/i.test(String(r.customer||'')+' '+String(r.product||'')+' '+String(r.remark||'')));const q=c.reduce((s,r)=>s+(num(r.sewingQty)||num(r.orderQty)),0);
       x.cmt=q>0?{qty:Math.round(q),share:tot>0?Math.round(q/tot*1000)/10:null,customers:[...new Set(c.map(r=>String(r.customer||'').trim()).filter(Boolean))].slice(0,3)}:null}
     if(f.loading){x.load={week:adjLoad(f.loading.week),next:adjLoad(f.loading.next)}}
+    try{x.po=planOutlook(data,f)}catch(e){x.poError=String(e&&e.message||e)}
+    x.stdHours=f.sewing&&f.sewing.prodMin?Math.round(f.sewing.prodMin/60):null;
     x.v=VERSION;return x}
 
   /* ── 情境：今天（這週）是哪一種日子。w＝重要度（開頭只講最重的一件，其餘變標籤）；tone＝燈號；focus＝哪一段排最前面 ── */
@@ -89,6 +151,16 @@
       if(nx&&nx.workdays>0&&nx.emptyLines.length)add('nextEmpty',75,'A','下週未排 '+nx.emptyLines.length+' 組','下週（'+md(nx.start)+'–'+md(nx.end)+'）'+(nx.emptyLines.length===nx.lineCount&&nx.lineCount>1?N(nx.lineCount)+' 組都還沒排':lsList(nx.emptyLines)+' 還沒排，負荷只有 '+P0(nx.pct)+'%')+'，這週內要排完。','load',PMC,'本週內排完下週並確認物料');
       if(wk.pct!=null&&wk.workdays>0){if(wk.pct<TH.loadA&&!wk.emptyLines.length)add('loadLow',82,'R','負荷 '+P0(wk.pct)+'%','這週負荷只有 '+P0(wk.pct)+'%（'+N(wk.sched)+'/'+N(wk.avail)+' 組日），排不滿。','load',PMC,'把有布的單往前拉，補滿空檔');else if(wk.pct>=TH.loadG)add('loadFull',26,'G','負荷 '+P0(wk.pct)+'%','這週排滿：負荷 '+P0(wk.pct)+'%，'+N(wk.lineCount)+' 組、'+N(wk.styles)+' 款、約 '+N(wk.pieces)+' 件。','load')}
       if(wk.gaps.length)add('gap',60,'A','中途空檔','中途空檔：'+(wk.gaps.length>4?N(wk.gaps.length)+' 組（'+wk.gaps.slice(0,3).map(z=>z.short).join('、')+'…）各空 2 天以上':wk.gaps.map(z=>z.short+' '+z.gap+' 天').join('、'))+'，補排或把前後款拉長，不要整組等。','load',PMC,'補排或延伸前後款');
+      const po=x.po;if(po){const hn=po.holiday?po.holiday.name:'';
+        if(po.dataLagDays>=2)add('dataLag',90,'A','日報停在 '+md(po.lastData),'車縫日報只進到 '+md(po.lastData)+'（少 '+po.dataLagDays+' 個工作天），各組「已做多少」是照排單推的，先把日報補進來再看進度。','outlook','AI／生管','補匯 '+md(addDays(po.lastData,1))+' 以後的車縫日報');
+        if(po.useShare!=null&&po.useShare>100)add('overCap',84,'R','超過產能','到月底還要 '+N(po.hours)+' 工時，照上月效率只做得出 '+N(po.availHours)+' 工時（'+P0(po.useShare)+'%），做不完，要排加班或往後移。','now','生管／PMC','列出往後移的款，或提加班');
+        else if(po.useShare!=null&&po.useShare<70)add('underCap',68,'I','產能用 '+P0(po.useShare)+'%','到月底還要 '+N(po.hours)+' 工時，照上月效率可做 '+N(po.availHours)+' 工時，只用到 '+P0(po.useShare)+'%。產能夠，問題在布什麼時候能用、單放在哪一組。','now');
+        if(po.slip>0)add('slip',83,'A','拖到下月 '+N(po.slip),'照最近的實際速度（目標的 '+po.pace+'%），約 '+N(po.slip)+' 件（'+P0(po.slipShare)+'%）會拖到下個月，在 '+lsList(po.slipLines)+'。','outlook','生管／PMC','把會拖的款分給 '+(po.idleAfter.length?po.idleAfter.slice(0,3).join('、'):'有空檔的組'));
+        if(po.holiday&&po.idleAfter.length)add('idleAfter',79,'A',hn+'後 '+po.idleAfter.length+' 組沒單',hn+'後到月底 '+po.postDays+' 天，'+lsList(po.idleAfter)+' 表上沒單。先把別組做不完的單調過來，不用為這幾天停工。','outlook','生管／PMC','假前排好節後調單');
+        const nb=po.due.filter(z=>!z.container&&z.open>0);if(nb.length)add('dueNoBox',67,'A','有交期沒櫃',nb.slice(0,2).map(z=>z.customer+' '+N(z.open)+' 件').join('、')+' 交期在月底前後，出貨表上沒有對應的櫃。','due','出貨／船務','跟客戶確認櫃期，更新出貨表');
+        if(po.check.unscheduled.length)add('unscheduled',64,'A','有交期沒排 '+N(po.check.unscheduledQty),'交期到了但排單表找不到：'+po.check.unscheduled.slice(0,3).map(z=>z.style+' '+N(z.qty)).join('、')+'（共 '+N(po.check.unscheduledQty)+' 件）。確認是漏排還是已在做。','check','生管／PMC','確認漏排的款在哪一組');
+        if(po.check.dups.length)add('dupStyle',42,'A','重複排 '+po.check.dups.length+' 款','同一款排在兩組：'+po.check.dups.slice(0,2).map(z=>z.style+'（'+z.lines.join('／')+'）').join('、')+'，確認是分單還是重複。','check','生管／PMC','確認重複排的款');
+        if(po.check.finished.length)add('finishedListed',41,'I','做完還在表上','已做完還留在排單表：'+po.check.finished.slice(0,3).map(z=>z.style+'（'+z.line+'）').join('、')+'。','check','生管／PMC','排單表刪掉已完成的款')}
       if(L.attainment!=null&&L.exposure>0){if(L.attainment<70)add('attainLow',66,'A','達成 '+P0(L.attainment)+'%','這週排 '+N(L.exposure)+' 件、實際做 '+N(L.actual)+' 件（'+P0(L.attainment)+'%）。差的要逐 PO、逐組對，臨時轉線寫回排產表。','load',PMC,'逐 PO／組對帳，轉線寫回排產表');else if(L.attainment>=100)add('attainHigh',30,'G','達成 '+P0(L.attainment)+'%','這週排 '+N(L.exposure)+' 件、做了 '+N(L.actual)+' 件（'+P0(L.attainment)+'%），有照排單走。','load')}
       const chg=wk.lines.filter(z=>z.changeovers>=TH.chgHigh);if(chg.length)add('changeover',50,'A','換款多','換款偏多：'+chg.map(z=>z.short+' '+z.changeovers+' 次').join('、')+'。每換一次先吃效率，同款同色連著排。','load',PMC,'同款同色連排，換款前備好裁片輔料');
       else if(nx&&nx.changeovers>=Math.max(4,nx.lineCount/2))add('nextChange',38,'I','下週換款 '+nx.changeovers+' 次','下週有 '+N(nx.changeovers)+' 次換款，裁片和輔料要在換款前到線邊。','load');
@@ -143,7 +215,7 @@
   /* ── 「要處理」：沿用 facts.anomalies（程式算的），寫成兩行「問題」＋「→ 誰：做什麼」 ── */
   const SHORT={eff:'查換款、工序平衡、SMV、人員',fabric:'追到布日，回寫排單',qc:'查前三大缺點，當天回覆改善',dual:'效率和品質一起查，先找工序',output:'找出掉量的組和原因，今天回覆',wip:'安排裁片上線，避免堆積',ship:'確認裝櫃日，更新出貨表',needle:'檢查機台與換針紀錄',plan:'列出會跨月的 PO，先對交期',reconcile:'對 QC 產出與車縫日報',empty:'有布的單補進空線；無料再提局部停工',nextEmpty:'本週內排完並確認物料',gap:'補排或延伸前後款',attain:'逐 PO／組對帳，轉線寫回排產表',change:'同款同色連排，換款前備好裁片輔料',undated:'補上線日／下線日',smv:'IE 補正式 SMV',conc:'追該客戶到布與補排',noplan:'匯入最新排產表'};
   function todoLines(f,sc){sc=sc||scenarios(f);const ids=sc.map(z=>z.id);
-    if(f.kind==='plan')return sc.filter(z=>z.act).slice(0,4).map(z=>({q:cut(z.head.replace(/。.*$/,''),62),who:z.who,act:z.act}));
+    if(f.kind==='plan')return sc.filter(z=>z.act).slice(0,5).map(z=>({q:(f.x&&f.x.po)?z.tag:cut(z.head.replace(/。.*$/,''),62),who:z.who,act:z.act,one:!!(f.x&&f.x.po)}));
     const explained=['otHoliday','shortWeek','stopDays','stopGap','afterBreak','lineCut','partial'].some(id=>ids.indexOf(id)>=0);
     const an=(f.anomalies||[]).slice().sort((a,b)=>(b.sev||0)-(a.sev||0));const out=[];
     const short=a=>{let t=String(a.zh||'');
@@ -160,15 +232,17 @@
     const title=PL?'📋 '+b('VRT 排單週報')+'　'+md(f.start)+'–'+md(f.end):W?'📅 '+b('VRT 效率週報')+'　'+md(f.start)+'–'+md(f.end):'📰 '+b('VRT 生產日報')+'　'+md(f.anchor||f.date)+'（'+esc(f.dow||DOW[dowMon0(f.anchor||f.date)])+'）';
     push(title);
     if(opts.note)push('📌 '+b(esc(cut(opts.note,80))));
-    push(light(top.tone)+' '+b(esc(top.head)));
-    const second=sc.slice(1).filter(z=>z.w>=60&&z.id!=='steady')[0];if(second)push(light(second.tone)+' '+esc(second.head));
-    const tags=sc.slice(second?2:1).filter(z=>z.tag&&z.id!=='steady'&&z.id!=='backlogOk').slice(0,4).map(z=>light(z.tone)+z.tag);if(tags.length)push('🏷 '+esc(tags.join('　')));
+    let nHead=1;
+    if(PL&&x.po){const hs=sc.filter(z=>z.id!=='steady'&&z.id!=='backlogOk').slice(0,3);nHead=hs.length||1;if(hs.length>1){push(b('三句話結論'));hs.forEach((z,i)=>push('①②③'.charAt(i)+' '+light(z.tone)+' '+(i===0?b(esc(z.head)):esc(z.head))))}else push(light(top.tone)+' '+b(esc(top.head)))}
+    else push(light(top.tone)+' '+b(esc(top.head)));
+    const second=(PL&&x.po)?null:sc.slice(1).filter(z=>z.w>=60&&z.id!=='steady')[0];if(second){push(light(second.tone)+' '+esc(second.head));nHead=2}
+    const tags=sc.slice(nHead).filter(z=>z.tag&&z.id!=='steady'&&z.id!=='backlogOk').slice(0,4).map(z=>light(z.tone)+z.tag);if(tags.length)push('🏷 '+esc(tags.join('　')));
     push(HR);
     const SEC={};
     /* 車縫 */
     SEC.sew=()=>{const o=[];if(!s.rows)return o;const t=effTone(s.eff);
       o.push('🧵 '+b('車縫')+'　'+N(s.pieces)+' 件'+arrow(cmp.piecesVsPrev)+(W&&s.perDay?'・日均 '+N(s.perDay):''));
-      const sub=[];if(s.lines)sub.push(N(s.lines)+' 線');if(s.manpower)sub.push(N(s.manpower)+' 人');if(W&&s.dayCount)sub.push(N(s.dayCount)+' 天');if(sub.length)o.push('　'+sub.join('・'));
+      const sub=[];if(s.lines)sub.push(N(s.lines)+' 線');if(s.manpower)sub.push(N(s.manpower)+' 人');if(W&&s.dayCount)sub.push(N(s.dayCount)+' 天');if(x.stdHours)sub.push('標準工時 '+N(x.stdHours)+' h');if(sub.length)o.push('　'+sub.join('・'));
       if(s.eff!=null)o.push('　效率 '+bar(s.eff/50,t)+' '+b(P1(s.eff)+'%')+(pv.eff!=null?'（'+(W?'上週':'昨')+' '+P1(pv.eff)+'%）':''));
       if(f.mix&&f.mix.filter(m=>m.pieces>0).length>1)o.push('　'+f.mix.filter(m=>m.pieces>0).map(m=>(m.product==='Apron'?'圍裙':m.product==='Garment'?'成衣':esc(m.product))+' '+N(m.pieces)).join('｜'));
       if(x.target&&x.target.ach!=null)o.push('　目標 '+N(x.target.target)+'・達成 '+P0(x.target.ach)+'%');
@@ -177,6 +251,8 @@
     /* 各組（色燈一排四組，省行數） */
     SEC.lines=()=>{const o=[];const ls=(f.lines||[]).filter(z=>z.eff!=null).slice().sort((a,b2)=>lno(a.line)-lno(b2.line));if(ls.length<2)return o;
       o.push('📊 '+b('各組效率')+'（🟢≥'+TH.lineOk+'　🟡≥'+TH.lineLow+'　🔴＜'+TH.lineLow+'）');
+      const po=x.po,tb=x.target&&x.target.byLine;
+      if(!W&&po&&po.lines.length){o[0]='📊 '+b('各組')+'（效率｜做／目標｜這張單剩多少・估哪天做完）';ls.forEach(z=>{const k=LS(z.line),pl2=po.lines.filter(q=>q.line===k)[0],t=tb&&tb[k];o.push('　'+light(lineTone(z.eff))+'<code>'+(k+'  ').slice(0,3)+'</code> '+P0(z.eff)+'%'+(t&&t.target?'｜'+N(t.actual)+'/'+N(t.target):'｜'+N(z.pieces))+(pl2&&!pl2.noWork?'｜剩 '+N(pl2.rem)+'・'+md(pl2.cautious)+(pl2.late>0?'🔴':''):pl2?'｜表上沒單':''))});return o}
       for(let i=0;i<ls.length;i+=4)o.push('　'+ls.slice(i,i+4).map(z=>light(lineTone(z.eff))+LS(z.line)+' '+P0(z.eff)).join('　'));return o};
     /* 每天（週報）：色條＝當天件數相對本週最高；顏色＝當天效率 */
     SEC.days=()=>{const o=[];if(!W||!f.days||!f.days.length)return o;const mx=Math.max.apply(null,f.days.map(d=>d.pieces))||1;const by={};f.days.forEach(d=>{by[d.date]=d});const hol={};(x.holidays||[]).forEach(r=>{for(let d=r.start;d<=r.end;d=addDays(d,1))hol[d]=r.name});
@@ -203,11 +279,29 @@
       if(L.attainment!=null&&L.exposure>0)o.push('　實做 '+N(L.actual)+' 件・達成 '+P0(L.attainment)+'%');
       wk.lines.forEach(z=>{o.push('　<code>'+(z.short+'  ').slice(0,3)+'</code> '+z.cells+' '+(z.empty?'沒排單 🔴':N(z.pieces)+' 件'+(z.changeovers?'・換 '+z.changeovers:'')+(z.attainment!=null&&z.pieces>0?'・做 '+P0(z.attainment)+'%':'')))});
       if(nx)o.push('➡️ '+b('下週')+'　'+(nx.workdays?'負荷 '+P0(nx.pct)+'%'+(nx.emptyLines.length?'・未排 '+(nx.emptyLines.length===nx.lineCount?'全部 '+nx.lineCount+' 組':lsList(nx.emptyLines)):'')+'・換款 '+N(nx.changeovers)+' 次':'整週放假')+(nx.holidays&&nx.workdays?'・放假 '+nx.holidays+' 天':''));return o};
-    const order=PL?['load','plan','ship']:W?['sew','days','lines','floor','cut','plan','qc','ship']:['sew','lines','floor','cut','plan','qc','ship'];
-    const focus=top.focus&&order.indexOf(top.focus)>0?top.focus:'';const seq=focus?[focus].concat(order.filter(k=>k!==focus)):order;
+    SEC.now=()=>{const o=[],po=x.po;if(!po)return o;o.push('📊 '+b('現在的位置'));
+      o.push('　'+mon(po.month)+'排單 '+N(po.monthQty)+' 件'+(po.monthHours?'・'+N(po.monthHours)+' 工時':''));
+      o.push('　到月底還要做 '+N(po.remaining)+' 件'+(po.hours?'・'+N(po.hours)+' 工時':''));
+      if(po.useShare!=null)o.push('　產能 '+bar(po.useShare/100,po.useShare>100?'R':po.useShare>=70?'G':'B')+' 用到 '+b(P0(po.useShare)+'%')+'（可做 '+N(po.availHours)+' 工時）');
+      o.push('　剩 '+(po.holiday?po.holiday.name+'前 '+po.preDays+' 天＋後 '+po.postDays+' 天':po.preDays+' 個工作天')+'・實際速度＝目標的 '+po.pace+'%'+(po.paceBasis==='default'?'（沒有實績，先用七五折）':''));
+      if(po.slip>0)o.push('　保守估拖到下月 '+b(N(po.slip)+' 件')+'（'+P0(po.slipShare)+'%）');return o};
+    SEC.outlook=()=>{const o=[],po=x.po;if(!po)return o;const AL=x.load&&x.load.week;const cells={};if(AL)AL.lines.forEach(z=>{cells[z.short]=z.cells});
+      o.push('📍 '+b('各組做到哪')+'（本週排單｜照表 → 保守估｜剩多少）');
+      po.lines.forEach(z=>{const ic=z.noWork?'⚪':z.late>0?'🔴':z.cautious>z.planEnd?'🟡':'🟢';o.push('　<code>'+(z.line+'  ').slice(0,3)+'</code> '+(cells[z.line]?cells[z.line]+' ':'')+(z.noWork?'表上沒單 ⚪':md(z.planEnd)+' → '+md(z.cautious)+' '+ic+'・剩 '+N(z.rem)+(z.uncut?'（未裁 '+N(z.uncut)+'）':'')))});
+      if(po.holiday)o.push('⛱ '+b('空檔')+'　'+po.holiday.name+'前 '+N(po.emptyPre)+'/'+N(po.lineDaysPre)+' 組日・後 '+N(po.emptyPost)+'/'+N(po.lineDaysPost)+' 組日'+(po.idleAfter.length?'・節後沒單 '+lsList(po.idleAfter):''));
+      else if(po.emptyPre)o.push('⛱ '+b('空檔')+'　到月底 '+N(po.emptyPre)+'/'+N(po.lineDaysPre)+' 組日沒排');return o};
+    SEC.due=()=>{const o=[],po=x.po;if(!po||!po.due.length)return o;o.push('🚢 '+b('月底前後交期')+'（未完成｜已入成品倉｜未車）');
+      po.due.slice(0,4).forEach(z=>o.push('　'+esc(cut(z.customer,10))+' '+N(z.open)+'｜'+N(z.fg)+'｜'+N(z.notSewn)+(z.overdue?'・逾期 '+N(z.overdue):'')+(z.container?'':' ⚠️沒櫃')));return o};
+    SEC.check=()=>{const o=[],po=x.po;if(!po)return o;const c=po.check,it=[];if(c.smvMissingCount)it.push('缺 SMV '+c.smvMissingCount+' 款（'+c.smvMissing.slice(0,3).join('、')+'）');if(c.dups.length)it.push('重複排 '+c.dups.slice(0,2).map(z=>z.style+' '+z.lines.join('／')).join('、'));if(c.finished.length)it.push('做完還在表上 '+c.finished.slice(0,3).map(z=>z.style).join('、'));if(c.undated)it.push('沒填日期 '+c.undated+' 筆');if(c.unscheduled.length)it.push('有交期沒排 '+c.unscheduled.slice(0,3).map(z=>z.style+' '+N(z.qty)).join('、'));
+      if(!it.length)return o;o.push('🧹 '+b('排單表要修'));it.forEach(t=>o.push('　・'+esc(t)));return o};
+    SEC.load2=()=>{const o=[];if(!L)return o;const AL=x.load||{week:adjLoad(L.week),next:adjLoad(L.next)};const wk=AL.week,nx=AL.next;const t=wk.pct==null?'G':wk.pct>=TH.loadG?'G':wk.pct>=TH.loadA?'A':'R';
+      o.push('📋 '+b('本週負荷')+'　'+bar(wk.pct/100,t)+' '+b(P0(wk.pct)+'%')+'・'+N(wk.styles)+' 款・換款 '+N(wk.changeovers)+' 次'+(L.attainment!=null&&L.exposure>0?'・達成 '+P0(L.attainment)+'%':''));
+      if(nx)o.push('➡️ '+b('下週')+'　'+(nx.workdays?'負荷 '+P0(nx.pct)+'%'+(nx.emptyLines.length?'・未排 '+(nx.emptyLines.length===nx.lineCount?'全部 '+nx.lineCount+' 組':lsList(nx.emptyLines)):''):'整週放假')+(nx.holidays&&nx.workdays?'・放假 '+nx.holidays+' 天':''));return o};
+    const order=PL?(x.po?['now','outlook','due','check','load2','ship']:['load','plan','ship']):W?['sew','days','lines','floor','cut','plan','qc','ship']:['sew','lines','floor','cut','plan','qc','ship'];
+    const focus=(PL&&x.po)?'':(top.focus&&order.indexOf(top.focus)>0?top.focus:'');const seq=focus?[focus].concat(order.filter(k=>k!==focus)):order;
     seq.forEach(k=>{(SEC[k]?SEC[k]():[]).forEach(push)});
-    const todo=todoLines(f,sc);if(todo.length){push(HR);push('⚠️ '+b('要處理'));todo.forEach((t,i)=>{push((i+1)+'. '+esc(t.q));push('　→ '+esc(t.who)+(t.act?'：'+esc(t.act):''))})}
-    push(HR);const src=[];src.push('車縫 '+(s.rows?md(W?f.days[f.days.length-1].date:f.anchor):'—'));src.push('裁剪 '+(c&&c.rows?md(f.end<=f.today?f.end:f.today):'—'));if(!PL)src.push('QC '+(q&&q.reports&&q.date?md(q.date):'—'));if(f.fabric&&f.fabric.snapshotDate)src.push('布料 '+md(f.fabric.snapshotDate));if(PL&&L)src.push('排單 '+md(f.start)+'–'+md(f.end));
+    const todo=todoLines(f,sc);if(todo.length){push(HR);push('⚠️ '+b('要處理'));todo.forEach((t,i)=>{if(t.one){push((i+1)+'. '+esc(t.who)+'：'+esc(t.act)+'（'+esc(t.q)+'）');return}push((i+1)+'. '+esc(t.q));push('　→ '+esc(t.who)+(t.act?'：'+esc(t.act):''))})}
+    push(HR);const src=[];src.push('車縫 '+(s.rows?md(W?f.days[f.days.length-1].date:f.anchor):'—'));src.push('裁剪 '+(c&&c.rows?md(f.end<=f.today?f.end:f.today):'—'));if(!PL)src.push('QC '+(q&&q.reports&&q.date?md(q.date):'—'));if(f.fabric&&f.fabric.snapshotDate)src.push('布料 '+md(f.fabric.snapshotDate));if(PL&&L)src.push('排單 '+md(f.start)+'–'+md(f.end));if(PL&&x.po&&x.po.lastData)src[0]='車縫 '+md(x.po.lastData);
     push('<i>資料：'+src.join('・')+'</i>');
     const html=out.join('\n');return {html,text:html.replace(/<[^>]+>/g,''),lines:out.length,scen:sc,focus:focus||order[0]}}
 
@@ -218,6 +312,6 @@
     const ls=(f.lines||[]).filter(z=>z.eff!=null).slice().sort((a,b)=>lno(a.line)-lno(b.line));if(ls.length<2)return null;
     return {title:md(f.anchor)+' 各組效率 %（綠≥'+TH.lineOk+'　黃≥'+TH.lineLow+'　紅＜'+TH.lineLow+'）',labels:ls.map(z=>LS(z.line)),values:ls.map(z=>Math.round(z.eff*10)/10),tones:ls.map(z=>lineTone(z.eff)),unit:'%'}}
 
-  const CATALOG=['nodata','partial','otHoliday','shortWeek','stopDays','stopGap','afterBreak','beforeHoliday','lineCut','lineAdd','absent','manpower','bigSwing','effDown','effUp','effRed','weakLines','allGreen','dayHigh','dayLow','mix','overtime','floorIssue','targetMiss','dualRisk','qcHigh','qcMismatch','qcMissing','needle','wipPile','wipLow','noCut','monthStart','monthEnd','behind','ahead','shipOverdue','shipSoon','fabric','fabricStale','backlogHigh','backlogLow','backlogOk','cmt','noplan','emptyLines','nextEmpty','loadLow','loadFull','gap','attainLow','attainHigh','changeover','nextChange','undated','smvMissing','concentration','steady'];
+  const CATALOG=['nodata','partial','otHoliday','shortWeek','stopDays','stopGap','afterBreak','beforeHoliday','lineCut','lineAdd','absent','manpower','bigSwing','effDown','effUp','effRed','weakLines','allGreen','dayHigh','dayLow','mix','overtime','floorIssue','targetMiss','dualRisk','qcHigh','qcMismatch','qcMissing','needle','wipPile','wipLow','noCut','monthStart','monthEnd','behind','ahead','shipOverdue','shipSoon','fabric','fabricStale','backlogHigh','backlogLow','backlogOk','cmt','noplan','emptyLines','nextEmpty','loadLow','loadFull','gap','attainLow','attainHigh','changeover','nextChange','undated','smvMissing','concentration','dataLag','overCap','underCap','slip','idleAfter','dueNoBox','unscheduled','dupStyle','finishedListed','steady'];
   g.VRTReportScen={version:VERSION,extras,scenarios,render,chart,todoLines,adjLoad,CATALOG};
 })(typeof window!=='undefined'?window:globalThis);

@@ -57,14 +57,29 @@ test('月初、月底、落後、超前、出貨逾期／兩週內出貨、缺�
 test('效率週報：每天色條、接單月數',()=>{const mk=n=>({overall:{actualNotSewn:n,noFabric:0},details:[],snapshotDate:'2026-11-03'});
   const a=run(factory({custstats:mk(900000)}),{date:'2026-11-04',period:'week'},'效率週報');has(a,'backlogHigh');assert(/🗓 每天/.test(a.r.text)&&/VRT 效率週報/.test(a.r.text));
   has(run(factory({custstats:mk(50000)}),{date:'2026-11-04',period:'week'}),'backlogLow');const f1=a.f;has(run(factory({custstats:mk(f1.months.prev.pieces*1.4)}),{date:'2026-11-04',period:'week'}),'backlogOk');return a.r.lines+' 行'});
-test('排單週報：空線、中途空檔、下週未排、沒填日期、達成、集中度、負荷色條；沒有排單資料',()=>{const x=run(factory({prodplan:PLAN}),{date:'2026-11-12',period:'week',kind:'plan'},'排單週報');
+test('排單週報：空線、中途空檔、下週未排、沒填日期、達成、集中度、負荷色條；沒有排單資料',()=>{const x=run(factory({prodplan:PLAN,until:'2026-11-12'}),{date:'2026-11-12',today:'2026-11-12',period:'week',kind:'plan'},'排單週報');
   ['emptyLines','nextEmpty','undated','concentration','shortWeek'].forEach(id=>has(x,id));assert.equal(x.top,'emptyLines',x.ids.join());assert(/L9.*沒排單/.test(x.r.text)&&/🟦/.test(x.r.text)&&/本週負荷/.test(x.r.text));
   const full=[];for(let i=1;i<=11;i++)full.push({month:'2026-11',line:'Line '+i,style:'ST'+i,customer:'C'+(i%4),sewingQty:9000,startDate:'2026-11-16',endDate:'2026-11-28'});
-  const y=run(factory({prodplan:full}),{date:'2026-11-18',period:'week',kind:'plan'},'排單週報（排滿）');has(y,'loadFull');
+  const y=run(factory({prodplan:full,until:'2026-11-18'}),{date:'2026-11-18',today:'2026-11-18',period:'week',kind:'plan'},'排單週報（排滿）');has(y,'loadFull');
   const n=run(factory(),{date:'2026-11-12',period:'week',kind:'plan'});assert.equal(n.top,'noplan');
   const few=[];for(let i=1;i<=11;i++)few.push({month:'2026-11',line:'Line '+i,style:'ST'+i,customer:'C'+(i%4),sewingQty:900,startDate:'2026-11-16',endDate:'2026-11-17'});for(let k=0;k<4;k++)few.push({month:'2026-11',line:'Line 1',style:'CH'+k,customer:'C1',sewingQty:300,startDate:H.addDays('2026-11-18',k),endDate:H.addDays('2026-11-18',k)});
-  const z=run(factory({prodplan:few}),{date:'2026-11-18',period:'week',kind:'plan'},'排單週報（排不滿、換款多）');['loadLow','gap','changeover','attainHigh'].forEach(id=>has(z,id));return x.r.lines+' 行'});
+  const z=run(factory({prodplan:few,until:'2026-11-18'}),{date:'2026-11-18',today:'2026-11-18',period:'week',kind:'plan'},'排單週報（排不滿、換款多）');['loadLow','gap','changeover','attainHigh'].forEach(id=>has(z,id));return x.r.lines+' 行'});
 test('目標沒達成（現場沒勾原因）',()=>{const d=factory({targetOn:'2026-11-12'});d.sewing.forEach(r=>{if(r.tSrc==='target'){r.issue={};r.remark='';r.target=Math.round(r.pieces*1.4)}});const x=run(d,{date:'2026-11-12'},'目標沒達成');has(x,'targetMiss');return x.f.x.target.ach+'%'});
+test('排單週報新版（11/11 報告第六節）：三句結論、件數＋工時、兩個完工日、節前節後空檔、交期對櫃、排單表檢查、日報停更提醒',()=>{
+  const P=[];const mk=(l,style,qty,st,en,daily,smv,cust,extra)=>P.push(Object.assign({month:'2026-11',line:'Line '+l,style,customer:cust||'ADI',product:'Garment',sewingQty:qty,startDate:st,endDate:en,dailyOutput:daily,smv:smv,cutQty:qty,po:'P'+l},extra||{}));
+  mk(1,'CHEF',2000,'2026-11-16','2026-11-26',250,24,'ALSCO',{cutQty:0});mk(2,'HA1521',1272,'2026-11-10','2026-11-18',300,12);mk(3,'A1544G',5904,'2026-11-17','2026-11-30',600,10,'ADI',{cutQty:0});mk(2,'A1544G',500,'2026-11-17','2026-11-18',600,10,'ADI',{po:'P3'});
+  mk(5,'CS127',3732,'2026-11-10','2026-11-20',500,9,'MAGNUS');mk(9,'A050',60000,'2026-11-13','2026-11-21',8000,0.4,'ASL');mk(9,'P050',20000,'2026-11-26','2026-11-28',8000,0,'ASL',{cutQty:0});mk(11,'TC1',6340,'2026-11-10','2026-11-30',400,6,'ASL');
+  const cs={overall:{actualNotSewn:90000,noFabric:9000,cuttingWip:20000},snapshotDate:'2026-11-10',details:[{customer:'ADI',po:'204400',style:'T3539',etd:'2026-11-28',orderQty:1380,balanceQty:1380,fgPcs:0,actualNotSewn:1380,noFabric:0},{customer:'ADI',po:'204292',style:'A1544G',etd:'2026-11-28',orderQty:5904,balanceQty:5904,fgPcs:2000,actualNotSewn:3904,noFabric:0},{customer:'ASL',po:'S1',style:'A050',etd:'2026-11-21',orderQty:60000,balanceQty:60000,fgPcs:10000,actualNotSewn:50000,noFabric:0}]};
+  const ship=[{cust:'ASL',po:'S1',style:'A050',orig:60000,shipped:0,open:60000,etd:'2026-11-21',status:'outstanding'}];
+  const x=run(factory({prodplan:P,custstats:cs,shipping:ship,until:'2026-11-13'}),{date:'2026-11-17',today:'2026-11-17',period:'week',kind:'plan'},'排單週報新版');const po=x.f.x.po;assert(po,'no plan outlook: '+x.f.x.poError);
+  ['dataLag','slip','idleAfter','unscheduled','dupStyle','dueNoBox'].forEach(id=>has(x,id));assert.equal(x.top,'dataLag',x.ids.join());
+  assert.equal(po.holiday.name,'送水節');assert.equal(po.preDays,5);assert.equal(po.postDays,4);assert(po.slipLines.includes('L3'),'L3 should slip: '+JSON.stringify(po.lines.filter(z=>z.line==='L3')));
+  const l3=po.lines.filter(z=>z.line==='L3')[0];assert(l3.cautious>'2026-11-30'&&l3.planEnd==='2026-11-30');assert(po.idleAfter.includes('L2')&&po.idleAfter.includes('L5'));
+  assert(po.check.smvMissing.includes('P050'));assert(po.check.unscheduled[0].style==='T3539'&&po.check.unscheduled[0].qty===1380);assert(po.check.dups[0].style==='A1544G');
+  const adi=po.due.filter(z=>z.customer==='ADI')[0],asl=po.due.filter(z=>z.customer==='ASL')[0];assert(adi.open===7284&&!adi.container&&asl.container);
+  ['三句話結論','現在的位置','工時','各組做到哪','送水節前','月底前後交期','排單表要修','⚠️沒櫃'].forEach(k=>assert(x.r.text.indexOf(k)>=0,'missing '+k+'\n'+x.r.text));assert(x.r.lines<=48,'lines '+x.r.lines);
+  const d=run(factory({prodplan:P,until:'2026-11-17',targetOn:'2026-11-17'}),{date:'2026-11-17',today:'2026-11-17'},'日報（各組明細）');assert(/這張單剩多少/.test(d.r.text)&&/標準工時/.test(d.r.text)&&/剩 [\d,]+・\d+\/\d+/.test(d.r.text),d.r.text);
+  return x.r.lines+' 行；pace '+po.pace+'%；slip '+po.slip});
 test('情境至少 40 種都被測到；圖表資料',()=>{assert(seen.size>=40,'only '+seen.size+': '+[...seen].join(' '));const f=R.compute(factory(),{date:'2026-11-12',today:'2026-12-31'});const c=S.chart(f);assert(c.labels.length===11&&c.values.every(v=>v>0)&&c.tones.every(t=>/[GAR]/.test(t)));
   const miss=S.CATALOG.filter(id=>!seen.has(id));return seen.size+' 種；未測到：'+(miss.join(' ')||'無')});
 const fails=out.filter(x=>x.status!=='PASS').length;try{require('fs').writeFileSync(path.join(__dirname,'scen_report_results.json'),JSON.stringify(out,null,1));require('fs').writeFileSync(path.join(__dirname,'scen_report_samples.txt'),Object.keys(samples).map(k=>'【'+k+'】\n'+samples[k]).join('\n\n\n'))}catch(_){}

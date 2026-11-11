@@ -1,4 +1,4 @@
-/* ═══ v4.13 (2026-11-11) 情境報告 — 日報／效率週報／排單週報 群組版 ═══
+/* ═══ v4.14 (2026-11-11) 情境報告（v4.13 ＋ 11/11 報告第六節：件數＋工時、各組剩餘與兩個完工日、假期前後空檔、交期對櫃、排單表檢查） — 日報／效率週報／排單週報 群組版 ═══
    貼法：把 vrt-report-scen-v1.js 整份貼在這段「前面」，合成一個 .gs 檔，放在專案最後一個檔（取代 v412_compact_daily_report 的內容）。
    同名函式會蓋掉前面的版本；主檔、Token、觸發器都不動。
    Paul 11/11：報告要能應付 10～40 種情境（放假、停工、加班、少人、加減組、料、代工、突發…），開頭一句結論要準，
@@ -58,7 +58,7 @@ function rsSendChart_(chatId,f){
 /* 檢查用（不發訊息）：最新一份日報／效率週報／排單週報的情境版文字、情境代號、行數、圖檔大小 */
 function checkScenarioReportV413(){
   const idx=dailyReportIndex_(); const pick=function(rx,not){ const x=idx.filter(function(e){return rx.test(e.date)&&!(not&&not.test(e.date))})[0]; return x?dailyReportLoad_(x.date):null; };
-  const reps={day:pick(/^\d{4}-\d{2}-\d{2}$/),eff:pick(/-W\d{2}$/),plan:pick(/-W\d{2}-plan$/)}; const out={ok:true,version:'4.13-scenario',scen:RSCEN_.version,catalog:RSCEN_.CATALOG.length,chart:String(rsProps_().getProperty('RS_CHART')||'1')!=='0'};
+  const reps={day:pick(/^\d{4}-\d{2}-\d{2}$/),eff:pick(/-W\d{2}$/),plan:pick(/-W\d{2}-plan$/)}; const out={ok:true,version:'4.14-scenario',scen:RSCEN_.version,catalog:RSCEN_.CATALOG.length,chart:String(rsProps_().getProperty('RS_CHART')||'1')!=='0'};
   Object.keys(reps).forEach(function(k){ const rep=reps[k]; if(!rep||!rep.facts){ out[k]='(no report)'; return; } try{ const r=rsRender_(rep); let png=0; try{ const b=rsChartBlob_(rep.facts); png=b?b.getBytes().length:0; }catch(e){ png='ERR '+e; } out[k]={date:rep.date,lines:r.lines,scen:r.scen.map(function(z){return z.id}),hasX:!!rep.facts.x,chartBytes:png,text:r.text}; }catch(e){ out[k]='ERR '+e; out.ok=false; } });
   console.log(JSON.stringify(out,null,2)); return out;
 }
@@ -74,3 +74,6 @@ function previewScenarioChart(dateOpt,period,kind){
   const f=DR.compute(data,{date:data.date,today,period,kind:period==='week'?(kind==='plan'?'plan':'eff'):'day'}); const b=rsChartBlob_(f); if(!b)return '(no chart)';
   const file=getOrCreateFolder().createFile(b.setName('preview_'+b.getName())); return file.getUrl();
 }
+/* 免參數預覽（編輯器下拉選單直接跑；不存、不發） */
+function previewPlanWeekly(){ return previewScenarioReport(todayYmd_(),'week','plan'); }
+function previewEffWeekly(){ return previewScenarioReport(todayYmd_(),'week','eff'); }
