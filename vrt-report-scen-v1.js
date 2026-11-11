@@ -29,7 +29,7 @@
   const ISSUE_ZH={material:'缺料',machine:'機台',manpower:'缺人',changeover:'換款',quality:'品質',others:'其他'};
   const ISSUE_KEYS=['material','machine','manpower','changeover','quality','others'];
 
-  const lsList=arr=>arr.length>5?arr[0]+'–'+arr[arr.length-1]+' 共 '+arr.length+' 組':arr.join('、');
+  const lsList=arr=>{if(arr.length<=5)return arr.join('、');const n=arr.map(lno),contig=n.every((v,i)=>i===0||v===n[i-1]+1);return contig?arr[0]+'–'+arr[arr.length-1]+' 共 '+arr.length+' 組':arr.slice(0,5).join('、')+' 等 '+arr.length+' 組'};
   /* 排單負荷扣掉國定假日（函式庫的週負荷是週一到週六，不扣假日）：每組每天一格 🟦 有排／⬜ 空檔／🎌 放假 */
   function adjLoad(wk){if(!wk||!wk.lines)return null;const days=[];for(let d=wk.start;d&&d<=wk.end;d=addDays(d,1))if(dowMon0(d)<6)days.push(d);const real=days.filter(d=>DR.isWorkday(d));
     const lines=wk.lines.map(z=>{const gapSet={};(z.gaps||[]).forEach(d=>{gapSet[d]=1});const cells=days.map(d=>!DR.isWorkday(d)?'🎌':gapSet[d]?'⬜':'🟦');const sched=real.filter(d=>!gapSet[d]).length,gap=real.length-sched;return {short:z.short,cells:cells.join(''),sched,gap,empty:sched===0,pieces:z.pieces,changeovers:z.changeovers,attainment:z.attainment}});
