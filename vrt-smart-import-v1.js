@@ -12,12 +12,13 @@
    Pure helpers (route / sniff / msg / eml / zip) are exported for the tests (Node: require this file, pass XLSX). */
 (function(g){'use strict';
   if(g.VRTSmartImport&&g.VRTSmartImport.version)return;
-  const VERSION='1.1.1';
+  const VERSION='1.2.0';
   /* ── modules: page + file types each page's own importer takes; msgWhole = the page reads .msg/.eml itself (keeps the mail name / date) ── */
   const MODULES={
     sewing:{zh:'🧵 車縫',en:'🧵 Sewing',page:'sewing_v5.html',ext:'xlsx xls csv eml msg',msgWhole:true},
     cutting:{zh:'✂️ 裁剪',en:'✂️ Cutting',page:'cutting_v3.html',ext:'xlsx xls csv eml msg json',msgWhole:true},
     cuttingplan:{zh:'📅 裁剪計劃',en:'📅 Cutting plan',page:'cutting_plan_v2.html',ext:'xlsx xls csv'},
+    cutpack:{zh:'✂️📦 裁剪用布＋裝箱',en:'✂️📦 Cutting fabric + packing',page:'vrt_cut_pack_v1.html',ext:'xlsx xls msg'},
     prodplan:{zh:'🗓 排單產能',en:'🗓 Production plan',page:'production_plan_capacity_v1.html',ext:'xlsx xls csv json'},
     orders:{zh:'📦 訂單週報／客戶 PO',en:'📦 Orders / customer POs',page:'orders_v3.html',ext:'xlsx xls pdf msg',msgWhole:true},
     shipping:{zh:'🚚 出貨排程',en:'🚚 Shipping schedule',page:'shipping_v2.html',ext:'xlsx xlsb xls'},
@@ -36,6 +37,8 @@
   };
   /* ── file-name routes (same order and patterns as the GAS inbox INBOX_ROUTES, v4.9; cutting is checked BEFORE the generic 'daily output') ── */
   const ROUTES=[
+    {re:/packing\s*(?:output|report)|daily\s*packing|cutting\s*(?:&|and)\s*packing/i,module:'cutpack'},   /* v4.23: Och Chanmalen 的 Cutting & Packing Report（裁剪用布明細＋裝箱） */
+    {re:/daily\s*cutting\s*report\s*for/i,module:'cutpack'},
     {re:/daily\s*needles?|needles?\s*change|換針/i,module:'spareparts'},
     {re:/spare\s*parts?|part\s*change|換件|machine\s*parts?\s*stock/i,module:'spareparts'},
     {re:/final\s*qc|end-?line|top\s*\d?\s*defect|qc\s*inspection/i,module:'qc'},
@@ -75,6 +78,7 @@
     cuttingplan:[['CUTTING PLAN',5],['MARKER',1]],
     prodplan:[['PRODUCTION PLAN',5],['SEWING QTY',2],['DAILY OUTPUT',1]],
     fg:[['FINISHED GOOD',4],['FG STOCK',4],['CARTON',1],['CTN',1]],
+    cutpack:[['MARKER EFF',5],['FABRIC ITEM',3],['TOTAL CTNS',5],['PACKING OUTPUT',5]],
     cutting:[['CUTTING',3],['CUT QTY',2],['YDS',1],['LAY',1]],
     sewing:[['SEWING',3],['DAILY PRODUCTION OUTPUT',4],['OPERATOR',1],['SEWER',2],['OUTPUT',1]],
     ie:[['SMV',3],['OBD',3],['OPERATION',1],['SAM',1]],

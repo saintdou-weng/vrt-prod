@@ -1,0 +1,196 @@
+<!doctype html><html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
+<title>VRT 裁剪用布＋裝箱 · Cut &amp; Pack v1.0</title>
+<script src="vrt-dialog-v1.js?v=4.24.0"></script><script src="vrt-i18n-v1.js?v=4.24.0"></script>
+<script src="vrt-deploy-config.js?v=4.24.0"></script><script src="vrt-platform-v40.js?v=4.24.0"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vrt-prod-storage-vnext.js?v=4.24.0"></script><script src="vrt-smart-sync-v3.js?v=4.24.0"></script>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#2563eb;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--pk:#7c3aed;--ct:#0891b2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;font-size:14px}
+header{background:linear-gradient(135deg,#1e293b,#334155);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}header p{margin:2px 0 0;font-size:11px;color:#cbd5e1;letter-spacing:1px}
+header .sp{flex:1}.hb{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer;text-decoration:none;font-family:inherit}
+.hb:hover{background:rgba(255,255,255,.22)}main{max-width:1180px;margin:0 auto;padding:14px 16px 40px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}.seg button{border:0;background:#fff;padding:7px 13px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--mut)}
+.seg button.on{background:var(--acc);color:#fff;font-weight:700}
+.bar input,.bar select{border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-family:inherit;font-size:13px;background:#fff}
+.nav{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+.tabs{display:flex;gap:6px;margin:6px 0 12px;flex-wrap:wrap}.tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;font-size:13px}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px}.kpi .v{font-size:22px;font-weight:800}.kpi .l{font-size:12px;color:var(--mut);margin-top:2px}.kpi .s{font-size:11px;color:var(--mut);margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}.card h3{margin:0 0 8px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th{text-align:left;font-size:11px;color:var(--mut);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;background:#f8fafc;position:sticky;top:0}
+td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}.tw{overflow:auto;max-height:560px}
+.mono{font-family:Consolas,monospace}.mut{color:var(--mut)}.small{font-size:11.5px}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}.p-ok{background:#dcfce7;color:#166534}.p-w{background:#fef3c7;color:#92400e}.p-b{background:#fee2e2;color:#991b1b}.p-n{background:#e2e8f0;color:#334155}
+.barc{height:10px;border-radius:5px;background:#e2e8f0;overflow:hidden;min-width:60px}.barc i{display:block;height:100%;border-radius:5px}
+.drop{border:2px dashed #cbd5e1;border-radius:12px;padding:14px;text-align:center;color:var(--mut);background:#fff;cursor:pointer;margin-bottom:12px}.drop.on{border-color:var(--acc);background:#eff6ff}
+#msg{margin-bottom:10px}.note{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:10px}.note.w{background:#fffbeb;border-color:#fde68a;color:#78350f}.note.b{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
+.heat td.c{text-align:right;font-variant-numeric:tabular-nums;min-width:52px}
+.prev{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin:8px 0}
+.btn{border:0;background:var(--acc);color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit;font-weight:700}.btn.g{background:#e2e8f0;color:var(--ink)}
+footer{color:var(--mut);font-size:11.5px;margin-top:10px;line-height:1.7}
+</style></head><body>
+<header><div style="font-size:26px">✂️📦</div><div><h1 data-zh="裁剪用布＋裝箱產出" data-en="Cutting fabric use + Packing output">裁剪用布＋裝箱產出</h1><p>CUT &amp; PACK · v1.0 · PROD v4.24 · Och Chanmalen 每日 Cutting &amp; Packing Report</p></div><div class="sp"></div>
+<a class="hb" href="portal_v2.html">⌂ 平台</a><button class="hb" id="bPush" title="上傳新增與修改的資料">☁↑ Push</button><button class="hb" id="bPull" title="下載雲端新增與修改的資料">☁↓ Pull</button></header>
+<main>
+<div class="drop" id="drop">📥 把 <b>Cutting &amp; Packing Report</b> 的信（.msg）或兩個 Excel 拖進來／點這裡選檔 — 同一天再匯一次會用新的取代，不會重複<input type="file" id="fi" multiple accept=".xlsx,.xls,.msg" hidden></div>
+<div id="msg"></div>
+<div class="bar"><div class="seg" id="per"><button data-p="day">日</button><button data-p="week" class="on">週</button><button data-p="month">月</button><button data-p="year">年</button></div>
+<button class="nav" id="prev" aria-label="上一期">◀</button><input type="date" id="anchor" aria-label="日期"><button class="nav" id="next" aria-label="下一期">▶</button>
+<select id="lineSel" aria-label="線別"><option value="">全部線別</option></select><input id="q" placeholder="搜尋款式、PO、布號" aria-label="搜尋"><span id="range" class="mut small"></span></div>
+<div class="tabs" id="tabs"></div>
+<div id="out"></div>
+<footer>裝箱＝每天各線包好的件數與箱數（Daily Packing Output Report）。裁剪用布＝每天每個馬克的計畫用布、實際用布、損耗％、馬克效率（Daily Cutting Report 明細）。<br>損耗％＝(實際用布−計畫用布)÷計畫用布；超過 3% 標黃、超過 5% 或負數標紅。同一天重新匯入＝整天取代。資料存在這台電腦，按 ☁↑ 上傳雲端（只傳有變的月份）。</footer>
+</main>
+<script>
+(function(){
+'use strict';
+const VER='1.0.0',DBN='VRT_CutPack',ST={pack:'packing',cut:'cutdetail'};
+const $=s=>document.querySelector(s),E=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const F=(n,d)=>(n==null||!isFinite(n))?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:d==null?0:d,minimumFractionDigits:d&&d>0&&Math.abs(n)<100?Math.min(d,1):0});
+const P=n=>(n==null||!isFinite(n))?'—':(n*100).toFixed(1)+'%';
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const D=s=>new Date(s+'T00:00:00'),addD=(s,n)=>{const d=D(s);d.setDate(d.getDate()+n);return ymd(d)};
+const normLine=v=>{const m=String(v||'').match(/(\d+)/);return m?'Line '+Number(m[1]):''};
+const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+let PACK=[],CUT=[],META={pack:{},cut:{}};
+let PER='week',ANCHOR=ymd(new Date()),TAB='pack',LINE='',Q='',PENDING=null;
+/* ── IndexedDB ── */
+let _db=null;function idb(){if(_db)return Promise.resolve(_db);return new Promise((res,rej)=>{const q=indexedDB.open(DBN,1);q.onupgradeneeded=()=>{const d=q.result;['packing','cutdetail','meta'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:n==='meta'?'k':'id'})})};q.onsuccess=()=>{_db=q.result;res(_db)};q.onerror=()=>rej(q.error)})}
+async function all(st){const d=await idb();return new Promise(res=>{const r=d.transaction(st).objectStore(st).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([])})}
+async function replaceAll(st,rows){const d=await idb();return new Promise((res,rej)=>{const tx=d.transaction(st,'readwrite'),o=tx.objectStore(st);o.clear();rows.forEach(r=>o.put(r));tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function metaGet(k){const d=await idb();return new Promise(res=>{const r=d.transaction('meta').objectStore('meta').get(k);r.onsuccess=()=>res(r.result&&r.result.v);r.onerror=()=>res(null)})}
+async function metaSet(k,v){const d=await idb();return new Promise(res=>{const tx=d.transaction('meta','readwrite');tx.objectStore('meta').put({k,v});tx.oncomplete=()=>res()})}
+async function load(){PACK=await all('packing');CUT=await all('cutdetail');META.pack=(await metaGet('pack'))||{};META.cut=(await metaGet('cut'))||{}}
+/* ── parsers (pure; exported for tests) ── */
+function cellDate(v,year){if(v instanceof Date&&!isNaN(v))return ymd(new Date(v.getTime()+12*36e5));/* SheetJS 日期常差幾秒（23:59:59）→ 取最近的一天 */if(typeof v==='number'&&v>30000&&v<80000){const d=new Date(Date.UTC(1899,11,30)+v*864e5);return d.toISOString().slice(0,10)}
+  const s=String(v||'');let m=s.match(/(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m=s.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s*(20\d{2})/);if(m&&MON[m[1].slice(0,3).toLowerCase()])return m[3]+'-'+String(MON[m[1].slice(0,3).toLowerCase()]).padStart(2,'0')+'-'+m[2].padStart(2,'0');
+  m=s.match(/^(\d{1,2})-(\d{1,2})$/);if(m&&year)return year+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');return''}
+const num=v=>{if(v==null||v==='')return null;const n=typeof v==='number'?v:parseFloat(String(v).replace(/[,\s%]/g,''));return isFinite(n)?n:null};
+const txt=v=>v==null?'':String(v).trim();
+function kindOf(XLSX,wb,name){const n=String(name||'').toLowerCase();if(/packing/.test(n))return'pack';if(/cutting\s*report|daily\s*cutting/.test(n))return'cut';
+  for(const sn of wb.SheetNames.slice(0,4)){const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null}).slice(0,12).map(r=>r.map(txt).join('|').toLowerCase()).join('\n');if(/total ctns|sewing line #/.test(rows))return'pack';if(/marker eff|fabric item/.test(rows))return'cut'}return''}
+function yearOf(name,wb,XLSX){const m=String(name||'').match(/20\d{2}/);if(m)return m[0];return String(new Date().getFullYear())}
+function parsePacking(XLSX,wb,name){const year=yearOf(name),out=[],days=[],targets={};
+  for(const sn of wb.SheetNames){if(/summary|form|sheet/i.test(sn))continue;const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+    let date='';for(let i=0;i<6&&i<rows.length;i++){const s=(rows[i]||[]).map(txt).join(' ');if(/as of/i.test(s)){date=cellDate(s.replace(/.*as of/i,''),year)||'';break}}
+    if(!date)date=cellDate(sn,year);if(!date)continue;
+    const hi=rows.findIndex(r=>(r||[]).some(c=>/sewing\s*line/i.test(txt(c))));if(hi<0)continue;const H=rows[hi].map(c=>txt(c).toLowerCase());
+    const col=(re,d)=>{const i=H.findIndex(h=>re.test(h));return i<0?d:i};const cL=col(/sewing line/,0),cK=col(/selfkey/,1),cP=col(/customer p\.?o|^po/,2),cS=col(/^style/,3),cC=col(/colou?r/,4),cZ=col(/^size/,5),cU=col(/^unit/,6),cQ=col(/quantity|qty/,7),cN=col(/ctns|carton/,8),cT=col(/type/,9);
+    let n=0,seq=0;for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const L=normLine(r[cL]);if(!L||!/line/i.test(txt(r[cL])))continue;const q=num(r[cQ]);if(!(q>0))continue;
+      const rec={id:'pk|'+date+'|'+(++seq),date,line:L,selfkey:txt(r[cK]),po:txt(r[cP]),style:txt(r[cS]).replace(/\s+/g,' '),color:txt(r[cC]),size:txt(r[cZ]),unit:num(r[cU])||0,qty:q,ctns:num(r[cN])||0,type:txt(r[cT]).toUpperCase()||'GARMENT',src:String(name||'')};out.push(rec);n++}
+    for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const j=r.findIndex(c=>/approx\.?\s*target/i.test(txt(c)));if(j>=0){const t=num((rows[i+1]||[])[j]);if(t)targets[date]=t;break}}
+    if(n)days.push(date)}
+  return {kind:'pack',rows:out,days:[...new Set(days)].sort(),targets}}
+function parseCutting(XLSX,wb,name){const year=yearOf(name),out=[],days=[];
+  for(const sn of wb.SheetNames){if(/\(\d+\)|sheet|summary|form/i.test(sn))continue;const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+    let date='';for(let i=0;i<8&&i<rows.length;i++){const r=rows[i]||[];const j=r.findIndex(c=>/^date/i.test(txt(c)));if(j>=0){date=cellDate(r[j+1],year)||cellDate(r[j+2],year);break}}
+    if(!date)date=cellDate(sn,year);if(!date)continue;
+    const hi=rows.findIndex(r=>(r||[]).some(c=>/fabric item/i.test(txt(c))));if(hi<0)continue;const H=rows[hi].map(c=>txt(c).toLowerCase());
+    const col=re=>H.findIndex(h=>re.test(h));const c={fab:col(/fabric item/),erp:col(/erp code/),key:col(/selfkey/),po:col(/^po/),sty:col(/^style/),clr:col(/colou?r/),size:col(/^size/),qty:col(/^qty/),plan:col(/plan to use/),act:col(/^ac(t|ut)u?al/),loss:col(/loss/),ypu:col(/yds\/unit/),lay:col(/pcs\/layer/),len:col(/^length/),eff:col(/marker eff/),tbl:col(/cutting table/),cutter:col(/cutter/),type:col(/type of product/),short:col(/shortage/),dmg:col(/damage/),rem:col(/remark/)};
+    let n=0,seq=0;for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const fab0=txt(r[c.fab]);if(/^total/i.test(fab0))break;if(/product type/i.test(txt(r[1])))continue;const q=num(r[c.qty]);if(!(q>0))continue;const fab=fab0||txt(r[c.erp])||(txt(r[c.sty])?'—':'');if(!fab)continue;
+      const g=k=>c[k]>=0?r[c[k]]:null;
+      out.push({id:'ct|'+date+'|'+(++seq),date,fabric:fab,erpCode:txt(g('erp')),selfkey:txt(g('key')),po:txt(g('po')),style:txt(g('sty')),color:txt(g('clr')),size:txt(g('size')),qty:q,planYds:num(g('plan'))||0,actYds:num(g('act'))||0,ydsUnit:num(g('ypu')),layers:txt(g('lay')),markerLen:num(g('len')),markerEff:num(g('eff')),table:txt(g('tbl')),cutter:txt(g('cutter')),type:txt(g('type')).toUpperCase()||'GARMENT',shortage:txt(g('short')),damage:txt(g('dmg')),remark:txt(g('rem')).toUpperCase(),src:String(name||'')});n++}
+    if(n)days.push(date)}
+  return {kind:'cut',rows:out,days:[...new Set(days)].sort()}}
+function parseMsgAtts(XLSX,u8){const c=XLSX.CFB.read(u8,{type:'array'});const subj=(()=>{const e=XLSX.CFB.find(c,'/__substg1.0_0037001F');return e&&e.content?new TextDecoder('utf-16le').decode(new Uint8Array(e.content)).replace(/\0+$/,''):''})();const atts=[];
+  c.FullPaths.forEach((p,i)=>{const m=p.match(/^(?:Root Entry)?\/?(__attach_version1\.0_#[0-9A-F]{8})\/$/i);if(!m)return;const base='/'+m[1]+'/';const get=s=>{const e=XLSX.CFB.find(c,base+s);return e&&e.content&&e.content.length?new Uint8Array(e.content):null};
+    const nm=get('__substg1.0_3707001F')||get('__substg1.0_3704001F');const data=get('__substg1.0_37010102');if(!nm||!data)return;const name=new TextDecoder('utf-16le').decode(nm).replace(/\0+$/,'');if(/\.(xlsx|xls)$/i.test(name))atts.push({name,data})});return {subject:subj,atts}}
+/* ── import ── */
+function msg(h,cls){$('#msg').innerHTML=h?`<div class="note ${cls||''}">${h}</div>`:''}
+async function readFiles(files){const XLSX=window.XLSX;const res=[];
+  for(const f of files){const u8=new Uint8Array(await f.arrayBuffer());let list=[{name:f.name,data:u8}];
+    if(/\.msg$/i.test(f.name)){try{list=parseMsgAtts(XLSX,u8).atts}catch(e){msg('讀不到這封信：'+E(e.message),'b');continue}}
+    for(const a of list){let wb;try{wb=XLSX.read(a.data,{type:'array',cellDates:true})}catch(e){res.push({name:a.name,err:'不是 Excel'});continue}
+      const k=kindOf(XLSX,wb,a.name);if(k==='pack')res.push(Object.assign({name:a.name},parsePacking(XLSX,wb,a.name)));else if(k==='cut')res.push(Object.assign({name:a.name},parseCutting(XLSX,wb,a.name)));else res.push({name:a.name,err:'認不出是裝箱或裁剪報表'})}}
+  return res}
+function preview(res){PENDING=res;const have={pack:new Set(PACK.map(r=>r.date)),cut:new Set(CUT.map(r=>r.date))};
+  let h='<div class="card"><h3>📋 匯入預覽（確認後才存）</h3><table><thead><tr><th>檔案</th><th>種類</th><th>日期</th><th class="r">筆數</th><th class="r">件數</th><th class="r">箱數／實際用布</th><th>狀態</th></tr></thead><tbody>';
+  res.forEach(x=>{if(x.err){h+=`<tr><td>${E(x.name)}</td><td colspan="6" class="mut">❌ ${E(x.err)}</td></tr>`;return}
+    x.days.forEach(d=>{const rs=x.rows.filter(r=>r.date===d),pcs=rs.reduce((s,r)=>s+r.qty,0),y=x.kind==='pack'?rs.reduce((s,r)=>s+r.ctns,0):rs.reduce((s,r)=>s+r.actYds,0);const old=have[x.kind].has(d);
+      h+=`<tr><td class="small">${E(x.name)}</td><td>${x.kind==='pack'?'📦 裝箱':'✂️ 裁剪用布'}</td><td>${d}</td><td class="r">${rs.length}</td><td class="r">${F(pcs)}</td><td class="r">${x.kind==='pack'?F(y,1)+' 箱':F(y,1)+' 碼'}</td><td>${old?'<span class="pill p-w">取代舊的</span>':'<span class="pill p-ok">新的一天</span>'}</td></tr>`})});
+  h+='</tbody></table><div style="margin-top:10px;display:flex;gap:8px"><button class="btn" id="okImp">✓ 確認存入</button><button class="btn g" id="noImp">取消</button></div></div>';
+  $('#out').insertAdjacentHTML('afterbegin',h);$('#okImp').onclick=commit;$('#noImp').onclick=()=>{PENDING=null;render()}}
+async function commit(){if(!PENDING)return;let np=0,nc=0;const days=[];
+  for(const x of PENDING){if(x.err)continue;const set=new Set(x.days);if(x.kind==='pack'){PACK=PACK.filter(r=>!set.has(r.date)).concat(x.rows);Object.assign(META.pack.targets||(META.pack.targets={}),x.targets||{});np+=x.rows.length}else{CUT=CUT.filter(r=>!set.has(r.date)).concat(x.rows);nc+=x.rows.length}days.push(...x.days)}
+  await replaceAll('packing',PACK);await replaceAll('cutdetail',CUT);await metaSet('pack',META.pack);await metaSet('cut',META.cut);PENDING=null;
+  const last=days.sort().pop();if(last){ANCHOR=last;$('#anchor').value=last}
+  msg(`✓ 已存入：裝箱 ${np} 筆、裁剪用布 ${nc} 筆（${[...new Set(days)].length} 天）。<b>正在上傳雲端…</b>`);render();push(true)}
+/* ── cloud ── */
+async function push(auto){try{const a=await VRTSmartSync.push({tool:ST.pack,records:PACK,meta:META.pack,onStatus:()=>{}});const b=await VRTSmartSync.push({tool:ST.cut,records:CUT,meta:META.cut,onStatus:()=>{}});
+    const blocked=[a,b].some(r=>r&&r.ok===false);msg(blocked?'⚠️ 雲端有本機沒有的資料，先按 ☁↓ Pull 再上傳（不會覆蓋雲端）':'☁ 已上傳雲端（只傳有變的月份）',blocked?'w':'')}catch(e){msg('☁ 上傳失敗：'+E(e.message||e)+'（資料已存在這台電腦，稍後再按 ☁↑）','w')}}
+async function pull(){try{msg('☁ 下載雲端…');
+    await VRTSmartSync.pull({tool:ST.pack,localRecords:PACK,meta:META.pack,apply:async(recs,meta)=>{PACK=recs;META.pack=meta||META.pack;await replaceAll('packing',PACK);await metaSet('pack',META.pack)}});
+    await VRTSmartSync.pull({tool:ST.cut,localRecords:CUT,meta:META.cut,apply:async(recs,meta)=>{CUT=recs;META.cut=meta||META.cut;await replaceAll('cutdetail',CUT);await metaSet('cut',META.cut)}});
+    msg('☁ 已是最新：裝箱 '+PACK.length+' 筆、裁剪用布 '+CUT.length+' 筆');render()}catch(e){msg('☁ 下載失敗：'+E(e.message||e),'w')}}
+/* ── period ── */
+function range(){const a=ANCHOR;if(PER==='day')return[a,a];if(PER==='week'){const d=D(a),wd=(d.getDay()+6)%7;const s=addD(a,-wd);return[s,addD(s,6)]}if(PER==='month')return[a.slice(0,8)+'01',ymd(new Date(D(a).getFullYear(),D(a).getMonth()+1,0))];return[a.slice(0,4)+'-01-01',a.slice(0,4)+'-12-31']}
+function prevRange(){const[s,e]=range();if(PER==='day'){const p=addD(s,-1);return[p,p]}if(PER==='week')return[addD(s,-7),addD(s,-1)];if(PER==='month'){const d=D(s);d.setMonth(d.getMonth()-1);const ps=ymd(d);return[ps,ymd(new Date(d.getFullYear(),d.getMonth()+1,0))]}return[(+s.slice(0,4)-1)+'-01-01',(+s.slice(0,4)-1)+'-12-31']}
+function shift(n){const d=D(ANCHOR);if(PER==='day')d.setDate(d.getDate()+n);else if(PER==='week')d.setDate(d.getDate()+7*n);else if(PER==='month')d.setMonth(d.getMonth()+n);else d.setFullYear(d.getFullYear()+n);ANCHOR=ymd(d);$('#anchor').value=ANCHOR;render()}
+const inR=(r,[s,e])=>r.date>=s&&r.date<=e;const match=r=>(!LINE||r.line===LINE)&&(!Q||[r.style,r.po,r.selfkey,r.fabric,r.color].some(v=>String(v||'').toLowerCase().includes(Q)));
+/* ── sewing (read-only, from the sewing module on this computer) ── */
+let SEW=null;function sewRows(){if(SEW)return Promise.resolve(SEW);return new Promise(res=>{let q;try{q=indexedDB.open('VRT_SewingProduction')}catch(e){return res(SEW=[])}q.onupgradeneeded=e=>{try{e.target.transaction.abort()}catch(_){}res(SEW=[])};q.onsuccess=()=>{const d=q.result;if(!d.objectStoreNames.contains('daily_records')){d.close();return res(SEW=[])}const r=d.transaction('daily_records').objectStore('daily_records').getAll();r.onsuccess=()=>{SEW=(r.result||[]).map(x=>({date:String(x.date||'').slice(0,10),line:normLine(x.lineNo),style:String(x.styleNo||''),pcs:+x.pieces||0,section:String(x.section||'')}));d.close();res(SEW)};r.onerror=()=>res(SEW=[])};q.onerror=()=>res(SEW=[])})}
+/* ── views ── */
+const kpi=(v,l,s,col)=>`<div class="kpi"><div class="v"${col?` style="color:${col}"`:''}>${v}</div><div class="l">${l}</div>${s?`<div class="s">${s}</div>`:''}</div>`;
+const delta=(a,b)=>{if(!b)return '';const p=(a-b)/b;return `<span style="color:${p>=0?'var(--ok)':'var(--bad)'}">${p>=0?'▲':'▼'} ${Math.abs(p*100).toFixed(0)}%</span> 比上期`};
+const lossCls=l=>l==null?'p-n':(l<-0.01||l>0.05)?'p-b':(l>0.03||l<0)?'p-w':'p-ok';
+function vPack(){const R=range(),rows=PACK.filter(r=>inR(r,R)&&match(r)),pr=PACK.filter(r=>inR(r,prevRange())&&match(r));
+  if(!PACK.length)return '<div class="note">還沒有裝箱資料。把 Och Chanmalen 每天寄的「Cutting &amp; Packing Report」信拖到上面。</div>';
+  const pcs=rows.reduce((s,r)=>s+r.qty,0),ctn=rows.reduce((s,r)=>s+r.ctns,0),days=[...new Set(rows.map(r=>r.date))].sort(),lines=[...new Set(rows.map(r=>r.line))];
+  const ppcs=pr.reduce((s,r)=>s+r.qty,0);const byType={};rows.forEach(r=>byType[r.type]=(byType[r.type]||0)+r.qty);
+  const tg=days.map(d=>(META.pack.targets||{})[d]||0).reduce((a,b)=>a+b,0),gar=rows.filter(r=>r.type==='GARMENT').reduce((s,r)=>s+r.qty,0);
+  let h=`<div class="kpis">${kpi(F(pcs),'件裝箱',delta(pcs,ppcs))}${kpi(F(ctn,1),'箱',days.length?'平均每天 '+F(ctn/days.length,1)+' 箱':'')}${kpi(days.length,'個裝箱日',days.length?days[0].slice(5)+' ～ '+days[days.length-1].slice(5):'')}${kpi(lines.length,'條線有裝箱','')}${tg?kpi(P(gar/tg),'成衣達成（對每日約略目標）',F(gar)+' / '+F(tg),gar/tg>=0.9?'var(--ok)':gar/tg>=0.7?'var(--warn)':'var(--bad)'):''}</div>`;
+  h+=`<div class="card"><h3>產品別</h3>${Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="display:grid;grid-template-columns:90px 1fr 90px;gap:8px;align-items:center;margin:4px 0"><b class="small">${E(k)}</b><div class="barc"><i style="width:${pcs?v/pcs*100:0}%;background:var(--pk)"></i></div><span class="small r">${F(v)} 件</span></div>`).join('')}</div>`;
+  /* line × day heat table */
+  const ls=[...new Set(rows.map(r=>r.line))].sort((a,b)=>+a.replace(/\D/g,'')-+b.replace(/\D/g,''));const mx=Math.max(1,...ls.map(l=>Math.max(0,...days.map(d=>rows.filter(r=>r.line===l&&r.date===d).reduce((s,r)=>s+r.qty,0)))));
+  h+=`<div class="card"><h3>各線每天裝箱件數 <span class="mut small">（顏色越深件數越多；空白＝那天沒裝箱）</span></h3><div class="tw"><table class="heat"><thead><tr><th>線</th>${days.map(d=>`<th class="r">${d.slice(5)}</th>`).join('')}<th class="r">合計</th><th class="r">箱</th></tr></thead><tbody>`+ls.map(l=>{const t=rows.filter(r=>r.line===l);return `<tr><td><b>${E(l)}</b></td>${days.map(d=>{const v=t.filter(r=>r.date===d).reduce((s,r)=>s+r.qty,0);return `<td class="c" style="background:${v?`rgba(124,58,237,${0.08+0.5*v/mx})`:'transparent'}">${v?F(v):''}</td>`}).join('')}<td class="r"><b>${F(t.reduce((s,r)=>s+r.qty,0))}</b></td><td class="r">${F(t.reduce((s,r)=>s+r.ctns,0),1)}</td></tr>`}).join('')+`</tbody></table></div></div>`;
+  /* by style/PO */
+  const g=new Map();rows.forEach(r=>{const k=r.po+'|'+r.style+'|'+r.color;let o=g.get(k);if(!o){o={po:r.po,style:r.style,color:r.color,qty:0,ctns:0,lines:new Set(),sizes:new Set(),first:r.date,last:r.date};g.set(k,o)}o.qty+=r.qty;o.ctns+=r.ctns;o.lines.add(r.line);o.sizes.add(r.size);if(r.date<o.first)o.first=r.date;if(r.date>o.last)o.last=r.date});
+  h+=`<div class="card"><h3>依 PO／款式</h3><div class="tw"><table><thead><tr><th>PO</th><th>款式</th><th>顏色</th><th>線</th><th>尺寸</th><th class="r">件數</th><th class="r">箱數</th><th>日期</th></tr></thead><tbody>`+[...g.values()].sort((a,b)=>b.qty-a.qty).map(o=>`<tr><td class="mono">${E(o.po)}</td><td class="mono"><b>${E(o.style)}</b></td><td>${E(o.color)}</td><td class="small">${[...o.lines].sort().map(x=>x.replace('Line ','L')).join(' ')}</td><td class="small">${[...o.sizes].join(' ')}</td><td class="r">${F(o.qty)}</td><td class="r">${F(o.ctns,1)}</td><td class="small">${o.first===o.last?o.first.slice(5):o.first.slice(5)+'～'+o.last.slice(5)}</td></tr>`).join('')+`</tbody></table></div></div>`;
+  return h}
+function vCut(){const R=range(),rows=CUT.filter(r=>inR(r,R)&&match(r)),pr=CUT.filter(r=>inR(r,prevRange())&&match(r));
+  if(!CUT.length)return '<div class="note">還沒有裁剪用布資料。把「Cutting &amp; Packing Report」信或「VRT Daily Cutting Report」Excel 拖到上面。</div>';
+  const pcs=rows.reduce((s,r)=>s+r.qty,0),plan=rows.reduce((s,r)=>s+r.planYds,0),act=rows.reduce((s,r)=>s+r.actYds,0),loss=plan?(act-plan)/plan:null,pp=pr.reduce((s,r)=>s+r.planYds,0),pa=pr.reduce((s,r)=>s+r.actYds,0),ploss=pp?(pa-pp)/pp:null;
+  const effRows=rows.filter(r=>r.markerEff>0),effW=effRows.reduce((s,r)=>s+r.actYds,0),eff=effW?effRows.reduce((s,r)=>s+r.markerEff*r.actYds,0)/effW:null;const recut=rows.filter(r=>/RECUT/.test(r.remark));
+  let h=`<div class="kpis">${kpi(F(pcs),'件裁出',delta(pcs,pr.reduce((s,r)=>s+r.qty,0)))}${kpi(F(act,0)+' 碼','實際用布','計畫 '+F(plan,0)+' 碼')}${kpi(P(loss),'用布損耗',ploss!=null?'上期 '+P(ploss):'',loss==null?'':loss>0.05||loss<-0.01?'var(--bad)':loss>0.03||loss<0?'var(--warn)':'var(--ok)')}${kpi(P(eff),'平均馬克效率','依用布加權')}${kpi(recut.length,'筆補裁（RECUT）',recut.length?F(recut.reduce((s,r)=>s+r.actYds,0),0)+' 碼':'',recut.length?'var(--warn)':'')}</div>`;
+  const days=[...new Set(rows.map(r=>r.date))].sort();
+  h+=`<div class="card"><h3>每天用布</h3><div class="tw"><table><thead><tr><th>日期</th><th class="r">件數</th><th class="r">計畫用布</th><th class="r">實際用布</th><th>損耗</th><th class="r">馬克效率</th><th>產品</th></tr></thead><tbody>`+days.map(d=>{const t=rows.filter(r=>r.date===d),p=t.reduce((s,r)=>s+r.planYds,0),a=t.reduce((s,r)=>s+r.actYds,0),l=p?(a-p)/p:null,er=t.filter(r=>r.markerEff>0),ew=er.reduce((s,r)=>s+r.actYds,0);const ty={};t.forEach(r=>ty[r.type]=(ty[r.type]||0)+r.qty);
+    return `<tr><td>${d}</td><td class="r">${F(t.reduce((s,r)=>s+r.qty,0))}</td><td class="r">${F(p,1)}</td><td class="r">${F(a,1)}</td><td><span class="pill ${lossCls(l)}">${P(l)}</span></td><td class="r">${ew?P(er.reduce((s,r)=>s+r.markerEff*r.actYds,0)/ew):'—'}</td><td class="small">${Object.entries(ty).map(([k,v])=>E(k)+' '+F(v)).join('、')}</td></tr>`}).join('')+`</tbody></table></div></div>`;
+  /* by marker (style + fabric + date), flag high loss */
+  const g=new Map();rows.forEach(r=>{const k=r.date+'|'+r.style+'|'+r.fabric+'|'+r.layers;let o=g.get(k);if(!o){o={date:r.date,style:r.style,po:r.po,fabric:r.fabric,erp:r.erpCode,color:r.color,qty:0,plan:0,act:0,eff:r.markerEff,table:r.table,remark:r.remark,sizes:new Set()};g.set(k,o)}o.qty+=r.qty;o.plan+=r.planYds;o.act+=r.actYds;o.sizes.add(r.size)});
+  const list=[...g.values()].map(o=>Object.assign(o,{loss:o.plan?(o.act-o.plan)/o.plan:null})).sort((a,b)=>(b.loss||0)-(a.loss||0));const bad=list.filter(o=>o.loss!=null&&(o.loss>0.03||o.loss<-0.01));
+  if(bad.length)h+=`<div class="note w">⚠️ <b>${bad.length}</b> 個馬克損耗超過 3%，或實際比計畫少 1% 以上（通常是計畫用量或件數填錯）：${bad.slice(0,6).map(o=>E(o.style)+' '+P(o.loss)).join('、')}${bad.length>6?' …':''}</div>`;
+  h+=`<div class="card"><h3>每個馬克 <span class="mut small">（損耗高的排前面）</span></h3><div class="tw"><table><thead><tr><th>日期</th><th>款式</th><th>PO</th><th>布號</th><th>顏色</th><th>尺寸</th><th class="r">件數</th><th class="r">計畫</th><th class="r">實際</th><th>損耗</th><th class="r">馬克效率</th><th>裁床</th><th>備註</th></tr></thead><tbody>`+list.map(o=>`<tr><td class="small">${o.date.slice(5)}</td><td class="mono"><b>${E(o.style)}</b></td><td class="mono small">${E(o.po)}</td><td class="mono small" title="${E(o.erp)}">${E(o.fabric)}</td><td class="small">${E(o.color)}</td><td class="small">${[...o.sizes].join(' ')}</td><td class="r">${F(o.qty)}</td><td class="r">${F(o.plan,1)}</td><td class="r">${F(o.act,1)}</td><td><span class="pill ${lossCls(o.loss)}">${P(o.loss)}</span></td><td class="r">${o.eff?P(o.eff):'—'}</td><td class="small">${E(o.table)}</td><td class="small">${E(o.remark)}</td></tr>`).join('')+`</tbody></table></div></div>`;
+  return h}
+async function vFlow(){const R=range(),sew=(await sewRows()).filter(r=>inR(r,R)&&(!LINE||r.line===LINE)&&/garment|apron|^$/i.test(r.section||'')),pk=PACK.filter(r=>inR(r,R)&&match(r)),ct=CUT.filter(r=>inR(r,R)&&match(r));
+  const cutP=ct.reduce((s,r)=>s+r.qty,0),sewP=sew.reduce((s,r)=>s+r.pcs,0),pkP=pk.reduce((s,r)=>s+r.qty,0);
+  let h=`<div class="note">一條線看：<b>裁出 → 車好 → 包好</b>。車縫數字來自這台電腦的車縫模組（${sew.length?'有資料':'這段期間沒有車縫資料，先到車縫頁 ☁↓ 下載'}）。裁剪件數只算這份明細有的（成衣、圍裙、餐巾、桌布都算）。</div>`;
+  h+=`<div class="kpis">${kpi(F(cutP),'件裁出','')}${kpi(F(sewP),'件車好',cutP?'＝裁出的 '+P(sewP/cutP):'')}${kpi(F(pkP),'件包好',sewP?'＝車好的 '+P(pkP/sewP):'',sewP&&pkP/sewP<0.8?'var(--warn)':'')}${kpi(F(sewP-pkP),'件車好還沒包（期間內）','正數＝包裝落後；負數＝包的是之前車好的','')}</div>`;
+  const ls=[...new Set(sew.map(r=>r.line).concat(pk.map(r=>r.line)))].filter(Boolean).sort((a,b)=>+a.replace(/\D/g,'')-+b.replace(/\D/g,''));const mx=Math.max(1,...ls.map(l=>Math.max(sew.filter(r=>r.line===l).reduce((s,r)=>s+r.pcs,0),pk.filter(r=>r.line===l).reduce((s,r)=>s+r.qty,0))));
+  h+=`<div class="card"><h3>各線：車好 vs 包好</h3>`+ls.map(l=>{const s=sew.filter(r=>r.line===l).reduce((a,r)=>a+r.pcs,0),p=pk.filter(r=>r.line===l).reduce((a,r)=>a+r.qty,0);return `<div style="display:grid;grid-template-columns:70px 1fr 170px;gap:8px;align-items:center;margin:6px 0"><b>${E(l)}</b><div><div class="barc" style="margin-bottom:3px"><i style="width:${s/mx*100}%;background:var(--ct)"></i></div><div class="barc"><i style="width:${p/mx*100}%;background:var(--pk)"></i></div></div><span class="small">車 ${F(s)}・包 ${F(p)} ${s?`<span class="pill ${p/s>=0.9?'p-ok':p/s>=0.7?'p-w':'p-b'}">${P(p/s)}</span>`:''}</span></div>`}).join('')+`<div class="small mut">藍＝車好、紫＝包好</div></div>`;
+  return h}
+function vHow(){return `<div class="card"><h3>這頁在看什麼</h3><ol style="line-height:1.9;margin:0;padding-left:20px"><li><b>📦 裝箱</b>：每天各線包好幾件、幾箱，依 PO／款式列出；有「每日約略目標」時算成衣達成率。</li><li><b>✂️ 裁剪用布</b>：每個馬克的計畫用布、實際用布、損耗％、馬克效率、補裁（RECUT）。損耗超過 3% 黃、超過 5% 或負數紅。</li><li><b>⇄ 裁→車→包</b>：同一段期間裁出、車好、包好放在一起，看哪條線包裝跟不上。</li><li>來源：Och Chanmalen 每天寄的「Cutting &amp; Packing Report as of …」，兩個附件（VRT Daily Cutting Report、VRT Daily Packing Output Report）都是整月累計檔，匯入時同一天會整天取代，不會重複。</li></ol></div>`}
+async function render(){const[s,e]=range();$('#range').textContent=s===e?s:s+' ～ '+e;
+  const lines=[...new Set(PACK.map(r=>r.line))].sort((a,b)=>+a.replace(/\D/g,'')-+b.replace(/\D/g,''));$('#lineSel').innerHTML='<option value="">全部線別</option>'+lines.map(l=>`<option${l===LINE?' selected':''}>${E(l)}</option>`).join('');
+  $('#tabs').innerHTML=[['pack','📦 裝箱'],['cut','✂️ 裁剪用布'],['flow','⇄ 裁→車→包'],['how','ⓘ 說明']].map(([k,t])=>`<button data-t="${k}" class="${TAB===k?'on':''}">${t}</button>`).join('');
+  $('#out').innerHTML=TAB==='pack'?vPack():TAB==='cut'?vCut():TAB==='flow'?await vFlow():vHow()}
+/* ── wiring ── */
+function wire(){$('#anchor').value=ANCHOR;$('#per').onclick=e=>{const b=e.target.closest('button');if(!b)return;PER=b.dataset.p;[...$('#per').children].forEach(x=>x.classList.toggle('on',x===b));render()};
+  $('#prev').onclick=()=>shift(-1);$('#next').onclick=()=>shift(1);$('#anchor').onchange=e=>{ANCHOR=e.target.value||ANCHOR;render()};$('#lineSel').onchange=e=>{LINE=e.target.value;render()};$('#q').oninput=e=>{Q=e.target.value.trim().toLowerCase();render()};
+  $('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;TAB=b.dataset.t;render()};
+  const dz=$('#drop'),fi=$('#fi');dz.onclick=()=>fi.click();fi.onchange=async()=>{if(fi.files.length)await importFiles([...fi.files]);fi.value=''};
+  dz.ondragover=e=>{e.preventDefault();dz.classList.add('on')};dz.ondragleave=()=>dz.classList.remove('on');dz.ondrop=async e=>{e.preventDefault();dz.classList.remove('on');await importFiles([...e.dataTransfer.files])};
+  $('#bPush').onclick=()=>push(false);$('#bPull').onclick=pull}
+async function importFiles(files){msg('讀取中…');const res=await readFiles(files);msg('');await render();preview(res);return res}
+window.VRTCutPack={version:VER,importFiles,commit,get:()=>({PACK,CUT,META}),_pure:{parsePacking,parseCutting,parseMsgAtts,kindOf,cellDate}};
+(async()=>{wire();await load();const last=[...PACK,...CUT].map(r=>r.date).sort().pop();if(last){ANCHOR=last;$('#anchor').value=last}await render();if(window.VRTSmartSync&&(PACK.length+CUT.length)===0)pull()})();
+})();
+</script>
+<script src="vrt-inbox-v1.js?v=4.24.0"></script><script>try{VRTInbox.init({module:"cutpack",label:"✂️📦 裁剪用布＋裝箱",feed:f=>VRTCutPack.importFiles([f]),feedAll:fs=>VRTCutPack.importFiles(fs)})}catch(e){console.warn("VRTInbox init",e)}</script>
+<script src="vrt-smart-import-v1.js?v=4.24.0"></script>
+</body></html>
