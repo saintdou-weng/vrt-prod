@@ -96,6 +96,11 @@ table.dt td.r,table.dt th.r{text-align:right}
 .g-b{position:absolute;height:22px;border-radius:6px;color:#fff;font-size:11px;font-weight:700;line-height:22px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.25)}.g-b.past{opacity:.5}.g-b:hover{outline:2px solid var(--ink)}
 .bgmenu{position:absolute;right:10px;top:54px;z-index:9500;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.3);display:none;width:230px}.bgmenu.on{display:block}
 .bgmenu b{font-size:11px;color:var(--mut);display:block;margin:6px 0 4px}.bgmenu .row{display:flex;gap:6px;flex-wrap:wrap}.bgmenu .sw{width:44px;height:30px;border-radius:8px;border:2px solid var(--line);cursor:pointer;background-size:cover;background-position:center}.bgmenu .sw.on{border-color:var(--acc)}
+/* 脈絡：訂單→排單→SMV→裁→車→包→出 */
+.flow{display:flex;align-items:stretch;gap:4px;overflow-x:auto;padding:4px 0 8px}.flow em{align-self:center;font-style:normal;color:var(--mut);font-size:16px}
+.fs{flex:1;min-width:118px;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--bar2);border-radius:10px;padding:8px 10px}
+.fs b{display:block;font-size:12px;color:var(--mut)}.fs span{display:block;font-size:18px;font-weight:800;margin:2px 0}.fs i{display:block;font-style:normal;font-size:10.5px;color:var(--mut);line-height:1.4}
+.fs.ok{border-top-color:var(--ok)}.fs.part{border-top-color:var(--warn)}.fs.none{opacity:.75}
 body[data-bg]{background-size:cover;background-position:center;background-attachment:fixed}
 body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data-bg] .card,body[data-bg] .kpi{background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(6px)}
 </style>
@@ -116,7 +121,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.26.0';
+const V='4.27.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -358,6 +363,26 @@ const SPECS={
  plan:{custom(p){
   p.innerHTML=`<div class="gwrap"><div class="seg" id="gSeg"></div><div class="lead" id="gLead">⏳ 讀取排單與車縫實績…</div><div class="gscroll" id="gScroll"></div></div>`;p.style.padding='10px 12px 20px';
   let weeks=3,start=monday(ymdToday()),runs=[],sew=new Map(),lines=[],src='';
+  /* v4.27 脈絡（Paul 11/12：排單跟訂單／SMV／出貨的連動要一眼看懂）：其他資料在背景慢慢讀，讀到多少顯示多少 */
+  const X={cut:null,pack:null,po:null,ship:null,shipUpd:''};
+  const loadX=()=>{loadTool('cutting',keepMonths(3)).then(r=>X.cut=r.rows).catch(()=>X.cut=[]);loadTool('packing').then(r=>X.pack=r.rows).catch(()=>X.pack=[]);loadTool('orders',k=>/^h:/.test(k)).then(r=>X.po=r.rows).catch(()=>X.po=[]);loadTool('shipping').then(r=>{X.ship=r.rows;X.shipUpd=String(r.updatedAt||'').slice(0,10)}).catch(()=>X.ship=[])};
+  const flowHtml=(r,done)=>{const pos=new Set(r.rows.map(x=>normS(x.po)).filter(Boolean)),sty=normS(r.style);const sm=(a,b)=>a&&b&&(a===b||a.indexOf(b)>=0||b.indexOf(a)>=0);
+    const st=(ic,name,val,sub,cls)=>`<div class="fs ${cls||''}"><b>${ic} ${name}</b><span>${val}</span><i>${sub||''}</i></div>`;const wait='<span class="small">讀取中…</span>';
+    const ordQ=sum(r.rows,x=>x.orderQty);const pl=X.po?X.po.filter(x=>pos.has(normS(x.po_number))&&sm(normS(x.style_code),sty)):null;const plQ=pl?sum(pl,x=>x.qty):0;const shipD=(pl&&pl.map(x=>poDate(x.ship_date)||poDate(x.cancel_date)).filter(Boolean).sort()[0])||r.rows.map(x=>String(x.shipmentDate||'').slice(0,10)).filter(Boolean).sort()[0]||'';
+    const smvP=(r.rows.find(x=>+x.smv>0)||{}).smv,smvA=(()=>{const a=r.sewRows.filter(x=>+x.smv>0);return a.length?sum(a,x=>x.smv)/a.length:null})();
+    const cutPlan=sum(r.rows,x=>x.cutQty);const cut=X.cut?X.cut.filter(x=>sm(normS(x.styleNo),sty)&&(!pos.size||pos.has(normS(x.po)))):null;const cutQ=cut?sum(cut,x=>x.pieces):0;
+    const pk=X.pack?X.pack.filter(x=>sm(normS(x.style),sty)&&(!pos.size||pos.has(normS(x.po)))):null;const pkQ=pk?sum(pk,x=>x.qty):0;
+    const sh=X.ship?X.ship.filter(x=>pos.has(normS(x.po))&&sm(normS(x.style),sty)):null;const shQ=sh?sum(sh,x=>x.shipped):0,shO=sh?sum(sh,x=>x.open):0;
+    const c=(v,t)=>!v?'':v>=t?'ok':'part';
+    return `<div class="flow">`+[
+      st('📋','訂單',pl==null?wait:(plQ?F(plQ)+' 件':ordQ?F(ordQ)+' 件':'—'),(pl&&plQ?`客戶 PDF 訂單・PO ${[...new Set(pl.map(x=>x.po_number))].slice(0,2).join('、')}`:(ordQ?'排單表的訂單量':'平台裡沒有這張 PO 的 PDF'))+(shipD?'・要出 '+shipD.slice(5):''),plQ||ordQ?'ok':'none'),
+      st('📅','排單',F(r.qty)+' 件',`${r.line}・${r.start.slice(5)}～${r.end.slice(5)}・日產 ${F(r.daily)}`,'ok'),
+      st('📐','SMV',smvP?F(smvP,2)+' 分':'—',smvA?`車縫日報 ${F(smvA,2)} 分・共 ${F(r.qty*(smvP||smvA)/60)} 小時`:(smvP?`共 ${F(r.qty*smvP/60)} 小時`:'排單表沒填 SMV'),smvP?'ok':'none'),
+      st('✂️','裁剪',cut==null?wait:F(cutQ||cutPlan)+' 件',cut&&cutQ?`裁剪日報・最後 ${(lastDays(cut,1,x=>x.date)[0]||'').slice(5)}`:(cutPlan?'排單表的已裁數':'還沒有裁剪紀錄'),c(cutQ||cutPlan,r.qty)||'none'),
+      st('🧵','車縫',F(done)+' 件',r.qty?P(done/r.qty*100)+'・還剩 '+F(Math.max(0,r.qty-done)):'',c(done,r.qty)||'none'),
+      st('📦','裝箱',pk==null?wait:F(pkQ)+' 件',pk&&pkQ?F(sum(pk,x=>x.ctns),1)+' 箱（11 月起的紀錄）':'還沒有裝箱紀錄',c(pkQ,r.qty)||'none'),
+      st('🚢','出貨',sh==null?wait:(sh.length?F(shQ)+' 件':'—'),sh&&sh.length?`還沒出 ${F(shO)}・ETD ${sh.map(x=>x.etd).filter(Boolean).sort()[0]||'—'}（出貨表 ${X.shipUpd}）`:'出貨表裡沒有這張 PO',sh&&sh.length?(shO?'part':'ok'):'none')
+    ].join('<em>→</em>')+`</div><p class="note">🟢 完成　🟡 做到一半　⚪ 還沒有／沒資料。排線與機台（Line balancing）在 <a href="#style/ie">款式 → IE／OBD／SMV</a> 分頁。</p>`};
   const lk=l=>'L'+(String(l||'').match(/\d+/)||[''])[0];
   const draw=()=>{const days=[];for(let d=start,k=0;k<weeks*7;k++,d=addD(d,1))days.push(d);const end=days[days.length-1],today=ymdToday(),cw=weeks<=2?74:weeks<=4?46:30;
    p.querySelector('#gSeg').innerHTML=`<button data-s="-7">◀ 上一週</button><button data-s="0">今天</button><button data-s="7">下一週 ▶</button>`+[2,3,4,8].map(w=>`<button data-w="${w}" class="${w===weeks?'on':''}">看 ${w} 週</button>`).join('')+`<span class="glegend"><i class="lg-plan"></i>色條＝排單（款號・件數）<i class="lg-act"></i>小字＝車縫實際件數<i class="lg-gap"></i>沒排單<i class="lg-today"></i>今天</span>`;
@@ -382,7 +407,7 @@ const SPECS={
     const late=est&&est>r.end;
     return {key:r.k,kind:'排單',title:r.line+'・'+r.style,sub:E(r.customer)+'・'+r.start.slice(5)+'～'+r.end.slice(5),chip:F(r.qty),badge:rem<=0&&done>0?'<span class="tag ok">✅ 做完了</span>':late?`<span class="tag crit">🔴 照現在速度 ${est.slice(5)} 才做完（排到 ${r.end.slice(5)}）</span>`:est?`<span class="tag ok">🟢 估 ${est.slice(5)} 做完</span>`:'<span class="tag">還沒開始車</span>',
      kpis:[[F(r.qty),'排單件數'],[F(done),'已車',done?'ok':''],[F(rem),'還剩',rem?'warn':'ok'],[F(r.daily),'排單日產'],[F(rate),'實際每天']],
-     detail:()=>`<div class="pbar big"><i style="width:${Math.min(100,r.qty?done/r.qty*100:0).toFixed(0)}%"></i></div><div class="pcap">已車 ${P(r.qty?done/r.qty*100:0)}</div>
+     detail:()=>`${flowHtml(r,done)}
       <h4>📈 每天實際車縫</h4>${dys.length?CH.bars(dys.map(d=>({label:d.slice(5),v:sum(mine.filter(x=>x.date===d),x=>x.pieces),v2:effW(mine.filter(x=>x.date===d))})),{v2:true,v2Unit:'%',legend:`長條＝這條線這一款每天車的件數，橘線＝效率。排單日產目標 ${F(r.daily)} 件。`}):'<p class="note">車縫日報裡還沒有這條線做這一款的紀錄。</p>'}
       <h4>📋 排單內容</h4>${table([['PO',x=>E(x.po)],['顏色',x=>E(x.color)],['尺寸',x=>E(x.size)],['排車縫',x=>F(x.sewingQty),1],['已裁',x=>F(x.cutQty),1],['開始',x=>E(x.startDate)],['結束',x=>E(x.endDate)],['人數',x=>F(x.manpower),1],['SMV',x=>F(x.smv,2),1],['備註',x=>E(x.remark)]],r.rows)}
       <h4>🧵 同一款其他線</h4>${(()=>{const o=runs.filter(x=>x!==r&&normS(x.style)===normS(r.style));return o.length?table([['線',x=>E(x.line)],['件數',x=>F(x.qty),1],['開始',x=>E(x.start)],['結束',x=>E(x.end)]],o):'<p class="note">只有這條線做這一款。</p>'})()}`}};
@@ -394,7 +419,7 @@ const SPECS={
     else runs.push({k0:k,k:k+'|'+st,line:l,style:String(r.style).trim(),customer:String(r.customer||''),start:st,end:en<st?st:en,qty:+r.sewingQty||0,daily:+r.dailyOutput||0,rows:[r]})});
    sw.rows.forEach(r=>{const l=lk(r.lineNo);if(!sew.has(l))sew.set(l,new Map());const m=sew.get(l);m.set(r.date,(m.get(r.date)||0)+(+r.pieces||0))});
    runs.forEach(r=>{r.sewRows=sw.rows.filter(x=>lk(x.lineNo)===r.line&&x.date>=addD(r.start,-2)&&(()=>{const a=normS(x.styleNo),b=normS(r.style);return a&&b&&(a===b||a.indexOf(b)>=0||b.indexOf(a)>=0)})())});
-   lines=[...new Set(runs.map(r=>r.line))].sort((a,b)=>(+a.slice(1))-(+b.slice(1)));draw()}).catch(e=>{p.querySelector('#gLead').innerHTML='⚠️ '+E(e.message||e)})}},
+   lines=[...new Set(runs.map(r=>r.line))].sort((a,b)=>(+a.slice(1))-(+b.slice(1)));draw();loadX()}).catch(e=>{p.querySelector('#gLead').innerHTML='⚠️ '+E(e.message||e)})}},
  ship:{segments:[
   {label:'🚢 每個客戶（出貨進度）',sorts:[['未出件數',(a,b)=>b.n-a.n],['已出件數',(a,b)=>b.s-a.s]],
    async build(){const [{rows},ms]=await Promise.all([loadTool('shipping'),loadTool('monthship').catch(()=>({rows:[]}))]);
