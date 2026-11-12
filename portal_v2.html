@@ -6,6 +6,7 @@
 <meta charset="UTF-8"><script src="vrt-dialog-v1.js?v=4.19.0"></script><script src="vrt-i18n-v1.js?v=4.19.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VRT 生產系統入口</title>
+<script src="vrt-theme-v1.js?v=4.25.0"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f1626;color:#f1f5f9;min-height:100dvh}
@@ -186,6 +187,7 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   </div>
   <div class="hdr-links"><!-- v4.15: PROD ↔ ERP 互相入口 -->
     <a class="hdr-link erp" href="https://saintdou-weng.github.io/PSJERP/" target="_blank" rel="noopener" title="VRT ERP（PSJERP）另開新分頁 · opens the ERP portal">🏢 VRT ERP ↗</a>
+    <button class="thm-btn" id="thmBtn" type="button" onclick="this.textContent=(VRTTheme.toggle()==='dark')?'☀️ 淡色':'🌙 深色'" title="淡色／深色（所有頁面一起換）">🌙 深色</button>
     <a class="hdr-link" href="vrt_erp_link_v1.html?v=4.19.0" title="ERP 對照中心：ERP 匯出檔 ↔ PROD 唯讀對照、日報草稿">🔗 ERP 對照</a>
   </div>
 </div>
@@ -216,6 +218,18 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   h.addEventListener('click',()=>{if(ok())VRTSmartImport.open()});['dragenter','dragover'].forEach(k=>h.addEventListener(k,e=>{e.preventDefault();h.classList.add('drag')}));['dragleave','drop'].forEach(k=>h.addEventListener(k,e=>{e.preventDefault();h.classList.remove('drag')}));
   h.addEventListener('drop',e=>{const f=[...(e.dataTransfer&&e.dataTransfer.files||[])];if(ok()&&f.length){VRTSmartImport.open();VRTSmartImport.add(f)}})})();</script>
 
+<div style="padding:0 16px"><div class="gtitle">🧭 8 個入口 · 點進去分頁切換</div>
+<div class="hub8" id="hub8">
+ <a href="vrt_hub_v1.html?v=4.25.0#overview"><div class="n"><i>📊</i><b>總覽＋報告</b><small>1</small></div><div class="d">生產總覽、週報、客戶統計、ERP 對照</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#orders"><div class="n"><i>📋</i><b>訂單與交期</b><small>2</small></div><div class="d">訂單、PO 交期控制</div><div class="p">📊 一覽：每個客戶未完成箱數走勢</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#plan"><div class="n"><i>📅</i><b>排單</b><small>3</small></div><div class="d">排單／產能、裁剪計劃</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#output"><div class="n"><i>🧵</i><b>生產實績</b><small>4</small></div><div class="d">裁剪 → 車縫 → 裝箱 → QC</div><div class="p">📊 一覽：每條線每天件數＋效率</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#style"><div class="n"><i>📐</i><b>款式</b><small>5</small></div><div class="d">IE／OBD、SMV、BOM、成本</div><div class="p">📊 一覽：每一款件數、效率、SMV、用布</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#fabric"><div class="n"><i>🧶</i><b>布料</b><small>6</small></div><div class="d">布料／副料庫存、布料進倉</div><div class="p">📊 一覽：每個料號每月進出</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#ship"><div class="n"><i>🚢</i><b>成品與出貨</b><small>7</small></div><div class="d">成品庫存、出貨進度、月出貨</div><div class="p">📊 一覽：每個客戶未出件數、月出貨</div></a>
+ <a href="vrt_hub_v1.html?v=4.25.0#parts"><div class="n"><i>🔧</i><b>機修零件</b><small>8</small></div><div class="d">零件、採購、換針</div><div class="p">📊 一覽：低於安全量的零件</div></a>
+</div>
+</div>
 <div class="hra-sync">
   <div class="hra-kpis">
     <div class="hra-kpi"><b id="hraMod">0</b><span>模組 Modules</span></div>
@@ -248,6 +262,19 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
 
 <div class="main">
 
+  <!-- v4.25（2026-11-12）8 個入口：Paul 11/11 核可的合併。舊頁面和資料都不動，每個入口一頁、裡面分頁就是原本那幾頁；原本 21 張卡片收在下面「全部原本的頁面」。 -->
+<style>
+.hub8{max-width:1100px;margin:6px auto 4px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.hub8 a{display:block;text-decoration:none;color:inherit;background:linear-gradient(135deg,#17233f,#1d2b4d);border:1px solid #2a3d66;border-radius:16px;padding:14px 16px;transition:.15s}
+.hub8 a:hover{border-color:#f59e0b;transform:translateY(-2px)}
+.hub8 .n{display:flex;align-items:center;gap:10px}.hub8 .n i{font-style:normal;font-size:26px}.hub8 .n b{font-size:16px}.hub8 .n small{margin-left:auto;font-size:11px;color:#f59e0b;font-weight:800}
+.hub8 .d{font-size:12px;color:#94a3b8;margin-top:6px;line-height:1.5}
+.hub8 .p{font-size:11px;color:#7dd3fc;margin-top:6px}
+details.oldpages{margin-top:18px}details.oldpages>summary{max-width:1100px;margin:0 auto;cursor:pointer;font-size:13px;font-weight:800;color:#94a3b8;padding:10px 4px;list-style:none}
+details.oldpages>summary::before{content:'▸ ';}details.oldpages[open]>summary::before{content:'▾ ';}
+.thm-btn{border:1px solid #2a3d66;background:#17233f;color:#f1f5f9;border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
+</style>
+<details class="oldpages" id="oldPages"><summary>全部原本的頁面（雲端推送／拉取按鈕在這裡）</summary>
   <div class="gtitle">🔗 ERP 連結 ERP LINK</div>
   <div class="grid">
     <div class="mcard mc-erp" id="card-erplink">
@@ -566,6 +593,8 @@ body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;background:#0f16
   </div>
 
 
+  </details>
+
   <div class="gtitle">🕒 資料新鮮度 DATA FRESHNESS</div>
   <div class="mcard" style="margin-bottom:18px">
     <div class="mc-head"><div class="mc-icon">🕒</div><div class="mc-info"><div class="mc-title">資料新鮮度稽核</div><div class="mc-sub">最新資料日 · 缺漏日期 · 雲端狀態；超過 3 個工作日未更新標黃</div></div><button class="btn-open" onclick="refreshFreshness514()" style="flex:none">↻ 更新</button></div>
@@ -654,7 +683,7 @@ const TOOLS = {
 };
 
 // ═══ 生產流程鏈渲染 ═══
-function flowGo(id){ const el=document.getElementById(id); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 0 0 2px #38bdf8'; setTimeout(()=>el.style.boxShadow='',1600); } }
+function flowGo(id){ const el=document.getElementById(id); if(el){ const dd=el.closest('details'); if(dd) dd.open=true; el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 0 0 2px #38bdf8'; setTimeout(()=>el.style.boxShadow='',1600); } }
 window.flowGo = flowGo;
 
 function renderFlow(data){
@@ -1015,5 +1044,6 @@ window.addEventListener('load',function(){setTimeout(function(){try{if(window.VR
 <script src="vrt-portal-overview-v1.js?v=4.19.0"></script>
 <!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
 <script src="vrt-smart-import-v1.js?v=4.19.0"></script>
+<script>try{document.getElementById('thmBtn').textContent=(document.documentElement.classList.contains('vrt-inv')||(localStorage.getItem('vrt_theme')==='light'))?'🌙 深色':'☀️ 淡色'}catch(e){}</script>
 </body>
 </html>

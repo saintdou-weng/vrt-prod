@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-vrt-themed>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VRT 生產平台</title>
+<script src="vrt-deploy-config.js?v=4.25.0"></script>
+<script src="vrt-platform-v40.js?v=4.25.0"></script>
+<script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
+<script src="vrt-theme-v1.js?v=4.25.0"></script>
+<style>
+/* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
+   舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
+:root{--bg:#f4f6fb;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#4f46e5;--acc2:#eef2ff;--ok:#059669;--warn:#d97706;--crit:#dc2626;--bar:#6366f1;--bar2:#94a3b8;--hdr:#ffffff;--chip:#f1f5f9}
+[data-theme=dark]{--bg:#0f1626;--card:#16213a;--ink:#f1f5f9;--mut:#94a3b8;--line:#25324f;--acc:#818cf8;--acc2:#1e2a4a;--ok:#34d399;--warn:#fbbf24;--crit:#f87171;--bar:#818cf8;--bar2:#475569;--hdr:#131d33;--chip:#1e2a45}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
+a{color:var(--acc)}
+.hdr{background:var(--hdr);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:8px 14px;flex-wrap:wrap}
+@media(min-width:900px){.hdr{padding-right:200px}} /* 右上角平台版本小標不要蓋到按鈕 */
+.hdr .home{font-size:20px;text-decoration:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff}
+.hdr h1{font-size:16px;margin:0;white-space:nowrap}.hdr .sub{font-size:11px;color:var(--mut)}
+.hub-pick{display:flex;gap:4px;flex-wrap:wrap;flex:1;justify-content:center}
+.hub-pick a{font-size:12px;text-decoration:none;color:var(--mut);padding:5px 9px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.hub-pick a.on{background:var(--acc2);color:var(--acc);border-color:var(--acc);font-weight:700}
+.hdr .tools{display:flex;gap:6px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--acc)}
+.tabs{display:flex;gap:2px;padding:0 10px;background:var(--hdr);border-bottom:1px solid var(--line);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabs button{border:0;background:none;color:var(--mut);font:inherit;font-size:13px;padding:10px 12px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:700}
+.stage{flex:1;position:relative;min-height:0}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg);display:none}
+.stage iframe.on{display:block}
+.pane{position:absolute;inset:0;overflow:auto;display:none;padding:14px 16px 40px}.pane.on{display:block}
+.wrap{max-width:1180px;margin:0 auto}
+.seg{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.seg button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer}
+.seg button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.seg input{flex:1;min-width:160px;max-width:280px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px}
+.seg select{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px}
+.note{font-size:12px;color:var(--mut);margin:6px 0 12px;line-height:1.5}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.kpi .v{font-size:20px;font-weight:800}.kpi .l{font-size:11px;color:var(--mut);margin-top:2px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;transition:.12s}
+.card:hover{border-color:var(--acc);transform:translateY(-1px)}
+.card.open{grid-column:1/-1;cursor:default;transform:none;border-color:var(--acc)}
+.card .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card .t b{font-size:15px}.card .t span{font-size:11px;color:var(--mut)}
+.card .m{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
+.card .m div{font-size:11px;color:var(--mut)}.card .m div b{display:block;font-size:15px;color:var(--ink)}
+.card svg.spark{width:100%;height:34px;margin-top:6px;display:block}
+.det{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
+.det h4{margin:14px 0 6px;font-size:13px}
+.chart{width:100%;display:block}
+.tblw{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px}
+table.dt{border-collapse:collapse;width:100%;font-size:12px}
+table.dt th,table.dt td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.dt th{position:sticky;top:0;background:var(--chip);font-weight:700}
+table.dt td.r,table.dt th.r{text-align:right}
+.close{float:right}
+.more{text-align:center;color:var(--mut);font-size:12px;padding:16px}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--mut);margin-left:4px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.crit{color:var(--crit)}
+@media(max-width:640px){.hdr h1{font-size:14px}.hub-pick{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap}.pane{padding:10px}.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="home" href="portal_v2.html?v=4.25.0" title="回生產平台入口">🏭</a>
+  <div><h1 id="hubTitle">VRT 生產平台</h1><div class="sub" id="hubSub">8 個入口 · 舊頁面和資料都不動</div></div>
+  <nav class="hub-pick" id="hubPick"></nav>
+  <div class="tools">
+    <a class="btn" href="https://saintdou-weng.github.io/PSJERP/" target="_blank" rel="noopener" title="VRT ERP（PSJERP）">🏢 PSJERP ↗</a>
+    <button class="btn" id="themeBtn" title="淡色／深色">🌙</button>
+  </div>
+</div>
+<div class="tabs" id="tabs"></div>
+<div class="stage" id="stage"></div>
+
+<script>
+(function(){
+'use strict';
+const V='4.25.0';
+/* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
+const HUBS=[
+ {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
+ {id:'orders',ic:'📋',name:'訂單與交期',drill:'orders',tabs:[['orders','訂單','orders_v3.html'],['po','PO 交期控制','VRT_PO_Delivery_Control_Center.html']]},
+ {id:'plan',ic:'📅',name:'排單',tabs:[['cap','排單／產能','production_plan_capacity_v1.html'],['cutplan','裁剪計劃','cutting_plan_v2.html']]},
+ {id:'output',ic:'🧵',name:'生產實績',drill:'output',tabs:[['cut','裁剪','cutting_v3.html'],['sew','車縫','sewing_v5.html'],['cutpack','裁剪用布＋裝箱','vrt_cut_pack_v1.html'],['qc','QC 品檢','vrt_final_qc_v1.html']]},
+ {id:'style',ic:'📐',name:'款式',drill:'style',tabs:[['ie','IE／OBD','ie_smv_report_v2_1.html'],['smv','SMV','smv_manager_v5_final.html'],['bom','BOM','VRT_BOM_Management_v2_AI.html'],['cost','成本','vrt_bom_costing_view_v39.html']]},
+ {id:'fabric',ic:'🧶',name:'布料',drill:'fabric',tabs:[['stock','布料／副料庫存','vrt_fabric_stock_control_v1.html'],['inbound','布料進倉','vrt_fabric_delivery_greige_center_v1.html']]},
+ {id:'ship',ic:'🚢',name:'成品與出貨',drill:'ship',tabs:[['fg','成品庫存','VRT_FG_Inventory_Management_v1.html'],['shipping','出貨進度','shipping_v2.html'],['month','月出貨','vrt_monthly_shipping_control_center_v1.html']]},
+ {id:'parts',ic:'🔧',name:'機修零件',drill:'parts',tabs:[['parts','零件／採購／換針','vrt_spare_parts_v2.html']]}
+];
+window.VRT_HUBS=HUBS;
+const $=s=>document.querySelector(s);
+const E=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const F=(n,d)=>(n==null||!isFinite(n))?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:d==null?0:d});
+const P=n=>(n==null||!isFinite(n))?'—':Number(n).toFixed(1)+'%';
+
+/* ── 主題 ── */
+function themeNow(){return document.documentElement.getAttribute('data-theme')||'dark'}
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('vrt_theme',t)}catch(e){}$('#themeBtn').textContent=t==='dark'?'☀️':'🌙';$('#themeBtn').title=t==='dark'?'換淡色':'換深色';
+  document.querySelectorAll('#stage iframe').forEach(f=>{try{f.contentWindow.VRTTheme&&f.contentWindow.VRTTheme.apply()}catch(e){}})}
+$('#themeBtn').onclick=()=>setTheme(themeNow()==='dark'?'light':'dark');
+window.addEventListener('storage',e=>{if(e.key==='vrt_theme'&&e.newValue)document.documentElement.setAttribute('data-theme',e.newValue)});
+
+/* ── 路由：#hub/tab ── */
+let cur={hub:null,tab:null};
+function parse(){const h=decodeURIComponent(location.hash.slice(1)).split('/');const hub=HUBS.find(x=>x.id===h[0])||HUBS[0];let tab=h[1];
+  const ids=(hub.drill?['drill']:[]).concat(hub.tabs.map(t=>t[0]));if(!ids.includes(tab))tab=ids[0];return {hub,tab}}
+function render(){
+  const {hub,tab}=parse();
+  document.title=hub.name+' · VRT 生產平台';$('#hubTitle').textContent=hub.ic+' '+hub.name;
+  $('#hubSub').textContent=hub.tabs.length+' 個原本的頁面合在這裡'+(hub.drill?' ＋ 📊 一覽':'');
+  $('#hubPick').innerHTML=HUBS.map((h,i)=>`<a href="#${h.id}" class="${h===hub?'on':''}">${i+1} ${h.ic} ${E(h.name)}</a>`).join('');
+  const tabs=(hub.drill?[['drill','📊 一覽',null]]:[]).concat(hub.tabs);
+  $('#tabs').innerHTML=tabs.map(t=>`<button data-t="${t[0]}" class="${t[0]===tab?'on':''}">${E(t[1])}</button>`).join('');
+  $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{location.hash=hub.id+'/'+b.dataset.t});
+  const st=$('#stage');
+  if(cur.hub!==hub.id){st.innerHTML='';}
+  st.querySelectorAll('iframe,.pane').forEach(x=>x.classList.remove('on'));
+  if(tab==='drill'){let p=st.querySelector('.pane');if(!p){p=document.createElement('div');p.className='pane';st.appendChild(p);DRILL.mount(p,hub.drill)}p.classList.add('on')}
+  else{const t=hub.tabs.find(x=>x[0]===tab);let f=st.querySelector(`iframe[data-t="${tab}"]`);
+    if(!f){f=document.createElement('iframe');f.dataset.t=tab;f.title=t[1];f.src=t[2]+'?v='+V+'&embed=1';st.appendChild(f)}f.classList.add('on')}
+  cur={hub:hub.id,tab};
+}
+window.addEventListener('hashchange',render);
+
+/* ══ 雲端資料（唯讀，跟 PSJERP 一樣：先比 manifest，只抓有變的月份，快取在這台的 IndexedDB）══ */
+const GAS=()=>{try{return (window.VRTPlatform&&VRTPlatform.getGasUrl&&VRTPlatform.getGasUrl())||(window.VRT_DEPLOY_CONFIG&&VRT_DEPLOY_CONFIG.gasUrl)||''}catch(e){return ''}};
+const idb=(()=>{let dbp;const open=()=>dbp||(dbp=new Promise((res,rej)=>{const r=indexedDB.open('VRT_Hub',1);r.onupgradeneeded=()=>r.result.createObjectStore('c');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const tx=(m,f)=>open().then(db=>new Promise((res,rej)=>{const t=db.transaction('c',m);const q=f(t.objectStore('c'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)}));
+  const T=(p,ms)=>Promise.race([p.catch(()=>null),new Promise(r=>setTimeout(()=>r(null),ms))]);
+  return {get:k=>T(tx('readonly',s=>s.get(k)),3000),set:(k,v)=>T(tx('readwrite',s=>s.put(v,k)),8000)}})();
+const memo={};
+async function loadTool(tool,keep){
+  const mk=tool+'|'+(keep?keep.toString():'');if(memo[mk])return memo[mk];
+  return memo[mk]=(async()=>{const G=GAS();if(!G)throw new Error('這台還沒設定雲端連線（入口頁 GAS URL）');
+    let c=await idb.get('t#'+tool);c=c&&c.b?c:{h:{},b:{}};
+    const m=await fetch(G+'?action=smartManifest&tool='+tool+'&t='+Date.now(),{redirect:'follow',cache:'no-store'}).then(r=>r.json());
+    const d=m.data||m;const H=d.hashes||{};const want=Object.keys(H).filter(k=>!keep||keep(k));let ch=false;
+    for(let i=0;i<want.length;i+=4)await Promise.all(want.slice(i,i+4).map(async k=>{if(c.h[k]===H[k]&&c.b[k])return;
+      const b=await fetch(G+'?action=smartBucket&tool='+tool+'&bucket='+encodeURIComponent(k)+'&hash='+encodeURIComponent(H[k]),{redirect:'follow'}).then(r=>r.json());
+      c.b[k]=((b.data&&b.data.records)||[]).map(r=>r._vrtValue||r);c.h[k]=H[k];ch=true}));
+    if(ch)idb.set('t#'+tool,c);
+    return {rows:want.flatMap(k=>c.b[k]||[]),updatedAt:d.updatedAt,summary:d.summary||{}}})().catch(e=>{delete memo[mk];throw e});
+}
+const monthsBack=n=>{const out=[];const d=new Date();for(let i=0;i<n;i++){const x=new Date(d.getFullYear(),d.getMonth()-i,1);out.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))}return out};
+const keepMonths=n=>{const ms=monthsBack(n);return new Function('k','return '+JSON.stringify(ms)+'.some(m=>k.indexOf(m)>=0)')};
+
+/* ══ 圖表（SVG，跟著主題換色）══ */
+const CH={
+ spark(vals){const n=vals.length;if(!n)return '';const mx=Math.max(...vals,1);const w=100,h=30;const bw=w/n;
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${vals.map((v,i)=>`<rect x="${i*bw+bw*.12}" y="${h-(v/mx)*h}" width="${bw*.76}" height="${(v/mx)*h}" rx=".6" fill="var(--bar)" opacity="${i===n-1?1:.55}"/>`).join('')}</svg>`},
+ /* bars: [{label,v,v2?}] ; v2 畫成折線（右軸，例如效率%） */
+ bars(items,o){o=o||{};const n=items.length;if(!n)return '<p class="note">沒有資料</p>';const W=Math.max(640,n*28),H=220,pl=44,pr=o.v2?40:8,pt=12,pb=40;
+  const mx=Math.max(...items.map(x=>x.v||0),1),mx2=o.v2?Math.max(...items.map(x=>x.v2||0),1):1;const iw=W-pl-pr,ih=H-pt-pb,bw=iw/n;
+  const y=v=>pt+ih-(v/mx)*ih,y2=v=>pt+ih-(v/mx2)*ih;let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" style="max-width:${W}px;min-width:${Math.min(W,560)}px">`;
+  for(let g=0;g<=4;g++){const v=mx*g/4,yy=y(v);s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${pl-4}" y="${yy+3}" font-size="9" text-anchor="end" fill="var(--mut)">${F(v)}</text>`;
+    if(o.v2)s+=`<text x="${W-pr+4}" y="${yy+3}" font-size="9" fill="var(--warn)">${F(mx2*g/4)}${o.v2Unit||''}</text>`}
+  const step=Math.ceil(n/16);
+  items.forEach((it,i)=>{const x=pl+i*bw;s+=`<rect x="${x+bw*.15}" y="${y(it.v||0)}" width="${bw*.7}" height="${Math.max(0,pt+ih-y(it.v||0))}" rx="2" fill="${it.c||'var(--bar)'}"><title>${E(it.label)}：${F(it.v)}${o.v2&&it.v2!=null?' · '+F(it.v2,1)+(o.v2Unit||''):''}</title></rect>`;
+    if(i%step===0)s+=`<text x="${x+bw/2}" y="${H-pb+12}" font-size="9" text-anchor="end" fill="var(--mut)" transform="rotate(-35 ${x+bw/2} ${H-pb+12})">${E(String(it.label).slice(0,12))}</text>`});
+  if(o.v2){const pts=items.map((it,i)=>it.v2==null?null:[pl+i*bw+bw/2,y2(it.v2)]).filter(Boolean);if(pts.length)s+=`<polyline fill="none" stroke="var(--warn)" stroke-width="2" points="${pts.map(p=>p.join(',')).join(' ')}"/>`+pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="var(--warn)"/>`).join('')}
+  s+='</svg>';return `<div style="overflow-x:auto">${s}</div>`+(o.legend?`<div class="note">${o.legend}</div>`:'')},
+ hbars(items){if(!items.length)return '<p class="note">沒有資料</p>';const mx=Math.max(...items.map(x=>x.v||0),1);
+  return '<div>'+items.map(it=>`<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px"><span style="width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${E(it.label)}">${E(it.label)}</span><span style="flex:1;background:var(--chip);border-radius:4px;height:14px"><span style="display:block;height:14px;border-radius:4px;width:${(it.v/mx*100).toFixed(1)}%;background:${it.c||'var(--bar)'}"></span></span><b style="width:80px;text-align:right">${F(it.v)}</b></div>`).join('')+'</div>'}
+};
+const table=(cols,rows,max)=>`<div class="tblw"><table class="dt"><thead><tr>${cols.map(c=>`<th class="${c[2]?'r':''}">${E(c[0])}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,max||300).map(r=>`<tr>${cols.map(c=>{const v=c[1](r);return `<td class="${c[2]?'r':''}">${v}</td>`}).join('')}</tr>`).join('')}</tbody></table></div>`+(rows.length>(max||300)?`<p class="note">只列前 ${max||300} 筆（共 ${F(rows.length)}）</p>`:'');
+const groupBy=(rows,f)=>{const m=new Map();rows.forEach(r=>{const k=f(r);if(k==null||k==='')return;let a=m.get(k);if(!a){a=[];m.set(k,a)}a.push(r)});return m};
+const sum=(rows,f)=>rows.reduce((a,r)=>a+(+f(r)||0),0);
+const lastDays=(rows,n,dateF)=>{const ds=[...new Set(rows.map(dateF).filter(Boolean))].sort();return ds.slice(-n)};
+
+/* ══ 一覽：卡片清單（搜尋、排序、點開看圖表＋明細、往下滑載入更多）══ */
+const DRILL={
+ mount(p,kind){const spec=SPECS[kind];p.innerHTML=`<div class="wrap"><div class="seg" id="dSeg"></div><div id="dTop"></div><div class="cards" id="dCards"></div><div class="more" id="dMore"></div></div>`;
+  const segs=spec.segments;let si=0,list=[],shown=0,q='',sortI=0;const seg=p.querySelector('#dSeg'),cards=p.querySelector('#dCards'),more=p.querySelector('#dMore'),top=p.querySelector('#dTop');
+  const drawSeg=()=>{const s=segs[si];seg.innerHTML=segs.map((x,i)=>`<button data-i="${i}" class="${i===si?'on':''}">${E(x.label)}</button>`).join('')+`<input placeholder="🔍 搜尋（線別、款號、客戶、料號…）" value="${E(q)}">`+(s.sorts?`<select>${s.sorts.map((x,i)=>`<option value="${i}" ${i===sortI?'selected':''}>排序：${E(x[0])}</option>`).join('')}</select>`:'');
+    seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{si=+b.dataset.i;sortI=0;load()});
+    const inp=seg.querySelector('input');let tm;inp.oninput=()=>{clearTimeout(tm);tm=setTimeout(()=>{q=inp.value.trim().toUpperCase();reset()},200)};
+    const sel=seg.querySelector('select');if(sel)sel.onchange=()=>{sortI=+sel.value;reset()}};
+  const filtered=()=>{const s=segs[si];let a=list.filter(g=>!q||(g.title+' '+(g.search||'')).toUpperCase().includes(q));if(s.sorts)a=a.slice().sort(s.sorts[sortI][1]);return a};
+  const cardHtml=g=>`<div class="card" data-k="${E(g.key)}"><div class="t"><b>${E(g.title)}</b><span>${g.sub||''}</span></div><div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.spark?CH.spark(g.spark):''}</div>`;
+  const more1=()=>{const a=filtered();const next=a.slice(shown,shown+12);if(!next.length){more.textContent=a.length?`共 ${a.length} 張卡片`:'沒有符合的資料';return}
+    cards.insertAdjacentHTML('beforeend',next.map(cardHtml).join(''));shown+=next.length;more.textContent=shown<a.length?'往下滑載入更多…':`共 ${a.length} 張卡片`};
+  const reset=()=>{cards.innerHTML='';shown=0;more1()};
+  cards.addEventListener('click',e=>{const c=e.target.closest('.card');if(!c)return;if(e.target.closest('.close')){c.classList.remove('open');c.querySelector('.det').remove();return}
+    if(c.classList.contains('open')||e.target.closest('.det'))return;const g=list.find(x=>String(x.key)===c.dataset.k);if(!g)return;
+    cards.querySelectorAll('.card.open').forEach(o=>{o.classList.remove('open');const d=o.querySelector('.det');d&&d.remove()});
+    c.classList.add('open');c.insertAdjacentHTML('beforeend',`<div class="det"><button class="btn close">✕ 收起</button>${g.detail()}</div>`);c.scrollIntoView({behavior:'smooth',block:'start'})});
+  new IntersectionObserver(es=>{if(es.some(x=>x.isIntersecting))more1()},{root:p,rootMargin:'300px'}).observe(more);
+  const load=async()=>{drawSeg();cards.innerHTML='';top.innerHTML='';more.textContent='⏳ 讀取雲端資料…（第一次比較久，之後只抓有變的）';
+    try{const r=await segs[si].build();list=r.groups;top.innerHTML=r.top||'';shown=0;reset()}catch(e){more.innerHTML='⚠️ '+E(e.message||e)}};
+  load()}
+};
+
+/* ══ 各入口的「一覽」══ */
+const lineName=r=>((r.section&&!/garment/i.test(r.section)?r.section+' ':'')+String(r.lineNo||r.line||'').replace(/^Line\s*/i,'L')).trim();
+const effW=rows=>{let a=0,b=0;rows.forEach(r=>{const w=+r.workers||0,e=+r.efficiency;if(e>0&&w>0){a+=e*w;b+=w}});return b?a/b:null};
+const effCls=e=>e==null?'':e>=60?'ok':e>=40?'warn':'crit';
+function dailySeries(rows,days,valF,v2F){const by=groupBy(rows,r=>r.date);return days.map(d=>{const a=by.get(d)||[];return {label:d.slice(5),v:sum(a,valF),v2:v2F?v2F(a):undefined}})}
+const SPECS={
+ output:{segments:[
+  {label:'🧵 車縫（每條線）',sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['效率高→低',(a,b)=>(b.e||0)-(a.e||0)],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['線別',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
+   async build(){const {rows,updatedAt}=await loadTool('sewing',keepMonths(3));const days=lastDays(rows,30,r=>r.date),D=new Set(days);const rs=rows.filter(r=>D.has(r.date));
+    const L=groupBy(rs,lineName);const last=days[days.length-1]||'';
+    const groups=[...L].map(([k,a])=>{const n=sum(a,r=>r.pieces),e=effW(a);const ld=lastDays(a,1,r=>r.date)[0]||'';return {key:k,title:k,n,e,search:[...new Set(a.map(r=>r.styleNo+' '+r.po))].join(' '),sub:'最後 '+ld.slice(5),
+      kpis:[[F(n),'件（30 天）'],[P(e),'效率',effCls(e)],[F(sum(a.filter(r=>r.date===last),r=>r.pieces)),last.slice(5)+' 件']],spark:dailySeries(a,days,r=>r.pieces).map(x=>x.v),
+      detail:()=>{const st=[...groupBy(a,r=>r.styleNo)].map(([s,b])=>({s,n:sum(b,r=>r.pieces),e:effW(b),smv:b.find(r=>+r.smv>0)?.smv,po:[...new Set(b.map(r=>r.po))].join(' '),d:lastDays(b,1,r=>r.date)[0]})).sort((x,y)=>y.n-x.n);
+        return `<h4>每天件數（長條）＋效率（折線）</h4>${CH.bars(dailySeries(a,days,r=>r.pieces,b=>effW(b)),{v2:true,v2Unit:'%'})}<h4>做了哪些款</h4>${table([['款號',x=>E(x.s)],['件數',x=>F(x.n),1],['效率',x=>`<b class="${effCls(x.e)}">${P(x.e)}</b>`,1],['SMV',x=>F(x.smv,2),1],['PO',x=>`<span class="small">${E(x.po)}</span>`],['最後',x=>E((x.d||'').slice(5))]],st)}
+        <h4>每天明細</h4>${table([['日期',r=>E(r.date)],['款號',r=>E(r.styleNo)],['PO',r=>E(r.po)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['人數',r=>F(r.workers,1),1],['效率',r=>P(+r.efficiency),1],['加班件',r=>F(r.otPcs),1]],a.slice().sort((x,y)=>y.date.localeCompare(x.date)))}`}}});
+    const tot=sum(rs,r=>r.pieces);return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(tot)}</div><div class="l">近 30 個生產日 件數</div></div><div class="kpi"><div class="v ${effCls(effW(rs))}">${P(effW(rs))}</div><div class="l">平均效率（依人數加權）</div></div><div class="kpi"><div class="v">${E(last)}</div><div class="l">最新車縫日</div></div><div class="kpi"><div class="v">${L.size}</div><div class="l">條線</div></div></div><p class="note">點任何一張卡片：每天件數＋效率圖、做了哪些款、每天明細。雲端更新：${E((updatedAt||'').slice(0,16).replace('T',' '))}</p>`}}},
+  {label:'✂️ 裁剪（每條線）',sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['用布多→少',(a,b)=>b.y-a.y]],
+   async build(){const {rows}=await loadTool('cutting',keepMonths(3));const days=lastDays(rows,30,r=>r.date),D=new Set(days);const rs=rows.filter(r=>D.has(r.date));
+    const L=groupBy(rs,lineName);const groups=[...L].map(([k,a])=>{const n=sum(a,r=>r.pieces),y=sum(a,r=>r.totalYds);return {key:k,title:'✂️ '+k,n,y,search:[...new Set(a.map(r=>r.styleNo+' '+r.po+' '+r.fabricItem))].join(' '),sub:'最後 '+(lastDays(a,1,r=>r.date)[0]||'').slice(5),
+      kpis:[[F(n),'件（30 天）'],[F(y,0),'碼布'],[P(effW(a)),'效率',effCls(effW(a))]],spark:dailySeries(a,days,r=>r.pieces).map(x=>x.v),
+      detail:()=>`<h4>每天裁剪件數＋效率</h4>${CH.bars(dailySeries(a,days,r=>r.pieces,b=>effW(b)),{v2:true,v2Unit:'%'})}<h4>用哪些布</h4>${CH.hbars([...groupBy(a,r=>r.fabricItem||r.fabricType)].map(([f,b])=>({label:f,v:Math.round(sum(b,r=>r.totalYds))})).sort((x,y)=>y.v-x.v).slice(0,12))}
+       <h4>明細</h4>${table([['日期',r=>E(r.date)],['款號',r=>E(r.styleNo)],['PO',r=>E(r.po)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['碼/件',r=>F(r.ydsPerPcs,3),1],['總碼',r=>F(r.totalYds,1),1]],a.slice().sort((x,y)=>y.date.localeCompare(x.date)))}`}});
+    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(sum(rs,r=>r.pieces))}</div><div class="l">近 30 個裁剪日 件數</div></div><div class="kpi"><div class="v">${F(sum(rs,r=>r.totalYds))}</div><div class="l">碼布</div></div><div class="kpi"><div class="v">${E(days[days.length-1]||'—')}</div><div class="l">最新裁剪日</div></div></div>`}}},
+  {label:'📦 裝箱（每條線）',sorts:[['件數',(a,b)=>b.n-a.n]],
+   async build(){const {rows}=await loadTool('packing');const days=lastDays(rows,30,r=>r.date);const L=groupBy(rows,r=>String(r.line||'').replace(/^Line\s*/i,'L')||'—');
+    const groups=[...L].map(([k,a])=>{const n=sum(a,r=>r.qty);return {key:k,title:'📦 '+k,n,search:[...new Set(a.map(r=>r.style+' '+r.po))].join(' '),sub:'最後 '+(lastDays(a,1,r=>r.date)[0]||'').slice(5),kpis:[[F(n),'件'],[F(sum(a,r=>r.ctns),1),'箱'],[String(new Set(a.map(r=>r.po)).size),'張 PO']],spark:dailySeries(a,days,r=>r.qty).map(x=>x.v),
+      detail:()=>`<h4>每天裝箱件數</h4>${CH.bars(dailySeries(a,days,r=>r.qty))}<h4>依 PO</h4>${table([['PO',x=>E(x[0])],['款號',x=>E(x[1][0].style)],['件數',x=>F(sum(x[1],r=>r.qty)),1],['箱',x=>F(sum(x[1],r=>r.ctns),1),1]],[...groupBy(a,r=>r.po)].sort((x,y)=>sum(y[1],r=>r.qty)-sum(x[1],r=>r.qty)))}`}});
+    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(sum(rows,r=>r.qty))}</div><div class="l">已裝箱件數（11 月起）</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.ctns),1)}</div><div class="l">箱</div></div><div class="kpi"><div class="v">${E(days[days.length-1]||'—')}</div><div class="l">最新裝箱日</div></div></div>`}}}
+ ]},
+ style:{segments:[
+  {label:'📐 每一款（近 3 個月車縫）',sorts:[['件數',(a,b)=>b.n-a.n],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['SMV 高→低',(a,b)=>(b.smv||0)-(a.smv||0)],['最近做的',(a,b)=>String(b.d).localeCompare(String(a.d))]],
+   async build(){const [{rows},cut]=await Promise.all([loadTool('sewing',keepMonths(3)),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]}))]);
+    const S=groupBy(rows,r=>String(r.styleNo||'').trim().toUpperCase());const C=groupBy(cut.rows,r=>String(r.styleNo||'').trim().toUpperCase());
+    const groups=[...S].map(([k,a])=>{const n=sum(a,r=>r.pieces),e=effW(a),smvR=a.filter(r=>+r.smv>0),smv=smvR.length?sum(smvR,r=>r.smv)/smvR.length:null,d=lastDays(a,1,r=>r.date)[0]||'',days=lastDays(a,20,r=>r.date),c=C.get(k)||[];
+      return {key:k,title:k,n,e,smv,d,search:[...new Set(a.map(r=>r.po+' '+lineName(r)))].join(' '),sub:'最後 '+d.slice(5),kpis:[[F(n),'件'],[P(e),'效率',effCls(e)],[F(smv,2),'SMV'],[String(new Set(a.map(lineName)).size),'條線']],spark:dailySeries(a,days,r=>r.pieces).map(x=>x.v),
+       detail:()=>{const yp=c.length?sum(c,r=>r.totalYds)/Math.max(1,sum(c,r=>r.pieces)):null;
+        return `<div class="kpis"><div class="kpi"><div class="v">${F(n)}</div><div class="l">車縫件數</div></div><div class="kpi"><div class="v">${F(sum(c,r=>r.pieces))}</div><div class="l">裁剪件數</div></div><div class="kpi"><div class="v">${F(yp,3)}</div><div class="l">實際碼/件（裁剪）</div></div><div class="kpi"><div class="v">${F(smv,3)}</div><div class="l">平均 SMV</div></div></div>
+        <h4>每天件數＋效率</h4>${CH.bars(dailySeries(a,days,r=>r.pieces,b=>effW(b)),{v2:true,v2Unit:'%'})}<h4>哪幾條線做</h4>${CH.hbars([...groupBy(a,lineName)].map(([l,b])=>({label:l+' · '+P(effW(b)),v:sum(b,r=>r.pieces)})).sort((x,y)=>y.v-x.v))}
+        <h4>依 PO</h4>${table([['PO',x=>E(x[0])],['車縫件數',x=>F(sum(x[1],r=>r.pieces)),1],['效率',x=>P(effW(x[1])),1],['日期',x=>{const ds=lastDays(x[1],999,r=>r.date);return E(ds[0].slice(5)+(ds.length>1?'～'+ds[ds.length-1].slice(5):''))}]],[...groupBy(a,r=>r.po)])}
+        <p class="note">SMV／OBD 工序、BOM、成本請看上面的分頁（IE／OBD、SMV、BOM、成本）。</p>`}}});
+    return {groups,top:`<p class="note">近 3 個月車縫做過的每一款：件數、效率、SMV、哪幾條線。點卡片看每天圖表、各線效率、PO 明細、裁剪實際用布。</p>`}}}
+ ]},
+ orders:{segments:[
+  {label:'📋 每個客戶（最新週快照）',sorts:[['未完成箱數',(a,b)=>b.n-a.n],['未完成金額',(a,b)=>b.amt-a.amt]],
+   async build(){const {rows}=await loadTool('orders',k=>/^p:weekly_/.test(k)&&monthsBack(4).some(m=>k.indexOf(m)>=0));
+    const dates=[...new Set(rows.map(r=>r.as_of_date).filter(Boolean))].sort();const last=dates[dates.length-1];
+    const C=groupBy(rows,r=>r.customer);const groups=[...C].map(([k,a])=>{const byD=groupBy(a,r=>r.as_of_date);const cur=byD.get(last)||[];const n=sum(cur,r=>r.unproducedCtns),amt=sum(cur,r=>r.openAmount);
+      const ser=dates.map(d=>({label:d.slice(5),v:sum(byD.get(d)||[],r=>r.unproducedCtns)}));
+      return {key:k,title:k,n,amt,sub:'快照 '+String(last||'').slice(5),kpis:[[F(n),'未生產箱'],[F(sum(cur,r=>r.producedCtns)),'已生產箱'],[F(sum(cur,r=>r.openSmv)),'未完成 SMV'],[F(amt),'未完成金額']],spark:ser.map(x=>x.v),
+       detail:()=>`<h4>每週快照：未生產箱數走勢</h4>${CH.bars(ser)}<h4>最新快照明細</h4>${table([['類別',r=>E(['garment','apron','topNapkin','fabric'].filter(x=>+r[x]).map(x=>x+' '+F(r[x])).join(' · '))],['總未出箱',r=>F(r.totalOpenCtns),1],['已生產',r=>F(r.producedCtns),1],['未生產',r=>F(r.unproducedCtns),1],['SMV',r=>F(r.openSmv),1],['金額',r=>F(r.openAmount),1],['備註',r=>E(r.remark)]],cur)}`}}).filter(g=>g.n||g.amt);
+    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(groups.reduce((a,g)=>a+g.n,0))}</div><div class="l">未生產箱數（${E(last||'—')}）</div></div><div class="kpi"><div class="v">${F(groups.reduce((a,g)=>a+g.amt,0))}</div><div class="l">未完成金額</div></div><div class="kpi"><div class="v">${groups.length}</div><div class="l">個客戶</div></div></div>`}}}
+ ]},
+ ship:{segments:[
+  {label:'🚢 每個客戶（出貨進度）',sorts:[['未出件數',(a,b)=>b.n-a.n],['已出件數',(a,b)=>b.s-a.s]],
+   async build(){const [{rows},ms]=await Promise.all([loadTool('shipping'),loadTool('monthship').catch(()=>({rows:[]}))]);
+    const C=groupBy(rows,r=>r.cust);const groups=[...C].map(([k,a])=>{const n=sum(a,r=>r.open),s=sum(a,r=>r.shipped),o=sum(a,r=>r.orig);const byM=groupBy(a.filter(r=>r.etd),r=>String(r.etd).slice(0,7));const mk=[...byM.keys()].sort().slice(-12);
+      return {key:k,title:k,n,s,sub:o?P(s/o*100)+' 已出':'',kpis:[[F(n),'未出件',n?'warn':''],[F(s),'已出件'],[String(new Set(a.filter(r=>+r.open>0).map(r=>r.po)).size),'張 PO 未完']],spark:mk.map(m=>sum(byM.get(m),r=>r.orig)),
+       detail:()=>`<h4>每月（ETD）訂單件數＋未出</h4>${CH.bars(mk.map(m=>({label:m,v:sum(byM.get(m),r=>r.orig),v2:sum(byM.get(m),r=>r.open)})),{v2:true,legend:'長條＝訂單件數，橘線＝還沒出的件數'})}
+        <h4>還沒出完的（未出多→少）</h4>${table([['PO',r=>E(r.po)],['款號',r=>E(r.style)],['品名',r=>E(String(r.desc||'').slice(0,28))],['布料',r=>E(r.fabItem)],['訂單',r=>F(r.orig),1],['已出',r=>F(r.shipped),1],['未出',r=>`<b class="warn">${F(r.open)}</b>`,1],['ETD',r=>E(r.etd)],['狀態',r=>E(r.status)]],a.filter(r=>+r.open>0).sort((x,y)=>y.open-x.open))}`}}).filter(g=>g.n||g.s);
+    const M=groupBy(ms.rows,r=>r.month);const mm=[...M.keys()].sort();
+    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v warn">${F(sum(rows,r=>r.open))}</div><div class="l">全部未出件數</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.shipped))}</div><div class="l">已出件數</div></div>${mm.slice(-3).map(m=>`<div class="kpi"><div class="v">${F(sum(M.get(m),r=>r.pieces))}</div><div class="l">${E(m)} 月出貨件數</div></div>`).join('')}</div>${mm.length?`<h4 style="margin:4px 0">月出貨件數</h4>${CH.bars(mm.map(m=>({label:m,v:sum(M.get(m),r=>r.pieces)})))}`:''}`}}}
+ ]},
+ fabric:{segments:[
+  {label:'🧶 每個料號（近 3 個月進出）',sorts:[['發出多→少',(a,b)=>b.iss-a.iss],['進倉多→少',(a,b)=>b.rec-a.rec]],
+   async build(){const {rows}=await loadTool('fabricstock',keepMonths(3));const I=groupBy(rows,r=>r.itemCode);
+    const groups=[...I].map(([k,a])=>{const rec=sum(a,r=>r.received),iss=sum(a,r=>r.issued);const byM=groupBy(a,r=>String(r.date||'').slice(0,7));const mk=[...byM.keys()].sort();const unit=(a.find(r=>r.unit)||{}).unit||'';
+      return {key:k,title:k,rec,iss,search:[...new Set(a.map(r=>r.color+' '+r.customer+' '+r.po))].join(' '),sub:unit,kpis:[[F(rec),'進'],[F(iss),'出'],[String(new Set(a.map(r=>r.color)).size),'個顏色']],spark:mk.map(m=>sum(byM.get(m),r=>r.issued)),
+       detail:()=>`<h4>每月進（長條）／出（折線）</h4>${CH.bars(mk.map(m=>({label:m,v:sum(byM.get(m),r=>r.received),v2:sum(byM.get(m),r=>r.issued)})),{v2:true})}<h4>依顏色</h4>${CH.hbars([...groupBy(a,r=>r.color||'—')].map(([c,b])=>({label:c,v:Math.round(sum(b,r=>r.issued))})).sort((x,y)=>y.v-x.v).slice(0,15))}
+        <h4>進出明細</h4>${table([['日期',r=>E(r.date)],['顏色',r=>E(r.color)],['單號',r=>E(r.documentNo)],['動作',r=>E(r.movement)],['缸號',r=>E(r.lotNumber)],['進',r=>F(r.received,1),1],['出',r=>F(r.issued,1),1],['客戶',r=>E(r.customer)],['PO',r=>E(r.po)]],a.slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))))}`}}).filter(g=>g.rec||g.iss);
+    return {groups,top:`<p class="note">近 3 個月每個料號的進倉／發出（雲端的布料庫存資料）。庫存結存、副料請看「布料／副料庫存」分頁。</p>`}}}
+ ]},
+ parts:{segments:[
+  {label:'🔧 零件（依類別）',sorts:[['低於安全量',(a,b)=>b.low-a.low],['品項數',(a,b)=>b.n-a.n]],
+   async build(){const {rows}=await loadTool('spareparts',k=>/^p:parts_master/.test(k));const C=groupBy(rows,r=>r.category||'未分類');
+    const isLow=r=>+r.minStock>0&&(+r.qty||0)<+r.minStock;
+    const groups=[...C].map(([k,a])=>{const low=a.filter(isLow).length;return {key:k,title:k,n:a.length,low,search:a.map(r=>r.partNo+' '+r.name+' '+r.machineType).join(' '),sub:'',kpis:[[String(a.length),'品項'],[String(low),'低於安全量',low?'crit':'ok'],[F(sum(a,r=>(+r.qty||0)*(+r.unitPrice||0))),'庫存金額']],
+      detail:()=>`<h4>依機種</h4>${CH.hbars([...groupBy(a,r=>r.machineType||'—')].map(([m,b])=>({label:m,v:b.length})).sort((x,y)=>y.v-x.v).slice(0,15))}<h4>品項（低於安全量排前面）</h4>${table([['料號',r=>E(r.partNo)],['名稱',r=>E(r.name)],['規格',r=>E(r.spec)],['機種',r=>E(r.machineType)],['庫存',r=>`<b class="${isLow(r)?'crit':''}">${F(r.qty)}</b>`,1],['安全量',r=>F(r.minStock),1],['單價',r=>F(r.unitPrice,2),1],['位置',r=>E(r.location)]],a.slice().sort((x,y)=>(isLow(y)-isLow(x))||String(x.partNo).localeCompare(String(y.partNo))))}`}});
+    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${rows.length}</div><div class="l">零件品項</div></div><div class="kpi"><div class="v crit">${rows.filter(isLow).length}</div><div class="l">低於安全量</div></div></div>`}}}
+ ]}
+};
+
+setTheme(themeNow());
+if(!location.hash)location.replace('#'+HUBS[0].id);
+render();
+})();
+</script>
+</body>
+</html>
