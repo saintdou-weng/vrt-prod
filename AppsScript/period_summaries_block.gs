@@ -60,7 +60,10 @@ function latestDataDate_(tool,prefixes){
 function shapeRows_(kind,rows,manifest){
   const val=r=>r._vrtValue||r;
   if(kind==='qc')return {records:rows.filter(r=>!r._vrtEntity),kpi:rows.filter(r=>r._vrtEntity==='qc.kpi').map(val)};
-  if(kind==='spareparts')return {needle:rows.filter(r=>r._vrtEntity==='maintenance.needleChanges').map(val),part:rows.filter(r=>r._vrtEntity==='maintenance.partChanges').map(val),txns:rows.filter(r=>!r._vrtEntity)};
+  if(kind==='spareparts'){const o={needle:rows.filter(r=>r._vrtEntity==='maintenance.needleChanges').map(val),part:rows.filter(r=>r._vrtEntity==='maintenance.partChanges').map(val),txns:rows.filter(r=>!r._vrtEntity)};
+    /* v4.28：帶上同月份的車縫日報列，摘要才能對照「哪些款在做／是不是換款日」；讀不到就不連動 */
+    try{const ms2=[...new Set(o.needle.concat(o.part).map(r=>String(r.date||'').slice(0,7)).filter(Boolean))].sort().slice(-3),sm=readSmartManifest_('sewing'),sw=[];if(sm)ms2.forEach(mm=>{const b=sm.buckets['m:'+mm];if(!b)return;const raw=loadFromDrive(smartBucketName_('sewing',b.source,'m:'+mm));if(raw)JSON.parse(raw).forEach(r=>{if(!r._vrtEntity)sw.push(r._vrtValue||r)})});o.sewing=sw}catch(_){}
+    return o}
   if(kind==='orders'){const meta=manifest&&manifest.meta||{},idb=meta.idbData||{};const w=rows.filter(r=>r._vrtEntity==='orders.weekly').map(val),h=rows.filter(r=>r._vrtEntity==='orders.header').map(val);return {lines:rows.filter(r=>!r._vrtEntity),headers:h.length?h:(idb.po_headers||[]),weekly:w.length?w:(idb.weekly_snapshots||[])}}
   return rows.filter(r=>!r._vrtEntity);
 }
