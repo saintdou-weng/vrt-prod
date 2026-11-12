@@ -49,7 +49,7 @@ a{color:var(--acc)}
 .card.open{grid-column:1/-1;cursor:default;transform:none;border-color:var(--acc)}
 .card .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .card .t b{font-size:15px}.card .t span{font-size:11px;color:var(--mut)}
-.card .m{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap}
+.card .m{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:6px 10px;margin-top:6px}
 .card .m div{font-size:11px;color:var(--mut)}.card .m div b{display:block;font-size:15px;color:var(--ink)}
 .card svg.spark{width:100%;height:34px;margin-top:6px;display:block}
 .det{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
@@ -259,13 +259,13 @@ const DRILL={
     const sel=seg.querySelector('select');if(sel)sel.onchange=()=>{sortI=+sel.value;reset()}};
   const filtered=()=>{const s=segs[si];let a=list.filter(g=>!q||(g.title+' '+(g.search||'')).toUpperCase().includes(q));if(s.sorts)a=a.slice().sort(s.sorts[sortI][1]);return a};
   const cardHtml=g=>`<div class="card" data-k="${E(g.key)}"><div class="t"><b>${E(g.title)}</b><span>${g.sub||''}</span></div>${g.badge?`<div style="margin-top:4px">${g.badge}</div>`:''}<div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.bar!=null?`<div class="pbar"><i style="width:${Math.max(0,Math.min(100,g.bar)).toFixed(0)}%"></i></div><div class="pcap">${g.barCap||''}</div>`:''}${g.spark?CH.spark(g.spark)+(g.sparkCap?`<div class="pcap">${g.sparkCap}</div>`:''):''}</div>`;
-  const more1=()=>{const a=filtered();const next=a.slice(shown,shown+12);if(!next.length){more.textContent=a.length?`共 ${a.length} 張卡片，到底了`:'沒有符合的資料';return}
+  let loading=true;const more1=()=>{if(loading)return;const a=filtered();const next=a.slice(shown,shown+12);if(!next.length){more.textContent=a.length?`共 ${a.length} 張卡片，到底了`:'沒有符合的資料';return}
     cards.insertAdjacentHTML('beforeend',next.map(cardHtml).join(''));shown+=next.length;more.textContent=shown<a.length?'往下滑載入更多…':`共 ${a.length} 張卡片，到底了`};
   const reset=()=>{cards.innerHTML='';shown=0;more1()};
   cards.addEventListener('click',e=>{const c=e.target.closest('.card');if(!c)return;const a=filtered();const idx=a.findIndex(x=>String(x.key)===c.dataset.k);if(idx>=0)SHEET.open(a,idx)});
   new IntersectionObserver(es=>{if(es.some(x=>x.isIntersecting))more1()},{root:p,rootMargin:'300px'}).observe(more);
-  const load=async()=>{drawSeg();cards.innerHTML='';top.innerHTML='';more.textContent='⏳ 讀取雲端資料…（第一次比較久，之後只抓有變的）';
-    try{const r=await segs[si].build();list=r.groups;top.innerHTML=r.top||'';shown=0;reset()}catch(e){more.innerHTML='⚠️ '+E(e.message||e)}};
+  const load=async()=>{drawSeg();cards.innerHTML='';top.innerHTML='';loading=true;more.textContent='⏳ 讀取雲端資料…（第一次比較久，之後只抓有變的）';
+    try{const r=await segs[si].build();loading=false;list=r.groups;top.innerHTML=r.top||'';shown=0;reset()}catch(e){more.innerHTML='⚠️ '+E(e.message||e)}};
   load()}
 };
 
@@ -323,7 +323,7 @@ const SPECS={
  ]},
  /* ── 訂單（v4.26 重做，Paul 11/12：「看不懂什麼客戶怎樣、沒頭沒尾」）：先講一句結論，每張卡＝一個客戶還有多少箱沒做、比上週多還是少、PDF 訂單最近哪天要出 ── */
  orders:{segments:[
-  {label:'👥 每個客戶還有多少沒做',sorts:[['還沒做的箱數 多→少',(a,b)=>b.n-a.n],['最近要出的排前面',(a,b)=>String(a.nextShip||'9').localeCompare(String(b.nextShip||'9'))],['比上週增加最多',(a,b)=>b.diff-a.diff]],
+  {label:'👥 每個客戶還有多少沒做',sorts:[['還沒做的箱數 多→少',(a,b)=>b.n-a.n],['最近要出的排前面',(a,b)=>String(a.nextShip||'9').localeCompare(String(b.nextShip||'9'))],['比上一次增加最多',(a,b)=>b.diff-a.diff]],
    async build(){const [{rows},po]=await Promise.all([loadTool('orders',k=>/^p:weekly_/.test(k)&&monthsBack(4).some(m=>k.indexOf(m)>=0)),loadTool('orders',k=>/^h:/.test(k)).catch(()=>({rows:[]}))]);
     const dates=[...new Set(rows.map(r=>r.as_of_date).filter(Boolean))].sort();const last=dates[dates.length-1],prev=dates[dates.length-2];const today=ymdToday();
     const PO=groupBy(po.rows,r=>custKey(r.customer));
@@ -336,14 +336,14 @@ const SPECS={
       const cant=/CANNOT SHIP/i.test(k);const tot=n+done;
       const badge=(cant?'<span class="tag crit">⛔ 不能出貨</span>':'')+(n===0?'<span class="tag ok">✅ 都做完了</span>':'')+(nextShip?`<span class="tag ${daysTo(nextShip)<=14?'warn':''}">📅 PDF 訂單最近 ${nextShip.slice(5)} 要出（${daysTo(nextShip)} 天後）</span>`:'');
       return {key:k,kind:'客戶',title:k,n,amt,diff,nextShip,search:pos.map(x=>x.no+' '+x.styles.join(' ')).join(' '),sub:'到 '+String(last||'').slice(5),badge,chip:F(n)+' 箱',
-       kpis:[[F(n),'箱還沒做',n?'warn':'ok'],[F(done),'箱做好還沒出'],[(diff>0?'▲ ':diff<0?'▼ ':'')+F(Math.abs(diff)),'比上週'+(diff>0?'多':diff<0?'少':'一樣'),diff>0?'crit':diff<0?'ok':''],['$'+F(amt),'還沒出的金額']],
-       bar:tot?done/tot*100:0,barCap:tot?`還沒出的 ${F(tot)} 箱裡，已做好 ${P(done/tot*100)}`:'目前沒有未出的箱數',spark:ser.map(x=>x.v),sparkCap:`最近 ${ser.length} 週「還沒做」的箱數（越來越矮＝有在消化）`,
-       detail:()=>`<h4>📉 每週走勢</h4><p class="note">每一條＝那一週 Weekly 報表上，這個客戶「還沒生產」的箱數。最右邊是最新（${E(last)}）。</p>${CH.bars(ser)}
+       kpis:[[F(n),'箱還沒做',n?'warn':'ok'],[F(done),'箱做好還沒出'],[(diff>0?'▲ ':diff<0?'▼ ':'')+F(Math.abs(diff)),'比上一次'+(diff>0?'多':diff<0?'少':'一樣'),diff>0?'crit':diff<0?'ok':''],['$'+F(amt),'還沒出的金額']],
+       bar:tot?done/tot*100:0,barCap:tot?`還沒出的 ${F(tot)} 箱裡，已做好 ${P(done/tot*100)}`:'目前沒有未出的箱數',spark:ser.map(x=>x.v),sparkCap:`最近 ${ser.length} 次 Weekly「還沒做」的箱數（越來越矮＝有在消化）`,
+       detail:()=>`<h4>📉 走勢</h4><p class="note">每一條＝那一次 Weekly 報表上，這個客戶「還沒生產」的箱數。最右邊是最新（${E(last)}）。</p>${CH.bars(ser)}
         <h4>📦 這週明細</h4>${table([['產品',r=>E([['garment','成衣'],['apron','圍裙'],['topNapkin','桌巾／口布'],['fabric','布']].filter(x=>+r[x[0]]).map(x=>x[1]+' '+F(r[x[0]])).join('・')||'—')],['還沒出（箱）',r=>F(r.totalOpenCtns),1],['已做好',r=>F(r.producedCtns),1],['還沒做',r=>`<b class="${+r.unproducedCtns?'warn':''}">${F(r.unproducedCtns)}</b>`,1],['還沒做的工時（SMV 分）',r=>F(r.openSmv),1],['金額',r=>'$'+F(r.openAmount),1],['備註',r=>E(r.remark)]],cur)}
         <h4>📄 客戶 PDF 訂單（${pos.length} 張）</h4>${pos.length?`<p class="note">客戶寄來的原始 PO。🟢 還沒到要求出貨日　⚪ 已經過了要求出貨日（是否已出請看「成品與出貨」）。</p>`+table([['',x=>x.ship?(x.ship>=today?'🟢':'⚪'):'❔'],['PO',x=>E(x.no)],['下單日',x=>E(x.od||'—')],['要求出貨日',x=>`<b>${E(x.ship||'沒寫')}</b>`],['還有幾天',x=>x.ship&&x.ship>=today?daysTo(x.ship)+' 天':'—',1],['件數',x=>F(x.qty),1],['金額',x=>'$'+F(x.amt),1],['款式',x=>`<span class="small">${E(x.styles.slice(0,4).join('、'))}${x.styles.length>4?' …共 '+x.styles.length+' 款':''}</span>`]],pos):'<p class="note">平台裡還沒有這個客戶的 PDF 訂單。</p>'}
         <h4>👕 訂了哪些款</h4>${CH.hbars([...groupBy(pls,r=>r.style_code)].map(([s,b])=>({label:s,v:sum(b,r=>r.qty)})).sort((x,y)=>y.v-x.v).slice(0,20))}`}}).filter(g=>g.n||g.amt||g.nextShip);
     const N=groups.reduce((a,g)=>a+g.n,0),D=groups.reduce((a,g)=>a+sum((groupBy(C.get(g.key),r=>r.as_of_date).get(last)||[]),r=>r.producedCtns),0),up=groups.filter(g=>g.diff>0).length,soon=groups.filter(g=>g.nextShip&&daysTo(g.nextShip)<=14).length;
-    return {groups,top:`<div class="lead">📌 到 <b>${E(last||'—')}</b>（最新一週 Weekly）：<b>${groups.filter(g=>g.n>0).length}</b> 個客戶共還有 <b class="warn">${F(N)}</b> 箱沒做，另外 <b>${F(D)}</b> 箱做好了還沒出。${up?`<b class="crit">${up}</b> 個客戶比上週變多；`:''}${soon?`<b class="warn">${soon}</b> 個客戶有 PDF 訂單 14 天內要出。`:''}</div><p class="note">每張卡＝一個客戶。點卡片看：每週走勢、這週明細、客戶 PDF 訂單（哪天要出）、訂了哪些款。面板上 ◀ ▶ 可以直接換下一個客戶。</p>`}}},
+    return {groups,top:`<div class="lead">📌 到 <b>${E(last||'—')}</b>（最新一週 Weekly）：<b>${groups.filter(g=>g.n>0).length}</b> 個客戶共還有 <b class="warn">${F(N)}</b> 箱沒做，另外 <b>${F(D)}</b> 箱做好了還沒出。${up?`<b class="crit">${up}</b> 個客戶比上一次變多；`:''}${soon?`<b class="warn">${soon}</b> 個客戶有 PDF 訂單 14 天內要出。`:''}</div><p class="note">每張卡＝一個客戶。點卡片看：每週走勢、這週明細、客戶 PDF 訂單（哪天要出）、訂了哪些款。面板上 ◀ ▶ 可以直接換下一個客戶。</p>`}}},
   {label:'📄 每張客戶 PDF 訂單（依要出貨日）',sorts:[['還沒到期的先（近→遠）',(a,b)=>(a.past-b.past)||(a.past?String(b.ship).localeCompare(String(a.ship)):String(a.ship).localeCompare(String(b.ship)))],['件數 多→少',(a,b)=>b.n-a.n],['下單日 新→舊',(a,b)=>String(b.od).localeCompare(String(a.od))]],
    async build(){const {rows}=await loadTool('orders',k=>/^h:/.test(k));const today=ymdToday();
     const groups=[...groupBy(rows,r=>r.customer+'|'+r.po_number)].map(([k,b])=>{const ship=b.map(r=>poDate(r.ship_date)||poDate(r.cancel_date)).filter(Boolean).sort()[0]||'',od=b.map(r=>r.order_date).filter(Boolean).sort()[0]||'',n=sum(b,r=>r.qty),amt=sum(b,r=>r.ext_price),past=ship&&ship<today?1:0;
