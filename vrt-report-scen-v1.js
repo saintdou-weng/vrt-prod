@@ -68,7 +68,7 @@
       const busy={};rs.forEach(r=>wdList(r.start>from?r.start:from,r.end).forEach(d=>{busy[d]=1}));
       const emptyPre=preDays.filter(d=>!busy[d]).length,emptyPost=postDays.filter(d=>!busy[d]).length;
       slip+=late;remAll+=rem;hrsAll+=hrs;
-      return {line:l,rem:Math.round(rem),hours:Math.round(hrs),planEnd,cautious,late:Math.round(late),items:items.slice(0,3),styles:items.length,emptyPre,emptyPost,noWork:!items.length,uncut:items.filter(z=>z.uncut).reduce((a,z)=>a+z.qty,0)}});
+      return {line:l,rem:Math.round(rem),hours:Math.round(hrs),planEnd,cautious,late:Math.round(late),items:items.slice(0,3),styles:items.length,emptyPre,emptyPost,noWork:!items.length,lastEnd:runs.filter(r=>r.line===l).reduce((m,r)=>r.end>m?r.end:m,''),uncut:items.filter(z=>z.uncut).reduce((a,z)=>a+z.qty,0)}});
     /* 月排單：件數與標準工時；可用工時＝目前人數×8×剩餘工作天×上月效率 */
     const month=rows.filter(r=>String(r.month||'').slice(0,7)===ym);const mQty=month.reduce((a,r)=>a+num(r.sewingQty),0),mHrs=month.reduce((a,r)=>a+num(r.sewingQty)*num(r.smv)/60,0);
     const eff=(f.months&&f.months.prev&&f.months.prev.eff)||(f.sewing&&f.sewing.eff)||null,mp=(f.sewing&&f.sewing.manpower)||(f.months&&f.months.prev&&f.months.prev.manpower)||0;const wdLeft=preDays.length+postDays.length;
@@ -252,7 +252,7 @@
     SEC.lines=()=>{const o=[];const ls=(f.lines||[]).filter(z=>z.eff!=null).slice().sort((a,b2)=>lno(a.line)-lno(b2.line));if(ls.length<2)return o;
       o.push('📊 '+b('各組效率')+'（🟢≥'+TH.lineOk+'　🟡≥'+TH.lineLow+'　🔴＜'+TH.lineLow+'）');
       const po=x.po,tb=x.target&&x.target.byLine;
-      if(!W&&po&&po.lines.length){o[0]='📊 '+b('各組')+'（效率｜做／目標｜這張單剩多少・估哪天做完）';ls.forEach(z=>{const k=LS(z.line),pl2=po.lines.filter(q=>q.line===k)[0],t=tb&&tb[k];o.push('　'+light(lineTone(z.eff))+'<code>'+(k+'  ').slice(0,3)+'</code> '+P0(z.eff)+'%'+(t&&t.target?'｜'+N(t.actual)+'/'+N(t.target):'｜'+N(z.pieces))+(pl2&&!pl2.noWork?'｜剩 '+N(pl2.rem)+'・'+md(pl2.cautious)+(pl2.late>0?'🔴':''):pl2?'｜表上沒單':''))});return o}
+      if(!W&&po&&po.lines.length){o[0]='📊 '+b('各組')+'（效率｜做／目標｜這張單剩多少・估哪天做完）';ls.forEach(z=>{const k=LS(z.line),pl2=po.lines.filter(q=>q.line===k)[0],t=tb&&tb[k];o.push('　'+light(lineTone(z.eff))+'<code>'+(k+'  ').slice(0,3)+'</code> '+P0(z.eff)+'%'+(t&&t.target?'｜'+N(t.actual)+'/'+N(t.target):'｜'+N(z.pieces))+(pl2&&!pl2.noWork?'｜剩 '+N(pl2.rem)+'・'+md(pl2.cautious)+(pl2.late>0?'🔴':''):pl2?'｜'+(pl2.lastEnd?'排單只排到 '+md(pl2.lastEnd)+'，之後沒排':'排單表上沒有這組'):''))});return o}
       for(let i=0;i<ls.length;i+=4)o.push('　'+ls.slice(i,i+4).map(z=>light(lineTone(z.eff))+LS(z.line)+' '+P0(z.eff)).join('　'));return o};
     /* 每天（週報）：色條＝當天件數相對本週最高；顏色＝當天效率 */
     SEC.days=()=>{const o=[];if(!W||!f.days||!f.days.length)return o;const mx=Math.max.apply(null,f.days.map(d=>d.pieces))||1;const by={};f.days.forEach(d=>{by[d.date]=d});const hol={};(x.holidays||[]).forEach(r=>{for(let d=r.start;d<=r.end;d=addDays(d,1))hol[d]=r.name});
@@ -287,7 +287,7 @@
       if(po.slip>0)o.push('　保守估拖到下月 '+b(N(po.slip)+' 件')+'（'+P0(po.slipShare)+'%）');return o};
     SEC.outlook=()=>{const o=[],po=x.po;if(!po)return o;const AL=x.load&&x.load.week;const cells={};if(AL)AL.lines.forEach(z=>{cells[z.short]=z.cells});
       o.push('📍 '+b('各組做到哪')+'（本週排單｜照表 → 保守估｜剩多少）');
-      po.lines.forEach(z=>{const ic=z.noWork?'⚪':z.late>0?'🔴':z.cautious>z.planEnd?'🟡':'🟢';o.push('　<code>'+(z.line+'  ').slice(0,3)+'</code> '+(cells[z.line]?cells[z.line]+' ':'')+(z.noWork?'表上沒單 ⚪':md(z.planEnd)+' → '+md(z.cautious)+' '+ic+'・剩 '+N(z.rem)+(z.uncut?'（未裁 '+N(z.uncut)+'）':'')))});
+      po.lines.forEach(z=>{const ic=z.noWork?'⚪':z.late>0?'🔴':z.cautious>z.planEnd?'🟡':'🟢';o.push('　<code>'+(z.line+'  ').slice(0,3)+'</code> '+(cells[z.line]?cells[z.line]+' ':'')+(z.noWork?(z.lastEnd?'只排到 '+md(z.lastEnd)+'，之後沒排 ⚪':'表上沒單 ⚪'):md(z.planEnd)+' → '+md(z.cautious)+' '+ic+'・剩 '+N(z.rem)+(z.uncut?'（未裁 '+N(z.uncut)+'）':'')))});
       if(po.holiday)o.push('⛱ '+b('空檔')+'　'+po.holiday.name+'前 '+N(po.emptyPre)+'/'+N(po.lineDaysPre)+' 組日・後 '+N(po.emptyPost)+'/'+N(po.lineDaysPost)+' 組日'+(po.idleAfter.length?'・節後沒單 '+lsList(po.idleAfter):''));
       else if(po.emptyPre)o.push('⛱ '+b('空檔')+'　到月底 '+N(po.emptyPre)+'/'+N(po.lineDaysPre)+' 組日沒排');return o};
     SEC.due=()=>{const o=[],po=x.po;if(!po||!po.due.length)return o;o.push('🚢 '+b('月底前後交期')+'（未完成｜已入成品倉｜未車）');
