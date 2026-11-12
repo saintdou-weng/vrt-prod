@@ -1769,11 +1769,14 @@ window.VRT_LOCAL_READY=(async function init(){
 /* PROD v3.4 HRA-style automatic reconcile; manual cloud buttons and original business logic remain unchanged. */
 window.addEventListener('load',function(){setTimeout(function(){try{if(window.VRTProdAutoSync)VRTProdAutoSync.install({key:'spareparts',lockKey:'spareparts',pull:async function(){return await (window.cloudDownload&&window.cloudDownload(true));},push:async function(){return await (window.cloudUpload&&window.cloudUpload(true));},canSync:function(){return !!((window.SET&&SET.gasUrl)||VRTPlatform.getGasUrl());},startDelay:1200});}catch(e){console.warn('[VRT Auto spareparts]',e)}},0)},{once:true});
 </script>
-<script src="vrt-tg-summary-v1.js?v=4.19.0"></script>
+<script src="vrt-tg-summary-v1.js?v=4.28.0"></script>
 <script src="vrt-telegram-v1.js?v=4.19.0"></script>
 <script>
 /* v4.14 每頁獨立 Telegram 摘要（日／週／月／年，中英雙語，與機器人同一份文字） */
-try{VRTTelegram.init({kind:"spareparts",tool:"spareparts",getData:()=>{const s=VRTParts39.getState();const m=s.maintenance||{};return {needle:m.needleChanges||[],part:m.partChanges||[],txns:s.txns||[]}}})}catch(e){console.warn("VRTTelegram init",e)}
+try{VRTTelegram.init({kind:"spareparts",tool:"spareparts",getData:async()=>{const s=VRTParts39.getState();const m=s.maintenance||{};
+ /* v4.28：摘要跟車縫日報連動（哪些款在做、是不是換款日）→ 從雲端讀最近 3 個月車縫列，讀不到就不連動，摘要照發 */
+ let sewing=window.__vrtSewForParts||null;if(!sewing){try{const G=VRTPlatform.getGasUrl();if(G){const T=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error("timeout")),ms))]);const mf=await T(fetch(G+"?action=smartManifest&tool=sewing&t="+Date.now(),{redirect:"follow"}).then(r=>r.json()),20000);const H=(mf.data||mf).hashes||{};const now=new Date();const want=[0,1,2].map(i=>{const d=new Date(now.getFullYear(),now.getMonth()-i,1);return "m:"+d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}).filter(k=>H[k]);const bs=await T(Promise.all(want.map(k=>fetch(G+"?action=smartBucket&tool=sewing&bucket="+encodeURIComponent(k)+"&hash="+encodeURIComponent(H[k]),{redirect:"follow"}).then(r=>r.json()))),40000);sewing=bs.flatMap(b=>((b.data&&b.data.records)||[]).filter(r=>!r._vrtEntity).map(r=>r._vrtValue||r));window.__vrtSewForParts=sewing}}catch(e){console.warn("sewing link skipped",e);sewing=[]}}
+ return {needle:m.needleChanges||[],part:m.partChanges||[],txns:s.txns||[],sewing:sewing||[]}}})}catch(e){console.warn("VRTTelegram init",e)}
 </script>
 <script src="vrt-inbox-v1.js?v=4.19.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"spareparts",label:"🔧 機修零件",feed:f=>importExcel(f)})}catch(e){console.warn("VRTInbox init",e)}</script>
 <!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->

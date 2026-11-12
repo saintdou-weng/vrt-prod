@@ -147,22 +147,38 @@
   function purchaseLines(txns){const xs=(txns||[]).filter(isPurchase),pool=new Map();
     xs.forEach(x=>{if(isIn(x))return;const k=dupKey(x);if(k)pool.set(k,(pool.get(k)||0)+1)});if(!pool.size)return xs;
     return xs.filter(x=>{if(!isIn(x))return true;const k=dupKey(x),n=k?pool.get(k)||0:0;if(n>0){pool.set(k,n-1);return false}return true})}
+  /* v1.3（2026-11-12）Paul：機修零件摘要也要有圖示、顏色；跟車縫日報連動，看是哪些款在做、是不是換款造成換針。
+     🟢 換款（計畫內）　🔴 斷針／損壞（非計畫）　⚪ 沒填原因；各組一條長條＋那幾天在做的款；data.sewing（車縫日報列）有給才連動。 */
   function spareparts(data,P,prev){
     data=data||{};const nc=chgAgg(filterPeriod(data.needle,P)),np=chgAgg(prev?filterPeriod(data.needle,prev):[]),pc=chgAgg(filterPeriod(data.part,P)),pp=chgAgg(prev?filterPeriod(data.part,prev):[]);
     const allTx=purchaseLines(data.txns),tx=filterPeriod(allTx,P),txp=prev?filterPeriod(allTx,prev):[];
     if(!nc.rows&&!pc.rows&&!tx.length)return {text:noData(P),empty:true};const L=[];
-    if(nc.rows){L.push('<b>🪡 機針更換 Needle changes</b>: <b>'+N(nc.qty)+'</b> 支 pcs'+(prev&&np.qty?esc(delta(nc.qty,np.qty)):'')+'（'+N(Object.keys(nc.days).length)+' 天 days · '+N(nc.rows)+' 列 rows）');
-      L.push('　換款 Planned: '+N(nc.planned)+'（'+pct(nc.qty?nc.planned/nc.qty*100:null,0)+'） · 非計畫 Unplanned (damage+broken): <b>'+N(nc.unplanned)+'</b>（'+pct(nc.qty?nc.unplanned/nc.qty*100:null,0)+'） · 其他／未填 Other/blank: '+N(nc.qty-nc.planned-nc.unplanned));
-      L.push('　原因 Reasons: '+reasonLine(nc));
-      L.push('　線別最多 Top lines: '+(top(nc.lines,3,(k,v)=>esc(k)+' '+N(v))||'—').replace(/\n/g,' · '));
-      L.push('　針型最多 Top needles: '+(top(nc.items,3,(k,v)=>esc(k)+' '+N(v))||'—').replace(/\n/g,' · '))}
-    if(pc.rows){if(L.length)L.push('');L.push('<b>🔩 零件更換 Spare-part changes</b>: <b>'+N(pc.qty)+'</b> 件 pcs'+(prev&&pp.qty?esc(delta(pc.qty,pp.qty)):'')+'（'+N(Object.keys(pc.days).length)+' 天 days）');
-      L.push('　原因 Reasons: '+reasonLine(pc));
-      L.push('　零件最多 Top parts: '+(top(pc.items,3,(k,v)=>esc(k.length>28?k.slice(0,28)+'…':k)+' '+N(v))||'—').replace(/\n/g,' · '));
-      L.push('　線別最多 Top lines: '+(top(pc.lines,3,(k,v)=>esc(k)+' '+N(v))||'—').replace(/\n/g,' · '))}
+    const lnum=v=>{const m=String(v||'').match(/\d+/);return m?String(+m[0]):''};
+    const bar=(v,mx)=>'▇'.repeat(Math.max(1,Math.round(v/Math.max(mx,1)*8)));
+    const dl=(cur,pre,moreIsBad)=>{if(!prev||!pre)return '';const d=(cur-pre)/pre*100;if(Math.abs(d)<0.05)return '　➖ 跟上期一樣 same as prev';return '　'+((d>0)===!!moreIsBad?'🔴':'🟢')+(d>0?'▲':'▼')+Math.abs(d).toFixed(1)+'% vs 上期 prev'};
+    const share=(q,t)=>pct(t?q/t*100:null,0);
+    const lcode=k=>{const n=lnum(k);return '<code>'+esc(((n?'L'+n:String(k).slice(0,4))+'   ').slice(0,4))+'</code>'};
+    /* 車縫日報：每組每天做哪些款；跟前一個有做的日子比，有新款＝換款日 */
+    const sd={},dates={};(data.sewing||[]).forEach(r=>{if(!r||!r.date||!r.styleNo)return;const l=lnum(r.lineNo||r.line);if(!l)return;const k=l+'|'+String(r.date).slice(0,10),s=String(r.styleNo).trim();const o=sd[k]||(sd[k]={});o[s]=(o[s]||0)+(Number(r.pieces)||0);(dates[l]=dates[l]||{})[String(r.date).slice(0,10)]=1});
+    const isChg=(l,d)=>{const a=Object.keys(dates[l]||{}).sort(),i=a.indexOf(d);if(i<1)return false;const pre=sd[l+'|'+a[i-1]]||{};return Object.keys(sd[l+'|'+d]||{}).some(s=>!(s in pre))};
+    const link=rows=>{let linked=0,onChg=0;const sty={};rows.forEach(v=>{if(!v||v.deleted)return;const l=lnum(v.line),d=String(v.date||'').slice(0,10),q=Number(v.qty)||0,m=sd[l+'|'+d];if(!m)return;linked+=q;if(isChg(l,d))onChg+=q;const o=sty[String(v.line||'—')]||(sty[String(v.line||'—')]={});Object.keys(m).forEach(s=>{o[s]=(o[s]||0)+m[s]})});return {linked,onChg,sty}};
+    const lineRows=(agg,lk)=>{const es=Object.entries(agg.lines).sort((a,b)=>b[1]-a[1]),mx=es.length?es[0][1]:1;return es.slice(0,6).map(([k,v])=>{const st=lk&&lk.sty[k]?Object.entries(lk.sty[k]).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>esc(x[0])).join('、'):'';return lcode(k)+bar(v,mx)+' <b>'+N(v)+'</b>'+(st?'　🧵 '+st:'')}).concat(es.length>6?['　… 其他 '+N(es.length-6)+' 組 more lines']:[])};
+    if(nc.rows){const blank=nc.qty-nc.planned-nc.unplanned,ur=nc.qty?nc.unplanned/nc.qty:0,lk=link(filterPeriod(data.needle,P));
+      L.push('🪡 <b>機針更換 Needle changes</b>　<b>'+N(nc.qty)+'</b> 支 pcs'+dl(nc.qty,np.qty,true)+'（'+N(Object.keys(nc.days).length)+' 天 days）');
+      L.push('🟢 換款 Planned <b>'+N(nc.planned)+'</b>（'+share(nc.planned,nc.qty)+'）　'+(ur>=0.3?'🔴':nc.unplanned?'🟡':'🟢')+' 斷針／損壞 Unplanned <b>'+N(nc.unplanned)+'</b>（'+share(nc.unplanned,nc.qty)+'）　⚪ 沒填原因 No reason <b>'+N(blank)+'</b>（'+share(blank,nc.qty)+'）');
+      if(nc.qty&&blank/nc.qty>=0.3)L.push('⚠️ '+N(blank)+' 支沒填原因，分不出是換款還是斷針 → 請機修補填 · reason missing, please fill in');
+      if(lk.linked)L.push('🧵 對照車縫日報 vs sewing report：<b>'+N(lk.onChg)+'</b> 支在「換款當天」on a style-change day（'+share(lk.onChg,lk.linked)+'），其餘 '+N(lk.linked-lk.onChg)+' 支在同一款生產中 during the same style');
+      else if((data.sewing||[]).length)L.push('🧵 這幾天車縫日報沒有對得上的組別／日期 · no matching sewing rows');
+      L.push('📊 各組 By line'+(lk.linked?'（🧵＝那幾天在做的款 styles sewn）':''));lineRows(nc,lk).forEach(x=>L.push(x));
+      L.push('🧷 針型 Needle types：'+(top(nc.items,3,(k,v)=>esc(k)+' <b>'+N(v)+'</b>')||'—').replace(/\n/g,' · '))}
+    if(pc.rows){if(L.length)L.push('');const lk=link(filterPeriod(data.part,P)),un=pc.unplanned;
+      L.push('🔩 <b>零件更換 Spare-part changes</b>　<b>'+N(pc.qty)+'</b> 件 pcs'+dl(pc.qty,pp.qty,true)+'（'+N(Object.keys(pc.days).length)+' 天 days）');
+      L.push((un?'🔴':'🟢')+' 原因 Reasons：'+reasonLine(pc));
+      L.push('🔧 零件 Parts：'+(top(pc.items,3,(k,v)=>esc(k.length>28?k.slice(0,28)+'…':k)+' <b>'+N(v)+'</b>')||'—').replace(/\n/g,' · '));
+      lineRows(pc,lk).forEach(x=>L.push(x))}
     if(tx.length){const cat={},parts={};let amt=0,amtp=0;tx.forEach(x=>{const a=amount(x);amt+=a;cat[String(x.category||'—')]=(cat[String(x.category||'—')]||0)+a;if(x.partNo)parts[x.partNo]=1});txp.forEach(x=>{amtp+=amount(x)});
-      if(L.length)L.push('');L.push('<b>🧾 採購 Purchases</b>: $'+amt.toFixed(2)+(prev&&txp.length?esc(delta(amt,amtp)):'')+' · '+N(tx.length)+' 筆 lines · '+N(Object.keys(parts).length)+' 品項 items');
-      L.push('　類別 Top categories: '+(top(cat,3,(k,v)=>esc(k)+' $'+v.toFixed(0))||'—').replace(/\n/g,' · '))}
+      if(L.length)L.push('');L.push('🧾 <b>採購 Purchases</b>　<b>$'+amt.toFixed(2)+'</b>'+(txp.length?dl(amt,amtp,true):'')+' · '+N(tx.length)+' 筆 lines · '+N(Object.keys(parts).length)+' 品項 items');
+      const ce=Object.entries(cat).sort((a,b)=>b[1]-a[1]),cm=ce.length?ce[0][1]:1;ce.slice(0,4).forEach(([k,v])=>L.push('　'+bar(v,cm)+' '+esc(k)+' <b>$'+v.toFixed(0)+'</b>'))}
     return {text:L.join('\n'),stats:{needle:nc,part:pc,purchases:tx.length}};
   }
   /* ── 🗓 production plan: styles whose schedule overlaps the period (anchor = today) ── */
@@ -297,5 +313,5 @@
   }
   const clip=(text,max)=>{text=String(text||'');max=max||4000;if(text.length<=max)return text;let cut=text.lastIndexOf('\n',max-100);if(cut<1000)cut=max-100;return text.slice(0,cut)+'\n… ✂️ 訊息過長已截短 / message truncated（Telegram 4096 限制）'};
   const plain=html=>String(html||'').replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-  g.VRTTgSummary={version:'1.2',purchaseLines,PERIODS,PERIOD_LABEL,KINDS,REASON_ZH,REASON_EN,esc,N,pct,delta,top,periodOf,monthsIn,isoWeekKey,addDays,localToday,filterPeriod,latestDate,periodOptions,rowsOf,dateFnOf,build,header,clip,plain,anyDate,builders:BUILDERS,agg:{sewAgg,cutAgg,qcAgg,kpiAgg,chgAgg,qcPick,cutDaily}};
+  g.VRTTgSummary={version:'1.3',purchaseLines,PERIODS,PERIOD_LABEL,KINDS,REASON_ZH,REASON_EN,esc,N,pct,delta,top,periodOf,monthsIn,isoWeekKey,addDays,localToday,filterPeriod,latestDate,periodOptions,rowsOf,dateFnOf,build,header,clip,plain,anyDate,builders:BUILDERS,agg:{sewAgg,cutAgg,qcAgg,kpiAgg,chgAgg,qcPick,cutDaily}};
 })(typeof globalThis!=='undefined'?globalThis:this);
