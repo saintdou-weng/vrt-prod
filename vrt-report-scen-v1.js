@@ -50,6 +50,8 @@
       const x=runs.find(q=>q.k===k&&!(st>addDays(q.end,3)||en<addDays(q.start,-3)));const smv=num(r.smv);
       if(x){if(st<x.start)x.start=st;if(en>x.end)x.end=en;x.qty+=num(r.sewingQty);x.cut+=num(r.cutQty);x.daily=Math.max(x.daily,num(r.dailyOutput));if(!x.smv&&smv)x.smv=smv;if(r.po&&x.pos.indexOf(String(r.po))<0)x.pos.push(String(r.po))}
       else runs.push({k,line:lineKey(r.line),style:String(r.style).trim(),color:String(r.color||'').trim(),customer:String(r.customer||'').trim(),start:st,end:en<st?st:en,qty:num(r.sewingQty),cut:num(r.cutQty),daily:num(r.dailyOutput),smv,ship:dayKey(r.shipmentDate)||'',pos:r.po?[String(r.po)]:[],remark:String(r.remark||'')})});
+    /* 排單表整欄都沒填已裁數時（新版排單表常這樣），不能把每張單都當成「未裁」 */
+    const anyCut=runs.some(r=>r.cut>0);
     /* 實績：每組每款從上線日起已車多少（款號去空白比對） */
     const done=(line,style,start)=>{let q=0,hit=false;dataDates.forEach(d=>{if(d<addDays(start,-2))return;days[d].forEach(r=>{if(lineKey(r.lineNo)!==line)return;const a=normSty(r.styleNo||r.style),b=normSty(style);if(a&&b&&(a===b||a.indexOf(b)>=0||b.indexOf(a)>=0)){q+=num(r.pieces);hit=true}})});return hit?q:null};
     /* 實際速度：最近 20 個有資料的工作天，各組實做 ÷ 當天排單日產目標 */
@@ -64,7 +66,7 @@
         const rate=(r.daily>0?r.daily:r.qty/total)*pace;const st=nextWd(r.start>cur?r.start:cur);const need=Math.max(1,Math.ceil(q/Math.max(rate,1)));let d=st,n=1;while(n<need){d=addDays(d,1);if(DR.isWorkday(d))n++}
         cur=addDays(d,1);cautious=d;if(r.end>planEnd)planEnd=r.end;rem+=q;if(r.smv>0)hrs+=q*r.smv/60;else smvMiss.add(r.style);
         if(d>mEnd){const over=wdList(addDays(mEnd,1),d).length;late+=Math.min(q,Math.round(over*rate))}
-        items.push({style:r.style,customer:r.customer,qty:Math.round(q),uncut:r.cut<=0,end:r.end,cautious:d})});
+        items.push({style:r.style,customer:r.customer,qty:Math.round(q),uncut:anyCut&&r.cut<=0,end:r.end,cautious:d})});
       const busy={};rs.forEach(r=>wdList(r.start>from?r.start:from,r.end).forEach(d=>{busy[d]=1}));
       const emptyPre=preDays.filter(d=>!busy[d]).length,emptyPost=postDays.filter(d=>!busy[d]).length;
       slip+=late;remAll+=rem;hrsAll+=hrs;
@@ -147,7 +149,7 @@
       if(!L){add('noplan',95,'R','沒有排單','這週系統裡沒有 Production Plan 的排單資料，先把排產表匯進來。','load','生管／PMC','匯入最新排產表');return S.sort((a,b)=>b.w-a.w)}
       const AL=x.load||{week:adjLoad(L.week),next:adjLoad(L.next)};const wk=AL.week,nx=AL.next;const PMC='生管／PMC';
       if(hol.length)add('shortWeek',74,'I','放假 '+hol.reduce((a,r)=>a+r.days,0)+' 天','這週放'+holTxt+'，只有 '+N(wk.workdays)+' 個工作天，排單量要照天數看。','load');
-      if(wk.workdays>0&&wk.emptyLines.length)add('emptyLines',85,'R','空線 '+wk.emptyLines.length+' 組',lsList(wk.emptyLines)+' 這週完全沒排單，'+N(wk.emptyLines.length*wk.workdays)+' 組日空著。有布的單先補進去，真的沒料再按組提局部停工。','load',PMC,'有布的單補進空線；無料再提局部停工');
+      if(wk.workdays>0&&wk.emptyLines.length)add('emptyLines',85,'R','空線 '+wk.emptyLines.length+' 組',lsList(wk.emptyLines)+(f.today&&f.end<f.today?' 那一週表上沒排單（那週已經過了，只供檢討；現在的空檔看最新排單），':' 這週完全沒排單，')+N(wk.emptyLines.length*wk.workdays)+' 組日空著。有布的單先補進去，真的沒料再按組提局部停工。','load',PMC,'有布的單補進空線；無料再提局部停工');
       if(nx&&nx.workdays>0&&nx.emptyLines.length)add('nextEmpty',75,'A','下週未排 '+nx.emptyLines.length+' 組','下週（'+md(nx.start)+'–'+md(nx.end)+'）'+(nx.emptyLines.length===nx.lineCount&&nx.lineCount>1?N(nx.lineCount)+' 組都還沒排':lsList(nx.emptyLines)+' 還沒排，負荷只有 '+P0(nx.pct)+'%')+'，這週內要排完。','load',PMC,'本週內排完下週並確認物料');
       if(wk.pct!=null&&wk.workdays>0){if(wk.pct<TH.loadA&&!wk.emptyLines.length)add('loadLow',82,'R','負荷 '+P0(wk.pct)+'%','這週負荷只有 '+P0(wk.pct)+'%（'+N(wk.sched)+'/'+N(wk.avail)+' 組日），排不滿。','load',PMC,'把有布的單往前拉，補滿空檔');else if(wk.pct>=TH.loadG)add('loadFull',26,'G','負荷 '+P0(wk.pct)+'%','這週排滿：負荷 '+P0(wk.pct)+'%，'+N(wk.lineCount)+' 組、'+N(wk.styles)+' 款、約 '+N(wk.pieces)+' 件。','load')}
       if(wk.gaps.length)add('gap',60,'A','中途空檔','中途空檔：'+(wk.gaps.length>4?N(wk.gaps.length)+' 組（'+wk.gaps.slice(0,3).map(z=>z.short).join('、')+'…）各空 2 天以上':wk.gaps.map(z=>z.short+' '+z.gap+' 天').join('、'))+'，補排或把前後款拉長，不要整組等。','load',PMC,'補排或延伸前後款');
