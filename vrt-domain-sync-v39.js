@@ -30,6 +30,7 @@
     else if(entity==='maintenance.editHistory')row._smartBucket='maint_history_'+syncPart43(id,8);
     else if(entity==='maintenance.tombstones')row._smartBucket='maintenance_tombstones';
     else if(entity==='maintenance.invoiceSummaries')row._smartBucket='maint_invoice_'+syncPart43(id,4);
+    else if(entity==='maintenance.machines')row._smartBucket='maint_machines_'+syncPart43(id,4); // v4.32：機台原本一台一區（幾百次上傳）→ 固定 4 區
     else if(entity==='parts.parts')row._smartBucket='parts_master_'+syncPart43(id,4);
     else if(entity==='parts.versions')row._smartBucket='parts_versions_'+syncPart43(id,4);
     else if(/^parts\./.test(entity))row._smartBucket='parts_'+entity.slice(6)+'_'+syncPart43(id,2);
