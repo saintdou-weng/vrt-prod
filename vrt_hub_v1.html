@@ -8,7 +8,8 @@
 <script src="vrt-platform-v40.js?v=4.25.0"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.25.0"></script>
-<script src="vrt-item-photos-v1.js?v=4.30.0"></script>
+<script src="vrt-item-photos-v1.js?v=4.31.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.31.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
    舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
@@ -127,7 +128,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.30.0';
+const V='4.31.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -161,7 +162,7 @@ function bgMenu(){let m=$('#bgMenu');if(!m){m=document.createElement('div');m.id
   fi.onchange=()=>{const f=fi.files[0];if(!f)return;const im=new Image();im.onload=()=>{const s=Math.min(1,1600/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);try{localStorage.setItem('vrt_bg_img',c.toDataURL('image/jpeg',.72));localStorage.setItem('vrt_bg','custom')}catch(e){}applyBg();URL.revokeObjectURL(im.src)};im.src=URL.createObjectURL(f)};
   return m}
 $('#themeBtn').onclick=()=>{bgMenu().classList.toggle('on')};
-$('#photoLibBtn').onclick=()=>{if(!window.VRTPhotos)return;const h=(location.hash||'').slice(1);const dm={fabric:'fabric',parts:'parts',ship:'customer',orders:'customer',style:'style',output:'line'}[h]||'fabric';VRTPhotos.library({domain:dm,onOpen:(d,k)=>{if(!REF[d])return false;SHEET.openRef(d,k);return true}})};
+$('#photoLibBtn').onclick=()=>{if(!window.VRTPhotos)return;const h=(location.hash||'').slice(1);const dm={fabric:'fabric',parts:'parts',ship:'customer',orders:'customer',style:'style',output:'line'}[h]||'fabric';VRTPhotos.library({domain:dm,items:d=>REF[d]?REF[d]().then(l=>l.map(x=>({key:(x.photo&&x.photo.key)||x.key,name:x.alt?x.alt:String(x.title).replace(/^[^A-Za-z0-9\u3400-\u9fff]+/,''),alt:x.title,code:x.code||''}))):Promise.resolve([]),onOpen:(d,k)=>{if(!REF[d])return false;SHEET.openRef(d,k);return true}})};
 window.addEventListener('storage',e=>{if(e.key==='vrt_theme'&&e.newValue)document.documentElement.setAttribute('data-theme',e.newValue)});
 
 /* ── 路由：#hub/tab ── */
@@ -328,7 +329,7 @@ function partGroups(){return once('parts',async()=>{const [{rows},chg]=await Pro
   const parts=rows.filter(r=>r&&r.partNo);const pc=chg.filter(r=>r.partType);const since=addD(ymdToday(),-92);
   const groups=parts.map(r=>{const nm=nk(r.name),sp=nk(r.spec);const rel=pc.filter(x=>{const t=nk(x.partType);return t&&nm&&(t===nm||t.indexOf(nm)>=0||nm.indexOf(t)>=0||(sp&&t.indexOf(sp)>=0))});
     const used=sum(rel.filter(x=>x.date>=since),x=>x.qty);const low=+r.minStock>0&&(+r.qty||0)<+r.minStock?1:0;const amt=(+r.qty||0)*(+r.unitPrice||0);
-    return {key:r.partNo,kind:'零件',title:r.partNo,sub:E([r.name,r.spec].filter(Boolean).join(' · ')),low,used,amt,search:[r.name,r.spec,r.machineType,r.category,r.location].join(' '),
+    return {key:r.partNo,kind:'零件',title:r.partNo,alt:[r.name,r.spec,r.machineType].filter(Boolean).join(' '),sub:E([r.name,r.spec].filter(Boolean).join(' · ')),low,used,amt,search:[r.name,r.spec,r.machineType,r.category,r.location].join(' '),
      badge:low?'<span class="lowtag">低於安全量</span>':'',chip:low?'⚠':'',
      kpis:[[F(r.qty),'庫存 '+(r.unit||''),low?'crit':'ok'],[F(r.minStock),'安全量'],[F(r.unitPrice,2),'單價'],[F(amt),'庫存金額'],[F(used),'近 3 個月換掉']],
      detail:()=>`<h4>基本資料</h4>${kv([['料號 Part No.',r.partNo],['名稱 Name',r.name],['規格 Spec',r.spec],['類別 Category',r.category],['機種 Machine',r.machineType],['位置 Location',r.location],['單位 Unit',r.unit],['供應商 Supplier',r.supplier]])}
@@ -353,7 +354,7 @@ function defectGroups(){return once('defect',async()=>{const ms=monthsBack(6);co
   const G=groupBy(ev,x=>nk(x.name));
   return [...G].map(([k,a])=>{const nm=a[0].name,code=(a.find(x=>x.code)||{}).code||'';const n=sum(a,x=>x.qty),n30=sum(a.filter(x=>x.date>=d30),x=>x.qty),qc=sum(a.filter(x=>x.src==='qc'),x=>x.qty),kpi=sum(a.filter(x=>x.src==='kpi'),x=>x.qty);const days=lastDays(a,30,x=>x.date);
     const st=new Map();a.forEach(x=>x.styles.forEach(s=>st.set(s,(st.get(s)||0)+x.qty)));
-    return {key:k,kind:'瑕疵',title:nm,n,n30,sub:(code?'代碼 '+E(code)+' · ':'')+'最後 '+(lastDays(a,1,x=>x.date)[0]||'').slice(5),search:code+' '+[...new Set(a.map(x=>x.line))].join(' '),
+    return {key:k,kind:'瑕疵',title:nm,code,n,n30,sub:(code?'代碼 '+E(code)+' · ':'')+'最後 '+(lastDays(a,1,x=>x.date)[0]||'').slice(5),search:code+' '+[...new Set(a.map(x=>x.line))].join(' '),
      kpis:[[F(n30),'近 30 天件數',n30?'warn':'ok'],[F(qc),'Final QC（6 個月）'],[F(kpi),'車縫 KPI（6 個月）'],[P(qc/totQC*100),'佔 Final QC 不良'],[String(new Set(a.map(x=>x.line)).size),'條線出現']],spark:dailySeries(a,days,x=>x.qty).map(x=>x.v),
      detail:()=>`<h4>每月件數（長條＝Final QC，橘線＝車縫 KPI）</h4>${CH.bars(monthBars(a,x=>x.date,x=>x.src==='qc'?x.qty:0,x=>x.src==='kpi'?x.qty:0,6),{v2:true,legend:'兩個來源分開算，不相加：Final QC 是成品抽驗，車縫 KPI 是線上自檢。'})}
       <h4>哪幾條線最多</h4>${CH.hbars([...groupBy(a,x=>x.line||'—')].map(([l,b])=>({label:l,v:sum(b,x=>x.qty)})).sort((x,y)=>y.v-x.v).slice(0,14))}
@@ -375,6 +376,23 @@ function fabricGroups(){return once('fabric',async()=>{const {rows}=await loadTo
 REF.parts=()=>partGroups();REF.needle=()=>needleGroups();REF.defect=()=>defectGroups();REF.fabric=()=>fabricGroups();
 const addPh=(l,domain)=>{l.forEach(g=>{if(!g.photo)g.photo={domain,key:g.key,name:g.title}});return l};
 ['parts','needle','defect','fabric'].forEach(k=>{const f=REF[k];REF[k]=()=>f().then(l=>addPh(l,k))});
+
+function bomGroups(){return once('bom',async()=>{const {rows}=await loadTool('bom');const st=rows.filter(r=>r&&r.styleNo&&Array.isArray(r.items));
+  return st.map(s=>{const it=s.items.filter(x=>x&&(x.itemName||x.item||x.description));const cat=x=>x.category||'其他';const fab=it.filter(x=>/fabric|布/i.test(cat(x)));const k=nk(s.styleNo);
+    const cost=s.costing&&typeof s.costing==='object'?Object.entries(s.costing).filter(([a,v])=>typeof v==='number'&&isFinite(v)).slice(0,8):[];
+    return {key:k,kind:'款式',title:s.styleNo,alt:s.styleName||'',sub:E([s.styleName,s.customerCode].filter(Boolean).join(' · ')),n:it.length,search:[s.styleName,s.customerCode,...it.map(x=>x.itemName||x.item)].join(' '),
+     badge:s.status?`<span class="tag">${E(s.status)}</span>`:'',kpis:[[String(it.length),'項用料'],[String(fab.length),'項布料'],[String(it.length-fab.length),'項副料'],[String((s.versions||[]).length||1),'個版本']],
+     detail:()=>`<h4>用料分類</h4>${CH.hbars([...groupBy(it,cat)].map(([c,b])=>({label:c,v:b.length})).sort((x,y)=>y.v-x.v))}
+      <h4>用料明細（每件用量）</h4>${table([['分類',x=>E(cat(x))],['料號／品名',x=>/fabric|布/i.test(cat(x))&&(x.itemName||x.item)?link('fabric',x.itemName||x.item):E(x.itemName||x.item)],['說明',x=>E(String(x.description||'').slice(0,40))],['顏色',x=>E(x.color)],['每件',x=>F(x.qtyPcs,4),1],['每打',x=>F(x.qtyDozen,3),1],['單位',x=>E(x.unit)],['損耗%',x=>F(x.wastePct,1),1]],it.slice().sort((a,b)=>cat(a).localeCompare(cat(b))))}
+      ${cost.length?`<h4>成本</h4>${kv(cost.map(([a,v])=>[a,F(v,3)]))}`:''}<p class="note">BOM 的編輯、版本、和 PSJERP 比對請到上面「BOM」分頁。布料料號可以點進去看庫存與照片。</p>`}}).sort((a,b)=>a.title.localeCompare(b.title,'en',{numeric:true}))})}
+function poGroups(){return once('po',async()=>{const {rows}=await loadTool('shipping');const PM=groupBy(rows.filter(r=>r&&r.po),r=>nk(r.po));
+  return [...PM].map(([k,a])=>{const o=sum(a,r=>r.orig),s=sum(a,r=>r.shipped),n=sum(a.filter(r=>+r.open>0),r=>r.open);const etd=[...new Set(a.map(r=>r.etd).filter(Boolean))].sort();const ab=a.some(r=>r.status==='abnormal');const cust=a[0].cust||'';
+    return {key:k,kind:'PO',title:a[0].po,n,o,s,etd:etd[etd.length-1]||'',sub:E(cust)+(etd.length?' · ETD '+E(etd[etd.length-1]):''),search:cust+' '+[...new Set(a.map(r=>r.style+' '+r.color))].join(' '),
+     badge:ab?'<span class="tag crit">異常</span>':n?'<span class="tag warn">未出完</span>':'<span class="tag ok">已出完</span>',chip:n?'':'✓',bar:o?s/o*100:null,barCap:o?P(s/o*100)+' 已出':'',
+     kpis:[[F(o),'訂單件'],[F(s),'已出'],[F(n),'未出',n?'warn':'ok'],[String(new Set(a.map(r=>r.style)).size),'款']],
+     detail:()=>`<h4>依款號／顏色</h4>${table([['款號',r=>E(r.style)],['品名',r=>E(String(r.desc||'').slice(0,26))],['顏色',r=>E(r.color)],['尺寸',r=>E(r.size)],['訂單',r=>F(r.orig),1],['已出',r=>F(r.shipped),1],['未出',r=>`<b class="${+r.open>0?'warn':''}">${F(r.open)}</b>`,1],['ETD',r=>E(r.etd)],['狀態',r=>E(r.status)],['布料',r=>r.fabItem?link('fabric',r.fabItem):'']],a.slice().sort((x,y)=>(+y.open||0)-(+x.open||0)))}
+      <h4>依顏色（訂單／已出）</h4>${CH.hbars([...groupBy(a,r=>r.color||'—')].map(([c,b])=>({label:c+' · '+P(sum(b,r=>r.shipped)/Math.max(1,sum(b,r=>r.orig))*100),v:sum(b,r=>r.orig)})).sort((x,y)=>y.v-x.v).slice(0,14))}`}}).sort((a,b)=>b.n-a.n||String(b.etd).localeCompare(String(a.etd)))})}
+REF.bom=()=>bomGroups().then(l=>addPh(l,'style'));REF.po=()=>poGroups().then(l=>addPh(l,'ship'));
 const SPECS={
  output:{segments:[
   {label:'🧵 車縫（每條線）',photo:'line',photoTip:'可放這條線的排位、標準作業或樣品照。',sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['效率高→低',(a,b)=>(b.e||0)-(a.e||0)],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['線別',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
@@ -401,6 +419,7 @@ const SPECS={
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(sum(rows,r=>r.qty))}</div><div class="l">已裝箱件數（11 月起）</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.ctns),1)}</div><div class="l">箱</div></div><div class="kpi"><div class="v">${E(days[days.length-1]||'—')}</div><div class="l">最新裝箱日</div></div></div>`}}}
  ]},
  style:{segments:[
+  {label:'🧾 BOM（每一款用料）',photo:'style',photoTip:'放這一款的樣品照、正確成品照；換料或做法不同的放每月。',sorts:[['款號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})],['用料多→少',(a,b)=>b.n-a.n]],build:async()=>({groups:await bomGroups(),top:'<p class="note">每一款的 BOM 用料：布料、副料、每件用量、損耗。布料料號點進去看庫存與照片。</p>'})},
   {label:'📐 每一款（近 3 個月車縫）',photo:'style',photoTip:'放這一款的樣品、BOM 用料、正確成品照。',sorts:[['件數',(a,b)=>b.n-a.n],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['SMV 高→低',(a,b)=>(b.smv||0)-(a.smv||0)],['最近做的',(a,b)=>String(b.d).localeCompare(String(a.d))]],
    async build(){const [{rows},cut]=await Promise.all([loadTool('sewing',keepMonths(3)),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]}))]);
     const S=groupBy(rows,r=>String(r.styleNo||'').trim().toUpperCase());const C=groupBy(cut.rows,r=>String(r.styleNo||'').trim().toUpperCase());
@@ -508,6 +527,7 @@ const SPECS={
    runs.forEach(r=>{r.sewRows=sw.rows.filter(x=>lk(x.lineNo)===r.line&&x.date>=addD(r.start,-2)&&(()=>{const a=normS(x.styleNo),b=normS(r.style);return a&&b&&(a===b||a.indexOf(b)>=0||b.indexOf(a)>=0)})())});
    lines=[...new Set(runs.map(r=>r.line))].sort((a,b)=>(+a.slice(1))-(+b.slice(1)));draw();loadX()}).catch(e=>{p.querySelector('#gLead').innerHTML='⚠️ '+E(e.message||e)})}},
  ship:{segments:[
+  {label:'📦 每張 PO（出貨）',photo:'ship',photoTip:'放這張 PO 的包裝、嘜頭、裝箱正確照；當月有不同的放每月異常。',sorts:[['未出多→少',(a,b)=>b.n-a.n],['ETD 近→遠',(a,b)=>String(a.etd||'9').localeCompare(String(b.etd||'9'))],['訂單多→少',(a,b)=>b.o-a.o]],build:async()=>({groups:await poGroups(),top:'<p class="note">每張 PO：訂單、已出、未出、ETD，依款號／顏色／尺寸列出。</p>'})},
   {label:'🚢 每個客戶（出貨進度）',photo:'customer',photoKey:g=>custKey(g.title),sorts:[['未出件數',(a,b)=>b.n-a.n],['已出件數',(a,b)=>b.s-a.s]],
    async build(){const [{rows},ms]=await Promise.all([loadTool('shipping'),loadTool('monthship').catch(()=>({rows:[]}))]);
     const C=groupBy(rows,r=>r.cust);const groups=[...C].map(([k,a])=>{const n=sum(a,r=>r.open),s=sum(a,r=>r.shipped),o=sum(a,r=>r.orig);const byM=groupBy(a.filter(r=>r.etd),r=>String(r.etd).slice(0,7));const mk=[...byM.keys()].sort().slice(-12);

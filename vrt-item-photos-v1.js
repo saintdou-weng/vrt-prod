@@ -205,7 +205,7 @@ function library(opt){css();opt=opt||{};let dom=opt.domain&&DOM[opt.domain]?opt.
     const now=rows.filter(r=>r.slot==='month'&&r.month===ymNow()).sort((a,b)=>String(b.at).localeCompare(String(a.at)));const d=DOM[dom];
     el.querySelector('.vp-lib-body').innerHTML=`<div class="vp"><div class="vp-st ${st.type}">${E(st.text)}</div>
       <div class="vp-h"><input class="vp-in" placeholder="🔍 搜尋料號／名稱 Search" value="${E(q)}" data-k="q" style="flex:1;max-width:320px"><span class="vp-sp"></span>
-        <label class="vp-btn ghost" title="檔名就是料號，例如 TCF0487.jpg、TCF0487_2.jpg">📁 批次上傳（檔名＝料號）Batch<input type="file" accept="image/*" multiple data-b="ref"></label>
+        <button class="vp-btn" data-imp="1" title="同事做的對照表：Excel／PDF／JPG，一列＝編號＋照片＋名稱">📥 匯入對照表 Excel／PDF／JPG</button><label class="vp-btn ghost" title="檔名就是料號，例如 TCF0487.jpg、TCF0487_2.jpg">📁 批次上傳（檔名＝料號）Batch<input type="file" accept="image/*" multiple data-b="ref"></label>
         <label class="vp-btn ghost">📁 批次＝本月異常 Batch (this month)<input type="file" accept="image/*" multiple data-b="month"></label></div>
       ${now.length?`<div class="vp-sec"><div class="vp-h"><b>⚠️ ${E(ymNow())} 本月異常／不同</b><span class="vp-n">${now.length} 張</span></div><div class="vp-grid">${now.map((r,i)=>`<div class="vp-th" data-now="${i}"><img src="${r.thumb}" alt="" loading="lazy"><span>${E(r.itemName||r.itemKey)} ${E(r.caption||'')}</span></div>`).join('')}</div></div>`:''}
       ${list.length?`<div class="vp-cards">${list.map(x=>`<div class="vp-card" data-key="${E(x.key)}"><div class="ph" style="${x.cover?`background-image:url('${x.cover}')`:''}">${x.cover?'':d[1]}</div><div class="tx"><b>${E(x.name)}</b><span>${E(x.key!==normKey(x.name)?x.key:'')}</span><div style="margin-top:4px">${x.ref?`<span class="vp-chip ref" style="margin-left:0">⭐ ${x.ref}</span>`:''}${x.month?`<span class="vp-chip">⚠️ ${x.month}${x.lastMonth?' · '+E(x.lastMonth.slice(2)):''}</span>`:''}</div></div></div>`).join('')}</div>`
@@ -214,6 +214,7 @@ function library(opt){css();opt=opt||{};let dom=opt.domain&&DOM[opt.domain]?opt.
     el.querySelectorAll('[data-b]').forEach(inp=>inp.onchange=async()=>{const files=[...inp.files];let add2=0,dup=0;setStatus(`⏳ 批次處理 ${files.length} 張…`,'busy');
       for(const f of files){const key=String(f.name).replace(/\.[^.]+$/,'').replace(/[\s_-]*(\(\d+\)|[_-]\d{1,2})$/,'').trim();if(!key)continue;try{const r=await add([f],{domain:dom,key,name:key,slot:inp.dataset.b,month:ymNow()});add2+=r.added;dup+=r.dup}catch(_){}}
       setStatus(`✅ 批次新增 ${add2} 張${dup?` · 重複略過 ${dup}`:''}`,'ok')});
+    const ib=el.querySelector('[data-imp]');ib&&(ib.onclick=()=>{if(g.VRTPhotoImport)g.VRTPhotoImport.open({domain:dom,items:opt.items,onDone:paint});else setStatus('⚠️ 這一頁沒有載入匯入元件','warn')});
     el.querySelectorAll('[data-now]').forEach(t=>t.onclick=()=>viewer(now,+t.dataset.now,{edit:true}));
     el.querySelectorAll('.vp-card').forEach(c=>c.onclick=()=>{const k=c.dataset.key;if(opt.onOpen&&opt.onOpen(dom,k)!==false){close();return}
       const box=document.createElement('div');box.className='vp-lib';box.innerHTML=`<div class="vp-lib-box"><div class="vp-lib-hd"><span style="font-size:20px">${d[1]}</span><b>${E((items.get(k)||{}).name||k)}</b><button class="vp-btn ghost" data-a="x">✕</button></div><div class="vp-lib-body"></div></div>`;document.body.appendChild(box);
