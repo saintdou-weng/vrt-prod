@@ -7,7 +7,7 @@
 <script src="vrt-deploy-config.js?v=4.25.0"></script>
 <script src="vrt-platform-v40.js?v=4.25.0"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
-<script src="vrt-theme-v1.js?v=4.25.0"></script>
+<script src="vrt-theme-v1.js?v=4.34.0"></script>
 <script src="vrt-item-photos-v1.js?v=4.33.0"></script>
 <script src="vrt-photo-import-v1.js?v=4.32.0"></script>
 <style>
@@ -128,7 +128,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.33.0';
+const V='4.34.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -249,9 +249,10 @@ const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
  function close(){el.classList.remove('on');stack=[]}
  function back(){const s=stack.pop();if(!s)return close();list=s.list;i=s.i;tabI=s.tabI;draw()}
  /* 點表格裡的料號／瑕疵／客戶… → 開那一個的物品頁（可再左右切換同類），↩ 回上一層 */
- async function openRef(kind,key){const spec=REF[kind];if(!spec)return;const body=el.querySelector('.sh-body');const old=body.innerHTML;body.insertAdjacentHTML('afterbegin','<p class="note" id="shWait">⏳ 開啟中…</p>');
-  try{const l=await spec();const K=String(key).toUpperCase();const idx=l.findIndex(x=>String(x.key).toUpperCase()===K);if(idx<0){document.getElementById('shWait').textContent='找不到 '+key;return}
-   if(list.length)stack.push({list,i,tabI});list=l;i=idx;tabI=0;draw()}catch(e){body.innerHTML='⚠️ '+E(e.message||e)+old}}
+ async function openRef(kind,key){const body=el.querySelector('.sh-body');const old=body.innerHTML;body.insertAdjacentHTML('afterbegin','<p class="note" id="shWait">⏳ 開啟中… '+E(key)+'</p>');
+  try{const hit=await findRef(kind,key);const w=document.getElementById('shWait');
+   if(!hit){if(w)w.textContent='找不到「'+key+'」的相關資料（可能還沒匯入，或名稱寫法不同）';if(!list.length){list=[{title:String(key),sub:'',kind:'',detail:()=>'<p class="note">找不到「'+E(key)+'」的相關資料（可能還沒匯入，或名稱寫法不同）。</p>'}];i=0;tabI=0;draw()}return}
+   if(list.length)stack.push({list,i,tabI});list=hit.list;i=hit.idx;tabI=0;draw()}catch(e){body.innerHTML='⚠️ '+E(e.message||e)+old}}
  function photoTab(g){return g.photo&&window.VRTPhotos}
  function draw(){const g=list[i];const {pre,secs}=split(g.detail());const tabs=[['📑 全部',null]].concat(secs);const hasPh=photoTab(g);if(tabI>=tabs.length)tabI=tabs.length>1?1:0;
   const ps=hasPh?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
@@ -601,7 +602,41 @@ const SPECS={
  ]}
 };
 
+/* ══ v4.34 點了就連：每一種東西去哪裡找（找不到就換下一種）══ */
+const segBuild=(hub,re)=>{const s=SPECS[hub]&&SPECS[hub].segments.find(x=>re.test(x.label));return s?()=>once('seg|'+hub+'|'+s.label,async()=>{const r=await s.build();const l=r.groups||[];if(s.photo)l.forEach(g=>{if(!g.photo)g.photo={domain:s.photo,key:s.photoKey?s.photoKey(g):(g.photoKey||g.key),name:g.title}});return l}):null};
+const CHAIN={style:['style','bom'],line:['line'],customer:['customer','shipcust'],po:['po','pdfpo','popro'],date:['date'],item:['parts','fabric','accessory','machine'],fabric:['fabric','accessory'],parts:['parts'],part:['parts'],machine:['machine'],needle:['needle'],defect:['defect'],accessory:['accessory'],bom:['bom']};
+const normK=s=>String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9\u3400-\u9fff]+/g,'');
+function matchIdx(l,kind,key){const K=String(key).toUpperCase().trim(),N=normK(key);let i=l.findIndex(x=>String(x.key).toUpperCase()===K||String(x.title).toUpperCase()===K);if(i>=0)return i;
+  if(kind==='line'){const n=(K.match(/(\d{1,2})\s*$/)||[])[1];const ap=/APRON/.test(K);if(n){i=l.findIndex(x=>{const t=String(x.key).toUpperCase();return (t.match(/(\d{1,2})\s*$/)||[])[1]===n&&(/APRON/.test(t)===ap)});if(i>=0)return i;i=l.findIndex(x=>(String(x.key).toUpperCase().match(/(\d{1,2})\s*$/)||[])[1]===n);if(i>=0)return i}}
+  if(kind==='customer'||kind==='shipcust'){const c=custKey(key);i=l.findIndex(x=>custKey(x.title)===c||custKey(x.title).startsWith(c)||c.startsWith(custKey(x.title)));if(i>=0)return i}
+  i=l.findIndex(x=>normK(x.key)===N||normK(x.title)===N);if(i>=0)return i;
+  if(N.length>=5)i=l.findIndex(x=>{const a=normK(x.key);return a.length>=5&&(a.startsWith(N)||N.startsWith(a))});return i}
+async function findRef(kind,key){for(const k of (CHAIN[kind]||[kind])){const f=REF[k];if(!f)continue;let l;try{l=await f()}catch(_){continue}if(!l||!l.length)continue;const idx=matchIdx(l,k,key);if(idx>=0)return {list:l,idx}}return null}
+REF.style=segBuild('style',/近 3 個月車縫/);REF.line=segBuild('output',/車縫/);REF.customer=segBuild('orders',/每個客戶/);REF.shipcust=segBuild('ship',/每個客戶/);REF.pdfpo=segBuild('orders',/PDF/);
+/* 某一天：那天裁了什麼、車了什麼、裝了多少箱、QC 怎樣 */
+REF.date=()=>once('days',async()=>{const ms=monthsBack(3);const [sw,ct,pk,qc]=await Promise.all([loadTool('sewing',keepMonths(3)).catch(()=>({rows:[]})),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]})),loadTool('packing').catch(()=>({rows:[]})),loadTool('qc',k=>/^m:/.test(k)&&ms.some(m=>k.indexOf(m)>=0)).catch(()=>({rows:[]}))]);
+  const S=groupBy(sw.rows,r=>r.date),C=groupBy(ct.rows,r=>r.date),PK=groupBy(pk.rows,r=>r.date),Q=groupBy(qc.rows.filter(r=>r&&r.date&&!r._vrtEntity&&r.reportKind!=='sewingkpi'),r=>r.date);
+  const days=[...new Set([...S.keys(),...C.keys(),...PK.keys(),...Q.keys()])].filter(d=>/^20\d\d-\d\d-\d\d$/.test(d)).sort().reverse();
+  const wk=d=>'日一二三四五六'[new Date(d+'T00:00:00').getDay()];
+  return days.map(d=>{const s=S.get(d)||[],c=C.get(d)||[],p=PK.get(d)||[],q=Q.get(d)||[];const e=effW(s),ins=sum(q,r=>r.inspected),rej=sum(q,r=>r.rejected);
+    return {key:d,kind:'日期',title:d+'（'+wk(d)+'）',sub:[s.length?'車縫 '+new Set(s.map(lineName)).size+' 線':'',c.length?'裁剪 '+c.length+' 筆':'',p.length?'裝箱':'',q.length?'QC':''].filter(Boolean).join(' · '),
+     kpis:[[F(sum(s,r=>r.pieces)),'車縫件數'],[P(e),'車縫效率',effCls(e)],[F(sum(c,r=>r.pieces)),'裁剪件數'],[F(sum(p,r=>r.qty)),'裝箱件數'],[ins?P(rej/ins*100):'—','QC 不良率',ins&&rej/ins>.05?'crit':'ok']],
+     detail:()=>`${s.length?`<h4>🧵 車縫（每條線）</h4>${table([['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['PO',r=>E(r.po)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['人數',r=>F(r.workers,1),1],['效率',r=>`<b class="${effCls(+r.efficiency)}">${P(+r.efficiency)}</b>`,1]],s.slice().sort((a,b)=>lineName(a).localeCompare(lineName(b),'en',{numeric:true})))}`:'<p class="note">這天沒有車縫日報（可能還沒匯入，或沒有生產）。</p>'}
+      ${c.length?`<h4>✂️ 裁剪</h4>${table([['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['PO',r=>E(r.po)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['總碼',r=>F(r.totalYds,1),1]],c)}`:''}
+      ${p.length?`<h4>📦 裝箱</h4>${table([['線別',r=>E(r.line)],['款號',r=>E(r.style)],['PO',r=>E(r.po)],['件數',r=>F(r.qty),1],['箱',r=>F(r.ctns,1),1]],p)}`:''}
+      ${q.length?`<h4>🔍 QC</h4>${table([['線別',r=>E(String(r.line||'').replace(/^Line\s*/i,'L'))],['檢驗',r=>F(r.inspected),1],['不良',r=>F(r.rejected),1],['不良率',r=>r.inspected?P(r.rejected/r.inspected*100):'—',1],['產出',r=>F(r.output),1]],q)}`:''}`}})});
+
+/* PO 在出貨／PDF 訂單都找不到時：用裁剪＋車縫實績組一張 PO 卡（這張 PO 裁了多少、車了多少、在哪幾線、哪幾天） */
+REF.popro=()=>once('popro',async()=>{const [sw,ct]=await Promise.all([loadTool('sewing',keepMonths(3)).catch(()=>({rows:[]})),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]}))]);
+  const keys=new Set([...sw.rows,...ct.rows].map(r=>nk(r.po)).filter(Boolean));const S=groupBy(sw.rows,r=>nk(r.po)),C=groupBy(ct.rows,r=>nk(r.po));
+  return [...keys].map(k=>{const s=S.get(k)||[],c=C.get(k)||[];const ds=lastDays(s.concat(c),999,r=>r.date);
+    return {key:k,kind:'PO',title:(s[0]||c[0]).po,sub:E([...new Set(s.concat(c).map(r=>r.styleNo))].join(' · ')),kpis:[[F(sum(c,r=>r.pieces)),'裁剪件數'],[F(sum(s,r=>r.pieces)),'車縫件數'],[P(effW(s)),'車縫效率',effCls(effW(s))],[String(new Set(s.map(lineName)).size),'條線'],[E((ds[0]||'').slice(5)+(ds.length>1?'～'+ds[ds.length-1].slice(5):'')),'日期']],
+     detail:()=>`<h4>🧵 車縫</h4>${s.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['效率',r=>P(+r.efficiency),1]],s.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有車縫紀錄。</p>'}
+      <h4>✂️ 裁剪</h4>${c.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['總碼',r=>F(r.totalYds,1),1]],c.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有裁剪紀錄。</p>'}`}})});
+window.VRTHubOpen=(k,key)=>SHEET.openRef(k,key);window.VRT_REF=REF;
+
 setTheme(themeNow());applyBg();
+{const m=(location.hash||'').match(/^#open=(.+)$/);if(m){const [k,...v]=decodeURIComponent(m[1]).split('|');location.replace('#'+HUBS[0].id);setTimeout(()=>SHEET.openRef(k,v.join('|')),300)}}
 if(!location.hash)location.replace('#'+HUBS[0].id);
 render();
 })();

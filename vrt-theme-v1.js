@@ -26,3 +26,5 @@
   window.addEventListener('storage',function(e){if(e.key===KEY)apply()});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){apply();setTimeout(apply,400)});else{apply();setTimeout(apply,400)}
 })();
+/* v4.34（Paul 11/14）每一頁都載入「點了就連」：表格裡的款號／PO／線別／日期／客戶／料號／機台可點，開相關資訊卡 */
+(function(){try{if(window.VRTLink||document.querySelector('script[src*="vrt-link-v1.js"]'))return;var s=document.createElement('script');s.src='vrt-link-v1.js?v=4.34.0';(document.head||document.documentElement).appendChild(s)}catch(e){}})();
