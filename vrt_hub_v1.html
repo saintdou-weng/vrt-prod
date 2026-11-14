@@ -429,7 +429,7 @@ function sewerGroups(){return once('sewer',async()=>{const db=await hrIdb();cons
   return out.sort((a,b)=>String(a.line).localeCompare(String(b.line),'en',{numeric:true})||a.title.localeCompare(b.title))})}
 async function hrPhoto(pid){const db=await hrIdb();return db?await hrGet(db,'photo|'+pid):null}
 
-function accGroups(){return once('acc',async()=>{const {rows}=await loadTool('fabricstock',keepMonths(4));const acc=rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted);const last=acc.map(r=>r.snapshotDate).filter(Boolean).sort().pop()||'';
+function accGroups(){return once('acc',async()=>{const {rows}=await loadTool('fabricstock',keepMonths(12));const acc=rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted);const last=acc.map(r=>r.snapshotDate).filter(Boolean).sort().pop()||'';
   const now=acc.filter(r=>r.snapshotDate===last);const H=groupBy(acc,r=>nk(r.itemCode)),N=groupBy(now,r=>nk(r.itemCode));
   return [...N].map(([k,a])=>{const bal=sum(a,r=>r.balance),unit=(a[0]||{}).unit||'',desc=(a.find(r=>r.description)||{}).description||'',cat=(a.find(r=>r.category)||{}).category||'';const hist=H.get(k)||[];
     const trend=[...groupBy(hist,r=>r.snapshotDate)].sort((x,y)=>x[0].localeCompare(y[0])).map(([d,b])=>({label:d.slice(5),v:sum(b,r=>r.balance)}));
