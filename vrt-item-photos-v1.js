@@ -8,7 +8,7 @@
 if(g.VRTPhotos&&g.VRTPhotos.version)return;
 const VERSION='1.0.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
 const DOMAINS=[
- ['fabric','🧶','布料','Fabric'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
+ ['fabric','🧶','布料','Fabric'],['accessory','🧷','輔料','Accessories'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
  ['customer','👥','客戶','Customers'],['style','📐','款式／BOM','Styles / BOM'],['ship','🚢','成品／出貨','FG / Shipping'],
  ['line','🧵','線別／組別','Lines / Teams'],['machine','⚙️','機台','Machines'],['other','📦','其他','Other']];
 const DOM=Object.fromEntries(DOMAINS.map(d=>[d[0],d]));

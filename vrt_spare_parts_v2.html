@@ -1781,6 +1781,10 @@ try{VRTTelegram.init({kind:"spareparts",tool:"spareparts",getData:async()=>{cons
 <script src="vrt-inbox-v1.js?v=4.19.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"spareparts",label:"🔧 機修零件",feed:f=>importExcel(f)})}catch(e){console.warn("VRTInbox init",e)}</script>
 <!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
 <script src="vrt-smart-import-v1.js?v=4.19.0"></script>
+<script src="vrt-item-photos-v1.js?v=4.33.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.33.0"></script>
+<script>/* v4.33（Paul 11/14）：打開一個零件（✎ 編輯）時，下面直接看／放這個零件的照片：⭐ 標準照＋每月不同；與生產平台一覽的零件物品頁同一份照片 */
+(function(){if(typeof window.editPart!=='function'||!window.VRTPhotos)return;const prev=window.editPart;window.editPart=function(id){prev.apply(this,arguments);try{if(!id)return;const p=(window.PARTS||[]).find(x=>x.id===id)||(typeof PARTS!=='undefined'?PARTS.find(x=>x.id===id):null);if(!p||!p.partNo)return;const box=document.getElementById('modalBox');if(!box)return;const d=document.createElement('div');d.style.cssText='margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:10px';d.innerHTML='<b style="font-size:14px">📷 零件照片 Part photos</b><div></div>';box.appendChild(d);VRTPhotos.mount(d.lastElementChild,{domain:'parts',key:p.partNo,name:p.partNo+(p.name?' · '+p.name:''),tip:'放零件正確的樣子（型號、規格標籤）。'})}catch(e){console.warn(e)}}})();</script>
 <script>/* v4.19 智慧匯入：本頁收哪些檔、交給哪個匯入器 */try{VRTSmartImport.init({module:'spareparts',feedAll:async fs=>{const media=f=>/\.(jpe?g|png|heic|heif|webp|pdf)$/i.test(f.name);const xl=fs.filter(f=>!media(f)),ph=fs.filter(media);for(let i=0;i<xl.length;i++){await importExcel(xl[i]);if(i<xl.length-1)await VRTSmartImport.waitGone('#mask.on')}if(ph.length){if(xl.length)await VRTSmartImport.waitGone('#mask.on');goTab('ocr',null);ocrFiles(ph)}}})  /* Excel: one preview at a time (next file after 儲存/取消); photos / PDF → 🤖 智慧OCR */}catch(e){console.warn('VRTSmartImport init',e)}</script>
 </body>
 </html>
