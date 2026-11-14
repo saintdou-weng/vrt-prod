@@ -8,6 +8,7 @@
 <script src="vrt-platform-v40.js?v=4.25.0"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.25.0"></script>
+<script src="vrt-item-photos-v1.js?v=4.30.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
    舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
@@ -71,7 +72,7 @@ table.dt td.r,table.dt th.r{text-align:right}
 .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--mut);margin:2px 4px 0 0;white-space:nowrap}.tag.ok{color:var(--ok)}.tag.warn{color:var(--warn)}.tag.crit{color:var(--crit)}
 .pbar{height:8px;border-radius:99px;background:var(--chip);margin-top:8px;overflow:hidden}.pbar i{display:block;height:100%;background:var(--ok);border-radius:99px}.pbar.big{height:16px}.pcap{font-size:10.5px;color:var(--mut);margin-top:3px}
 .small{font-size:11px;color:var(--mut)}
-.sheet{position:fixed;inset:0;z-index:9000;background:rgba(2,6,23,.55);display:none;padding:10px}.sheet.on{display:flex}
+.sheet{position:fixed;inset:0;z-index:9995;background:rgba(2,6,23,.55);display:none;padding:10px}.sheet.on{display:flex}
 .sh-box{margin:auto;width:min(1180px,100%);height:100%;background:var(--bg);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
 .sh-hd{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--hdr);border-bottom:1px solid var(--line)}
 .sh-t{flex:1;min-width:0}.sh-t b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sh-t span{font-size:11px;color:var(--mut)}
@@ -103,6 +104,10 @@ table.dt td.r,table.dt th.r{text-align:right}
 .fs.ok{border-top-color:var(--ok)}.fs.part{border-top-color:var(--warn)}.fs.none{opacity:.75}
 body[data-bg]{background-size:cover;background-position:center;background-attachment:fixed}
 body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data-bg] .card,body[data-bg] .kpi{background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(6px)}
+.sh-cv img{width:40px;height:40px;border-radius:10px;object-fit:cover;display:block;cursor:pointer;border:2px solid #f59e0b}.sh-back{display:none}
+.card .cv{float:right;width:46px;height:46px;border-radius:10px;object-fit:cover;margin:0 0 4px 8px;border:2px solid #f59e0b}
+.card .phc{font-size:10.5px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:99px;padding:1px 7px;margin-left:4px}
+.sh-t .lowtag,.lowtag{display:inline-block;color:#fff!important;font-size:10.5px;font-weight:800;color:#fff;background:var(--crit);border-radius:99px;padding:1px 7px}
 </style>
 </head>
 <body>
@@ -112,6 +117,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
   <nav class="hub-pick" id="hubPick"></nav>
   <div class="tools">
     <a class="btn" href="https://saintdou-weng.github.io/PSJERP/" target="_blank" rel="noopener" title="VRT ERP（PSJERP）">🏢 PSJERP ↗</a>
+    <button class="btn" id="photoLibBtn" title="照片庫 Photo library：布料、零件、針、瑕疵、客戶…依類別分頁">📷 照片庫</button>
     <button class="btn" id="themeBtn" title="淡色／深色">🌙</button>
   </div>
 </div>
@@ -121,7 +127,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.27.0';
+const V='4.30.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -155,6 +161,7 @@ function bgMenu(){let m=$('#bgMenu');if(!m){m=document.createElement('div');m.id
   fi.onchange=()=>{const f=fi.files[0];if(!f)return;const im=new Image();im.onload=()=>{const s=Math.min(1,1600/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);try{localStorage.setItem('vrt_bg_img',c.toDataURL('image/jpeg',.72));localStorage.setItem('vrt_bg','custom')}catch(e){}applyBg();URL.revokeObjectURL(im.src)};im.src=URL.createObjectURL(f)};
   return m}
 $('#themeBtn').onclick=()=>{bgMenu().classList.toggle('on')};
+$('#photoLibBtn').onclick=()=>{if(!window.VRTPhotos)return;const h=(location.hash||'').slice(1);const dm={fabric:'fabric',parts:'parts',ship:'customer',orders:'customer',style:'style',output:'line'}[h]||'fabric';VRTPhotos.library({domain:dm,onOpen:(d,k)=>{if(!REF[d])return false;SHEET.openRef(d,k);return true}})};
 window.addEventListener('storage',e=>{if(e.key==='vrt_theme'&&e.newValue)document.documentElement.setAttribute('data-theme',e.newValue)});
 
 /* ── 路由：#hub/tab ── */
@@ -225,33 +232,49 @@ const sum=(rows,f)=>rows.reduce((a,r)=>a+(+f(r)||0),0);
 const lastDays=(rows,n,dateF)=>{const ds=[...new Set(rows.map(dateF).filter(Boolean))].sort();return ds.slice(-n)};
 
 /* ══ 詳細面板（v4.26）：點卡片 → 整頁面板，上面分頁切不同資訊；◀ ▶／鍵盤左右／手機左右滑＝上一個、下一個；最下面一排是相關的其他項目 ══ */
-const SHEET=(()=>{let list=[],i=0,tabI=1,el;
+const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
  const split=html=>{const p=String(html).split(/<h4[^>]*>([\s\S]*?)<\/h4>/);const secs=[];for(let k=1;k<p.length;k+=2)secs.push([p[k],p[k+1]||'']);return {pre:p[0]||'',secs}};
+ const PH='📷 照片 Photos';
  function ensure(){if(el)return;el=document.createElement('div');el.className='sheet';
-  el.innerHTML=`<div class="sh-box"><div class="sh-hd"><button class="btn" data-a="prev" title="上一個（←）">◀</button><div class="sh-t"><b></b><span></span></div><span class="sh-pos"></span><button class="btn" data-a="next" title="下一個（→）">▶</button><button class="btn" data-a="close" title="關閉（Esc）">✕</button></div><div class="sh-tabs"></div><div class="sh-body"></div><div class="sh-rel"></div></div>`;
+  el.innerHTML=`<div class="sh-box"><div class="sh-hd"><button class="btn sh-back" data-a="back" title="回上一層">↩</button><button class="btn" data-a="prev" title="上一個（←）">◀</button><div class="sh-cv"></div><div class="sh-t"><b></b><span></span></div><span class="sh-pos"></span><button class="btn" data-a="next" title="下一個（→）">▶</button><button class="btn" data-a="close" title="關閉（Esc）">✕</button></div><div class="sh-tabs"></div><div class="sh-body"></div><div class="sh-rel"></div></div>`;
   document.body.appendChild(el);
-  el.addEventListener('click',e=>{if(e.target===el)return close();const a=e.target.closest('[data-a]');if(a){({prev:()=>go(-1),next:()=>go(1),close})[a.dataset.a]();return}
+  el.addEventListener('click',e=>{if(e.target===el)return close();const a=e.target.closest('[data-a]');if(a){({prev:()=>go(-1),next:()=>go(1),close,back,photo:()=>{tabI=-1;draw()}})[a.dataset.a]();return}
+   const o=e.target.closest('[data-open]');if(o){const [kind,key]=String(o.dataset.open).split('|');openRef(kind,key);return}
    const t=e.target.closest('[data-tab]');if(t){tabI=+t.dataset.tab;draw();return}const j=e.target.closest('[data-jump]');if(j){i=+j.dataset.jump;draw()}});
-  document.addEventListener('keydown',e=>{if(!el.classList.contains('on')||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;if(e.key==='Escape')close();if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1)});
+  document.addEventListener('keydown',e=>{if(!el.classList.contains('on')||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)||document.querySelector('.vp-lb'))return;if(e.key==='Escape')(stack.length?back():close());if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1)});
   let sx=0,sy=0;el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
-  el.addEventListener('touchend',e=>{if(e.target.closest('.tblw,.gscroll,.sh-rel,.sh-tabs,svg'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>80&&Math.abs(dy)<50)go(dx<0?1:-1)},{passive:true})}
+  el.addEventListener('touchend',e=>{if(e.target.closest('.tblw,.gscroll,.sh-rel,.sh-tabs,svg,.vp-grid,input'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>80&&Math.abs(dy)<50)go(dx<0?1:-1)},{passive:true})}
  function go(d){const n=i+d;if(n<0||n>=list.length)return;i=n;draw()}
- function close(){el.classList.remove('on')}
- function draw(){const g=list[i];const {pre,secs}=split(g.detail());const tabs=[['📑 全部',null]].concat(secs);if(tabI>=tabs.length)tabI=tabs.length>1?1:0;
-  el.querySelector('.sh-t b').textContent=g.title;el.querySelector('.sh-t span').innerHTML=(g.sub||'')+(g.badge?' '+g.badge:'');
+ function close(){el.classList.remove('on');stack=[]}
+ function back(){const s=stack.pop();if(!s)return close();list=s.list;i=s.i;tabI=s.tabI;draw()}
+ /* 點表格裡的料號／瑕疵／客戶… → 開那一個的物品頁（可再左右切換同類），↩ 回上一層 */
+ async function openRef(kind,key){const spec=REF[kind];if(!spec)return;const body=el.querySelector('.sh-body');const old=body.innerHTML;body.insertAdjacentHTML('afterbegin','<p class="note" id="shWait">⏳ 開啟中…</p>');
+  try{const l=await spec();const K=String(key).toUpperCase();const idx=l.findIndex(x=>String(x.key).toUpperCase()===K);if(idx<0){document.getElementById('shWait').textContent='找不到 '+key;return}
+   if(list.length)stack.push({list,i,tabI});list=l;i=idx;tabI=0;draw()}catch(e){body.innerHTML='⚠️ '+E(e.message||e)+old}}
+ function photoTab(g){return g.photo&&window.VRTPhotos}
+ function draw(){const g=list[i];const {pre,secs}=split(g.detail());const tabs=[['📑 全部',null]].concat(secs);const hasPh=photoTab(g);if(tabI>=tabs.length)tabI=tabs.length>1?1:0;
+  const ps=hasPh?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
+  el.querySelector('.sh-back').style.display=stack.length?'inline-block':'none';
+  el.querySelector('.sh-cv').innerHTML=ps&&ps.cover?`<img src="${ps.cover}" alt="" data-a="photo" title="看照片">`:'';
+  el.querySelector('.sh-t b').textContent=g.title;el.querySelector('.sh-t span').innerHTML=(g.sub||'')+(g.badge?' '+g.badge:'')+(ps&&ps.total?` <span class="tag">📷 ${ps.total}${ps.thisMonth?` · 本月異常 ${ps.thisMonth}`:''}</span>`:'');
   el.querySelector('.sh-pos').textContent=(i+1)+' / '+list.length;
   el.querySelector('[data-a=prev]').disabled=i===0;el.querySelector('[data-a=next]').disabled=i===list.length-1;
-  el.querySelector('.sh-tabs').innerHTML=tabs.map((t,k)=>`<button data-tab="${k}" class="${k===tabI?'on':''}">${t[0]}</button>`).join('');
+  el.querySelector('.sh-tabs').innerHTML=tabs.map((t,k)=>`<button data-tab="${k}" class="${k===tabI?'on':''}">${t[0]}</button>`).join('')+(hasPh?`<button data-tab="-1" class="${tabI===-1?'on':''}">${PH}${ps.total?` <span class="pill">${ps.total}</span>`:''}</button>`:'');
   const kp=g.kpis?`<div class="kpis">${g.kpis.map(k=>`<div class="kpi"><div class="v ${k[2]||''}">${k[0]}</div><div class="l">${E(k[1])}</div></div>`).join('')}</div>`:'';
-  const body=tabI===0?secs.map(s=>`<h4>${s[0]}</h4>${s[1]}`).join(''):tabs[tabI][1];
-  const nx=list[i+1];
-  el.querySelector('.sh-body').innerHTML=kp+pre+body+(nx?`<button class="btn sh-next" data-a="next">下一個：${E(nx.title)} ▶</button>`:'');
-  el.querySelector('.sh-body').scrollTop=0;
+  const nx=list[i+1];const B=el.querySelector('.sh-body');
+  if(tabI===-1){B.innerHTML=kp+'<div id="shPh"></div>'+(nx?`<button class="btn sh-next" data-a="next">下一個：${E(nx.title)} ▶</button>`:'');VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
+  else{const body=tabI===0?secs.map(s=>`<h4>${s[0]}</h4>${s[1]}`).join(''):tabs[tabI][1];
+   B.innerHTML=kp+pre+body+(hasPh&&tabI===0?'<h4>'+PH+'</h4><div id="shPh"></div>':'')+(nx?`<button class="btn sh-next" data-a="next">下一個：${E(nx.title)} ▶</button>`:'');
+   if(hasPh&&tabI===0)VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
+  B.scrollTop=0;
   const a=Math.max(0,i-4),b=Math.min(list.length,i+12);
   el.querySelector('.sh-rel').innerHTML=`<span class="sh-rl">其他${E(g.kind||'項目')}：</span>`+list.slice(a,b).map((x,k)=>`<button data-jump="${a+k}" class="${a+k===i?'on':''}">${E(x.title)}${x.chip?` <i>${x.chip}</i>`:''}</button>`).join('');
   const on=el.querySelector('.sh-rel .on');on&&on.scrollIntoView({block:'nearest',inline:'center'})}
- return {open(l,idx){ensure();list=l;i=Math.max(0,idx);el.classList.add('on');draw()}};
+ return {open(l,idx){ensure();stack=[];list=l;i=Math.max(0,idx);el.classList.add('on');draw()},openRef:(k,key)=>{ensure();if(!el.classList.contains('on')){stack=[];list=[]}el.classList.add('on');return openRef(k,key)},redraw:()=>{if(el&&el.classList.contains('on')&&tabI!==-1)draw()}};
 })();
+/* 物品頁之間互連：表格裡的 <a data-open="parts|料號">（REF 由下面各入口註冊） */
+const REF={};
+const link=(kind,key,label)=>`<a href="javascript:void 0" data-open="${E(kind)}|${E(key)}" style="font-weight:700;text-decoration:none">${E(label==null?key:label)} ›</a>`;
 
 /* ══ 一覽：卡片清單（搜尋、排序、往下滑載入更多；點卡片開詳細面板）══ */
 const DRILL={
@@ -263,14 +286,15 @@ const DRILL={
     const inp=seg.querySelector('input');let tm;inp.oninput=()=>{clearTimeout(tm);tm=setTimeout(()=>{q=inp.value.trim().toUpperCase();reset()},200)};
     const sel=seg.querySelector('select');if(sel)sel.onchange=()=>{sortI=+sel.value;reset()}};
   const filtered=()=>{const s=segs[si];let a=list.filter(g=>!q||(g.title+' '+(g.search||'')).toUpperCase().includes(q));if(s.sorts)a=a.slice().sort(s.sorts[sortI][1]);return a};
-  const cardHtml=g=>`<div class="card" data-k="${E(g.key)}"><div class="t"><b>${E(g.title)}</b><span>${g.sub||''}</span></div>${g.badge?`<div style="margin-top:4px">${g.badge}</div>`:''}<div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.bar!=null?`<div class="pbar"><i style="width:${Math.max(0,Math.min(100,g.bar)).toFixed(0)}%"></i></div><div class="pcap">${g.barCap||''}</div>`:''}${g.spark?CH.spark(g.spark)+(g.sparkCap?`<div class="pcap">${g.sparkCap}</div>`:''):''}</div>`;
+  const phS=g=>g.photo&&window.VRTPhotos?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
+  const cardHtml=g=>{const ps=phS(g);return `<div class="card" data-k="${E(g.key)}">${ps&&ps.cover?`<img class="cv" src="${ps.cover}" alt="">`:''}<div class="t"><b>${E(g.title)}${ps&&ps.total?`<span class="phc">📷${ps.total}</span>`:''}</b><span>${g.sub||''}</span></div>${g.badge?`<div style="margin-top:4px">${g.badge}</div>`:''}<div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.bar!=null?`<div class="pbar"><i style="width:${Math.max(0,Math.min(100,g.bar)).toFixed(0)}%"></i></div><div class="pcap">${g.barCap||''}</div>`:''}${g.spark?CH.spark(g.spark)+(g.sparkCap?`<div class="pcap">${g.sparkCap}</div>`:''):''}</div>`};
   let loading=true;const more1=()=>{if(loading)return;const a=filtered();const next=a.slice(shown,shown+12);if(!next.length){more.textContent=a.length?`共 ${a.length} 張卡片，到底了`:'沒有符合的資料';return}
     cards.insertAdjacentHTML('beforeend',next.map(cardHtml).join(''));shown+=next.length;more.textContent=shown<a.length?'往下滑載入更多…':`共 ${a.length} 張卡片，到底了`};
   const reset=()=>{cards.innerHTML='';shown=0;more1()};
   cards.addEventListener('click',e=>{const c=e.target.closest('.card');if(!c)return;const a=filtered();const idx=a.findIndex(x=>String(x.key)===c.dataset.k);if(idx>=0)SHEET.open(a,idx)});
   new IntersectionObserver(es=>{if(es.some(x=>x.isIntersecting))more1()},{root:p,rootMargin:'300px'}).observe(more);
   const load=async()=>{drawSeg();cards.innerHTML='';top.innerHTML='';loading=true;more.textContent='⏳ 讀取雲端資料…（第一次比較久，之後只抓有變的）';
-    try{const r=await segs[si].build();loading=false;list=r.groups;top.innerHTML=r.top||'';shown=0;reset()}catch(e){more.innerHTML='⚠️ '+E(e.message||e)}};
+    try{const r=await segs[si].build();loading=false;list=r.groups;const pd=segs[si].photo,pk=segs[si].photoKey;if(pd)list.forEach(g=>{if(!g.photo)g.photo={domain:pd,key:pk?pk(g):(g.photoKey||g.key),name:g.photoName||g.title,tip:segs[si].photoTip||''}});top.innerHTML=r.top||'';shown=0;reset()}catch(e){more.innerHTML='⚠️ '+E(e.message||e)}};
   load()}
 };
 
@@ -289,9 +313,71 @@ const custKey=v=>String(v||'').toUpperCase().replace(/\(.*?\)/g,'').replace(/[^A
 /* PDF 訂單上的日期有兩種寫法：2026-09-11、08-JAN-27 */
 const poDate=v=>{v=String(v||'').trim();if(!v)return '';let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];m=v.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);if(!m)return '';const mi='JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC'.indexOf(m[2].toUpperCase())/3;if(mi<0||mi%1)return '';return (m[3].length===2?'20'+m[3]:m[3])+'-'+String(mi+1).padStart(2,'0')+'-'+m[1].padStart(2,'0')};
 const LINE_COL=['#4f46e5','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#db2777','#0d9488','#65a30d','#ea580c','#2563eb','#9333ea','#b45309','#475569'];
+
+/* ══ v4.30（Paul 11/14）每一個物品都有自己的物品頁：零件、針、瑕疵、布料（＋照片）══ */
+const nk=v=>String(v==null?'':v).replace(/\s+/g,' ').trim().toUpperCase();
+const ymOf=d=>String(d||'').slice(0,7);
+const monthBars=(rows,dateF,v1F,v2F,n)=>{const byM=groupBy(rows.filter(r=>ymOf(dateF(r))),r=>ymOf(dateF(r)));const mk=[...byM.keys()].sort().slice(-(n||12));return mk.map(m=>({label:m,v:sum(byM.get(m),v1F),v2:v2F?sum(byM.get(m),v2F):undefined}))};
+const kv=pairs=>`<div class="kpis">${pairs.filter(p=>p[1]!=null&&p[1]!=='').map(p=>`<div class="kpi"><div class="l">${E(p[0])}</div><div style="font-size:14px;font-weight:700;margin-top:2px;word-break:break-word">${E(p[1])}</div></div>`).join('')}</div>`;
+const memoB={};const once=(k,f)=>memoB[k]||(memoB[k]=f().catch(e=>{delete memoB[k];throw e}));
+const RC={changeover:['換款（計畫內）',''],broken:['斷針','crit'],damage:['損壞／彎','warn'],lost:['遺失','warn'],other:['其他',''],unknown:['未填','']};
+const rcOf=r=>r.reasonClass||(()=>{const t=nk(r.reason);if(/CHANGE\s*STYLE|CHANGEOVER|換款|换款/.test(t))return 'changeover';if(/BROKEN|BREAK|斷|断/.test(t))return 'broken';if(/DAMAGE|BENT|損|彎|弯/.test(t))return 'damage';if(/LOST|遺失|丢/.test(t))return 'lost';return t?'other':'unknown'})();
+const isFail=r=>/^(broken|damage|lost)$/.test(rcOf(r));
+function partChanges(){return once('pchg',async()=>{const {rows}=await loadTool('spareparts',k=>/^p:maint_(part|needle)_/.test(k));return rows.filter(r=>r&&r.date&&(r.needleType||r.partType))})}
+function partGroups(){return once('parts',async()=>{const [{rows},chg]=await Promise.all([loadTool('spareparts',k=>/^p:parts_master/.test(k)),partChanges().catch(()=>[])]);
+  const parts=rows.filter(r=>r&&r.partNo);const pc=chg.filter(r=>r.partType);const since=addD(ymdToday(),-92);
+  const groups=parts.map(r=>{const nm=nk(r.name),sp=nk(r.spec);const rel=pc.filter(x=>{const t=nk(x.partType);return t&&nm&&(t===nm||t.indexOf(nm)>=0||nm.indexOf(t)>=0||(sp&&t.indexOf(sp)>=0))});
+    const used=sum(rel.filter(x=>x.date>=since),x=>x.qty);const low=+r.minStock>0&&(+r.qty||0)<+r.minStock?1:0;const amt=(+r.qty||0)*(+r.unitPrice||0);
+    return {key:r.partNo,kind:'零件',title:r.partNo,sub:E([r.name,r.spec].filter(Boolean).join(' · ')),low,used,amt,search:[r.name,r.spec,r.machineType,r.category,r.location].join(' '),
+     badge:low?'<span class="lowtag">低於安全量</span>':'',chip:low?'⚠':'',
+     kpis:[[F(r.qty),'庫存 '+(r.unit||''),low?'crit':'ok'],[F(r.minStock),'安全量'],[F(r.unitPrice,2),'單價'],[F(amt),'庫存金額'],[F(used),'近 3 個月換掉']],
+     detail:()=>`<h4>基本資料</h4>${kv([['料號 Part No.',r.partNo],['名稱 Name',r.name],['規格 Spec',r.spec],['類別 Category',r.category],['機種 Machine',r.machineType],['位置 Location',r.location],['單位 Unit',r.unit],['供應商 Supplier',r.supplier]])}
+      <h4>每月換掉多少（依名稱對到的換零件紀錄）</h4>${rel.length?CH.bars(monthBars(rel,x=>x.date,x=>x.qty))+`<p class="note">換零件紀錄沒有料號，這裡是用「零件名稱／規格」比對出來的 ${rel.length} 筆，僅供參考。</p>`:'<p class="note">還沒有對得到的換零件紀錄（換零件紀錄只有名稱，沒有料號）。</p>'}
+      <h4>哪幾條線在換</h4>${CH.hbars([...groupBy(rel,x=>x.line||'—')].map(([l,b])=>({label:l,v:sum(b,x=>x.qty)})).sort((x,y)=>y.v-x.v).slice(0,12))}
+      <h4>換零件明細</h4>${table([['日期',x=>E(x.date)],['線別',x=>E(x.line)],['名稱',x=>E(x.partType)],['數量',x=>F(x.qty),1],['機台',x=>E(x.machine)],['原因',x=>{const c=RC[rcOf(x)]||RC.other;return `<span class="${c[1]}">${E(x.reason||c[0])}</span>`}]],rel.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))),200)}`}});
+  return groups.sort((a,b)=>(b.low-a.low)||(b.used-a.used))})}
+function needleGroups(){return once('needle',async()=>{const chg=await partChanges();const nd=chg.filter(r=>r.needleType);const t=ymdToday(),d30=addD(t,-30),thisM=ymOf(t),lastM=ymOf(addD(thisM+'-01',-1));
+  const G=groupBy(nd,r=>nk(r.needleType)+(r.size?' · '+nk(r.size):''));
+  return [...G].map(([k,a])=>{const r30=a.filter(r=>r.date>=d30);const n30=sum(r30,r=>r.qty),fail=sum(a.filter(isFail),r=>r.qty),chgo=sum(a.filter(r=>rcOf(r)==='changeover'),r=>r.qty),tm=sum(a.filter(r=>ymOf(r.date)===thisM),r=>r.qty),lm=sum(a.filter(r=>ymOf(r.date)===lastM),r=>r.qty);
+    const days=lastDays(a,30,r=>r.date);
+    return {key:k,kind:'針型',title:'🪡 '+k,n30,fail,search:[...new Set(a.map(r=>r.line+' '+r.machine))].join(' '),sub:'最後 '+(lastDays(a,1,r=>r.date)[0]||'').slice(5),
+     kpis:[[F(n30),'近 30 天支數'],[F(tm),thisM.slice(5)+' 月'],[F(lm),lastM.slice(5)+' 月'],[F(fail),'斷／損／遺失',fail?'crit':'ok'],[F(chgo),'換款（計畫內）']],spark:dailySeries(a,days,r=>r.qty).map(x=>x.v),
+     detail:()=>`<h4>每月支數（長條＝全部，橘線＝斷／損／遺失）</h4>${CH.bars(monthBars(a,r=>r.date,r=>r.qty,r=>isFail(r)?r.qty:0),{v2:true,legend:'換款（Change Style）是計畫內的消耗，不算在斷／損裡。'})}
+      <h4>原因</h4>${CH.hbars(Object.keys(RC).map(c=>({label:RC[c][0],v:sum(a.filter(r=>rcOf(r)===c),r=>r.qty)})).filter(x=>x.v).sort((x,y)=>y.v-x.v))}
+      <h4>哪幾條線（斷／損多的排前面）</h4>${table([['線別',x=>E(x[0])],['支數',x=>F(sum(x[1],r=>r.qty)),1],['斷／損',x=>`<b class="${sum(x[1].filter(isFail),r=>r.qty)?'crit':''}">${F(sum(x[1].filter(isFail),r=>r.qty))}</b>`,1],['換款',x=>F(sum(x[1].filter(r=>rcOf(r)==='changeover'),r=>r.qty)),1],['最後',x=>E(lastDays(x[1],1,r=>r.date)[0]||'')]],[...groupBy(a,r=>r.line||'—')].sort((x,y)=>sum(y[1].filter(isFail),r=>r.qty)-sum(x[1].filter(isFail),r=>r.qty)||sum(y[1],r=>r.qty)-sum(x[1],r=>r.qty)))}
+      <h4>明細</h4>${table([['日期',r=>E(r.date)],['線別',r=>E(r.line)],['機台',r=>E(r.machine)],['支數',r=>F(r.qty),1],['回收',r=>F(r.returned),1],['原因',r=>{const c=RC[rcOf(r)]||RC.other;return `<span class="${c[1]}">${E(r.reason||c[0])}</span>`}],['操作員',r=>E(r.operator)]],a.slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))),200)}`}}).sort((a,b)=>b.n30-a.n30)})}
+function defectGroups(){return once('defect',async()=>{const ms=monthsBack(6);const {rows}=await loadTool('qc',k=>/^(m:|p:kpi_)/.test(k)&&ms.some(m=>k.indexOf(m)>=0));
+  const ev=[];rows.forEach(r=>{if(!r||!r.date||!Array.isArray(r.defects))return;const src=r.reportKind==='sewingkpi'?'kpi':'qc';const sty=(r.styles||[]).map(x=>typeof x==='string'?x:(x&&(x.style||x.styleNo))||'').filter(Boolean);
+    r.defects.forEach(d=>{const q=+d.qty||0;if(q<=0)return;const nm=String(d.name||d.code||'').replace(/\s+/g,' ').trim();if(!nm)return;ev.push({name:nm,code:d.code||'',date:r.date,line:String(r.line||'').replace(/^Line\s*/i,'L'),qty:q,src,styles:sty,customer:r.customer||'',po:r.po||''})})});
+  const totQC=sum(ev.filter(x=>x.src==='qc'),x=>x.qty)||1;const d30=addD(ymdToday(),-30);
+  const G=groupBy(ev,x=>nk(x.name));
+  return [...G].map(([k,a])=>{const nm=a[0].name,code=(a.find(x=>x.code)||{}).code||'';const n=sum(a,x=>x.qty),n30=sum(a.filter(x=>x.date>=d30),x=>x.qty),qc=sum(a.filter(x=>x.src==='qc'),x=>x.qty),kpi=sum(a.filter(x=>x.src==='kpi'),x=>x.qty);const days=lastDays(a,30,x=>x.date);
+    const st=new Map();a.forEach(x=>x.styles.forEach(s=>st.set(s,(st.get(s)||0)+x.qty)));
+    return {key:k,kind:'瑕疵',title:nm,n,n30,sub:(code?'代碼 '+E(code)+' · ':'')+'最後 '+(lastDays(a,1,x=>x.date)[0]||'').slice(5),search:code+' '+[...new Set(a.map(x=>x.line))].join(' '),
+     kpis:[[F(n30),'近 30 天件數',n30?'warn':'ok'],[F(qc),'Final QC（6 個月）'],[F(kpi),'車縫 KPI（6 個月）'],[P(qc/totQC*100),'佔 Final QC 不良'],[String(new Set(a.map(x=>x.line)).size),'條線出現']],spark:dailySeries(a,days,x=>x.qty).map(x=>x.v),
+     detail:()=>`<h4>每月件數（長條＝Final QC，橘線＝車縫 KPI）</h4>${CH.bars(monthBars(a,x=>x.date,x=>x.src==='qc'?x.qty:0,x=>x.src==='kpi'?x.qty:0,6),{v2:true,legend:'兩個來源分開算，不相加：Final QC 是成品抽驗，車縫 KPI 是線上自檢。'})}
+      <h4>哪幾條線最多</h4>${CH.hbars([...groupBy(a,x=>x.line||'—')].map(([l,b])=>({label:l,v:sum(b,x=>x.qty)})).sort((x,y)=>y.v-x.v).slice(0,14))}
+      ${st.size?`<h4>哪幾款（Final QC）</h4>${CH.hbars([...st].map(([s2,v])=>({label:s2,v})).sort((x,y)=>y.v-x.v).slice(0,12))}`:''}
+      <h4>每天明細</h4>${table([['日期',x=>E(x.date)],['來源',x=>x.src==='qc'?'Final QC':'車縫 KPI'],['線別',x=>E(x.line)],['件數',x=>F(x.qty),1],['款號',x=>E(x.styles.join(' '))],['客戶',x=>E(x.customer)],['PO',x=>E(x.po)]],a.slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))),300)}`}}).sort((a,b)=>b.n30-a.n30||b.n-a.n)})}
+function fabricGroups(){return once('fabric',async()=>{const {rows}=await loadTool('fabricstock',keepMonths(3));const cur=rows.filter(r=>r&&r.stockType==='current'&&r.snapshotDate);const lastSnap=cur.map(r=>r.snapshotDate).sort().pop()||'';
+  const mov=rows.filter(r=>r&&(r.received!=null||r.issued!=null)&&r.itemCode);const snapNow=cur.filter(r=>r.snapshotDate===lastSnap);
+  const keys=new Set([...mov.map(r=>nk(r.itemCode)),...snapNow.map(r=>nk(r.itemCode))].filter(Boolean));const M=groupBy(mov,r=>nk(r.itemCode)),S=groupBy(snapNow,r=>nk(r.itemCode)),H=groupBy(cur,r=>nk(r.itemCode));
+  const groups=[...keys].map(k=>{const a=M.get(k)||[],sn=S.get(k)||[],hist=H.get(k)||[];const rec=sum(a,r=>r.received),iss=sum(a,r=>r.issued),bal=sum(sn,r=>r.quantity);const unit=((sn[0]||a[0]||{}).unit)||'';
+    const desc=(sn.find(r=>r.description)||a.find(r=>r.description)||{}).description||'';const byM=groupBy(a,r=>ymOf(r.date));const mk=[...byM.keys()].filter(Boolean).sort();
+    const snapTrend=[...groupBy(hist,r=>r.snapshotDate)].sort((x,y)=>x[0].localeCompare(y[0])).map(([d,b])=>({label:d.slice(5),v:sum(b,r=>r.quantity)}));
+    return {key:k,kind:'布料',title:(sn[0]||a[0]||{}).itemCode||k,rec,iss,bal,sub:E([desc,unit].filter(Boolean).join(' · ')),search:[desc,...new Set(a.map(r=>r.color+' '+r.customer+' '+r.po)),...sn.map(r=>r.location+' '+r.lotNumber)].join(' '),
+     kpis:[[F(bal),'庫存 '+unit+(lastSnap?'（'+lastSnap.slice(5)+'）':''),bal?'ok':''],[String(sn.length),'個缸號／批'],[F(rec),'進（3 個月）'],[F(iss),'出（3 個月）']],spark:mk.map(m=>sum(byM.get(m),r=>r.issued)),
+     detail:()=>`${sn.length?`<h4>目前庫存（${E(lastSnap)}）</h4>${table([['缸號／批號',r=>E(r.lotNumber)],['顏色',r=>E(r.color||r.colorName)],['數量',r=>F(r.quantity,1),1],['單位',r=>E(r.unit)],['品質',r=>E(r.quality)],['儲位',r=>E(r.location)],['客戶',r=>E(r.customer)],['PO',r=>E(r.po)],['年份',r=>E(r.stockYear)]],sn.slice().sort((x,y)=>(+y.quantity||0)-(+x.quantity||0)))}`:''}
+      ${snapTrend.length>1?`<h4>每次盤點的庫存</h4>${CH.bars(snapTrend)}`:''}
+      ${mk.length?`<h4>每月進（長條）／出（折線）</h4>${CH.bars(mk.map(m=>({label:m,v:sum(byM.get(m),r=>r.received),v2:sum(byM.get(m),r=>r.issued)})),{v2:true})}<h4>依顏色（發出）</h4>${CH.hbars([...groupBy(a,r=>r.color||'—')].map(([c,b])=>({label:c,v:Math.round(sum(b,r=>r.issued))})).sort((x,y)=>y.v-x.v).slice(0,15))}
+      <h4>進出明細</h4>${table([['日期',r=>E(r.date)],['顏色',r=>E(r.color)],['單號',r=>E(r.documentNo)],['動作',r=>E(r.movement)],['缸號',r=>E(r.lotNumber)],['進',r=>F(r.received,1),1],['出',r=>F(r.issued,1),1],['客戶',r=>E(r.customer)],['PO',r=>E(r.po)]],a.slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))))}`:'<p class="note">近 3 個月沒有進出紀錄。</p>'}`}}).filter(g=>g.rec||g.iss||g.bal);
+  return groups})}
+REF.parts=()=>partGroups();REF.needle=()=>needleGroups();REF.defect=()=>defectGroups();REF.fabric=()=>fabricGroups();
+const addPh=(l,domain)=>{l.forEach(g=>{if(!g.photo)g.photo={domain,key:g.key,name:g.title}});return l};
+['parts','needle','defect','fabric'].forEach(k=>{const f=REF[k];REF[k]=()=>f().then(l=>addPh(l,k))});
 const SPECS={
  output:{segments:[
-  {label:'🧵 車縫（每條線）',sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['效率高→低',(a,b)=>(b.e||0)-(a.e||0)],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['線別',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
+  {label:'🧵 車縫（每條線）',photo:'line',photoTip:'可放這條線的排位、標準作業或樣品照。',sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['效率高→低',(a,b)=>(b.e||0)-(a.e||0)],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['線別',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
    async build(){const {rows,updatedAt}=await loadTool('sewing',keepMonths(3));const days=lastDays(rows,30,r=>r.date),D=new Set(days);const rs=rows.filter(r=>D.has(r.date));
     const L=groupBy(rs,lineName);const last=days[days.length-1]||'';
     const groups=[...L].map(([k,a])=>{const n=sum(a,r=>r.pieces),e=effW(a);const ld=lastDays(a,1,r=>r.date)[0]||'';return {key:k,title:k,n,e,search:[...new Set(a.map(r=>r.styleNo+' '+r.po))].join(' '),sub:'最後 '+ld.slice(5),
@@ -300,21 +386,22 @@ const SPECS={
         return `<h4>每天件數（長條）＋效率（折線）</h4>${CH.bars(dailySeries(a,days,r=>r.pieces,b=>effW(b)),{v2:true,v2Unit:'%'})}<h4>做了哪些款</h4>${table([['款號',x=>E(x.s)],['件數',x=>F(x.n),1],['效率',x=>`<b class="${effCls(x.e)}">${P(x.e)}</b>`,1],['SMV',x=>F(x.smv,2),1],['PO',x=>`<span class="small">${E(x.po)}</span>`],['最後',x=>E((x.d||'').slice(5))]],st)}
         <h4>每天明細</h4>${table([['日期',r=>E(r.date)],['款號',r=>E(r.styleNo)],['PO',r=>E(r.po)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['人數',r=>F(r.workers,1),1],['效率',r=>P(+r.efficiency),1],['加班件',r=>F(r.otPcs),1]],a.slice().sort((x,y)=>y.date.localeCompare(x.date)))}`}}});
     const tot=sum(rs,r=>r.pieces);return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(tot)}</div><div class="l">近 30 個生產日 件數</div></div><div class="kpi"><div class="v ${effCls(effW(rs))}">${P(effW(rs))}</div><div class="l">平均效率（依人數加權）</div></div><div class="kpi"><div class="v">${E(last)}</div><div class="l">最新車縫日</div></div><div class="kpi"><div class="v">${L.size}</div><div class="l">條線</div></div></div><p class="note">點任何一張卡片：每天件數＋效率圖、做了哪些款、每天明細。雲端更新：${E((updatedAt||'').slice(0,16).replace('T',' '))}</p>`}}},
-  {label:'✂️ 裁剪（每條線）',sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['用布多→少',(a,b)=>b.y-a.y]],
+  {label:'✂️ 裁剪（每條線）',photo:'line',photoKey:g=>g.key,sorts:[['近 30 天件數',(a,b)=>b.n-a.n],['用布多→少',(a,b)=>b.y-a.y]],
    async build(){const {rows}=await loadTool('cutting',keepMonths(3));const days=lastDays(rows,30,r=>r.date),D=new Set(days);const rs=rows.filter(r=>D.has(r.date));
     const L=groupBy(rs,lineName);const groups=[...L].map(([k,a])=>{const n=sum(a,r=>r.pieces),y=sum(a,r=>r.totalYds);return {key:k,title:'✂️ '+k,n,y,search:[...new Set(a.map(r=>r.styleNo+' '+r.po+' '+r.fabricItem))].join(' '),sub:'最後 '+(lastDays(a,1,r=>r.date)[0]||'').slice(5),
       kpis:[[F(n),'件（30 天）'],[F(y,0),'碼布'],[P(effW(a)),'效率',effCls(effW(a))]],spark:dailySeries(a,days,r=>r.pieces).map(x=>x.v),
       detail:()=>`<h4>每天裁剪件數＋效率</h4>${CH.bars(dailySeries(a,days,r=>r.pieces,b=>effW(b)),{v2:true,v2Unit:'%'})}<h4>用哪些布</h4>${CH.hbars([...groupBy(a,r=>r.fabricItem||r.fabricType)].map(([f,b])=>({label:f,v:Math.round(sum(b,r=>r.totalYds))})).sort((x,y)=>y.v-x.v).slice(0,12))}
        <h4>明細</h4>${table([['日期',r=>E(r.date)],['款號',r=>E(r.styleNo)],['PO',r=>E(r.po)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['碼/件',r=>F(r.ydsPerPcs,3),1],['總碼',r=>F(r.totalYds,1),1]],a.slice().sort((x,y)=>y.date.localeCompare(x.date)))}`}});
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(sum(rs,r=>r.pieces))}</div><div class="l">近 30 個裁剪日 件數</div></div><div class="kpi"><div class="v">${F(sum(rs,r=>r.totalYds))}</div><div class="l">碼布</div></div><div class="kpi"><div class="v">${E(days[days.length-1]||'—')}</div><div class="l">最新裁剪日</div></div></div>`}}},
-  {label:'📦 裝箱（每條線）',sorts:[['件數',(a,b)=>b.n-a.n]],
+  {label:'🔍 品管瑕疵（依類別）',photo:'defect',photoTip:'放這種瑕疵的標準範例照（大家才知道什麼叫這個瑕疵）；當月看到不一樣的放每月異常。',sorts:[['近 30 天件數',(a,b)=>b.n30-a.n30],['近 3 個月件數',(a,b)=>b.n-a.n],['名稱',(a,b)=>a.title.localeCompare(b.title)]],build:async()=>({groups:await defectGroups(),top:'<p class="note">近 6 個月 Final QC 與車縫 KPI 的瑕疵，依瑕疵名稱分。每一種都可以放標準範例照。</p>'})},
+  {label:'📦 裝箱（每條線）',photo:'line',sorts:[['件數',(a,b)=>b.n-a.n]],
    async build(){const {rows}=await loadTool('packing');const days=lastDays(rows,30,r=>r.date);const L=groupBy(rows,r=>String(r.line||'').replace(/^Line\s*/i,'L')||'—');
     const groups=[...L].map(([k,a])=>{const n=sum(a,r=>r.qty);return {key:k,title:'📦 '+k,n,search:[...new Set(a.map(r=>r.style+' '+r.po))].join(' '),sub:'最後 '+(lastDays(a,1,r=>r.date)[0]||'').slice(5),kpis:[[F(n),'件'],[F(sum(a,r=>r.ctns),1),'箱'],[String(new Set(a.map(r=>r.po)).size),'張 PO']],spark:dailySeries(a,days,r=>r.qty).map(x=>x.v),
       detail:()=>`<h4>每天裝箱件數</h4>${CH.bars(dailySeries(a,days,r=>r.qty))}<h4>依 PO</h4>${table([['PO',x=>E(x[0])],['款號',x=>E(x[1][0].style)],['件數',x=>F(sum(x[1],r=>r.qty)),1],['箱',x=>F(sum(x[1],r=>r.ctns),1),1]],[...groupBy(a,r=>r.po)].sort((x,y)=>sum(y[1],r=>r.qty)-sum(x[1],r=>r.qty)))}`}});
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(sum(rows,r=>r.qty))}</div><div class="l">已裝箱件數（11 月起）</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.ctns),1)}</div><div class="l">箱</div></div><div class="kpi"><div class="v">${E(days[days.length-1]||'—')}</div><div class="l">最新裝箱日</div></div></div>`}}}
  ]},
  style:{segments:[
-  {label:'📐 每一款（近 3 個月車縫）',sorts:[['件數',(a,b)=>b.n-a.n],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['SMV 高→低',(a,b)=>(b.smv||0)-(a.smv||0)],['最近做的',(a,b)=>String(b.d).localeCompare(String(a.d))]],
+  {label:'📐 每一款（近 3 個月車縫）',photo:'style',photoTip:'放這一款的樣品、BOM 用料、正確成品照。',sorts:[['件數',(a,b)=>b.n-a.n],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['SMV 高→低',(a,b)=>(b.smv||0)-(a.smv||0)],['最近做的',(a,b)=>String(b.d).localeCompare(String(a.d))]],
    async build(){const [{rows},cut]=await Promise.all([loadTool('sewing',keepMonths(3)),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]}))]);
     const S=groupBy(rows,r=>String(r.styleNo||'').trim().toUpperCase());const C=groupBy(cut.rows,r=>String(r.styleNo||'').trim().toUpperCase());
     const groups=[...S].map(([k,a])=>{const n=sum(a,r=>r.pieces),e=effW(a),smvR=a.filter(r=>+r.smv>0),smv=smvR.length?sum(smvR,r=>r.smv)/smvR.length:null,d=lastDays(a,1,r=>r.date)[0]||'',days=lastDays(a,20,r=>r.date),c=C.get(k)||[];
@@ -328,7 +415,7 @@ const SPECS={
  ]},
  /* ── 訂單（v4.26 重做，Paul 11/12：「看不懂什麼客戶怎樣、沒頭沒尾」）：先講一句結論，每張卡＝一個客戶還有多少箱沒做、比上週多還是少、PDF 訂單最近哪天要出 ── */
  orders:{segments:[
-  {label:'👥 每個客戶還有多少沒做',sorts:[['還沒做的箱數 多→少',(a,b)=>b.n-a.n],['最近要出的排前面',(a,b)=>String(a.nextShip||'9').localeCompare(String(b.nextShip||'9'))],['比上一次增加最多',(a,b)=>b.diff-a.diff]],
+  {label:'👥 每個客戶還有多少沒做',photo:'customer',photoKey:g=>custKey(g.title),photoTip:'放客戶的吊牌、標籤、包裝標準照。',sorts:[['還沒做的箱數 多→少',(a,b)=>b.n-a.n],['最近要出的排前面',(a,b)=>String(a.nextShip||'9').localeCompare(String(b.nextShip||'9'))],['比上一次增加最多',(a,b)=>b.diff-a.diff]],
    async build(){const [{rows},po]=await Promise.all([loadTool('orders',k=>/^p:weekly_/.test(k)&&monthsBack(4).some(m=>k.indexOf(m)>=0)),loadTool('orders',k=>/^h:/.test(k)).catch(()=>({rows:[]}))]);
     const dates=[...new Set(rows.map(r=>r.as_of_date).filter(Boolean))].sort();const last=dates[dates.length-1],prev=dates[dates.length-2];const today=ymdToday();
     const PO=groupBy(po.rows,r=>custKey(r.customer));
@@ -421,7 +508,7 @@ const SPECS={
    runs.forEach(r=>{r.sewRows=sw.rows.filter(x=>lk(x.lineNo)===r.line&&x.date>=addD(r.start,-2)&&(()=>{const a=normS(x.styleNo),b=normS(r.style);return a&&b&&(a===b||a.indexOf(b)>=0||b.indexOf(a)>=0)})())});
    lines=[...new Set(runs.map(r=>r.line))].sort((a,b)=>(+a.slice(1))-(+b.slice(1)));draw();loadX()}).catch(e=>{p.querySelector('#gLead').innerHTML='⚠️ '+E(e.message||e)})}},
  ship:{segments:[
-  {label:'🚢 每個客戶（出貨進度）',sorts:[['未出件數',(a,b)=>b.n-a.n],['已出件數',(a,b)=>b.s-a.s]],
+  {label:'🚢 每個客戶（出貨進度）',photo:'customer',photoKey:g=>custKey(g.title),sorts:[['未出件數',(a,b)=>b.n-a.n],['已出件數',(a,b)=>b.s-a.s]],
    async build(){const [{rows},ms]=await Promise.all([loadTool('shipping'),loadTool('monthship').catch(()=>({rows:[]}))]);
     const C=groupBy(rows,r=>r.cust);const groups=[...C].map(([k,a])=>{const n=sum(a,r=>r.open),s=sum(a,r=>r.shipped),o=sum(a,r=>r.orig);const byM=groupBy(a.filter(r=>r.etd),r=>String(r.etd).slice(0,7));const mk=[...byM.keys()].sort().slice(-12);
       return {key:k,title:k,n,s,sub:o?P(s/o*100)+' 已出':'',kpis:[[F(n),'未出件',n?'warn':''],[F(s),'已出件'],[String(new Set(a.filter(r=>+r.open>0).map(r=>r.po)).size),'張 PO 未完']],spark:mk.map(m=>sum(byM.get(m),r=>r.orig)),
@@ -431,21 +518,18 @@ const SPECS={
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v warn">${F(sum(rows,r=>r.open))}</div><div class="l">全部未出件數</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.shipped))}</div><div class="l">已出件數</div></div>${mm.slice(-3).map(m=>`<div class="kpi"><div class="v">${F(sum(M.get(m),r=>r.pieces))}</div><div class="l">${E(m)} 月出貨件數</div></div>`).join('')}</div>${mm.length?`<h4 style="margin:4px 0">月出貨件數</h4>${CH.bars(mm.map(m=>({label:m,v:sum(M.get(m),r=>r.pieces)})))}`:''}`}}}
  ]},
  fabric:{segments:[
-  {label:'🧶 每個料號（近 3 個月進出）',sorts:[['發出多→少',(a,b)=>b.iss-a.iss],['進倉多→少',(a,b)=>b.rec-a.rec]],
-   async build(){const {rows}=await loadTool('fabricstock',keepMonths(3));const I=groupBy(rows,r=>r.itemCode);
-    const groups=[...I].map(([k,a])=>{const rec=sum(a,r=>r.received),iss=sum(a,r=>r.issued);const byM=groupBy(a,r=>String(r.date||'').slice(0,7));const mk=[...byM.keys()].sort();const unit=(a.find(r=>r.unit)||{}).unit||'';
-      return {key:k,title:k,rec,iss,search:[...new Set(a.map(r=>r.color+' '+r.customer+' '+r.po))].join(' '),sub:unit,kpis:[[F(rec),'進'],[F(iss),'出'],[String(new Set(a.map(r=>r.color)).size),'個顏色']],spark:mk.map(m=>sum(byM.get(m),r=>r.issued)),
-       detail:()=>`<h4>每月進（長條）／出（折線）</h4>${CH.bars(mk.map(m=>({label:m,v:sum(byM.get(m),r=>r.received),v2:sum(byM.get(m),r=>r.issued)})),{v2:true})}<h4>依顏色</h4>${CH.hbars([...groupBy(a,r=>r.color||'—')].map(([c,b])=>({label:c,v:Math.round(sum(b,r=>r.issued))})).sort((x,y)=>y.v-x.v).slice(0,15))}
-        <h4>進出明細</h4>${table([['日期',r=>E(r.date)],['顏色',r=>E(r.color)],['單號',r=>E(r.documentNo)],['動作',r=>E(r.movement)],['缸號',r=>E(r.lotNumber)],['進',r=>F(r.received,1),1],['出',r=>F(r.issued,1),1],['客戶',r=>E(r.customer)],['PO',r=>E(r.po)]],a.slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))))}`}}).filter(g=>g.rec||g.iss);
-    return {groups,top:`<p class="note">近 3 個月每個料號的進倉／發出（雲端的布料庫存資料）。庫存結存、副料請看「布料／副料庫存」分頁。</p>`}}}
+  {label:'🧶 每個料號（庫存＋近 3 個月進出）',photo:'fabric',photoTip:'放這個布的正確顏色／布面照；當月收到色差或不同的，放在下面的每月異常。',sorts:[['庫存多→少',(a,b)=>b.bal-a.bal],['發出多→少',(a,b)=>b.iss-a.iss],['進倉多→少',(a,b)=>b.rec-a.rec],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
+   build:async()=>({groups:await fabricGroups(),top:'<p class="note">每個料號：目前庫存（最近一次盤點）＋近 3 個月進出。點進去可放正確布面照與每月色差／異常照。</p>'})}
  ]},
  parts:{segments:[
   {label:'🔧 零件（依類別）',sorts:[['低於安全量',(a,b)=>b.low-a.low],['品項數',(a,b)=>b.n-a.n]],
    async build(){const {rows}=await loadTool('spareparts',k=>/^p:parts_master/.test(k));const C=groupBy(rows,r=>r.category||'未分類');
     const isLow=r=>+r.minStock>0&&(+r.qty||0)<+r.minStock;
     const groups=[...C].map(([k,a])=>{const low=a.filter(isLow).length;return {key:k,title:k,n:a.length,low,search:a.map(r=>r.partNo+' '+r.name+' '+r.machineType).join(' '),sub:'',kpis:[[String(a.length),'品項'],[String(low),'低於安全量',low?'crit':'ok'],[F(sum(a,r=>(+r.qty||0)*(+r.unitPrice||0))),'庫存金額']],
-      detail:()=>`<h4>依機種</h4>${CH.hbars([...groupBy(a,r=>r.machineType||'—')].map(([m,b])=>({label:m,v:b.length})).sort((x,y)=>y.v-x.v).slice(0,15))}<h4>品項（低於安全量排前面）</h4>${table([['料號',r=>E(r.partNo)],['名稱',r=>E(r.name)],['規格',r=>E(r.spec)],['機種',r=>E(r.machineType)],['庫存',r=>`<b class="${isLow(r)?'crit':''}">${F(r.qty)}</b>`,1],['安全量',r=>F(r.minStock),1],['單價',r=>F(r.unitPrice,2),1],['位置',r=>E(r.location)]],a.slice().sort((x,y)=>(isLow(y)-isLow(x))||String(x.partNo).localeCompare(String(y.partNo))))}`}});
-    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${rows.length}</div><div class="l">零件品項</div></div><div class="kpi"><div class="v crit">${rows.filter(isLow).length}</div><div class="l">低於安全量</div></div></div>`}}}
+      detail:()=>`<h4>依機種</h4>${CH.hbars([...groupBy(a,r=>r.machineType||'—')].map(([m,b])=>({label:m,v:b.length})).sort((x,y)=>y.v-x.v).slice(0,15))}<h4>品項（低於安全量排前面）</h4>${table([['料號',r=>link('parts',r.partNo)],['名稱',r=>E(r.name)],['規格',r=>E(r.spec)],['機種',r=>E(r.machineType)],['庫存',r=>`<b class="${isLow(r)?'crit':''}">${F(r.qty)}</b>`,1],['安全量',r=>F(r.minStock),1],['單價',r=>F(r.unitPrice,2),1],['位置',r=>E(r.location)]],a.slice().sort((x,y)=>(isLow(y)-isLow(x))||String(x.partNo).localeCompare(String(y.partNo))))}`}});
+    return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${rows.length}</div><div class="l">零件品項</div></div><div class="kpi"><div class="v crit">${rows.filter(isLow).length}</div><div class="l">低於安全量</div></div></div><p class="note">點類別 → 品項表的料號可再點開那一個零件（照片、換零件紀錄）。</p>`}}},
+  {label:'🔩 每個零件（料號）',photo:'parts',photoTip:'放零件正確的樣子（型號、規格標籤）；收到不一樣的放每月異常。',sorts:[['低於安全量先',(a,b)=>(b.low-a.low)||(b.used-a.used)],['近 3 個月換得多',(a,b)=>b.used-a.used],['庫存金額',(a,b)=>b.amt-a.amt],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],build:async()=>({groups:await partGroups(),top:'<p class="note">點一個零件：照片、庫存、換零件紀錄。</p>'})},
+  {label:'🪡 換針（依針型／尺寸）',photo:'needle',photoTip:'放這種針的正確樣子（針型、號數）；斷針／彎針的異常照放每月。',sorts:[['近 30 天支數',(a,b)=>b.n30-a.n30],['斷／損多→少',(a,b)=>b.fail-a.fail]],build:async()=>({groups:await needleGroups(),top:'<p class="note">換款（Change Style）是計畫內消耗，不算斷／損。</p>'})}
  ]}
 };
 
