@@ -8,8 +8,8 @@
 <script src="vrt-platform-v40.js?v=4.25.0"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.34.0"></script>
-<script src="vrt-item-photos-v1.js?v=4.33.0"></script>
-<script src="vrt-photo-import-v1.js?v=4.32.0"></script>
+<script src="vrt-item-photos-v1.js?v=4.35.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.35.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
    舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
@@ -82,6 +82,19 @@ table.dt td.r,table.dt th.r{text-align:right}
 .sh-tabs button{border:0;background:none;color:var(--mut);font:inherit;font-size:13px;padding:9px 12px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}.sh-tabs button.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:700}
 .sh-body{flex:1;overflow:auto;padding:12px 14px 20px}.sh-body h4{margin:14px 0 6px;font-size:14px}
 .sh-next{display:block;width:100%;margin-top:18px;padding:12px;font-size:14px;text-align:center}
+.sh-hero{display:flex;gap:14px;align-items:center;margin-bottom:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px}
+.sh-hero .ph{width:168px;height:168px;flex:none;border-radius:12px;background:var(--chip) center/cover no-repeat;border:2px solid #f59e0b;cursor:pointer;display:grid;place-items:center;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}
+.sh-hero .ph.none{border:2px dashed var(--line);font-size:13px}.sh-hero .ph.none:hover{border-color:var(--acc);color:var(--acc)}
+.sh-hero .tx{flex:1;min-width:0}.sh-hero .kpis{margin:10px 0 0}.sh-hero .tx b{font-size:22px;display:block;word-break:break-all}.sh-hero .sub{color:var(--mut);font-size:13px;margin:4px 0 8px}.sh-hero .chips .tag{margin-right:6px}
+.sh-cont{margin-top:22px;padding-top:4px;border-top:3px dashed var(--line)}
+.sh-cont-hd{display:flex;align-items:center;gap:12px;margin:10px 0;padding:8px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+.sh-cont-hd:hover{border-color:var(--acc)}.sh-cont-hd .ph{width:84px;height:84px;flex:none;border-radius:10px;background:var(--chip) center/cover no-repeat;display:grid;place-items:center;color:var(--mut);font-size:12px}
+.sh-cont-hd .tx{flex:1;min-width:0}.sh-cont-hd b{font-size:18px;display:block}.sh-cont-hd span{color:var(--mut);font-size:12px}.sh-cont-hd .pos{flex:none;font-size:11px}
+.bi-en{font-weight:400;font-size:10.5px;color:var(--mut)}th .bi-en,.kpi .bi-en{display:block;font-size:10px}
+.sh-more{margin-top:16px;padding:14px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:12px;cursor:pointer;font-size:13px}
+.sh-ct.off{opacity:.45}
+@media (max-width:640px){.sh-hero{align-items:flex-start}.sh-hero .ph{width:110px;height:110px}.sh-hero .tx b{font-size:18px}.sh-hero .kpis{grid-template-columns:1fr 1fr;gap:6px}.sh-hero .kpi{padding:6px 8px}.sh-hero .kpi .v{font-size:17px}.sh-cont-hd .ph{width:60px;height:60px}
+ .sh-t>span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sh-t>span .tag{display:none}.sh-hd{flex-wrap:nowrap}}
 .sh-rel{display:flex;gap:6px;align-items:center;padding:8px 10px;border-top:1px solid var(--line);background:var(--hdr);overflow-x:auto}
 .sh-rl{font-size:11px;color:var(--mut);white-space:nowrap}.sh-rel button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}.sh-rel button.on{background:var(--acc);border-color:var(--acc);color:#fff}.sh-rel button i{font-style:normal;opacity:.7;font-size:11px}
 .gwrap{display:flex;flex-direction:column;height:100%}.gscroll{flex:1;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);min-height:0}
@@ -128,7 +141,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.34.0';
+const V='4.35.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -233,13 +246,48 @@ const sum=(rows,f)=>rows.reduce((a,r)=>a+(+f(r)||0),0);
 const lastDays=(rows,n,dateF)=>{const ds=[...new Set(rows.map(dateF).filter(Boolean))].sort();return ds.slice(-n)};
 
 /* ══ 詳細面板（v4.26）：點卡片 → 整頁面板，上面分頁切不同資訊；◀ ▶／鍵盤左右／手機左右滑＝上一個、下一個；最下面一排是相關的其他項目 ══ */
+/* v4.35 物品頁中英對照（Paul 11/13：有中文就要有英文）：標題／表頭／指標下面加小字英文，資料本身不動 */
+const BI=(()=>{const T=[
+['這條線近 30 天（車縫日報；個人產量要有個人計件資料才算得出來）','This line, last 30 days (sewing daily report)'],
+['每月支數（長條＝全部，橘線＝斷／損／遺失）','Needles per month (bars = all, orange = broken / damaged / lost)'],
+['每月換掉多少（依名稱對到的換零件紀錄）','Replaced per month (matched part-change records)'],
+['哪幾條線（斷／損多的排前面）','Which lines (most broken / damaged first)'],['品項（低於安全量排前面）','Items (below safety stock first)'],
+['還沒出完的（未出多→少）','Not fully shipped (most open first)'],['每天件數（長條）＋效率（折線）','Pcs per day (bars) + efficiency (line)'],
+['每月進（長條）／出（折線）','Monthly in (bars) / out (line)'],['用料明細（每件用量）','Materials (usage per pc)'],
+['依顏色（訂單／已出）','By color (ordered / shipped)'],['依顏色（發出）','By color (issued)'],['每天裁剪件數＋效率','Cut pcs per day + efficiency'],
+['每天件數＋效率','Pcs per day + efficiency'],['換針／換零件明細','Needle / part change details'],['每月換針／換零件','Needle / part changes per month'],
+['同一款其他線','Same style, other lines'],['車縫（每條線）','Sewing (per line)'],['每天實際車縫','Actual sewing per day'],['每次盤點的庫存','Stock at each count'],['每次盤點的結存','Balance at each count'],
+['這條線近 30 天件數','Pcs on this line, 30 days'],['箱做好還沒出','Cartons packed, not shipped'],['還沒出（箱）','Not shipped (cartons)'],['換款（計畫內）','Style changes (planned)'],
+['依款號／顏色','By style / color'],['每天裝箱件數','Packed pcs per day'],['哪幾條線在換','Lines changing'],['哪幾條線最多','Top lines'],['哪幾條線做','Lines making it'],
+['換零件明細','Part change details'],['近 3 個月換掉','Replaced, last 3 mo'],['近 30 天支數','Needles, last 30 days'],['還沒出的金額','Open (unshipped) value'],
+['訂了哪些款','Styles ordered'],['做了哪些款','Styles made'],['用哪些布','Fabrics used'],['排單內容','Plan details'],['訂單內容','Order details'],['這週明細','This week'],
+['目前庫存','Current stock'],['目前結存','Current balance'],['進出明細','Movements'],['每天明細','Daily details'],['用料分類','Material types'],['基本資料','Basic info'],
+['個顏色／尺寸','colors / sizes'],['個缸號／批','lots'],['缸號／批號','Lot no.'],['線別／位置','Line / position'],['桌巾／口布','Table cloth / napkin'],
+['（3 個月）',' (3 mo)'],['（30 天）',' (30 days)'],['3 個月','3 months'],['30 天','30 days'],
+['依機種','By machine type'],['依款式','By style'],['走勢','Trend'],['裝箱','Packing'],['車縫','Sewing'],['裁剪','Cutting'],['成本','Cost'],['原因','Reason'],['明細','Details'],
+['庫存金額','Stock value'],['排單件數','Planned pcs'],['排單日產','Planned per day'],['實際每天','Actual per day'],['裁剪件數','Cut pcs'],['裝箱件數','Packed pcs'],['車縫件數','Sewn pcs'],
+['換針（支）','Needles changed'],['換零件','Parts changed'],['條線出現','lines'],['項副料','trim items'],['項布料','fabric items'],['項用料','material items'],['個版本','versions'],
+['不良率','Defect %'],['加班件','OT pcs'],['出貨日','Ship date'],['下單日','Order date'],['操作員','Operator'],['已做好','Done'],['還沒做','Not done'],['已出件','Shipped pcs'],
+['訂單件','Order pcs'],['安全量','Safety stock'],['碼/件','yd/pc'],['碼布','yd fabric'],['條線','lines'],
+['不良','Defects'],['人數','Headcount'],['件數','Pcs'],['位置','Position'],['備註','Remarks'],['儲位','Location'],['動作','Action'],['名稱','Name'],['品名','Item name'],['品質','Quality'],
+['單位','Unit'],['單價','Unit price'],['單號','Doc no.'],['回收','Returned'],['客戶','Customer'],['尺寸','Size'],['已出','Shipped'],['布料','Fabric'],['年份','Year'],['庫存','Stock'],
+['支數','Qty (pcs)'],['效率','Efficiency'],['數量','Qty'],['料號','Item code'],['日期','Date'],['期初','Opening'],['未出','Open'],['機台','Machine'],['機種','Machine type'],
+['檢驗','Inspected'],['款號','Style'],['狀態','Status'],['產出','Output'],['產品','Product'],['結存','Balance'],['線別','Line'],['總碼','Total yd'],['缸號','Lot'],['規格','Spec'],
+['訂單','Order'],['金額','Amount'],['顏色','Color'],['分類','Category'],['品項','Items'],['圍裙','Apron'],['年資','Seniority'],['性別','Gender'],['成衣','Garment'],
+['布','Fabric'],['款','styles'],['箱','Cartons'],['件','pcs'],['進','In'],['出','Out'],
+['（',' ('],['）',')'],['／',' / '],['＋',' + '],['，',', '],['：',': ']].sort((a,b)=>b[0].length-a[0].length);
+ const CJ=/[㐀-鿿]/;const memo=new Map();
+ function en(t){t=String(t||'').trim();if(!t||!CJ.test(t))return '';if(memo.has(t))return memo.get(t);let x=t;for(const [a,b] of T)if(x.includes(a))x=x.split(a).join(b);
+  x=x.replace(/\s+/g,' ').replace(/\(\s+/g,'(').trim();const r=CJ.test(x)?'':x.replace(/^[^\w(]+/u,m=>m.replace(/[㐀-鿿]/g,''));memo.set(t,r);return r}
+ function apply(root){root.querySelectorAll('h4,.kpi .l,th').forEach(n=>{if(n.querySelector('.bi-en')||/[A-Za-z]{3,}/.test(n.textContent))return;const raw=n.textContent.replace(/^[\p{Extended_Pictographic}️\s]+/u,'');const e=en(raw);if(e)n.insertAdjacentHTML('beforeend',` <small class="bi-en">${E(e)}</small>`)})}
+ return {en,apply}})();
 const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
  const split=html=>{const p=String(html).split(/<h4[^>]*>([\s\S]*?)<\/h4>/);const secs=[];for(let k=1;k<p.length;k+=2)secs.push([p[k],p[k+1]||'']);return {pre:p[0]||'',secs}};
  const PH='📷 照片 Photos';
  function ensure(){if(el)return;el=document.createElement('div');el.className='sheet';
-  el.innerHTML=`<div class="sh-box"><div class="sh-hd"><button class="btn sh-back" data-a="back" title="回上一層">↩</button><button class="btn" data-a="prev" title="上一個（←）">◀</button><div class="sh-cv"></div><div class="sh-t"><b></b><span></span></div><span class="sh-pos"></span><button class="btn" data-a="next" title="下一個（→）">▶</button><button class="btn" data-a="close" title="關閉（Esc）">✕</button></div><div class="sh-tabs"></div><div class="sh-body"></div><div class="sh-rel"></div></div>`;
+  el.innerHTML=`<div class="sh-box"><div class="sh-hd"><button class="btn sh-back" data-a="back" title="回上一層">↩</button><button class="btn" data-a="prev" title="上一個（←）">◀</button><div class="sh-cv"></div><div class="sh-t"><b></b><span></span></div><span class="sh-pos"></span><button class="btn" data-a="next" title="下一個（→）">▶</button><button class="btn sh-ct" data-a="cont" title="連續瀏覽：捲到底自動接下一個 Continuous scroll">⇣</button><button class="btn" data-a="close" title="關閉（Esc）">✕</button></div><div class="sh-tabs"></div><div class="sh-body"></div><div class="sh-rel"></div></div>`;
   document.body.appendChild(el);
-  el.addEventListener('click',e=>{if(e.target===el)return close();const a=e.target.closest('[data-a]');if(a){({prev:()=>go(-1),next:()=>go(1),close,back,photo:()=>{tabI=-1;draw()}})[a.dataset.a]();return}
+  el.addEventListener('click',e=>{if(e.target===el)return close();const a=e.target.closest('[data-a]');if(a){({prev:()=>go(-1),next:()=>go(1),close,back,photo:()=>{tabI=-1;draw()},cont:()=>{try{localStorage.setItem(CK,contOn()?'0':'1')}catch(e){}a.classList.toggle('on',contOn());draw()}})[a.dataset.a]();return}
    const o=e.target.closest('[data-open]');if(o){const [kind,key]=String(o.dataset.open).split('|');openRef(kind,key);return}
    const t=e.target.closest('[data-tab]');if(t){tabI=+t.dataset.tab;draw();return}const j=e.target.closest('[data-jump]');if(j){i=+j.dataset.jump;draw()}});
   document.addEventListener('keydown',e=>{if(!el.classList.contains('on')||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)||document.querySelector('.vp-lb'))return;if(e.key==='Escape')(stack.length?back():close());if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1)});
@@ -254,22 +302,48 @@ const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
    if(!hit){if(w)w.textContent='找不到「'+key+'」的相關資料（可能還沒匯入，或名稱寫法不同）';if(!list.length){list=[{title:String(key),sub:'',kind:'',detail:()=>'<p class="note">找不到「'+E(key)+'」的相關資料（可能還沒匯入，或名稱寫法不同）。</p>'}];i=0;tabI=0;draw()}return}
    if(list.length)stack.push({list,i,tabI});list=hit.list;i=hit.idx;tabI=0;draw()}catch(e){body.innerHTML='⚠️ '+E(e.message||e)+old}}
  function photoTab(g){return g.photo&&window.VRTPhotos}
+ /* v4.35（Paul 11/17）像 PSJHR 員工頁：最上面大張 ⭐ 標準照＋名稱；捲到底自動接下一個（連續往下滑），捲到誰上方標頭就換成誰；◀ ▶／左右滑照舊 */
+ let base=0,CIO=null;const CK='vrt_sheet_cont';
+ const contOn=()=>{try{return localStorage.getItem(CK)!=='0'}catch(e){return true}};
+ function hero(g,ps,t,kp){if(!photoTab(g)||t>0)return '';const has=ps&&ps.cover;
+  return `<div class="sh-hero"><div class="ph ${has?'':'none'}" data-a="photo" title="看／加照片 Photos" style="${has?`background-image:url('${ps.cover}')`:''}">${has?'':'📷<br>加標準照<br><small>Add photo</small>'}</div>
+   <div class="tx"><b>${E(g.title)}</b><div class="sub">${g.sub||''}</div><div class="chips">${ps&&ps.ref?`<span class="tag">⭐ 標準照 ${ps.ref}</span>`:''}${ps&&ps.month?`<span class="tag">⚠️ 每月異常 ${ps.month}</span>`:''}${g.badge||''}</div>${kp||''}</div></div>`}
+ function contSec(k,tabName){const g=list[k];if(!g)return '';let pre='',secs=[];try{({pre,secs}=split(g.detail()))}catch(e){return ''}
+  const ps=photoTab(g)?VRTPhotos.summary(g.photo.domain,g.photo.key):null;const sec=tabName?secs.find(x=>x[0]===tabName):null;
+  const body=sec?`<h4>${sec[0]}</h4>${sec[1]}`:secs.map(x=>`<h4>${x[0]}</h4>${x[1]}`).join('');
+  const kp=g.kpis?`<div class="kpis">${g.kpis.map(x=>`<div class="kpi"><div class="v ${x[2]||''}">${x[0]}</div><div class="l">${E(x[1])}</div></div>`).join('')}</div>`:'';
+  const d=document.createElement('div');d.innerHTML=kp+pre+body;d.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));BI.apply(d);
+  const has=ps&&ps.cover;
+  return `<section class="sh-cont" data-i="${k}"><div class="sh-cont-hd" data-jump="${k}" title="打開這一個 Open"><div class="ph" style="${has?`background-image:url('${ps.cover}')`:''}">${has?'':E((g.kind||'').slice(0,2))}</div><div class="tx"><b>${E(g.title)}</b><span>${g.sub||''}</span></div><span class="pos">${k+1} / ${list.length}</span></div>${d.innerHTML}</section>`}
+ function contInit(B,tabName){if(CIO){CIO.disconnect();CIO=null}if(!contOn()||tabI===-1||list.length<2)return;let last=i;
+  B.insertAdjacentHTML('beforeend','<div class="sh-more"></div>');const more=B.querySelector('.sh-more');
+  const label=()=>{const nx=list[last+1];more.innerHTML=nx?`⬇ 繼續往下捲：下一個 Keep scrolling — next：<b>${E(nx.title)}</b>`:'— 已經是最後一個 That was the last one —'};
+  const add=()=>{if(!list[last+1])return false;more.insertAdjacentHTML('beforebegin',contSec(last+1,tabName));last++;label();return true};
+  const near=()=>more.getBoundingClientRect().top<B.getBoundingClientRect().bottom+500;const fill=()=>{let n=0;while(near()&&n++<3&&add());};
+  label();more.onclick=()=>add();
+  if(window.IntersectionObserver){CIO=new IntersectionObserver(es=>{if(!more.isConnected){CIO&&CIO.disconnect();return}if(es.some(x=>x.isIntersecting))fill()},{root:B,rootMargin:'0px 0px 500px 0px'});CIO.observe(more)}
+  let tk=0;B.onscroll=()=>{if(tk)return;tk=setTimeout(()=>{tk=0;if(!more.isConnected)return;fill();let cur=base;for(const x of B.querySelectorAll('.sh-cont')){if(x.offsetTop<=B.scrollTop+80)cur=+x.dataset.i;else break}if(cur!==i){i=cur;head(list[i])}},90)}}
+ function head(g){const ps=photoTab(g)?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
+  el.querySelector('.sh-cv').innerHTML=ps&&ps.cover?`<img src="${ps.cover}" alt="" data-a="photo" title="看照片">`:'';
+  el.querySelector('.sh-t b').textContent=g.title;el.querySelector('.sh-t span').innerHTML=(g.sub||'')+(g.badge?' '+g.badge:'')+(ps&&ps.total?` <span class="tag">📷 ${ps.total}${ps.thisMonth?` · 本月異常 ${ps.thisMonth}`:''}</span>`:'');
+  el.querySelector('.sh-pos').textContent=(i+1)+' / '+list.length;el.querySelector('[data-a=prev]').disabled=i===0;el.querySelector('[data-a=next]').disabled=i===list.length-1;
+  el.querySelectorAll('.sh-rel [data-jump]').forEach(b=>b.classList.toggle('on',+b.dataset.jump===i))}
  function draw(){const g=list[i];const {pre,secs}=split(g.detail());const tabs=[['📑 全部',null]].concat(secs);const hasPh=photoTab(g);if(tabI>=tabs.length)tabI=tabs.length>1?1:0;
   const ps=hasPh?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
   el.querySelector('.sh-back').style.display=stack.length?'inline-block':'none';
   el.querySelector('.sh-cv').innerHTML=ps&&ps.cover?`<img src="${ps.cover}" alt="" data-a="photo" title="看照片">`:'';
   el.querySelector('.sh-t b').textContent=g.title;el.querySelector('.sh-t span').innerHTML=(g.sub||'')+(g.badge?' '+g.badge:'')+(ps&&ps.total?` <span class="tag">📷 ${ps.total}${ps.thisMonth?` · 本月異常 ${ps.thisMonth}`:''}</span>`:'');
-  el.querySelector('.sh-pos').textContent=(i+1)+' / '+list.length;
+  el.querySelector('.sh-pos').textContent=(i+1)+' / '+list.length;el.querySelector('.sh-ct').classList.toggle('off',!contOn());
   el.querySelector('[data-a=prev]').disabled=i===0;el.querySelector('[data-a=next]').disabled=i===list.length-1;
   el.querySelector('.sh-tabs').innerHTML=tabs.map((t,k)=>`<button data-tab="${k}" class="${k===tabI?'on':''}">${t[0]}</button>`).join('')+(hasPh?`<button data-tab="-1" class="${tabI===-1?'on':''}">${PH}${ps.total?` <span class="pill">${ps.total}</span>`:''}</button>`:'');
   const kp=g.kpis?`<div class="kpis">${g.kpis.map(k=>`<div class="kpi"><div class="v ${k[2]||''}">${k[0]}</div><div class="l">${E(k[1])}</div></div>`).join('')}</div>`:'';
   const nx=list[i+1];const B=el.querySelector('.sh-body');
-  if(tabI===-1){B.innerHTML=kp+'<div id="shPh"></div>'+(nx?`<button class="btn sh-next" data-a="next">下一個：${E(nx.title)} ▶</button>`:'');VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
+  if(tabI===-1){B.innerHTML=kp+'<div id="shPh"></div>'+(nx?`<button class="btn sh-next" data-a="next">下一個 Next：${E(nx.title)} ▶</button>`:'');VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
   else{const body=tabI===0?secs.map(s=>`<h4>${s[0]}</h4>${s[1]}`).join(''):tabs[tabI][1];
-   B.innerHTML=kp+pre+body+(hasPh&&tabI===0?'<h4>'+PH+'</h4><div id="shPh"></div>':'')+(nx?`<button class="btn sh-next" data-a="next">下一個：${E(nx.title)} ▶</button>`:'');
+   const hr=hero(g,ps,tabI,kp);B.innerHTML=(hr||kp)+pre+body+(hasPh&&tabI===0?'<h4>'+PH+'</h4><div id="shPh"></div>':'')+(nx&&!contOn()?`<button class="btn sh-next" data-a="next">下一個 Next：${E(nx.title)} ▶</button>`:'');
    if(hasPh&&tabI===0)VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
   const hp=B.querySelector('#hrPh');if(hp)hrPhoto(hp.dataset.pid).then(d=>{if(d&&hp.isConnected)hp.innerHTML=`<img src="${d}" alt="" style="width:96px;height:120px;object-fit:cover;border-radius:12px;border:2px solid var(--line)">`}).catch(()=>{});
-  B.scrollTop=0;
+  BI.apply(B);B.scrollTop=0;base=i;contInit(B,tabI===-1?null:(tabI===0?null:tabs[tabI][0]));
   const a=Math.max(0,i-4),b=Math.min(list.length,i+12);
   el.querySelector('.sh-rel').innerHTML=`<span class="sh-rl">其他${E(g.kind||'項目')}：</span>`+list.slice(a,b).map((x,k)=>`<button data-jump="${a+k}" class="${a+k===i?'on':''}">${E(x.title)}${x.chip?` <i>${x.chip}</i>`:''}</button>`).join('');
   const on=el.querySelector('.sh-rel .on');on&&on.scrollIntoView({block:'nearest',inline:'center'})}

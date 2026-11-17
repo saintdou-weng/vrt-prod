@@ -6,7 +6,7 @@
 (function(g){
 'use strict';
 if(g.VRTPhotos&&g.VRTPhotos.version)return;
-const VERSION='1.0.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
+const VERSION='1.1.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
 const DOMAINS=[
  ['fabric','🧶','布料','Fabric'],['accessory','🧷','輔料','Accessories'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
  ['customer','👥','客戶','Customers'],['style','📐','款式／BOM','Styles / BOM'],['ship','🚢','成品／出貨','FG / Shipping'],
@@ -150,6 +150,24 @@ function css(){if(document.getElementById('vrtPhotoCss'))return;const s=document
 .vp-chip{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:#fef3c7;color:#92400e;margin-left:6px;white-space:nowrap}.vp-chip.ref{background:#e0e7ff;color:#3730a3}
 `;document.head.appendChild(s)}
 
+/* ── v1.1 下載：單張（檔名＝料號）、整類匯出 ZIP（檔名＝料號，可直接再用「批次上傳」匯回）── */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=u=>{let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0};
+function zipStore(files){const te=new TextEncoder(),parts=[],cen=[];let off=0;const d=new Date(),dt=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF,dd=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  for(const f of files){const nm=te.encode(f.name),b=f.bytes,c=crc32(b);const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(10,dt,true);h.setUint16(12,dd,true);h.setUint32(14,c,true);h.setUint32(18,b.length,true);h.setUint32(22,b.length,true);h.setUint16(26,nm.length,true);
+    parts.push(h.buffer,nm,b);const ce=new DataView(new ArrayBuffer(46));ce.setUint32(0,0x02014b50,true);ce.setUint16(4,20,true);ce.setUint16(6,20,true);ce.setUint16(8,0x0800,true);ce.setUint16(12,dt,true);ce.setUint16(14,dd,true);ce.setUint32(16,c,true);ce.setUint32(20,b.length,true);ce.setUint32(24,b.length,true);ce.setUint16(28,nm.length,true);ce.setUint32(42,off,true);cen.push(ce.buffer,nm);off+=30+nm.length+b.length}
+  const cs=cen.reduce((s,x)=>s+(x.byteLength||x.length),0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,e.buffer],{type:'application/zip'})}
+const dataBytes=u=>{const b=atob(String(u).split(',')[1]||'');const a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a};
+const safeName=s=>String(s||'photo').replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,80);
+function saveBlob(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}
+async function exportZip(domain,onProg){await ready;const by=new Map();[...IDX.values()].filter(r=>r.domain===domain&&!r.retired&&r.slot==='ref').forEach(r=>{if(!by.has(r.itemKey))by.set(r.itemKey,[]);by.get(r.itemKey).push(r)});
+  const files=[],rows=[['code / 料號','name / 名稱','file','date','caption']];let n=0,miss=0;
+  for(const [k,list] of by){list.sort((a,b)=>(b.cover?1:0)-(a.cover?1:0)||String(b.at).localeCompare(String(a.at)));let j=0;
+    for(const r of list){n++;onProg&&onProg(n);let d='';try{d=await image(r.hash)}catch(_){}if(!d){miss++;continue}const fn=safeName(k)+(j?'_'+(j+1):'')+'.jpg';j++;files.push({name:fn,bytes:dataBytes(d)});rows.push([k,r.itemName||'',fn,String(r.at||'').slice(0,10),r.caption||''])}}
+  const csv='﻿'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');files.push({name:'index_清單.csv',bytes:new TextEncoder().encode(csv)});
+  saveBlob(zipStore(files),'VRT_photos_'+domain+'_'+isoLocal().slice(0,10)+'.zip');return {files:files.length-1,miss}}
+
 /* ── 大圖檢視（左右滑／鍵盤左右）── */
 function viewer(list,i,opt){css();opt=opt||{};let k=i;const el=document.createElement('div');el.className='vp-lb';document.body.appendChild(el);
   const close=()=>{el.remove();document.removeEventListener('keydown',key)};
@@ -158,10 +176,10 @@ function viewer(list,i,opt){css();opt=opt||{};let k=i;const el=document.createEl
   async function paint(){const r=list[k];el.innerHTML=`<div class="vp-lb-h"><button data-a="x">✕</button><b>${E(r.itemName||r.itemKey)} · ${r.slot==='ref'?'⭐ 標準照 Standard':'⚠️ '+E(r.month)+' 異常 Anomaly'}</b><span style="color:#cbd5e1;font-size:12px">${k+1} / ${list.length}</span></div>
     <div class="vp-lb-m"><img src="${r.thumb}" alt=""></div>
     <div class="vp-lb-f"><button data-a="p" ${k?'':'disabled'}>◀</button><span>${E(r.caption||'（沒有說明 no caption）')} · ${E(String(r.at||'').replace('T',' ').slice(0,16))}</span><button data-a="n" ${k<list.length-1?'':'disabled'}>▶</button></div>
-    ${opt.edit?`<div class="vp-lb-f">${r.slot==='ref'&&r.cover?'<span>⭐ 目前封面 Cover</span>':`<button data-a="c">⭐ 設為標準照封面 Set as standard</button>`}${r.slot==='ref'?`<button data-a="m">⚠️ 改成本月異常 Move to this month</button>`:''}<button data-a="t">✏️ 說明 Caption</button><button data-a="r">🗄 封存 Archive</button></div>`:''}`;
+    ${opt.edit?`<div class="vp-lb-f">${r.slot==='ref'&&r.cover?'<span>⭐ 目前封面 Cover</span>':`<button data-a="c">⭐ 設為標準照封面 Set as standard</button>`}${r.slot==='ref'?`<button data-a="m">⚠️ 改成本月異常 Move to this month</button>`:''}<button data-a="t">✏️ 說明 Caption</button><button data-a="r">🗄 封存 Archive</button></div>`:''}<div class="vp-lb-f"><button data-a="d">⬇ 下載這張 Download</button></div>`;
     const img=el.querySelector('.vp-lb-m img');try{const full=await image(r.hash);if(full&&list[k]===r)img.src=full}catch(_){}}
   el.addEventListener('click',async e=>{const a=e.target.closest('[data-a]');if(!a){if(e.target===el)close();return}const r=list[k];
-    ({x:close,p:()=>go(-1),n:()=>go(1),c:async()=>{await setCover(r.id);list[k]=IDX.get(r.id);paint()},m:async()=>{await update(r.id,{slot:'month',month:ymNow(),cover:false});close()},
+    ({x:close,p:()=>go(-1),n:()=>go(1),d:async()=>{let u='';try{u=await image(r.hash)}catch(_){}u=u||r.thumb;saveBlob(new Blob([dataBytes(u)],{type:'image/jpeg'}),safeName(r.itemKey)+(r.slot==='month'?'_'+r.month:'')+'.jpg')},c:async()=>{await setCover(r.id);list[k]=IDX.get(r.id);paint()},m:async()=>{await update(r.id,{slot:'month',month:ymNow(),cover:false});close()},
       t:()=>{const f=el.querySelector('.vp-lb-f span');const inp=document.createElement('input');inp.className='vp-in';inp.value=r.caption||'';inp.placeholder='例如：色差、破洞、斷針 e.g. shade, hole';inp.style.minWidth='220px';f.replaceWith(inp);inp.focus();inp.onkeydown=async ev=>{if(ev.key==='Enter'){await update(r.id,{caption:inp.value.trim()});list[k]=IDX.get(r.id);paint()}};inp.onblur=async()=>{await update(r.id,{caption:inp.value.trim()});list[k]=IDX.get(r.id);paint()}},
       r:async()=>{if(a.dataset.sure!=='1'){a.dataset.sure='1';a.textContent='再按一次確定封存 Tap again';return}await update(r.id,{retired:true,cover:false});list.splice(k,1);if(!list.length)return close();k=Math.min(k,list.length-1);paint()}})[a.dataset.a]()});
   let sx=0,sy=0;el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
@@ -206,7 +224,7 @@ function library(opt){css();opt=opt||{};let dom=opt.domain&&DOM[opt.domain]?opt.
     el.querySelector('.vp-lib-body').innerHTML=`<div class="vp"><div class="vp-st ${st.type}">${E(st.text)}</div>
       <div class="vp-h"><input class="vp-in" placeholder="🔍 搜尋料號／名稱 Search" value="${E(q)}" data-k="q" style="flex:1;max-width:320px"><span class="vp-sp"></span>
         <button class="vp-btn" data-imp="1" title="同事做的對照表：Excel／PDF／JPG，一列＝編號＋照片＋名稱">📥 匯入對照表 Excel／PDF／JPG</button><label class="vp-btn ghost" title="檔名就是料號，例如 TCF0487.jpg、TCF0487_2.jpg">📁 批次上傳（檔名＝料號）Batch<input type="file" accept="image/*" multiple data-b="ref"></label>
-        <label class="vp-btn ghost">📁 批次＝本月異常 Batch (this month)<input type="file" accept="image/*" multiple data-b="month"></label></div>
+        <label class="vp-btn ghost">📁 批次＝本月異常 Batch (this month)<input type="file" accept="image/*" multiple data-b="month"></label><button class="vp-btn ghost" data-exp="1" title="這一類的標準照全部打包，檔名＝料號（可再用批次上傳匯回）">⬇ 匯出 ZIP Export</button></div>
       ${now.length?`<div class="vp-sec"><div class="vp-h"><b>⚠️ ${E(ymNow())} 本月異常／不同</b><span class="vp-n">${now.length} 張</span></div><div class="vp-grid">${now.map((r,i)=>`<div class="vp-th" data-now="${i}"><img src="${r.thumb}" alt="" loading="lazy"><span>${E(r.itemName||r.itemKey)} ${E(r.caption||'')}</span></div>`).join('')}</div></div>`:''}
       ${list.length?`<div class="vp-cards">${list.map(x=>`<div class="vp-card" data-key="${E(x.key)}"><div class="ph" style="${x.cover?`background-image:url('${x.cover}')`:''}">${x.cover?'':d[1]}</div><div class="tx"><b>${E(x.name)}</b><span>${E(x.key!==normKey(x.name)?x.key:'')}</span><div style="margin-top:4px">${x.ref?`<span class="vp-chip ref" style="margin-left:0">⭐ ${x.ref}</span>`:''}${x.month?`<span class="vp-chip">⚠️ ${x.month}${x.lastMonth?' · '+E(x.lastMonth.slice(2)):''}</span>`:''}</div></div></div>`).join('')}</div>`
         :`<div class="vp-empty">${d[1]} ${E(d[2])}還沒有照片。<br>在物品頁的「📷 照片」分頁上傳，或用上面的「批次上傳」：檔名就是料號／瑕疵名稱（例如 TCF0487.jpg）。</div>`}</div>`;
@@ -214,6 +232,7 @@ function library(opt){css();opt=opt||{};let dom=opt.domain&&DOM[opt.domain]?opt.
     el.querySelectorAll('[data-b]').forEach(inp=>inp.onchange=async()=>{const files=[...inp.files];let add2=0,dup=0;setStatus(`⏳ 批次處理 ${files.length} 張…`,'busy');
       for(const f of files){const key=String(f.name).replace(/\.[^.]+$/,'').replace(/[\s_-]*(\(\d+\)|[_-]\d{1,2})$/,'').trim();if(!key)continue;try{const r=await add([f],{domain:dom,key,name:key,slot:inp.dataset.b,month:ymNow()});add2+=r.added;dup+=r.dup}catch(_){}}
       setStatus(`✅ 批次新增 ${add2} 張${dup?` · 重複略過 ${dup}`:''}`,'ok')});
+    const xb=el.querySelector('[data-exp]');xb&&(xb.onclick=async()=>{xb.disabled=true;setStatus('⏳ 打包照片…','busy');try{const r=await exportZip(dom,n=>setStatus(`⏳ 打包照片 ${n}…`,'busy'));setStatus(`✅ 已匯出 ${r.files} 張${r.miss?`（${r.miss} 張雲端暫時讀不到）`:''}`,'ok')}catch(e){setStatus('⚠️ 匯出失敗：'+(e.message||e),'warn')}xb.disabled=false});
     const ib=el.querySelector('[data-imp]');ib&&(ib.onclick=()=>{if(g.VRTPhotoImport)g.VRTPhotoImport.open({domain:dom,items:opt.items,onDone:paint});else setStatus('⚠️ 這一頁沒有載入匯入元件','warn')});
     el.querySelectorAll('[data-now]').forEach(t=>t.onclick=()=>viewer(now,+t.dataset.now,{edit:true}));
     el.querySelectorAll('.vp-card').forEach(c=>c.onclick=()=>{const k=c.dataset.key;if(opt.onOpen&&opt.onOpen(dom,k)!==false){close();return}
@@ -221,5 +240,5 @@ function library(opt){css();opt=opt||{};let dom=opt.domain&&DOM[opt.domain]?opt.
       box.addEventListener('click',e=>{if(e.target===box||e.target.closest('[data-a=x]'))box.remove()});mount(box.querySelector('.vp-lib-body'),{domain:dom,key:k,name:(items.get(k)||{}).name||k})})}
   listeners.add(paint);ready.then(paint);pull().catch(()=>{})}
 
-g.VRTPhotos={version:VERSION,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,normKey,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
+g.VRTPhotos={version:VERSION,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
 })(window);

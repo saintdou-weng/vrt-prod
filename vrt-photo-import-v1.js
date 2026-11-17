@@ -4,7 +4,10 @@
    ・Excel：直接讀檔案裡的圖片＋同一列的文字（不用另外裝程式；支援浮動圖片與「放在儲存格內」的圖片）。
    ・PDF：每頁畫出來 → 找表格線切出每一列 → 文字直接讀 PDF 的文字層（掃描檔才用 OCR）。
    ・JPG／PNG：找表格線切出每一列的照片 → 名稱用 OCR（Tesseract，第一次會下載，之後有快取）。
-   匯入前一定先列出「每一列 → 對到哪個物品」給人確認，可改、可不勾；同一張照片不會重複存。 */
+   匯入前一定先列出「每一列 → 對到哪個物品」給人確認，可改、可不勾；同一張照片不會重複存。
+   v1.1（Paul 11/17，Picture_fabric.xlsx）：照片跨兩列時以「照片中心落在哪一列」為準（不再把下一列的料號混進來）；
+   看表頭分欄：料號／名稱（中英柬）／儲位 RACK／類別，料號完全一樣就直接對到；不在清單的料號＝新料號；
+   核對表改成可打字搜尋（不用在幾百個選項裡找）；顯示「已有幾張標準照 → 新的當封面、舊的留歷史」。 */
 (function(g){
 'use strict';
 if(g.VRTPhotoImport)return;
@@ -34,14 +37,30 @@ async function readXlsx(file,log){const z=await unzip(await file.arrayBuffer());
     byLocal(doc,'c').forEach(c=>{const [col,row]=colNum(c.getAttribute('r'));const t=c.getAttribute('t');let v='';if(t==='s'){const x=byLocal(c,'v')[0];v=x?ss[+x.textContent]||'':''}else if(t==='inlineStr'){v=byLocal(c,'t').map(x=>x.textContent).join('')}else{const x=byLocal(c,'v')[0];v=x?x.textContent:''}
       const vm=c.getAttribute('vm');if(vm&&rv.length){const ri=rv[+vm-1];const media=rvRel[ri];if(media)inCell.push({media,row,col});v=''}
       if(String(v).trim()){if(!rows.has(row))rows.set(row,[]);rows.get(row).push([col,String(v).trim()])}});
+    /* 合併儲存格：每一格都當成有左上角的字 */
+    byLocal(doc,'mergeCell').forEach(m=>{const [a,b]=String(m.getAttribute('ref')||'').split(':');if(!b)return;const [c0,r0]=colNum(a),[c1,r1]=colNum(b);const v=((rows.get(r0)||[]).find(x=>x[0]===c0)||[])[1];if(!v)return;
+      for(let r=r0;r<=r1;r++){if(r===r0)continue;if(!rows.has(r))rows.set(r,[]);const L=rows.get(r);if(!L.some(x=>x[0]===c0))L.push([c0,v])}});
+    /* 列高（算照片中心在哪一列）：EMU，1pt=12700 */
+    const fmt=byLocal(doc,'sheetFormatPr')[0];const defH=(fmt&&+fmt.getAttribute('defaultRowHeight'))||15;const RH=new Map(),HID=new Set();
+    byLocal(doc,'row').forEach(r=>{const i=+r.getAttribute('r')-1;const h=r.getAttribute('ht');if(h)RH.set(i,+h);if(r.getAttribute('hidden')==='1')HID.add(i)});
+    const rowH=r=>HID.has(r)?0:(RH.has(r)?RH.get(r):defH)*12700;const yOf=(r,off)=>{let y=0;for(let k=0;k<r;k++)y+=rowH(k);return y+(+off||0)};
+    const rowAt=y=>{let acc=0;for(let k=0;k<100000;k++){const h=rowH(k);if(h&&y<acc+h)return k;acc+=h}return 0};
+    /* 表頭：第一張照片上面、最近一列有 2 格以上字、而且像表頭的 */
+    const HEADRE=/(code|no\.?|item|編號|料號|編碼|名稱|name|picture|photo|image|圖|照片|description|desc|type|類|category|location|rack|位置|儲位|fabric|part|defect|瑕疵|រូប|កូដ|ឈ្មោះ|ប្រភេទ|ទីតាំង)/i;
     const textRows=(r0,r1,skipCol)=>{const a=[];for(let r=r0;r<=r1;r++)(rows.get(r)||[]).filter(x=>x[0]!==skipCol).sort((x,y)=>x[0]-y[0]).forEach(x=>a.push(x[1]));return a};
+    const cellsOf=(r,skipCol)=>(rows.get(r)||[]).filter(x=>x[0]!==skipCol).sort((x,y)=>x[0]-y[0]);
     const imgs=[];const srel=await relsOf(z,path);
     for(const id of Object.keys(srel)){if(!/drawing$/.test(srel[id].type))continue;const dpath=srel[id].t,ddoc=xml(await z.text(dpath)),drel=await relsOf(z,dpath);
       [...byLocal(ddoc,'twoCellAnchor'),...byLocal(ddoc,'oneCellAnchor')].forEach(a=>{const fr=byLocal(a,'from')[0],to=byLocal(a,'to')[0];const blip=byLocal(a,'blip')[0];if(!fr||!blip)return;const rid=rAttr(blip);const m=drel[rid];if(!m)return;
-        const num=(el,n)=>{const x=el&&byLocal(el,n)[0];return x?+x.textContent:null};const r0=num(fr,'row'),c0=num(fr,'col');let r1=to?num(to,'row'):r0;const rOff=to?num(to,'rowOff'):0;if(r1>r0&&rOff===0)r1--;imgs.push({media:m.t,row:r0,row2:Math.max(r0,r1),col:c0})})}
+        const num=(el,n)=>{const x=el&&byLocal(el,n)[0];return x?+x.textContent:null};const r0=num(fr,'row'),c0=num(fr,'col');const y0=yOf(r0,num(fr,'rowOff'));
+        let y1=y0;if(to)y1=yOf(num(to,'row'),num(to,'rowOff'));else{const ext=byLocal(a,'ext')[0];y1=y0+(ext?+ext.getAttribute('cy')||0:0)}
+        const r=y1>y0?rowAt((y0+y1)/2):r0;imgs.push({media:m.t,row:r,row2:r,col:c0})})}
     inCell.forEach(x=>imgs.push({media:x.media,row:x.row,row2:x.row,col:x.col}));
+    const firstImg=imgs.length?Math.min(...imgs.map(x=>x.row)):0;let head=null;
+    for(let r=firstImg-1;r>=0&&r>=firstImg-15;r--){const c=cellsOf(r,-1);if(c.length>=2&&c.filter(x=>HEADRE.test(x[1])).length>=1){head=new Map(c.map(x=>[x[0],x[1]]));break}}
     for(const im of imgs.sort((a,b)=>a.row-b.row)){const bytes=await z.get(im.media);if(!bytes)continue;const mime=mimeOf(im.media);if(!mime){log('略過（不支援的圖檔格式）'+im.media);continue}
-      const texts=textRows(im.row,im.row2,im.col);out.push({blob:new Blob([bytes],{type:mime}),texts,src:file.name+' · '+sh.getAttribute('name')+' 第 '+(im.row+1)+' 列'})}}
+      const texts=textRows(im.row,im.row2,im.col);const cells=cellsOf(im.row,im.col).map(x=>({col:x[0],text:x[1],head:head?head.get(x[0])||'':''}));
+      out.push({blob:new Blob([bytes],{type:mime}),texts,cells,head:head?[...head.values()].join(' | '):'',src:file.name+' · '+sh.getAttribute('name')+' 第 '+(im.row+1)+' 列'})}}
   if(!out.length)log(file.name+'：沒有找到圖片（請確認照片是貼在 Excel 裡，不是連結）');return out}
 
 /* ── 圖片表格：找表格線 → 每一列切出照片 ── */
@@ -76,11 +95,28 @@ async function readPdf(file,log){await script(CDN.pdf);const lib=g.pdfjsLib;lib.
 /* ── 名稱對物品（編號一樣最優先，再比英文字、中文字）── */
 const words=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9㐀-鿿]+/g,' ').split(' ').filter(w=>w.length>1||/[㐀-鿿]/.test(w));
 const cjk=s=>{const a=String(s||'').replace(/[^㐀-鿿]/g,'');const o=new Set();for(let i=0;i<a.length-1;i++)o.add(a.slice(i,i+2));return o};
-function parseRow(texts){const all=texts.join(' | ');const no=(texts.map(t=>t.trim()).find(t=>/^\d{1,3}$/.test(t))||(all.match(/^\s*(\d{1,3})\b/)||[])[1]||'');
-  const name=texts.filter(t=>!/^\d{1,3}$/.test(t.trim())).join(' ').replace(/\s+/g,' ').trim();return {no,name,all}}
+/* v1.1 看表頭分欄：序號／料號／名稱（中英柬分開）／儲位／類別；沒有表頭就看字的樣子（像 TCF0001 這種＝料號） */
+const CODE_RE=/^[A-Z]{1,6}[-_ ]?\d{2,}[A-Z0-9\-\/.]*$/i;
+const ROLE=[['seq',/^\s*(no\.?|#|序號?|項次|ល\.?រ)\s*$/i],['photo',/(picture|photo|image|圖片|照片|រូប)/i],['loc',/(rack|location|位置|儲位|庫位|\bbin\b|shelf|ទីតាំង)/i],
+  ['code',/(code|編號|料號|編碼|item\s*no|part\s*no|article|art\.?\s*no|កូដ)/i],['cat',/(category|類別|分類|種類|ប្រភេទ)/i]];
+const roleOf=h=>{const first=String(h||'').split(/\n/)[0];for(const [k,re] of ROLE)if(re.test(first)||re.test(h))return k;return h?'name':''};
+const script3=t=>/[\u1780-\u17FF]/.test(t)?'km':/[\u3400-\u9fff]/.test(t)?'zh':'en';
+function parseRow(texts,cells){texts=texts||[];const all=texts.join(' | ');
+  const out={no:'',code:'',name:'',loc:'',cat:'',zh:'',en:'',km:'',all};
+  const C=(cells&&cells.length)?cells:texts.map((t,i)=>({col:i,text:t,head:''}));const names=[];
+  C.forEach(c=>{const t=String(c.text||'').replace(/\s+/g,' ').trim();if(!t)return;let role=c.head?roleOf(c.head):'';
+    if(!role||role==='name'){if(!out.code&&CODE_RE.test(t)&&!/^\d+$/.test(t))role='code';else if(!out.no&&/^\d{1,3}$/.test(t))role='seq';else if(!c.head&&/^(RACK|NO RACK|BIN|SHELF)\b/i.test(t))role='loc';else role='name'}
+    if(role==='seq'){if(!out.no)out.no=t.replace(/\D/g,'')}else if(role==='code'){if(!out.code)out.code=t;else names.push(t)}else if(role==='loc')out.loc=out.loc?out.loc+', '+t:t;else if(role==='cat')out.cat=out.cat?out.cat+' / '+t:t;else if(role!=='photo')names.push(t)});
+  /* 一格裡中英柬換行寫在一起的，拆開 */
+  const parts=[];names.forEach(t=>String(t).split(/\s*\n\s*/).forEach(x=>x&&parts.push(x)));
+  parts.forEach(t=>{const k=script3(t);out[k]=out[k]?out[k]+' / '+t:t});
+  out.name=[out.en,out.zh,out.km].filter(Boolean).join(' · ')||out.cat||'';return out}
 const GENERIC=new Set(['STITCH','STITCHES','SEAM','NEEDLE','NEEDLES','FOR','THE','AND','OR','OF','PART','PARTS','SEWING','MACHINE','SINGLE','DOUBLE','DEFECT','FROM','WITH']);
-function score(row,it){let s=0,dist=0;if(row.no&&it.code&&String(it.code).trim()===row.no)s+=3;const A=new Set(words(row.name)),B=words(it.name+' '+(it.alt||'')+' '+it.key);let hit=0;const AA=[...A],has=w=>A.has(w)||(w.length>=4&&AA.some(x=>x.length>=4&&(x.startsWith(w)||w.startsWith(x))));new Set(B).forEach(w=>{if(has(w)){hit++;if(!GENERIC.has(w))dist++}});s+=hit/Math.max(1,Math.min(A.size,new Set(B).size||1))*2;
+const ck=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+function score(row,it){let s=0,dist=0;if(row.code){const c=ck(row.code);if(c&&(ck(it.key)===c||ck(it.code)===c||ck(it.title)===c))return 99;}
+  if(row.no&&it.code&&String(it.code).trim()===row.no)s+=3;const A=new Set(words(row.name)),B=words(it.name+' '+(it.alt||'')+' '+it.key);let hit=0;const AA=[...A],has=w=>A.has(w)||(w.length>=4&&AA.some(x=>x.length>=4&&(x.startsWith(w)||w.startsWith(x))));new Set(B).forEach(w=>{if(has(w)){hit++;if(!GENERIC.has(w))dist++}});s+=hit/Math.max(1,Math.min(A.size,new Set(B).size||1))*2;
   const ca=cjk(row.name),cb=cjk(it.name+' '+(it.alt||''));if(ca.size&&cb.size){let h=0;ca.forEach(x=>{if(cb.has(x))h++});s+=h/Math.min(ca.size,cb.size)*2;if(h)dist++}return dist||s>=3?s:0}
+const guessHead=t=>{const s=String(t).toUpperCase();if(/DEFECT|瑕疵/.test(s))return 'defect';if(/SPARE|PART|零件/.test(s))return 'parts';if(/NEEDLE|機針/.test(s))return 'needle';if(/TRIM|ACCESSOR|輔料|副料/.test(s))return 'accessory';if(/FABRIC|布料|ក្រណាត់/.test(s))return 'fabric';if(/MACHINE|機台/.test(s))return 'machine';return ''};
 const guessDomain=t=>{const s=String(t).toUpperCase();if(/STITCH|SEAM|PUCKER|TRIM|RAW EDGE|LABEL|STAIN|HOLE|SHADE|瑕疵|跳針|漏針/.test(s))return 'defect';if(/NEEDLE\b|機針|縫紉機針/.test(s)&&!/PLATE|針板/.test(s))return 'needle';if(/HOOK|FEED DOG|PLATE|KNIFE|BLADE|LOOPER|SPRING|旋梭|送布牙|針板|刀/.test(s))return 'parts';if(/FABRIC|TWILL|JERSEY|布/.test(s))return 'fabric';return ''};
 
 /* ── 畫面 ── */
@@ -97,26 +133,30 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
        <select class="vp-in" id="piSlot"><option value="ref" ${slot==='ref'?'selected':''}>⭐ 標準照 Standard</option><option value="month" ${slot==='month'?'selected':''}>⚠️ 本月異常 This month</option></select></div>
       <div class="vp-st busy" id="piLog" style="${logs.length?'':'display:none'}">${logs.slice(-6).map(E).join('<br>')}</div></div>
      ${rows.length?`<div class="vp-sec"><div class="vp-h"><b>2️⃣ 核對：每一列對到哪個${E((DOMS.find(d=>d[0]===dom)||[])[2]||'')}</b><span class="vp-n">${rows.filter(r=>r.on&&(r.match||r.newName)).length}／${rows.length} 列會匯入 · 綠＝自動對到，黃＝新的名稱，紅＝還沒有名稱（不會匯入）</span><span class="vp-sp"></span><button class="vp-btn" id="piGo">✅ 匯入 ${rows.filter(r=>r.on&&(r.match||r.newName)).length} 張</button></div>
-      <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12px">${rows.map((r,i)=>`<tr style="border-top:1px solid var(--vp-line);background:${!r.on?'transparent':r.match?'rgba(16,185,129,.08)':r.newName?'rgba(245,158,11,.10)':'rgba(239,68,68,.10)'}">
-        <td style="padding:6px"><input type="checkbox" data-on="${i}" ${r.on?'checked':''}></td><td style="padding:6px"><img src="${r.url}" style="width:88px;height:66px;object-fit:cover;border-radius:8px;display:block"></td>
-        <td style="padding:6px;min-width:150px"><b>${E(r.p.no?'#'+r.p.no+' ':'')}${E(r.p.name||'（沒讀到文字）')}</b><div style="color:var(--vp-mut);font-size:10.5px">${E(r.src)}</div></td>
-        <td style="padding:6px;min-width:200px"><select class="vp-in" data-m="${i}" style="max-width:260px"><option value="">${r.newName?'🆕 新的：'+E(r.newName):'👉 請選一個，或在下面打名稱'}</option>${items.map((it,k)=>`<option value="${k}" ${r.match===it?'selected':''}>${E(it.name)}${it.key!==it.name?' · '+E(it.key):''}</option>`).join('')}</select>
-         ${r.match?'':`<input class="vp-in" data-n="${i}" value="${E(r.newName||'')}" placeholder="打名稱 Type a name" style="display:block;margin-top:4px;width:100%;max-width:260px">`}</td></tr>`).join('')}</table></div></div>`:''}`;
-    B.querySelector('#piDom').onchange=async e=>{dom=e.target.value;await loadItems();rows.forEach(r=>{r.match=best(r.p)});paint()};
+      <datalist id="piList">${items.map(it=>`<option value="${E(it.key)}">${E(it.name&&it.name!==it.key?it.name:'')}</option>`).join('')}</datalist>
+      <style>@media (max-width:640px){.pi-t tr{display:grid;grid-template-columns:30px 100px 1fr}.pi-t tr>td:last-child{grid-column:1/-1;padding-left:36px!important}.pi-t tr.pi-h{display:none}}</style><div style="overflow-x:auto"><table class="pi-t" style="border-collapse:collapse;width:100%;font-size:12px"><tr class="pi-h" style="color:var(--vp-mut);font-size:11px;text-align:left"><th></th><th>照片 Photo</th><th>Excel 這一列 Row in file</th><th>放到哪個${E((DOMS.find(d=>d[0]===dom)||[])[2]||'')} → Item</th></tr>${rows.map((r,i)=>{const key=r.match?r.match.key:(r.newName||'');const ps=key&&P.summary?P.summary(dom,key):null;
+        return `<tr style="border-top:1px solid var(--vp-line);background:${!r.on?'transparent':r.match?'rgba(16,185,129,.08)':r.newName?'rgba(245,158,11,.10)':'rgba(239,68,68,.10)'}">
+        <td style="padding:6px"><input type="checkbox" data-on="${i}" ${r.on?'checked':''}></td><td style="padding:6px"><img src="${r.url}" style="width:96px;height:72px;object-fit:cover;border-radius:8px;display:block"></td>
+        <td style="padding:6px;min-width:180px">${r.p.code?`<b style="font-size:13px">${E(r.p.code)}</b> `:''}${r.p.no?`<b>#${E(r.p.no)}</b> `:''}<span>${E(r.p.en||'')}</span>${r.p.zh?`<div>${E(r.p.zh)}</div>`:''}${r.p.km?`<div style="color:var(--vp-mut)">${E(r.p.km)}</div>`:''}${!r.p.code&&!r.p.name?'<i>（沒讀到文字）</i>':''}
+         ${r.p.cat?`<div style="font-size:11px">🏷️ ${E(r.p.cat)}</div>`:''}${r.p.loc?`<div style="font-size:11px">📍 ${E(r.p.loc)}</div>`:''}<div style="color:var(--vp-mut);font-size:10.5px">${E(r.src)}</div></td>
+        <td style="padding:6px;min-width:220px"><input class="vp-in" list="piList" data-k="${i}" value="${E(key)}" placeholder="打料號或名稱 Type code / name" style="width:100%;max-width:280px">
+         <div style="font-size:11px;margin-top:3px">${r.match?`✅ 對到 ${E(r.match.name&&r.match.name!==r.match.key?r.match.name:r.match.key)}`:r.newName?`🆕 清單裡沒有，會新增「${E(r.newName)}」`:'❌ 還沒選（不會匯入）'}${ps&&ps.ref?` · 已有 ⭐ ${ps.ref} 張（同一張自動略過；不同的話新的當封面、舊的留歷史）`:''}${r.dupRow?`<br>⚠️ 這個料號前面已經有一張（${E(r.dupRow)}），預設不勾`:''}</div></td></tr>`}).join('')}</table></div></div>`:''}`;
+    B.querySelector('#piDom').onchange=async e=>{dom=e.target.value;await loadItems();rows.forEach(r=>{r.match=best(r.p);r.newName=r.match?'':(r.p.code||r.p.name||'')});paint()};
     B.querySelector('#piSlot').onchange=e=>{slot=e.target.value};
     B.querySelector('#piFile').onchange=async e=>{const files=[...e.target.files];if(!files.length)return;logs=[];rows=[];paint();
       for(const f of files){log('⏳ 讀取 '+f.name+' …');try{const rs=/\.xls[xm]$/i.test(f.name)?await readXlsx(f,log):/\.pdf$/i.test(f.name)||f.type==='application/pdf'?await readPdf(f,log):await readImage(f,log);
-        rs.forEach(r=>{const p=parseRow(r.texts);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,src:r.src,on:true,newName:p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
-      {const gd=guessDomain(rows.map(r=>r.p.all).join(' '));if(gd&&gd!==dom){dom=gd;log('自動判斷是「'+(DOMS.find(d=>d[0]===gd)||[])[2]+'」，可在上面改')}}
-      await loadItems();rows.forEach(r=>{r.match=best(r.p)});log('✅ 共 '+rows.length+' 列，自動對到 '+rows.filter(r=>r.match).length+' 列，請核對後按匯入');paint()};
+        rs.forEach(r=>{const p=parseRow(r.texts,r.cells);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,head:r.head||'',src:r.src,on:true,newName:p.code||p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
+      {const gd=guessHead(files.map(f=>f.name).join(' ')+' '+[...new Set(rows.map(r=>r.head))].join(' '))||guessDomain(rows.map(r=>r.p.all).join(' '));if(gd&&gd!==dom){dom=gd;log('自動判斷是「'+(DOMS.find(d=>d[0]===gd)||[])[2]+'」，可在上面改')}}
+      await loadItems();rows.forEach(r=>{r.match=best(r.p);if(r.match)r.newName=''});
+      {const seen=new Map();rows.forEach(r=>{const k=r.match?r.match.key:r.newName;if(!k)return;if(seen.has(k)){r.on=false;r.dupRow=seen.get(k)}else seen.set(k,r.src)});}log('✅ 共 '+rows.length+' 列，自動對到 '+rows.filter(r=>r.match).length+' 列，請核對後按匯入');paint()};
     B.querySelectorAll('[data-on]').forEach(c=>c.onchange=()=>{rows[+c.dataset.on].on=c.checked;paint()});
-    B.querySelectorAll('[data-m]').forEach(s=>s.onchange=()=>{const r=rows[+s.dataset.m];r.match=s.value===''?null:items[+s.value];paint()});
-    B.querySelectorAll('[data-n]').forEach(t=>{t.oninput=()=>{rows[+t.dataset.n].newName=t.value};t.onchange=()=>paint()});
+    B.querySelectorAll('[data-k]').forEach(t=>t.onchange=()=>{const r=rows[+t.dataset.k];const v=t.value.trim();const c=ck(v);
+      r.match=c?items.find(it=>ck(it.key)===c||ck(it.code)===c)||items.find(it=>ck(it.name)===c)||null:null;r.newName=r.match?'':v;paint()});
     const go=B.querySelector('#piGo');go&&(go.onclick=async()=>{go.disabled=true;let add=0,dup=0,skip=0;
-      for(const r of rows.filter(x=>x.on)){const key=r.match?r.match.key:String(r.newName||'').trim();if(!key){skip++;continue}const name=r.match?r.match.name:key;
+      for(const r of rows.filter(x=>x.on)){const key=r.match?r.match.key:String(r.newName||'').trim();if(!key){skip++;continue}const name=r.match?(r.match.name&&ck(r.match.name)!==ck(r.match.key)?r.match.name:(r.p.name||r.match.key)):(r.p.code&&key===r.p.code&&r.p.name?r.p.name:key);
         const f=new File([r.blob],(key.replace(/[^\w.-]+/g,'_')||'photo')+'.jpg',{type:r.blob.type||'image/jpeg'});
-        try{const x=await P.add([f],{domain:dom,key,name,slot,caption:[r.p.no?'#'+r.p.no:'',r.p.name].filter(Boolean).join(' ').slice(0,200)});add+=x.added;dup+=x.dup}catch(_){skip++}}
-      logs=[`✅ 匯入 ${add} 張${dup?` · 重複略過 ${dup}`:''}${skip?` · 沒名稱略過 ${skip}`:''}；照片會自動上傳雲端。`];rows=[];paint();opt.onDone&&opt.onDone()})}
+        try{const x=await P.add([f],{domain:dom,key,name,slot,caption:[r.p.no?'#'+r.p.no:'',r.p.code,r.p.name,r.p.loc?'📍 '+r.p.loc:''].filter(Boolean).join(' ').slice(0,200)});add+=x.added;dup+=x.dup}catch(_){skip++}}
+      logs=[`✅ 匯入 ${add} 張${dup?` · 同一張已經有了、略過 ${dup}`:''}${skip?` · 沒名稱略過 ${skip}`:''}；照片會自動上傳雲端。`];rows=[];paint();opt.onDone&&opt.onDone()})}
   paint();loadItems()}
-g.VRTPhotoImport={version:'1.0.0',open,readXlsx,gridCut,parseRow,score};
+g.VRTPhotoImport={version:'1.1.0',open,readXlsx,gridCut,parseRow,score};
 })(window);
