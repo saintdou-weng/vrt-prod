@@ -8,7 +8,7 @@
 <script src="vrt-platform-v40.js?v=4.25.0"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.34.0"></script>
-<script src="vrt-item-photos-v1.js?v=4.35.0"></script>
+<script src="vrt-item-photos-v1.js?v=4.36.0"></script>
 <script src="vrt-photo-import-v1.js?v=4.35.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
@@ -119,6 +119,7 @@ table.dt td.r,table.dt th.r{text-align:right}
 body[data-bg]{background-size:cover;background-position:center;background-attachment:fixed}
 body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data-bg] .card,body[data-bg] .kpi{background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(6px)}
 .sh-cv img{width:40px;height:40px;border-radius:10px;object-fit:cover;display:block;cursor:pointer;border:2px solid #f59e0b}.sh-back{display:none}
+.cards.ft .card .cv{float:none;display:block;width:100%;height:130px;margin:0 0 8px;border:0!important;border-radius:10px}.cards.ft .card .nop{display:flex;align-items:center;justify-content:center;height:130px;margin:0 0 8px;border-radius:10px;background:var(--chip);color:var(--mut);font-size:12px}
 .card .cv{float:right;width:46px;height:46px;border-radius:10px;object-fit:cover;margin:0 0 4px 8px;border:2px solid #f59e0b}
 .card .phc{font-size:10.5px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:99px;padding:1px 7px;margin-left:4px}
 .sh-t .lowtag,.lowtag{display:inline-block;color:#fff!important;font-size:10.5px;font-weight:800;color:#fff;background:var(--crit);border-radius:99px;padding:1px 7px}
@@ -141,7 +142,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.35.0';
+const V='4.36.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -364,13 +365,13 @@ const DRILL={
     const sel=seg.querySelector('select');if(sel)sel.onchange=()=>{sortI=+sel.value;reset()}};
   const filtered=()=>{const s=segs[si];let a=list.filter(g=>!q||(g.title+' '+(g.search||'')).toUpperCase().includes(q));if(s.sorts)a=a.slice().sort(s.sorts[sortI][1]);return a};
   const phS=g=>g.photo&&window.VRTPhotos?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
-  const cardHtml=g=>{const ps=phS(g);return `<div class="card" data-k="${E(g.key)}">${ps&&ps.cover?`<img class="cv" src="${ps.cover}" alt="">`:''}<div class="t"><b>${E(g.title)}${ps&&ps.total?`<span class="phc">📷${ps.total}</span>`:''}</b><span>${g.sub||''}</span></div>${g.badge?`<div style="margin-top:4px">${g.badge}</div>`:''}<div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.bar!=null?`<div class="pbar"><i style="width:${Math.max(0,Math.min(100,g.bar)).toFixed(0)}%"></i></div><div class="pcap">${g.barCap||''}</div>`:''}${g.spark?CH.spark(g.spark)+(g.sparkCap?`<div class="pcap">${g.sparkCap}</div>`:''):''}</div>`};
+  const cardHtml=g=>{const ps=phS(g);return `<div class="card" data-k="${E(g.key)}">${ps&&ps.cover?`<img class="cv" src="${ps.cover}" alt="" loading="lazy">`:(g.noPhoto?`<div class="nop">📷 還沒有標準照 No photo yet</div>`:'')}<div class="t"><b>${E(g.title)}${ps&&ps.total?`<span class="phc">📷${ps.total}</span>`:''}</b><span>${g.sub||''}</span></div>${g.badge?`<div style="margin-top:4px">${g.badge}</div>`:''}<div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.bar!=null?`<div class="pbar"><i style="width:${Math.max(0,Math.min(100,g.bar)).toFixed(0)}%"></i></div><div class="pcap">${g.barCap||''}</div>`:''}${g.spark?CH.spark(g.spark)+(g.sparkCap?`<div class="pcap">${g.sparkCap}</div>`:''):''}</div>`};
   let loading=true;const more1=()=>{if(loading)return;const a=filtered();const next=a.slice(shown,shown+12);if(!next.length){more.textContent=a.length?`共 ${a.length} 張卡片，到底了`:'沒有符合的資料';return}
     cards.insertAdjacentHTML('beforeend',next.map(cardHtml).join(''));shown+=next.length;more.textContent=shown<a.length?'往下滑載入更多…':`共 ${a.length} 張卡片，到底了`};
   const reset=()=>{cards.innerHTML='';shown=0;more1()};
   cards.addEventListener('click',e=>{const c=e.target.closest('.card');if(!c)return;const a=filtered();const idx=a.findIndex(x=>String(x.key)===c.dataset.k);if(idx>=0)SHEET.open(a,idx)});
   new IntersectionObserver(es=>{if(es.some(x=>x.isIntersecting))more1()},{root:p,rootMargin:'300px'}).observe(more);
-  const load=async()=>{drawSeg();cards.innerHTML='';top.innerHTML='';loading=true;more.textContent='⏳ 讀取雲端資料…（第一次比較久，之後只抓有變的）';
+  const load=async()=>{drawSeg();cards.className='cards '+(segs[si].cls||'');cards.innerHTML='';top.innerHTML='';loading=true;more.textContent='⏳ 讀取雲端資料…（第一次比較久，之後只抓有變的）';
     try{const r=await segs[si].build();loading=false;list=r.groups;const pd=segs[si].photo,pk=segs[si].photoKey;if(pd)list.forEach(g=>{if(!g.photo)g.photo={domain:pd,key:pk?pk(g):(g.photoKey||g.key),name:g.photoName||g.title,tip:segs[si].photoTip||''}});top.innerHTML=r.top||'';shown=0;reset()}catch(e){more.innerHTML='⚠️ '+E(e.message||e)}};
   load()}
 };
@@ -449,6 +450,15 @@ function fabricGroups(){return once('fabric',async()=>{const {rows}=await loadTo
       ${mk.length?`<h4>每月進（長條）／出（折線）</h4>${CH.bars(mk.map(m=>({label:m,v:sum(byM.get(m),r=>r.received),v2:sum(byM.get(m),r=>r.issued)})),{v2:true})}<h4>依顏色（發出）</h4>${CH.hbars([...groupBy(a,r=>r.color||'—')].map(([c,b])=>({label:c,v:Math.round(sum(b,r=>r.issued))})).sort((x,y)=>y.v-x.v).slice(0,15))}
       <h4>進出明細</h4>${table([['日期',r=>E(r.date)],['顏色',r=>E(r.color)],['單號',r=>E(r.documentNo)],['動作',r=>E(r.movement)],['缸號',r=>E(r.lotNumber)],['進',r=>F(r.received,1),1],['出',r=>F(r.issued,1),1],['客戶',r=>E(r.customer)],['PO',r=>E(r.po)]],a.slice().sort((x,y)=>String(y.date).localeCompare(String(x.date))))}`:'<p class="note">近 3 個月沒有進出紀錄。</p>'}`}}).filter(g=>g.rec||g.iss||g.bal);
   return groups})}
+/* v4.36（11/17）布種頁：倉庫布料照片表（fabric_types_v1.json，409 個 TCF 布種）＋庫存資料，每個布種一張卡；⭐ 標準照掛在料號上（生產平台自己的，不和總務／人事共用） */
+function fabricTypeGroups(){return once('fabtypes',async()=>{const [mj,stock]=await Promise.all([fetch('fabric_types_v1.json?v=4.36.0').then(r=>r.json()).catch(()=>({items:[]})),fabricGroups().catch(()=>[])]);
+  const S=new Map(stock.map(g=>[nk(g.key),g]));const seen=new Set();
+  const mk=(code,m,g)=>{seen.add(code);const racks=m&&m.racks?m.racks.split(/\s*,\s*/).filter(Boolean):[];const desc=(m&&m.name)||'';
+    return {key:code,kind:'布種',title:code,noPhoto:true,bal:g?g.bal:0,iss:g?g.iss:0,sub:E(desc||(g?String(g.sub||'').replace(/<[^>]+>/g,''):'')),search:[desc,racks.join(' '),g?g.search:''].join(' '),
+     kpis:[[g&&g.bal?F(g.bal):'—','目前庫存',g&&g.bal?'ok':''],[racks.length?E(racks[0].replace(/^RACK\s*/i,''))+(racks.length>1?' +'+(racks.length-1):''):'—','儲位'],[g?F(g.iss):'—','出（3 個月）']],
+     detail:()=>`<h4>🧶 布種資料</h4>${table([['項目',r=>E(r[0])],['內容',r=>r[1]]],[['料號',E(code)],['品名',E(desc||'—')],['儲位',racks.length?racks.map(x=>`<span class="tag">${E(x)}</span>`).join(' '):'—'],['來源',m?'倉庫布料照片表 Picture_fabric.xlsx（2026-11-17）':'只在庫存資料（照片表沒有這個料號）']])}${g?g.detail():'<p class="note">這個布種目前庫存資料裡沒有數量，也沒有近 3 個月進出。</p>'}`}};
+  const out=(mj.items||[]).map(m=>mk(nk(m.code),m,S.get(nk(m.code))));
+  stock.forEach(g=>{const k=nk(g.key);if(!seen.has(k))out.push(mk(k,null,g))});return out})}
 REF.parts=()=>partGroups();REF.needle=()=>needleGroups();REF.defect=()=>defectGroups();REF.fabric=()=>fabricGroups();
 const addPh=(l,domain)=>{l.forEach(g=>{if(!g.photo)g.photo={domain,key:g.key,name:g.title}});return l};
 ['parts','needle','defect','fabric'].forEach(k=>{const f=REF[k];REF[k]=()=>f().then(l=>addPh(l,k))});
@@ -659,6 +669,8 @@ const SPECS={
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v warn">${F(sum(rows,r=>r.open))}</div><div class="l">全部未出件數</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.shipped))}</div><div class="l">已出件數</div></div>${mm.slice(-3).map(m=>`<div class="kpi"><div class="v">${F(sum(M.get(m),r=>r.pieces))}</div><div class="l">${E(m)} 月出貨件數</div></div>`).join('')}</div>${mm.length?`<h4 style="margin:4px 0">月出貨件數</h4>${CH.bars(mm.map(m=>({label:m,v:sum(M.get(m),r=>r.pieces)})))}`:''}`}}}
  ]},
  fabric:{segments:[
+  {label:'📷 布種（標準照）',photo:'fabric',cls:'ft',photoTip:'放這個布種正確的布面／顏色照（⭐ 標準照）；當月收到色差或不同的，放在每月異常。',sorts:[['有照片的先',(a,b)=>((window.VRTPhotos&&VRTPhotos.summary('fabric',b.key).total?1:0)-(window.VRTPhotos&&VRTPhotos.summary('fabric',a.key).total?1:0))||a.title.localeCompare(b.title,'en',{numeric:true})],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})],['庫存多→少',(a,b)=>b.bal-a.bal],['還沒有照片的先',(a,b)=>((window.VRTPhotos&&VRTPhotos.summary('fabric',a.key).total?1:0)-(window.VRTPhotos&&VRTPhotos.summary('fabric',b.key).total?1:0))||a.title.localeCompare(b.title,'en',{numeric:true})]],
+   build:async()=>{const l=await fabricTypeGroups();const ph=window.VRTPhotos?l.filter(g=>VRTPhotos.summary('fabric',g.key).total).length:0;return {groups:l,top:`<div class="kpis"><div class="kpi"><div class="v">${F(l.length)}</div><div class="l">布種（料號）</div></div><div class="kpi"><div class="v ok">${F(ph)}</div><div class="l">已有標準照</div></div><div class="kpi"><div class="v ${l.length-ph?'warn':'ok'}">${F(l.length-ph)}</div><div class="l">還沒有照片</div></div></div><p class="note">點一張卡 → 大張標準照、布種資料、庫存；左右滑換布種，往下滑一直看下去。照片表（Excel 內嵌照片）用「📷 照片庫 → 📥 匯入對照表」一次放進來。</p>`}}},
   {label:'🧶 每個料號（庫存＋近 3 個月進出）',photo:'fabric',photoTip:'放這個布的正確顏色／布面照；當月收到色差或不同的，放在下面的每月異常。',sorts:[['庫存多→少',(a,b)=>b.bal-a.bal],['發出多→少',(a,b)=>b.iss-a.iss],['進倉多→少',(a,b)=>b.rec-a.rec],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
    build:async()=>({groups:await fabricGroups(),top:'<p class="note">每個料號：目前庫存（最近一次盤點）＋近 3 個月進出。點進去可放正確布面照與每月色差／異常照。</p>'})},
   {label:'🧷 輔料（每個料號）',photo:'accessory',photoTip:'放這個輔料（鈕扣、拉鍊、吊牌、織帶…）正確的樣子；當月收到不同顏色或規格的放每月異常。',sorts:[['結存多→少',(a,b)=>b.bal-a.bal],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],build:async()=>({groups:await accGroups(),top:'<p class="note">最近一次副料盤點的每個料號：結存、顏色／尺寸。點進去可放輔料照片。</p>'})}
@@ -678,7 +690,7 @@ const SPECS={
 
 /* ══ v4.34 點了就連：每一種東西去哪裡找（找不到就換下一種）══ */
 const segBuild=(hub,re)=>{const s=SPECS[hub]&&SPECS[hub].segments.find(x=>re.test(x.label));return s?()=>once('seg|'+hub+'|'+s.label,async()=>{const r=await s.build();const l=r.groups||[];if(s.photo)l.forEach(g=>{if(!g.photo)g.photo={domain:s.photo,key:s.photoKey?s.photoKey(g):(g.photoKey||g.key),name:g.title}});return l}):null};
-const CHAIN={style:['style','bom'],line:['line'],customer:['customer','shipcust'],po:['po','pdfpo','popro'],date:['date'],item:['parts','fabric','accessory','machine'],fabric:['fabric','accessory'],parts:['parts'],part:['parts'],machine:['machine'],needle:['needle'],defect:['defect'],accessory:['accessory'],bom:['bom']};
+const CHAIN={style:['style','bom'],line:['line'],customer:['customer','shipcust'],po:['po','pdfpo','popro'],date:['date'],item:['parts','fabric','fabtype','accessory','machine'],fabric:['fabric','fabtype','accessory'],fabtype:['fabtype','fabric'],parts:['parts'],part:['parts'],machine:['machine'],needle:['needle'],defect:['defect'],accessory:['accessory'],bom:['bom']};
 const normK=s=>String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9\u3400-\u9fff]+/g,'');
 function matchIdx(l,kind,key){const K=String(key).toUpperCase().trim(),N=normK(key);let i=l.findIndex(x=>String(x.key).toUpperCase()===K||String(x.title).toUpperCase()===K);if(i>=0)return i;
   if(kind==='line'){const n=(K.match(/(\d{1,2})\s*$/)||[])[1];const ap=/APRON/.test(K);if(n){i=l.findIndex(x=>{const t=String(x.key).toUpperCase();return (t.match(/(\d{1,2})\s*$/)||[])[1]===n&&(/APRON/.test(t)===ap)});if(i>=0)return i;i=l.findIndex(x=>(String(x.key).toUpperCase().match(/(\d{1,2})\s*$/)||[])[1]===n);if(i>=0)return i}}
@@ -707,9 +719,11 @@ REF.popro=()=>once('popro',async()=>{const [sw,ct]=await Promise.all([loadTool('
     return {key:k,kind:'PO',title:(s[0]||c[0]).po,sub:E([...new Set(s.concat(c).map(r=>r.styleNo))].join(' · ')),kpis:[[F(sum(c,r=>r.pieces)),'裁剪件數'],[F(sum(s,r=>r.pieces)),'車縫件數'],[P(effW(s)),'車縫效率',effCls(effW(s))],[String(new Set(s.map(lineName)).size),'條線'],[E((ds[0]||'').slice(5)+(ds.length>1?'～'+ds[ds.length-1].slice(5):'')),'日期']],
      detail:()=>`<h4>🧵 車縫</h4>${s.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['效率',r=>P(+r.efficiency),1]],s.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有車縫紀錄。</p>'}
       <h4>✂️ 裁剪</h4>${c.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['總碼',r=>F(r.totalYds,1),1]],c.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有裁剪紀錄。</p>'}`}})});
+REF.fabtype=()=>fabricTypeGroups().then(l=>{l.forEach(g=>{if(!g.photo)g.photo={domain:'fabric',key:g.key,name:g.title}});return l});
 window.VRTHubOpen=(k,key)=>SHEET.openRef(k,key);window.VRT_REF=REF;
 
 setTheme(themeNow());applyBg();
+try{window.VRTPhotos&&VRTPhotos.seed&&VRTPhotos.seed('photo_seed_fabric_20261117.json').then(r=>{if(r&&r.added)SHEET.redraw()})}catch(_){}
 {const m=(location.hash||'').match(/^#open=(.+)$/);if(m){const [k,...v]=decodeURIComponent(m[1]).split('|');location.replace('#'+HUBS[0].id);setTimeout(()=>SHEET.openRef(k,v.join('|')),300)}}
 if(!location.hash)location.replace('#'+HUBS[0].id);
 render();

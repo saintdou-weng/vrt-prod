@@ -64,7 +64,7 @@ async function prepare(file){const im=await loadImg(file);const full=draw(im,128
 async function add(files,ctx){await ready;const out={added:0,dup:0,err:[]};const K=normKey(ctx.key);if(!K||!DOM[ctx.domain])throw new Error('缺少物品 Missing item');
   for(const f of [...files]){try{const p=await prepare(f);const slot=ctx.slot==='month'?'month':'ref',month=slot==='month'?(ctx.month||ymNow()):ymNow();
     const same=itemRows(ctx.domain,K).filter(r=>r.slot===slot&&(slot==='ref'||r.month===month));
-    if(same.some(r=>r.hash===p.hash||(ham(r.ah,p.ah)===0&&r.w===p.w&&r.h===p.h&&Math.abs((r.bytes||0)-p.bytes)<p.bytes*.04))){out.dup++;continue}
+    if(same.some(r=>r.hash===p.hash||(ham(r.ah,p.ah)===0&&r.w===p.w&&r.h===p.h&&Math.abs((r.bytes||0)-p.bytes)<p.bytes*.04)||(r.w===p.w&&r.h===p.h&&ham(r.ah,p.ah)<=4))){out.dup++;continue}
     const rec={id:'ix_'+p.hash.slice(0,16)+'_'+fnv(ctx.domain+'|'+K+'|'+slot+'|'+month),kind:'idx',domain:ctx.domain,itemKey:K,itemName:String(ctx.name||ctx.key||'').slice(0,120),slot,month,caption:String(ctx.caption||'').slice(0,200),hash:p.hash,ah:p.ah,thumb:p.thumb,w:p.w,h:p.h,bytes:p.bytes,file:String(f.name||'').slice(0,120),at:isoLocal(),by:String(ctx.by||'web').slice(0,60),retired:false,_smartBucket:'idx_'+ctx.domain,_pend:1};
     await idbPut('img',{hash:p.hash,id:'im_'+p.hash,kind:'img',data:p.data,_smartBucket:'img_'+p.hash.slice(0,24),_pend:1});
     await idbPut('idx',rec);IDX.set(rec.id,rec);out.added++}catch(e){out.err.push(e.message||String(e))}}
@@ -240,5 +240,17 @@ function library(opt){css();opt=opt||{};let dom=opt.domain&&DOM[opt.domain]?opt.
       box.addEventListener('click',e=>{if(e.target===box||e.target.closest('[data-a=x]'))box.remove()});mount(box.querySelector('.vp-lib-body'),{domain:dom,key:k,name:(items.get(k)||{}).name||k})})}
   listeners.add(paint);ready.then(paint);pull().catch(()=>{})}
 
-g.VRTPhotos={version:VERSION,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
+/* ── v1.1（11/17）預先整理好的標準照（倉庫布料照片表等）：先和雲端比完才放；這個物品已經有標準照、或這張已有（含封存）就不放；固定編號，多台同時開也不重複 ── */
+const seeding={};
+function seed(url){return seeding[url]||(seeding[url]=(async()=>{await ready;if(!gasUrl())return {added:0,skip:'no-cloud'};
+  const done=await idbGet('kv','seed:'+url).catch(()=>null);if(done)return {added:0,skip:'done'};
+  await pull();if(st.type==='warn'){delete seeding[url];return {added:0,skip:'cloud-unreachable'}}
+  const r=await fetch(url,{cache:'no-store'});if(!r.ok){delete seeding[url];return {added:0,skip:'http '+r.status}}const j=await r.json();let added=0;
+  for(const x of (j.records||[])){const rec=x.idx,im=x.img;if(!rec||!rec.id||!im||!im.hash||IDX.has(rec.id))continue;
+    const K=normKey(rec.itemKey);if(itemRows(rec.domain,K).some(o=>o.slot==='ref'||o.hash===rec.hash))continue;
+    const n=Object.assign({},rec,{itemKey:K,_pend:1});
+    if(!(await idbGet('img',im.hash)))await idbPut('img',Object.assign({},im,{_pend:1}));await idbPut('idx',n);IDX.set(n.id,n);added++}
+  await idbPut('kv',{at:isoLocal(),added},'seed:'+url);if(added){setStatus(`📥 放入標準照 ${added} 張（${j.source||j.name||''}）`,'ok');emit();push().catch(()=>{})}return {added}})().catch(e=>{delete seeding[url];return {added:0,error:e.message||String(e)}}))}
+
+g.VRTPhotos={version:VERSION,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,seed,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
 })(window);
