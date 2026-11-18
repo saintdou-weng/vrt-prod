@@ -151,7 +151,10 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
       for(const r of rows.filter(x=>x.on)){const key=r.match?r.match.key:String(r.newName||'').trim();if(!key){skip++;continue}const name=r.match?(r.match.name&&ck(r.match.name)!==ck(r.match.key)?r.match.name:(r.p.name||r.match.key)):(r.p.code&&key===r.p.code&&r.p.name?r.p.name:key);
         const f=new File([r.blob],(key.replace(/[^\w.-]+/g,'_')||'photo')+'.jpg',{type:r.blob.type||'image/jpeg'});
         try{const x=await P.add([f],{domain:dom,key,name,slot,caption:[r.p.no?'#'+r.p.no:'',r.p.code,r.p.name,r.p.loc?'📍 '+r.p.loc:''].filter(Boolean).join(' ').slice(0,200)});add+=x.added;dup+=x.dup}catch(_){skip++}}
-      logs=[`✅ 匯入 ${add} 張${dup?` · 同一張已經有了、略過 ${dup}`:''}${skip?` · 沒名稱略過 ${skip}`:''}；照片會自動上傳雲端。`];rows=[];paint();opt.onDone&&opt.onDone()})}
+      const head=`✅ 匯入 ${add} 張${dup?` · 同一張已經有了、略過 ${dup}`:''}${skip?` · 沒名稱略過 ${skip}`:''}`;rows=[];logs=[head,'☁↑ 上傳雲端中，請先不要關閉這一頁…'];paint();opt.onDone&&opt.onDone();
+        /* v1.2：等照片真的上傳完才說完成（之前關掉頁面會只上傳一部分） */
+        const tk=setInterval(()=>{const st2=P.status&&P.status();const n=P.pending?P.pending():0;logs=[head,(st2&&st2.text?st2.text:'☁↑ 上傳中…')+(n?`（還有 ${n} 張）`:'')];const l=B.querySelector('#piLog');if(l){l.style.display='';l.innerHTML=logs.map(E).join('<br>')}},800);
+        try{await P.push()}catch(_){}clearInterval(tk);const left=P.pending?P.pending():0;logs=[head,left?`⚠️ 還有 ${left} 張沒上傳到雲端（可能網路不穩）；下次打開任何一頁會自動接著上傳`:'☁ 已全部上傳雲端，其他手機／電腦也看得到'];paint()})}
   async function handle(files){if(!files.length)return;if(!files.length)return;logs=[];rows=[];paint();
       for(const f of files){log('⏳ 讀取 '+f.name+' …');try{const rs=/\.xls[xm]$/i.test(f.name)?await readXlsx(f,log):/\.pdf$/i.test(f.name)||f.type==='application/pdf'?await readPdf(f,log):await readImage(f,log);
         rs.forEach(r=>{const p=parseRow(r.texts,r.cells);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,head:r.head||'',src:r.src,on:true,newName:p.code||p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
@@ -159,5 +162,5 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
       await loadItems();rows.forEach(r=>{r.match=best(r.p);if(r.match)r.newName=''});
       {const seen=new Map();rows.forEach(r=>{const k=r.match?r.match.key:r.newName;if(!k)return;if(seen.has(k)){r.dupRow=seen.get(k)}else seen.set(k,r.src)});}log('✅ 共 '+rows.length+' 列，自動對到 '+rows.filter(r=>r.match).length+' 列，請核對後按匯入');paint()}
   paint();loadItems().then(()=>{if(opt.files&&opt.files.length)handle(opt.files)})}
-g.VRTPhotoImport={version:'1.2.0',open,readXlsx,gridCut,parseRow,score};
+g.VRTPhotoImport={version:'1.3.0',open,readXlsx,gridCut,parseRow,score};
 })(window);

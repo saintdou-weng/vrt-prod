@@ -6,7 +6,7 @@
 (function(g){
 'use strict';
 if(g.VRTPhotos&&g.VRTPhotos.version)return;
-const VERSION='1.1.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
+const VERSION='1.2.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
 const DOMAINS=[
  ['fabric','🧶','布料','Fabric'],['accessory','🧷','輔料','Accessories'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
  ['customer','👥','客戶','Customers'],['style','📐','款式／BOM','Styles / BOM'],['ship','🚢','成品／出貨','FG / Shipping'],
@@ -48,6 +48,11 @@ const idbPutMany=(s,arr)=>tx(s,'readwrite',st=>{arr.forEach(v=>st.put(v))});
 /* ── 記憶體索引 ── */
 let IDX=new Map();const listeners=new Set();
 function emit(){listeners.forEach(f=>{try{f()}catch(_){}})}
+/* v1.2（Paul 11/18 匯入了卻看不到）：同一支手機／電腦的其他分頁、入口頁裡的子頁面也馬上看到新照片 */
+let BC=null;try{BC=new BroadcastChannel('vrt-item-photos')}catch(_){}
+function tell(){try{BC&&BC.postMessage('changed')}catch(_){}}
+async function reloadIdx(){try{const a=await idbAll('idx');const m=new Map();a.forEach(r=>m.set(r.id,r));IDX=m;emit()}catch(_){}}
+if(BC)BC.onmessage=()=>{reloadIdx()};
 const ready=(async()=>{try{(await idbAll('idx')).forEach(r=>IDX.set(r.id,r))}catch(e){console.warn('[VRTPhotos] IDB',e)}})();
 function itemRows(domain,key){const K=normKey(key);return [...IDX.values()].filter(r=>r.domain===domain&&r.itemKey===K&&!r.retired)}
 function summary(domain,key){const a=itemRows(domain,key),ref=a.filter(r=>r.slot==='ref').sort((x,y)=>String(y.at).localeCompare(String(x.at))),mon=a.filter(r=>r.slot==='month');const cover=(ref.find(r=>r.cover)||ref[0]||mon.slice().sort((x,y)=>String(y.at).localeCompare(String(x.at)))[0]||null);
@@ -68,8 +73,8 @@ async function add(files,ctx){await ready;const out={added:0,dup:0,err:[]};const
     const rec={id:'ix_'+p.hash.slice(0,16)+'_'+fnv(ctx.domain+'|'+K+'|'+slot+'|'+month),kind:'idx',domain:ctx.domain,itemKey:K,itemName:String(ctx.name||ctx.key||'').slice(0,120),slot,month,caption:String(ctx.caption||'').slice(0,200),hash:p.hash,ah:p.ah,thumb:p.thumb,w:p.w,h:p.h,bytes:p.bytes,file:String(f.name||'').slice(0,120),at:isoLocal(),by:String(ctx.by||'web').slice(0,60),retired:false,_smartBucket:'idx_'+ctx.domain,_pend:1};
     await idbPut('img',{hash:p.hash,id:'im_'+p.hash,kind:'img',data:p.data,_smartBucket:'img_'+p.hash.slice(0,24),_pend:1});
     await idbPut('idx',rec);IDX.set(rec.id,rec);out.added++}catch(e){out.err.push(e.message||String(e))}}
-  emit();if(out.added)push().catch(()=>{});return out}
-async function update(id,patch){const r=IDX.get(id);if(!r)return;const n=Object.assign({},r,patch,{_pend:1});await idbPut('idx',n);IDX.set(id,n);emit();push().catch(()=>{})}
+  emit();tell();if(out.added)push().catch(()=>{});return out}
+async function update(id,patch){const r=IDX.get(id);if(!r)return;const n=Object.assign({},r,patch,{_pend:1});await idbPut('idx',n);IDX.set(id,n);emit();tell();push().catch(()=>{})}
 async function setCover(id){const r=IDX.get(id);if(!r)return;for(const x of itemRows(r.domain,r.itemKey))if(x.cover&&x.id!==id)await update(x.id,{cover:false});await update(id,{slot:'ref',cover:true})}
 
 /* ── 雲端 ── */
@@ -85,18 +90,18 @@ function pull(){return pulling||(pulling=(async()=>{await ready;if(!gasUrl())ret
     const seen=(await idbGet('kv','bh'))||{};let n=0;
     for(const k of Object.keys(m.hashes).filter(k=>/^idx_/.test(k))){if(seen[k]===m.hashes[k])continue;const rows=await bucket(k,m.hashes[k]);
       const put=[];rows.forEach(r=>{if(!r||!r.id)return;const old=IDX.get(r.id);if(old&&old._pend)return;put.push(r);IDX.set(r.id,r);n++});if(put.length)await idbPutMany('idx',put);seen[k]=m.hashes[k]}
-    await idbPut('kv',seen,'bh');setStatus(n?`☁↓ 已下載 ${n} 筆照片資料`:'☁ 照片已是最新','ok');emit();push().catch(()=>{})}
+    await idbPut('kv',seen,'bh');setStatus(n?`☁↓ 已下載 ${n} 筆照片資料`:'☁ 照片已是最新','ok');emit();if(n)tell();push().catch(()=>{})}
   catch(e){setStatus('☁↓ 照片雲端暫時讀不到：'+(e.message||e),'warn')}finally{pulling=null}})())}
 async function image(hash){const loc=await idbGet('img',hash);if(loc&&loc.data)return loc.data;
   const m=await manifest();const k='img_'+hash.slice(0,24);if(!m.hashes[k])return '';const rows=await bucket(k,m.hashes[k]);const r=rows.find(x=>x.hash===hash);if(r&&r.data){await idbPut('img',{hash,id:r.id,kind:'img',data:r.data,_smartBucket:k});return r.data}return ''}
 let pushing=null,again=false;
 function push(){if(pushing){again=true;return pushing}return pushing=(async()=>{try{do{again=false;await pushOnce()}while(again)}finally{pushing=null}})()}
-async function pushOnce(){await ready;const pend=[...IDX.values()].filter(r=>r._pend);if(!pend.length)return;if(!gasUrl()){setStatus(`⚠️ ${pend.length} 張只在這台（沒有雲端設定）`,'warn');return}
+async function pushOnce(){await ready;const pend=[...IDX.values()].filter(r=>r._pend);const pendIds=new Set(pend.map(r=>r.id));if(!pend.length)return;if(!gasUrl()){setStatus(`⚠️ ${pend.length} 張只在這台（沒有雲端設定）`,'warn');return}
   setStatus(`☁↑ 上傳照片 ${pend.length} 張…`,'busy');
   try{for(let attempt=0;attempt<2;attempt++){const m=await manifest();if(!m.exists&&m.legacy)throw new Error('雲端格式不符');
       const buckets={};const domains=[...new Set(pend.map(r=>r.domain))];
       for(const d of domains){const k='idx_'+d;let cloudRows=[];if(m.hashes[k])cloudRows=await bucket(k,m.hashes[k]);const map=new Map(cloudRows.filter(r=>r&&r.id).map(r=>[r.id,r]));
-        [...IDX.values()].filter(r=>r.domain===d).forEach(r=>{if(r._pend||!map.has(r.id))map.set(r.id,clean(r))});buckets[k]=[...map.values()].map(clean)}
+        [...IDX.values()].filter(r=>r.domain===d).forEach(r=>{if(r._pend&&!pendIds.has(r.id))return;/* v1.2：這一輪沒帶到圖的新照片下一輪再上，索引不會比照片先上雲 */if(pendIds.has(r.id)||!map.has(r.id))map.set(r.id,clean(r))});buckets[k]=[...map.values()].map(clean)}
       const hashes=[...new Set(pend.map(r=>r.hash))];
       for(const h of hashes){const k='img_'+h.slice(0,24);if(m.hashes[k])continue;const im=await idbGet('img',h);if(!im||!im.data)continue;buckets[k]=[clean(im)]}
       const uploadId=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),newH={},newC={},content={};const changed=Object.keys(buckets).sort();let i=0;
@@ -252,5 +257,8 @@ function seed(url){return seeding[url]||(seeding[url]=(async()=>{await ready;if(
     if(!(await idbGet('img',im.hash)))await idbPut('img',Object.assign({},im,{_pend:1}));await idbPut('idx',n);IDX.set(n.id,n);added++}
   await idbPut('kv',{at:isoLocal(),added},'seed:'+url);if(added){setStatus(`📥 放入標準照 ${added} 張（${j.source||j.name||''}）`,'ok');emit();push().catch(()=>{})}return {added}})().catch(e=>{delete seeding[url];return {added:0,error:e.message||String(e)}}))}
 
-g.VRTPhotos={version:VERSION,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,seed,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
+/* v1.2 每一頁打開就比對一次雲端照片索引（只抓有變的類別，縮圖在索引裡），還沒上傳完的照片也會接著上傳 */
+ready.then(()=>setTimeout(()=>{if(gasUrl())pull().catch(()=>{})},1200));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reloadIdx()});
+g.VRTPhotos={version:VERSION,pending:()=>[...IDX.values()].filter(r=>r._pend).length,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,seed,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
 })(window);

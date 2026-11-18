@@ -185,7 +185,7 @@
   /* ledger: local first, then the GAS inbox ledger (files the bots collected count too) */
   async function check(){const hs=[...new Set(rows.flatMap(r=>[r.hash].concat((r.kids||[]).map(k=>k.hash))))];const loc={};for(const h of hs){try{const x=await idb.get('ledger',h);if(x)loc[h]=x}catch(_){}}
     let remote={};if(gasUrl()&&hs.length){try{const d=await gas({action:'inboxLedger',hashes:hs});remote=d.found||{}}catch(_){remote={}}}
-    const seenH={};rows.forEach(r=>{if(r.status==='bad')return;const own=[r.hash].concat((r.kids||[]).map(k=>k.hash));
+    const seenH={};rows.forEach(r=>{if(r.status==='bad')return;if(r.module==='photos'){/* v4.38 照片對照表可重複匯入（同一張照片本來就不會重複存），不標「已匯入過」 */if(seenH[r.hash]){r.status='dup';r.include=false;return}seenH[r.hash]=1;r.status='new';r.include=true;return}const own=[r.hash].concat((r.kids||[]).map(k=>k.hash));
       if(seenH[r.hash]){r.status='dup';r.include=false;r.note=L('同一個檔這次已經有了','same file already in this drop');return}seenH[r.hash]=1;
       const l=own.map(h=>loc[h]).find(Boolean),x=own.map(h=>remote[h]).find(Boolean);
       if(l&&l.status==='queued'){r.status='queued';r.include=false;r.note=L('已交給 ','already handed to ')+mz(l.module)+L('，等著匯入（上面「前往匯入」）',', waiting (Go and import above)');return}
@@ -266,7 +266,7 @@
     upload(P.sel)}
   /* v4.37 照片對照表：在這一頁直接開「匯入照片對照表」（需要的元件自動載入） */
   function loadJs(src){return new Promise((res,rej)=>{if(document.querySelector('script[src^="'+src.split('?')[0]+'"]')){res();return}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(L('元件載入失敗：','failed to load: ')+src));document.head.appendChild(s)})}
-  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.37.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.37.0');
+  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.38.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.38.0');
     if(!g.VRTPhotoImport)throw new Error(L('照片匯入元件沒有載入','photo importer not loaded'));g.VRTPhotoImport.open({files,onDone:()=>{try{g.dispatchEvent(new CustomEvent('vrt-photos-imported'))}catch(_){}}})}
   const toFile=r=>new File([r.u8||r.data],r.name,{type:r.type||'',lastModified:r.lastModified||Date.now()});
   async function record(r,m,status){const at=new Date().toISOString();const base={module:m,at,status,name:r.name,page:pageFile()};
