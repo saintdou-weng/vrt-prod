@@ -34,6 +34,7 @@
     podelivery:{zh:'🚚 採購單交期',en:'🚚 PO delivery',page:'VRT_PO_Delivery_Control_Center.html',ext:'xlsx xls csv'},
     bom:{zh:'🧵 BOM',en:'🧵 BOM',page:'VRT_BOM_Management_v2_AI.html',ext:'pdf xlsx xls csv'},
     erplink:{zh:'🔗 ERP 對照（手動 ERP 檔）',en:'🔗 ERP link (manual ERP file)',page:'vrt_erp_link_v1.html',ext:'csv txt tsv xlsx xls json'},
+    photos:{zh:'📷 照片對照表（標準照）',en:'📷 Photo reference chart',page:'vrt_hub_v1.html',ext:'xlsx xlsm pdf jpg jpeg png'},   /* v4.37 Paul 11/18：瑕疵／零件／針／輔料／布料的「編號＋照片＋名稱」Excel → 直接變成各物品的標準照，在哪一頁丟都可以 */
   };
   /* ── file-name routes (same order and patterns as the GAS inbox INBOX_ROUTES, v4.9; cutting is checked BEFORE the generic 'daily output') ── */
   const ROUTES=[
@@ -155,7 +156,12 @@
   function learn(name,module){const k=learnKey(name);const o=learned();if(module)o[k]=module;else delete o[k];ls('vrt_si_learned',JSON.stringify(o))}
   const uploadOn=()=>ls('vrt_si_upload')!=='0';
   function accepts(m,name){const x=MODULES[m];return !!x&&(' '+x.ext+' ').indexOf(' '+extOf(name)+' ')>=0}
-  async function classify(name,u8,ctx){ctx=ctx||{};const e=extOf(name);const lk=learned()[learnKey(name)];if(lk&&MODULES[lk])return {module:lk,reason:L('記住的選擇','remembered')};
+  /* v4.37 照片對照表：Excel 裡有嵌入圖片＋表頭有「照片／Photo／示意圖／រូប」→ 照片匯入（比檔名、記住的選擇都優先） */
+  const PHOTO_HEAD=/(PHOTO|PICTURE|IMAGE|示意圖|示意图|照片|圖片|图片|រូប)/i,PHOTO_NAME=/(reference\s*chart|photo|picture|對照表|对照表|示意|照片)/i;
+  function hasMedia(u8){try{const t=new TextDecoder('latin1').decode(u8.length>4e6?u8.subarray(u8.length-4e6):u8);return /xl\/media\/image\d+\.(png|jpe?g|gif|bmp|emf|webp)/i.test(t)}catch(_){return false}}
+  async function photoChart(name,u8){const e=extOf(name);if(!/^(xlsx|xlsm)$/.test(e)||!u8||!hasMedia(u8))return false;if(PHOTO_NAME.test(normName(name)))return true;
+    try{const X=await needX();const wb=X.read(u8,{type:'array',sheetRows:12,bookVBA:false});const sn=wb.SheetNames[0];const a=X.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});return PHOTO_HEAD.test(a.slice(0,12).map(r=>r.join(' ')).join(' '))}catch(_){return false}}
+  async function classify(name,u8,ctx){ctx=ctx||{};const e=extOf(name);if(await photoChart(name,u8))return {module:'photos',reason:L('Excel 裡有照片＋照片欄','photos inside the Excel')};const lk=learned()[learnKey(name)];if(lk&&MODULES[lk])return {module:lk,reason:L('記住的選擇','remembered')};
     let m=routeName(name);if(m)return {module:m,reason:L('檔名','file name')};
     if(ctx.subject){m=routeName(ctx.subject+'.'+e);if(m)return {module:m,reason:L('信件主旨','mail subject')}}
     if(/^(xlsx|xlsm|xls|xlsb|csv)$/.test(e)&&u8){try{const X=await needX();const s=sniffWorkbook(X,u8);if(s.module)return {module:s.module,reason:L('表頭','sheet headers')};if(s.close)return {module:'',reason:L('表頭像 ','headers look like ')+s.close.map(mz).join(' / '),guess:s.close}}catch(_){}}
@@ -250,6 +256,7 @@
   /* ── import: this page now, the others through the handoff store ── */
   async function go(gopt){gopt=gopt||{};const P=plan();if(!P.sel.length||busy)return;busy=true;els.go.disabled=true;const here=pageModule();const batch='b'+Date.now().toString(36);const result={here:null,away:{},at:new Date().toISOString()};
     try{for(const m of Object.keys(P.by)){const list=P.by[m];
+        if(m==='photos'){if(!gopt.auto)close();await openPhotos(list.map(toFile));result.photos=list.length;for(const r of list)await record(r,m,'handed');continue}
         if(m===here&&reg()){if(!gopt.auto)close();await feedHere(list.map(toFile));result.here={module:m,n:list.length};}
         else{for(const r of list)await idb.put('handoff',{id:batch+'_'+r.id,batch,module:m,name:r.name,type:r.type||'',lastModified:r.lastModified||Date.now(),data:r.u8,hash:r.hash,kids:(r.kids||[]).map(k=>k.hash),inboxId:r.inboxId||'',from:pageFile(),subject:r.subject||(r.from&&r.from.subject)||'',createdAt:new Date().toISOString()});result.away[m]=list.length}
         for(const r of list)await record(r,m,m===here?'handed':'queued')}
@@ -257,6 +264,10 @@
       const aw=Object.keys(result.away);if(result.here)await chipDone(result.here.module,result.here.n);else if(aw.length===1&&!gopt.auto){msg('→ '+mz(aw[0]));setTimeout(()=>{location.href=MODULES[aw[0]].page+VQ+'#smartimport'},700)}
     }catch(e){msg('❌ '+e.message)}finally{busy=false;paint()}
     upload(P.sel)}
+  /* v4.37 照片對照表：在這一頁直接開「匯入照片對照表」（需要的元件自動載入） */
+  function loadJs(src){return new Promise((res,rej)=>{if(document.querySelector('script[src^="'+src.split('?')[0]+'"]')){res();return}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(L('元件載入失敗：','failed to load: ')+src));document.head.appendChild(s)})}
+  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.37.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.37.0');
+    if(!g.VRTPhotoImport)throw new Error(L('照片匯入元件沒有載入','photo importer not loaded'));g.VRTPhotoImport.open({files,onDone:()=>{try{g.dispatchEvent(new CustomEvent('vrt-photos-imported'))}catch(_){}}})}
   const toFile=r=>new File([r.u8||r.data],r.name,{type:r.type||'',lastModified:r.lastModified||Date.now()});
   async function record(r,m,status){const at=new Date().toISOString();const base={module:m,at,status,name:r.name,page:pageFile()};
     await idb.put('ledger',Object.assign({hash:r.hash},base));for(const k of (r.kids||[]))await idb.put('ledger',Object.assign({hash:k.hash||k},base,{name:k.name||r.name,parent:r.name}));

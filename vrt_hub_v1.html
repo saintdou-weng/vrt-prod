@@ -9,7 +9,7 @@
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.34.0"></script>
 <script src="vrt-item-photos-v1.js?v=4.36.0"></script>
-<script src="vrt-photo-import-v1.js?v=4.35.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.37.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
    舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
@@ -142,7 +142,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.36.0';
+const V='4.37.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -721,6 +721,8 @@ REF.popro=()=>once('popro',async()=>{const [sw,ct]=await Promise.all([loadTool('
       <h4>✂️ 裁剪</h4>${c.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['總碼',r=>F(r.totalYds,1),1]],c.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有裁剪紀錄。</p>'}`}})});
 REF.fabtype=()=>fabricTypeGroups().then(l=>{l.forEach(g=>{if(!g.photo)g.photo={domain:'fabric',key:g.key,name:g.title}});return l});
 window.VRTHubOpen=(k,key)=>SHEET.openRef(k,key);window.VRT_REF=REF;
+/* v4.37 照片對照表匯入（智慧匯入或照片庫）用這裡的物品清單對名稱／料號 */
+window.VRTPhotoItems=d=>REF[d]?REF[d]().then(l=>l.map(x=>({key:(x.photo&&x.photo.key)||x.key,name:x.alt?x.alt:String(x.title).replace(/^[^A-Za-z0-9\u3400-\u9fff]+/,''),alt:x.title,code:x.code||''}))):Promise.resolve([]);
 
 setTheme(themeNow());applyBg();
 try{window.VRTPhotos&&VRTPhotos.seed&&VRTPhotos.seed('photo_seed_fabric_20261117.json').then(r=>{if(r&&r.added)SHEET.redraw()})}catch(_){}
