@@ -46,7 +46,7 @@ async function readXlsx(file,log){const z=await unzip(await file.arrayBuffer());
     const rowH=r=>HID.has(r)?0:(RH.has(r)?RH.get(r):defH)*12700;const yOf=(r,off)=>{let y=0;for(let k=0;k<r;k++)y+=rowH(k);return y+(+off||0)};
     const rowAt=y=>{let acc=0;for(let k=0;k<100000;k++){const h=rowH(k);if(h&&y<acc+h)return k;acc+=h}return 0};
     /* 表頭：第一張照片上面、最近一列有 2 格以上字、而且像表頭的 */
-    const HEADRE=/(code|no\.?|item|編號|料號|編碼|名稱|name|picture|photo|image|圖|照片|description|desc|type|類|category|location|rack|位置|儲位|fabric|part|defect|瑕疵|រូប|កូដ|ឈ្មោះ|ប្រភេទ|ទីតាំង)/i;
+    const HEADRE=/(code|no\.?|item|style|machine|\bid\b|feature|highlight|編號|料號|編碼|名稱|name|picture|photo|image|圖|照片|description|desc|type|類|category|location|rack|位置|儲位|fabric|part|defect|瑕疵|រូប|កូដ|ឈ្មោះ|ប្រភេទ|ទីតាំង)/i;
     const textRows=(r0,r1,skipCol)=>{const a=[];for(let r=r0;r<=r1;r++)(rows.get(r)||[]).filter(x=>x[0]!==skipCol).sort((x,y)=>x[0]-y[0]).forEach(x=>a.push(x[1]));return a};
     const cellsOf=(r,skipCol)=>(rows.get(r)||[]).filter(x=>x[0]!==skipCol).sort((x,y)=>x[0]-y[0]);
     const imgs=[];const srel=await relsOf(z,path);
@@ -57,7 +57,7 @@ async function readXlsx(file,log){const z=await unzip(await file.arrayBuffer());
         const r=y1>y0?rowAt((y0+y1)/2):r0;imgs.push({media:m.t,row:r,row2:r,col:c0})})}
     inCell.forEach(x=>imgs.push({media:x.media,row:x.row,row2:x.row,col:x.col}));
     const firstImg=imgs.length?Math.min(...imgs.map(x=>x.row)):0;let head=null;
-    for(let r=firstImg-1;r>=0&&r>=firstImg-15;r--){const c=cellsOf(r,-1);if(c.length>=2&&c.filter(x=>HEADRE.test(x[1])).length>=1){head=new Map(c.map(x=>[x[0],x[1]]));break}}
+    for(let r=firstImg-1;r>=0&&r>=firstImg-15;r--){const c=cellsOf(r,-1);if(c.length>=2&&c.filter(x=>HEADRE.test(x[1])).length>=1){head=new Map(c.map(x=>[x[0],x[1]]));/* v1.4 兩列表頭（英文一列、中文一列）合在一起 */const p=r>0?cellsOf(r-1,-1):[];if(p.length>=2&&p.filter(x=>HEADRE.test(x[1])).length>=1)p.forEach(x=>head.set(x[0],x[1]+(head.has(x[0])?'\n'+head.get(x[0]):'')));break}}
     for(const im of imgs.sort((a,b)=>a.row-b.row)){const bytes=await z.get(im.media);if(!bytes)continue;const mime=mimeOf(im.media);if(!mime){log('略過（不支援的圖檔格式）'+im.media);continue}
       const texts=textRows(im.row,im.row2,im.col);const cells=cellsOf(im.row,im.col).map(x=>({col:x[0],text:x[1],head:head?head.get(x[0])||'':''}));
       out.push({blob:new Blob([bytes],{type:mime}),texts,cells,head:head?[...head.values()].join(' | '):'',src:file.name+' · '+sh.getAttribute('name')+' 第 '+(im.row+1)+' 列'})}}
@@ -96,17 +96,21 @@ async function readPdf(file,log){await script(CDN.pdf);const lib=g.pdfjsLib;lib.
 const words=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9㐀-鿿]+/g,' ').split(' ').filter(w=>w.length>1||/[㐀-鿿]/.test(w));
 const cjk=s=>{const a=String(s||'').replace(/[^㐀-鿿]/g,'');const o=new Set();for(let i=0;i<a.length-1;i++)o.add(a.slice(i,i+2));return o};
 /* v1.1 看表頭分欄：序號／料號／名稱（中英柬分開）／儲位／類別；沒有表頭就看字的樣子（像 TCF0001 這種＝料號） */
-const CODE_RE=/^[A-Z]{1,6}[-_ ]?\d{2,}[A-Z0-9\-\/.]*$/i;
-const ROLE=[['seq',/^\s*(no\.?|#|序號?|項次|ល\.?រ)\s*$/i],['photo',/(picture|photo|image|圖片|照片|រូប)/i],['loc',/(rack|location|位置|儲位|庫位|\bbin\b|shelf|ទីតាំង)/i],
-  ['code',/(code|編號|料號|編碼|item\s*no|part\s*no|article|art\.?\s*no|កូដ)/i],['cat',/(category|類別|分類|種類|ប្រភេទ)/i]];
+const CODE_RE=/^(?:[A-Z]{1,6}[-_ ]?\d{2,}[A-Z0-9\-\/.]*|(?=[A-Z0-9\-_\/.]*[A-Z])\d[A-Z0-9\-_\/.]{2,24})$/i;/* v1.4 也收數字開頭的款號（6095KC、7303BLK） */
+const ROLE=[['seq',/^\s*(no\.?|#|序[號号]?|項次|ល\.?រ)\s*$/i],['photo',/(picture|photo|image|圖片|照片|រូប)/i],['loc',/(rack|location|位置|儲位|庫位|\bbin\b|shelf|ទីតាំង)/i],
+  ['note',/(highlight|feature|特徵|標記|remark|備註|\bnote)/i],
+  ['code',/(code|編號|料號|編碼|款號|item\s*no|part\s*no|style\s*(#|no)|machine\s*id|asset|\bid\b|article|art\.?\s*no|កូដ)/i],['cat',/(category|類別|分類|ប្រភេទ)/i]];
+/* v1.4 照片檔名就是編號（TCF0001.jpg、OL-0212_2.jpg、6095KC.png）→ 直接放到那個編號；手機相機檔名（IMG_2026…）不算 */
+const CAM=/^(img|dsc|dscn|pxl|mvimg|screenshot|photo|image|whatsapp|vid|telegram|signal|line_|wechat|mmexport|\d{8})/i;
+function codeOfName(name){const stem=String(name||'').replace(/\.[^.]+$/,'').replace(/\s*\(\d+\)$/,'').replace(/[_](\d{1,2})$/,'').replace(/\s+/g,'').trim();if(!stem||CAM.test(stem)||/\d{6,}/.test(stem))return '';return CODE_RE.test(stem)?stem:''}
 const roleOf=h=>{const first=String(h||'').split(/\n/)[0];for(const [k,re] of ROLE)if(re.test(first)||re.test(h))return k;return h?'name':''};
 const script3=t=>/[\u1780-\u17FF]/.test(t)?'km':/[\u3400-\u9fff]/.test(t)?'zh':'en';
 function parseRow(texts,cells){texts=texts||[];const all=texts.join(' | ');
-  const out={no:'',code:'',name:'',loc:'',cat:'',zh:'',en:'',km:'',all};
+  const out={no:'',code:'',name:'',loc:'',cat:'',note:'',zh:'',en:'',km:'',all};
   const C=(cells&&cells.length)?cells:texts.map((t,i)=>({col:i,text:t,head:''}));const names=[];
-  C.forEach(c=>{const t=String(c.text||'').replace(/\s+/g,' ').trim();if(!t)return;let role=c.head?roleOf(c.head):'';
-    if(!role||role==='name'){if(!out.code&&CODE_RE.test(t)&&!/^\d+$/.test(t))role='code';else if(!out.no&&/^\d{1,3}$/.test(t))role='seq';else if(!c.head&&/^(RACK|NO RACK|BIN|SHELF)\b/i.test(t))role='loc';else role='name'}
-    if(role==='seq'){if(!out.no)out.no=t.replace(/\D/g,'')}else if(role==='code'){if(!out.code)out.code=t;else names.push(t)}else if(role==='loc')out.loc=out.loc?out.loc+', '+t:t;else if(role==='cat')out.cat=out.cat?out.cat+' / '+t:t;else if(role!=='photo')names.push(t)});
+  C.forEach(c=>{const t=String(c.text||'').replace(/[ \t\u00a0]+/g,' ').replace(/ *\n */g,'\n').trim();if(!t)return;let role=c.head?roleOf(c.head):'';
+    if(!role||role==='name'){if(!out.code&&CODE_RE.test(t.replace(/\n.*/s,''))&&!/^\d+$/.test(t))role='code';else if(!out.no&&/^\d{1,3}$/.test(t))role='seq';else if(!c.head&&/^(RACK|NO RACK|BIN|SHELF)\b/i.test(t))role='loc';else role='name'}
+    if(role==='seq'){if(!out.no)out.no=t.replace(/\D/g,'')}else if(role==='code'){if(!out.code)out.code=t;else names.push(t)}else if(role==='loc')out.loc=out.loc?out.loc+', '+t:t;else if(role==='cat')out.cat=out.cat?out.cat+' / '+t:t;else if(role==='note')out.note=(out.note?out.note+' ':'')+t.replace(/\n/g,' ').replace(/^[•·\-\s]+/,'');else if(role!=='photo')names.push(t)});
   /* 一格裡中英柬換行寫在一起的，拆開 */
   const parts=[];names.forEach(t=>String(t).split(/\s*\n\s*/).forEach(x=>x&&parts.push(x)));
   parts.forEach(t=>{const k=script3(t);out[k]=out[k]?out[k]+' / '+t:t});
@@ -116,7 +120,9 @@ const ck=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
 function score(row,it){let s=0,dist=0;if(row.code){const c=ck(row.code);if(c&&(ck(it.key)===c||ck(it.code)===c||ck(it.title)===c))return 99;}
   if(row.no&&it.code&&String(it.code).trim()===row.no)s+=3;const A=new Set(words(row.name)),B=words(it.name+' '+(it.alt||'')+' '+it.key);let hit=0;const AA=[...A],has=w=>A.has(w)||(w.length>=4&&AA.some(x=>x.length>=4&&(x.startsWith(w)||w.startsWith(x))));new Set(B).forEach(w=>{if(has(w)){hit++;if(!GENERIC.has(w))dist++}});s+=hit/Math.max(1,Math.min(A.size,new Set(B).size||1))*2;
   const ca=cjk(row.name),cb=cjk(it.name+' '+(it.alt||''));if(ca.size&&cb.size){let h=0;ca.forEach(x=>{if(cb.has(x))h++});s+=h/Math.min(ca.size,cb.size)*2;if(h)dist++}return dist||s>=3?s:0}
-const guessHead=t=>{const s=String(t).toUpperCase();if(/DEFECT|瑕疵/.test(s))return 'defect';if(/SPARE|PART|零件/.test(s))return 'parts';if(/NEEDLE|機針/.test(s))return 'needle';if(/TRIM|ACCESSOR|輔料|副料/.test(s))return 'accessory';if(/FABRIC|布料|ក្រណាត់/.test(s))return 'fabric';if(/MACHINE|機台/.test(s))return 'machine';return ''};
+const guessHead=t=>{const s=String(t).toUpperCase();/* 順序有意義：瑕疵 → 零件／針 → 機台 → 輔料 → 布料 → 款式 */
+  if(/DEFECT|瑕疵/.test(s))return 'defect';if(/SPARE|PART|零件/.test(s))return 'parts';if(/NEEDLE|機針/.test(s))return 'needle';if(/MACHINE|設備|機台/.test(s))return 'machine';
+  if(/TRIM|ACCESSOR|輔料|副料/.test(s))return 'accessory';if(/FABRIC|布料|ក្រណាត់/.test(s))return 'fabric';if(/STYLE|款式|款號/.test(s))return 'style';return ''};
 const guessDomain=t=>{const s=String(t).toUpperCase();if(/STITCH|SEAM|PUCKER|TRIM|RAW EDGE|LABEL|STAIN|HOLE|SHADE|瑕疵|跳針|漏針/.test(s))return 'defect';if(/NEEDLE\b|機針|縫紉機針/.test(s)&&!/PLATE|針板/.test(s))return 'needle';if(/HOOK|FEED DOG|PLATE|KNIFE|BLADE|LOOPER|SPRING|旋梭|送布牙|針板|刀/.test(s))return 'parts';if(/FABRIC|TWILL|JERSEY|布/.test(s))return 'fabric';return ''};
 
 /* ── 畫面 ── */
@@ -124,7 +130,7 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
   const el=document.createElement('div');el.className='vp-lib';el.style.zIndex=9997;document.body.appendChild(el);
   el.innerHTML=`<div class="vp-lib-box"><div class="vp-lib-hd"><span style="font-size:20px">📥</span><b>匯入照片對照表 Import photo chart</b><button class="vp-btn ghost" data-a="x">✕</button></div><div class="vp-lib-body"><div class="vp" id="piBody"></div></div></div>`;
   el.addEventListener('click',e=>{if(e.target===el||e.target.closest('[data-a=x]'))el.remove()});const B=el.querySelector('#piBody');let logs=[];const log=m=>{logs.push(m);const l=B.querySelector('#piLog');if(l)l.innerHTML=logs.slice(-6).map(E).join('<br>')};
-  const loadItems=async()=>{items=[];try{const src=opt.items||g.VRTPhotoItems;items=src?await src(dom)||[]:[]}catch(_){items=[]}};
+  const loadItems=async()=>{items=[];try{let up=null;try{up=g.parent&&g.parent!==g?g.parent.VRTPhotoItems:null}catch(_){}const own=g.VRTPhotoItems;const src=opt.items||(own&&own.full?own:null)||(up&&up.full?up:null)||own||up;/* 入口頁裡的子頁面用入口頁的清單 */items=src?await src(dom)||[]:[]}catch(_){items=[]}};
   function best(r){let b=null,bs=0;items.forEach(it=>{const s=score(r,it);if(s>bs){bs=s;b=it}});return bs>=1.2?b:null}
   function paint(){const dsel=DOMS.map(d=>`<option value="${d[0]}" ${d[0]===dom?'selected':''}>${d[1]} ${E(d[2])}</option>`).join('');
     B.innerHTML=`<div class="vp-sec"><div class="vp-h"><b>1️⃣ 選檔案</b><span class="vp-n">Excel／PDF／JPG／PNG，一列＝編號＋照片＋名稱（像瑕疵對照表、零件示意圖）</span></div>
@@ -138,7 +144,7 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
         return `<tr style="border-top:1px solid var(--vp-line);background:${!r.on?'transparent':r.match?'rgba(16,185,129,.08)':r.newName?'rgba(245,158,11,.10)':'rgba(239,68,68,.10)'}">
         <td style="padding:6px"><input type="checkbox" data-on="${i}" ${r.on?'checked':''}></td><td style="padding:6px"><img src="${r.url}" style="width:96px;height:72px;object-fit:cover;border-radius:8px;display:block"></td>
         <td style="padding:6px;min-width:180px">${r.p.code?`<b style="font-size:13px">${E(r.p.code)}</b> `:''}${r.p.no?`<b>#${E(r.p.no)}</b> `:''}<span>${E(r.p.en||'')}</span>${r.p.zh?`<div>${E(r.p.zh)}</div>`:''}${r.p.km?`<div style="color:var(--vp-mut)">${E(r.p.km)}</div>`:''}${!r.p.code&&!r.p.name?'<i>（沒讀到文字）</i>':''}
-         ${r.p.cat?`<div style="font-size:11px">🏷️ ${E(r.p.cat)}</div>`:''}${r.p.loc?`<div style="font-size:11px">📍 ${E(r.p.loc)}</div>`:''}<div style="color:var(--vp-mut);font-size:10.5px">${E(r.src)}</div></td>
+         ${r.p.cat?`<div style="font-size:11px">🏷️ ${E(r.p.cat)}</div>`:''}${r.p.note?`<div style="font-size:11px;color:var(--vp-mut)">🔎 ${E(r.p.note.slice(0,120))}</div>`:''}${r.p.loc?`<div style="font-size:11px">📍 ${E(r.p.loc)}</div>`:''}<div style="color:var(--vp-mut);font-size:10.5px">${E(r.src)}</div></td>
         <td style="padding:6px;min-width:220px"><input class="vp-in" list="piList" data-k="${i}" value="${E(key)}" placeholder="打料號或名稱 Type code / name" style="width:100%;max-width:280px">
          <div style="font-size:11px;margin-top:3px">${r.match?`✅ 對到 ${E(r.match.name&&r.match.name!==r.match.key?r.match.name:r.match.key)}`:r.newName?`🆕 清單裡沒有，會新增「${E(r.newName)}」`:'❌ 還沒選（不會匯入）'}${ps&&ps.ref?` · 已有 ⭐ ${ps.ref} 張（同一張自動略過；不同的話新的當封面、舊的留歷史）`:''}${r.dupRow?`<br>📎 同一項的第 2 張（前一張在 ${E(r.dupRow)}），兩張都會放；不要可以取消勾選`:''}</div></td></tr>`}).join('')}</table></div></div>`:''}`;
     B.querySelector('#piDom').onchange=async e=>{dom=e.target.value;await loadItems();rows.forEach(r=>{r.match=best(r.p);r.newName=r.match?'':(r.p.code||r.p.name||'')});paint()};
@@ -150,17 +156,22 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
     const go=B.querySelector('#piGo');go&&(go.onclick=async()=>{go.disabled=true;let add=0,dup=0,skip=0;
       for(const r of rows.filter(x=>x.on)){const key=r.match?r.match.key:String(r.newName||'').trim();if(!key){skip++;continue}const name=r.match?(r.match.name&&ck(r.match.name)!==ck(r.match.key)?r.match.name:(r.p.name||r.match.key)):(r.p.code&&key===r.p.code&&r.p.name?r.p.name:key);
         const f=new File([r.blob],(key.replace(/[^\w.-]+/g,'_')||'photo')+'.jpg',{type:r.blob.type||'image/jpeg'});
-        try{const x=await P.add([f],{domain:dom,key,name,slot,caption:[r.p.no?'#'+r.p.no:'',r.p.code,r.p.name,r.p.loc?'📍 '+r.p.loc:''].filter(Boolean).join(' ').slice(0,200)});add+=x.added;dup+=x.dup}catch(_){skip++}}
+        try{const x=await P.add([f],{domain:dom,key,name,slot,caption:[r.p.no?'#'+r.p.no:'',r.p.code,r.p.name,r.p.loc?'📍 '+r.p.loc:'',r.p.note?'🔎 '+r.p.note:''].filter(Boolean).join(' ').slice(0,200)});add+=x.added;dup+=x.dup}catch(_){skip++}}
       const head=`✅ 匯入 ${add} 張${dup?` · 同一張已經有了、略過 ${dup}`:''}${skip?` · 沒名稱略過 ${skip}`:''}`;rows=[];logs=[head,'☁↑ 上傳雲端中，請先不要關閉這一頁…'];paint();opt.onDone&&opt.onDone();
         /* v1.2：等照片真的上傳完才說完成（之前關掉頁面會只上傳一部分） */
         const tk=setInterval(()=>{const st2=P.status&&P.status();const n=P.pending?P.pending():0;logs=[head,(st2&&st2.text?st2.text:'☁↑ 上傳中…')+(n?`（還有 ${n} 張）`:'')];const l=B.querySelector('#piLog');if(l){l.style.display='';l.innerHTML=logs.map(E).join('<br>')}},800);
         try{await P.push()}catch(_){}clearInterval(tk);const left=P.pending?P.pending():0;logs=[head,left?`⚠️ 還有 ${left} 張沒上傳到雲端（可能網路不穩）；下次打開任何一頁會自動接著上傳`:'☁ 已全部上傳雲端，其他手機／電腦也看得到'];paint()})}
   async function handle(files){if(!files.length)return;if(!files.length)return;logs=[];rows=[];paint();
-      for(const f of files){log('⏳ 讀取 '+f.name+' …');try{const rs=/\.xls[xm]$/i.test(f.name)?await readXlsx(f,log):/\.pdf$/i.test(f.name)||f.type==='application/pdf'?await readPdf(f,log):await readImage(f,log);
+      for(const f of files){const cn=!/\.(xls[xm]|pdf)$/i.test(f.name)&&f.type!=='application/pdf'?codeOfName(f.name):'';if(cn){rows.push({blob:f,url:URL.createObjectURL(f),p:parseRow([cn],[{col:0,text:cn,head:'Code'}]),head:'',src:f.name+'（檔名＝編號）',on:true,newName:cn,byName:true});continue}
+        log('⏳ 讀取 '+f.name+' …');try{const rs=/\.xls[xm]$/i.test(f.name)?await readXlsx(f,log):/\.pdf$/i.test(f.name)||f.type==='application/pdf'?await readPdf(f,log):await readImage(f,log);
         rs.forEach(r=>{const p=parseRow(r.texts,r.cells);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,head:r.head||'',src:r.src,on:true,newName:p.code||p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
       {const gd=guessHead(files.map(f=>f.name).join(' ')+' '+[...new Set(rows.map(r=>r.head))].join(' '))||guessDomain(rows.map(r=>r.p.all).join(' '));if(gd&&gd!==dom){dom=gd;log('自動判斷是「'+(DOMS.find(d=>d[0]===gd)||[])[2]+'」，可在上面改')}}
       await loadItems();rows.forEach(r=>{r.match=best(r.p);if(r.match)r.newName=''});
+      /* 檔名＝編號的照片：這一類對不到，就到其他類別找（布料／零件／針／機台／款式／輔料），哪一類對到最多就放哪一類 */
+      if(rows.length&&rows.every(r=>r.byName)&&rows.filter(r=>r.match).length<rows.length){let bestD=dom,bestN=rows.filter(r=>r.match).length;const keep=dom;
+        for(const d of ['fabric','parts','needle','machine','style','accessory','defect','customer']){if(d===keep)continue;dom=d;await loadItems();const n=rows.filter(r=>best(r.p)).length;if(n>bestN){bestN=n;bestD=d}}
+        dom=bestD;await loadItems();rows.forEach(r=>{r.match=best(r.p);r.newName=r.match?'':r.p.code});if(bestD!==keep)log('照片檔名對到「'+(DOMS.find(x=>x[0]===bestD)||[])[2]+'」'+bestN+' 個編號，可在上面改')}
       {const seen=new Map();rows.forEach(r=>{const k=r.match?r.match.key:r.newName;if(!k)return;if(seen.has(k)){r.dupRow=seen.get(k)}else seen.set(k,r.src)});}log('✅ 共 '+rows.length+' 列，自動對到 '+rows.filter(r=>r.match).length+' 列，請核對後按匯入');paint()}
   paint();loadItems().then(()=>{if(opt.files&&opt.files.length)handle(opt.files)})}
-g.VRTPhotoImport={version:'1.3.0',open,readXlsx,gridCut,parseRow,score};
+g.VRTPhotoImport={version:'1.4.0',codeOfName,open,readXlsx,gridCut,parseRow,score};
 })(window);
