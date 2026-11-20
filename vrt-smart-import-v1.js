@@ -283,7 +283,7 @@
     upload(P.sel)}
   /* v4.37 照片對照表：在這一頁直接開「匯入照片對照表」（需要的元件自動載入） */
   function loadJs(src){return new Promise((res,rej)=>{if(document.querySelector('script[src^="'+src.split('?')[0]+'"]')){res();return}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(L('元件載入失敗：','failed to load: ')+src));document.head.appendChild(s)})}
-  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.41.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.41.0');
+  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.42.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.41.0');
     if(!g.VRTPhotoImport)throw new Error(L('照片匯入元件沒有載入','photo importer not loaded'));g.VRTPhotoImport.open({files,onDone:()=>{try{g.dispatchEvent(new CustomEvent('vrt-photos-imported'))}catch(_){}}})}
   const toFile=r=>new File([r.u8||r.data],r.name,{type:r.type||'',lastModified:r.lastModified||Date.now()});
   async function record(r,m,status){const at=new Date().toISOString();const base={module:m,at,status,name:r.name,page:pageFile()};

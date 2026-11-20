@@ -6,7 +6,7 @@
 (function(g){
 'use strict';
 if(g.VRTPhotos&&g.VRTPhotos.version)return;
-const VERSION='1.2.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
+const VERSION='1.3.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
 const DOMAINS=[
  ['fabric','🧶','布料','Fabric'],['accessory','🧷','輔料','Accessories'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
  ['customer','👥','客戶','Customers'],['style','📐','款式／BOM','Styles / BOM'],['ship','🚢','成品／出貨','FG / Shipping'],
@@ -152,6 +152,7 @@ function css(){if(document.getElementById('vrtPhotoCss'))return;const s=document
 .vp-card{background:var(--vp-card);border:1px solid var(--vp-line);border-radius:14px;overflow:hidden;cursor:pointer}.vp-card:hover{border-color:var(--vp-acc)}
 .vp-card .ph{aspect-ratio:4/3;background:#0b1220 center/cover no-repeat;display:grid;place-items:center;color:#64748b;font-size:28px}
 .vp-card .tx{padding:8px 10px}.vp-card .tx b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vp-card .tx span{font-size:11px;color:var(--vp-mut)}
+.vp-hist{margin-top:8px}.vp-hist summary{cursor:pointer;font-size:13px;font-weight:700;color:#475569;padding:6px 0}.vp-hist summary small{font-weight:400;color:#94a3b8;margin-left:6px}
 .vp-chip{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:#fef3c7;color:#92400e;margin-left:6px;white-space:nowrap}.vp-chip.ref{background:#e0e7ff;color:#3730a3}
 `;document.head.appendChild(s)}
 
@@ -201,7 +202,7 @@ function mount(host,ctx){css();ready.then(()=>{if(!host.isConnected)return;draw2
      <div class="vp-st ${st.type}">${E(st.text)}</div>
      <div class="vp-sec"><div class="vp-h"><b>⭐ 標準照（最正確的樣子）<small style="font-weight:400;color:var(--vp-mut)">Standard photo</small></b><span class="vp-n">${ref.length} 張</span><span class="vp-sp"></span>
        <label class="vp-btn">📷 上傳標準照 Upload<input type="file" accept="image/*" multiple data-slot="ref"></label></div>
-       ${ref.length?`<div class="vp-cover"><div class="vp-big" data-v="ref:0"><img src="${ref[0].thumb}" alt=""><i>⭐ 標準 Standard</i></div><div class="vp-grid">${ref.map((r,i)=>`<div class="vp-th ${i===0?'on':''}" data-v="ref:${i}"><img src="${r.thumb}" alt="" loading="lazy"><span>${E(r.caption||r.file||'')}</span></div>`).join('')}</div></div>`
+       ${ref.length?`<div class="vp-cover"><div class="vp-big" data-v="ref:0"><img src="${ref[0].thumb}" alt=""><i>⭐ 標準 Standard · ${E(String(ref[0].at||'').slice(0,10))}</i></div>${ref.length>1?`<details class="vp-hist"><summary>🕘 以前的標準照 History（${ref.length-1} 張）<small>點一張可以設回標準</small></summary><div class="vp-grid">${ref.slice(1).map((r,i)=>`<div class="vp-th" data-v="ref:${i+1}"><img src="${r.thumb}" alt="" loading="lazy"><span>${E(String(r.at||'').slice(0,10))} ${E(r.caption||'')}</span></div>`).join('')}</div></details>`:''}</div>`
         :`<div class="vp-empty">${d[1]} 這個${E(d[2])}還沒有標準照<br><small>拍一張「正確」的樣子放這裡，大家對照就知道對不對。No standard photo yet.</small>${tip?'<br><small>'+E(tip)+'</small>':''}</div>`}</div>
      <div class="vp-sec"><div class="vp-h"><b>⚠️ 每月不同／異常照 <small style="font-weight:400;color:var(--vp-mut)">Monthly differences</small></b><span class="vp-n">${mon.length} 張 · ${months.length} 個月</span><span class="vp-sp"></span>
        <input class="vp-in" type="month" value="${E(month)}" data-k="month" title="哪個月 Month"><input class="vp-in" data-k="cap" value="${E(cap)}" placeholder="說明：色差／破洞／斷針… Caption" style="min-width:150px;flex:1;max-width:260px">
