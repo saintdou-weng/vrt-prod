@@ -46,18 +46,23 @@ async function readXlsx(file,log){const z=await unzip(await file.arrayBuffer());
     const rowH=r=>HID.has(r)?0:(RH.has(r)?RH.get(r):defH)*12700;const yOf=(r,off)=>{let y=0;for(let k=0;k<r;k++)y+=rowH(k);return y+(+off||0)};
     const rowAt=y=>{let acc=0;for(let k=0;k<100000;k++){const h=rowH(k);if(h&&y<acc+h)return k;acc+=h}return 0};
     /* 表頭：第一張照片上面、最近一列有 2 格以上字、而且像表頭的 */
+    const PHOTO_COL=/(picture|photo|image|圖片|照片|示意|រូបភាព)/i;
     const HEADRE=/(code|no\.?|item|style|machine|\bid\b|feature|highlight|編號|料號|編碼|名稱|name|picture|photo|image|圖|照片|description|desc|type|類|category|location|rack|位置|儲位|fabric|part|defect|瑕疵|រូប|កូដ|ឈ្មោះ|ប្រភេទ|ទីតាំង)/i;
     const textRows=(r0,r1,skipCol)=>{const a=[];for(let r=r0;r<=r1;r++)(rows.get(r)||[]).filter(x=>x[0]!==skipCol).sort((x,y)=>x[0]-y[0]).forEach(x=>a.push(x[1]));return a};
     const cellsOf=(r,skipCol)=>(rows.get(r)||[]).filter(x=>x[0]!==skipCol).sort((x,y)=>x[0]-y[0]);
-    const imgs=[];const srel=await relsOf(z,path);
+    let imgs=[];const srel=await relsOf(z,path);
     for(const id of Object.keys(srel)){if(!/drawing$/.test(srel[id].type))continue;const dpath=srel[id].t,ddoc=xml(await z.text(dpath)),drel=await relsOf(z,dpath);
       [...byLocal(ddoc,'twoCellAnchor'),...byLocal(ddoc,'oneCellAnchor')].forEach(a=>{const fr=byLocal(a,'from')[0],to=byLocal(a,'to')[0];const blip=byLocal(a,'blip')[0];if(!fr||!blip)return;const rid=rAttr(blip);const m=drel[rid];if(!m)return;
         const num=(el,n)=>{const x=el&&byLocal(el,n)[0];return x?+x.textContent:null};const r0=num(fr,'row'),c0=num(fr,'col');const y0=yOf(r0,num(fr,'rowOff'));
         let y1=y0;if(to)y1=yOf(num(to,'row'),num(to,'rowOff'));else{const ext=byLocal(a,'ext')[0];y1=y0+(ext?+ext.getAttribute('cy')||0:0)}
         const r=y1>y0?rowAt((y0+y1)/2):r0;imgs.push({media:m.t,row:r,row2:r,col:c0})})}
     inCell.forEach(x=>imgs.push({media:x.media,row:x.row,row2:x.row,col:x.col}));
-    const firstImg=imgs.length?Math.min(...imgs.map(x=>x.row)):0;let head=null;
-    for(let r=firstImg-1;r>=0&&r>=firstImg-15;r--){const c=cellsOf(r,-1);if(c.length>=2&&c.filter(x=>HEADRE.test(x[1])).length>=1){head=new Map(c.map(x=>[x[0],x[1]]));/* v1.4 兩列表頭（英文一列、中文一列）合在一起 */const p=r>0?cellsOf(r-1,-1):[];if(p.length>=2&&p.filter(x=>HEADRE.test(x[1])).length>=1)p.forEach(x=>head.set(x[0],x[1]+(head.has(x[0])?'\n'+head.get(x[0]):'')));break}}
+    let firstImg=imgs.length?Math.min(...imgs.map(x=>x.row)):0;let head=null,headRow=-1;
+    /* v1.5 表頭：前 25 列裡最像表頭的一列（照片欄＋2 格以上像欄名）；表頭上面的圖（公司 logo）不算 */
+    {let best=-1,bs=1;for(let r=0;r<25;r++){const c=cellsOf(r,-1);if(c.length<2)continue;const sc=c.filter(x=>HEADRE.test(x[1])).length+(c.some(x=>PHOTO_COL.test(x[1]))?2:0);if(sc>bs&&imgs.some(x=>x.row>r)){bs=sc;best=r}}
+      if(best>=0&&bs>=3){headRow=best;imgs=imgs.filter(x=>x.row>best);firstImg=headRow+1}}
+    if(headRow<0&&imgs.length<2&&!inCell.length)continue;/* 只有一張圖又找不到照片欄＝公司 logo，這張表不是照片表 */
+    for(let r=firstImg-1;r>=0&&r>=firstImg-15;r--){if(headRow>=0&&r!==headRow)continue;const c=cellsOf(r,-1);if(c.length>=2&&c.filter(x=>HEADRE.test(x[1])).length>=1){head=new Map(c.map(x=>[x[0],x[1]]));/* v1.4 兩列表頭（英文一列、中文一列）合在一起 */const p=r>0?cellsOf(r-1,-1):[];if(p.length>=2&&p.filter(x=>HEADRE.test(x[1])).length>=1&&p.every(x=>String(x[1]).length<=40)&&p.filter(x=>head.has(x[0])).length>=p.length*.6)p.forEach(x=>head.set(x[0],x[1]+(head.has(x[0])?'\n'+head.get(x[0]):'')));break}}
     for(const im of imgs.sort((a,b)=>a.row-b.row)){const bytes=await z.get(im.media);if(!bytes)continue;const mime=mimeOf(im.media);if(!mime){log('略過（不支援的圖檔格式）'+im.media);continue}
       const texts=textRows(im.row,im.row2,im.col);const cells=cellsOf(im.row,im.col).map(x=>({col:x[0],text:x[1],head:head?head.get(x[0])||'':''}));
       out.push({blob:new Blob([bytes],{type:mime}),texts,cells,head:head?[...head.values()].join(' | '):'',src:file.name+' · '+sh.getAttribute('name')+' 第 '+(im.row+1)+' 列'})}}
@@ -98,27 +103,33 @@ const cjk=s=>{const a=String(s||'').replace(/[^㐀-鿿]/g,'');const o=new Set();
 /* v1.1 看表頭分欄：序號／料號／名稱（中英柬分開）／儲位／類別；沒有表頭就看字的樣子（像 TCF0001 這種＝料號） */
 const CODE_RE=/^(?:[A-Z]{1,6}[-_ ]?\d{2,}[A-Z0-9\-\/.]*|(?=[A-Z0-9\-_\/.]*[A-Z])\d[A-Z0-9\-_\/.]{2,24})$/i;/* v1.4 也收數字開頭的款號（6095KC、7303BLK） */
 const ROLE=[['seq',/^\s*(no\.?|#|序[號号]?|項次|ល\.?រ)\s*$/i],['photo',/(picture|photo|image|圖片|照片|រូប)/i],['loc',/(rack|location|位置|儲位|庫位|\bbin\b|shelf|ទីតាំង)/i],
-  ['note',/(highlight|feature|特徵|標記|remark|備註|\bnote)/i],
-  ['code',/(code|編號|料號|編碼|款號|item\s*no|part\s*no|style\s*(#|no)|machine\s*id|asset|\bid\b|article|art\.?\s*no|កូដ)/i],['cat',/(category|類別|分類|ប្រភេទ)/i]];
+  ['name',/(\btype\b|\bname\b|description|品名|名稱|名称|品項|種類|类型|類型|ប្រភេទ|ឈ្មោះ)/i],
+  ['mid',/(machine\s*id|設備編號|機台編號|លេខម៉ាស៊ីន)/i],
+  ['skip',/(brand|品牌|ម៉ាក|\btime\b|ម៉ោង|\bsize\b|尺寸|ទំហំ|balance|received|issued|已收到|\bqty\b|quantity|數量|数量|returned|repeat|operator|technician|employee|員工|员工|line\s*#|សមតុល្យ)/i],
+  ['note',/(highlight|feature|特徵|標記|remark|備註|评论|\bnote)/i],
+  ['code',/(code|編號|料號|編碼|款號|item\s*no|part\s*no|style\s*(#|no)|machine\s*id|asset|\bid\b|article|art\.?\s*no|កូដ)/i],['cat',/(category|類別|分類)/i]];
 /* v1.4 照片檔名就是編號（TCF0001.jpg、OL-0212_2.jpg、6095KC.png）→ 直接放到那個編號；手機相機檔名（IMG_2026…）不算 */
 const CAM=/^(img|dsc|dscn|pxl|mvimg|screenshot|photo|image|whatsapp|vid|telegram|signal|line_|wechat|mmexport|\d{8})/i;
 function codeOfName(name){const stem=String(name||'').replace(/\.[^.]+$/,'').replace(/\s*\(\d+\)$/,'').replace(/[_](\d{1,2})$/,'').replace(/\s+/g,'').trim();if(!stem||CAM.test(stem)||/\d{6,}/.test(stem))return '';return CODE_RE.test(stem)?stem:''}
 const roleOf=h=>{const first=String(h||'').split(/\n/)[0];for(const [k,re] of ROLE)if(re.test(first)||re.test(h))return k;return h?'name':''};
 const script3=t=>/[\u1780-\u17FF]/.test(t)?'km':/[\u3400-\u9fff]/.test(t)?'zh':'en';
 function parseRow(texts,cells){texts=texts||[];const all=texts.join(' | ');
-  const out={no:'',code:'',name:'',loc:'',cat:'',note:'',zh:'',en:'',km:'',all};
+  const out={no:'',code:'',mid:'',name:'',loc:'',cat:'',note:'',zh:'',en:'',km:'',all};
   const C=(cells&&cells.length)?cells:texts.map((t,i)=>({col:i,text:t,head:''}));const names=[];
   C.forEach(c=>{const t=String(c.text||'').replace(/[ \t\u00a0]+/g,' ').replace(/ *\n */g,'\n').trim();if(!t)return;let role=c.head?roleOf(c.head):'';
     if(!role||role==='name'){if(!out.code&&CODE_RE.test(t.replace(/\n.*/s,''))&&!/^\d+$/.test(t))role='code';else if(!out.no&&/^\d{1,3}$/.test(t))role='seq';else if(!c.head&&/^(RACK|NO RACK|BIN|SHELF)\b/i.test(t))role='loc';else role='name'}
-    if(role==='seq'){if(!out.no)out.no=t.replace(/\D/g,'')}else if(role==='code'){if(!out.code)out.code=t;else names.push(t)}else if(role==='loc')out.loc=out.loc?out.loc+', '+t:t;else if(role==='cat')out.cat=out.cat?out.cat+' / '+t:t;else if(role==='note')out.note=(out.note?out.note+' ':'')+t.replace(/\n/g,' ').replace(/^[•·\-\s]+/,'');else if(role!=='photo')names.push(t)});
+    if(role==='skip')return;if(role==='mid'){if(!out.mid)out.mid=t;return}if(role==='seq'){if(!out.no)out.no=t.replace(/\D/g,'')}else if(role==='code'){if(!out.code)out.code=t;else names.push(t)}else if(role==='loc')out.loc=out.loc?out.loc+', '+t:t;else if(role==='cat')out.cat=out.cat?out.cat+' / '+t:t;else if(role==='note')out.note=(out.note?out.note+' ':'')+t.replace(/\n/g,' ').replace(/^[•·\-\s]+/,'');else if(role!=='photo')names.push(t)});
   /* 一格裡中英柬換行寫在一起的，拆開 */
   const parts=[];names.forEach(t=>String(t).split(/\s*\n\s*/).forEach(x=>x&&parts.push(x)));
-  parts.forEach(t=>{const k=script3(t);out[k]=out[k]?out[k]+' / '+t:t});
+  /* v1.5 同一行裡柬文＋英文＋中文寫在一起（សំបុកម្ជុល Single Needle Rotary Hook 单针旋梭）→ 依文字分成三段；純數字／時間／是否 不算名稱 */
+  const seg=t=>{const o=[];let cur='',k='';for(const ch of t){const c=/[\u1780-\u17FF\u19E0-\u19FF]/.test(ch)?'km':/[\u3400-\u9fff\uF900-\uFAFF]/.test(ch)?'zh':/[A-Za-z]/.test(ch)?'en':'';if(c&&c!==k&&cur.trim()){o.push([k,cur]);cur=''}if(c)k=c;cur+=ch}if(cur.trim())o.push([k||'en',cur]);return o.map(([k,v])=>[k,v.replace(/^[\s,，、;；:：\-\/]+|[\s,，、;；:：\-\/]+$/g,'').replace(/[\u200b]/g,'')]).filter(x=>x[1])};
+  parts.filter(t=>!/^[\d\s.,:\/\-%]*(am|pm)?$/i.test(t)&&!/^(yes|no|y|n|是|否|បាទ|ទេ)$/i.test(t)).forEach(t=>{let sg=seg(t);if(!/[\u1780-\u17FF]/.test(t)&&!sg.some(([k,v])=>k==='en'&&v.split(/\s+/).length>=2))sg=[[script3(t),t]];sg.forEach(([k,v])=>{if(/^[\d\s.]+$/.test(v))return;out[k]=out[k]?out[k]+' / '+v:v})});
   out.name=[out.en,out.zh,out.km].filter(Boolean).join(' · ')||out.cat||'';return out}
 const GENERIC=new Set(['STITCH','STITCHES','SEAM','NEEDLE','NEEDLES','FOR','THE','AND','OR','OF','PART','PARTS','SEWING','MACHINE','SINGLE','DOUBLE','DEFECT','FROM','WITH']);
 const ck=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
 function score(row,it){let s=0,dist=0;if(row.code){const c=ck(row.code);if(c&&(ck(it.key)===c||ck(it.code)===c||ck(it.title)===c))return 99;}
-  if(row.no&&it.code&&String(it.code).trim()===row.no)s+=3;const A=new Set(words(row.name)),B=words(it.name+' '+(it.alt||'')+' '+it.key);let hit=0;const AA=[...A],has=w=>A.has(w)||(w.length>=4&&AA.some(x=>x.length>=4&&(x.startsWith(w)||w.startsWith(x))));new Set(B).forEach(w=>{if(has(w)){hit++;if(!GENERIC.has(w))dist++}});s+=hit/Math.max(1,Math.min(A.size,new Set(B).size||1))*2;
+  if(row.no&&it.code&&String(it.code).trim()===row.no)s+=3;
+  /* v1.5 柬文名稱完全一樣再加分（Needle Plate 有兩種，只差柬文） */if(row.km){const ka=String(row.km).split(' / ')[0].replace(/[\s\u200b]/g,''),kb=(String(it.name||'')+' '+(it.alt||'')+' '+(it.key||'')).replace(/\u200b/g,'').match(/[\u1780-\u17FF]+/g)||[];if(ka&&kb.includes(ka)){s+=3;dist++}}const A=new Set(words(row.name)),B=words(it.name+' '+(it.alt||'')+' '+it.key);let hit=0;const AA=[...A],has=w=>A.has(w)||(w.length>=4&&AA.some(x=>x.length>=4&&(x.startsWith(w)||w.startsWith(x))));new Set(B).forEach(w=>{if(has(w)){hit++;if(!GENERIC.has(w))dist++}});s+=hit/Math.max(1,Math.min(A.size,new Set(B).size||1))*2;
   const ca=cjk(row.name),cb=cjk(it.name+' '+(it.alt||''));if(ca.size&&cb.size){let h=0;ca.forEach(x=>{if(cb.has(x))h++});s+=h/Math.min(ca.size,cb.size)*2;if(h)dist++}return dist||s>=3?s:0}
 const guessHead=t=>{const s=String(t).toUpperCase();/* 順序有意義：瑕疵 → 零件／針 → 機台 → 輔料 → 布料 → 款式 */
   if(/DEFECT|瑕疵/.test(s))return 'defect';if(/SPARE|PART|零件/.test(s))return 'parts';if(/NEEDLE|機針/.test(s))return 'needle';if(/MACHINE|設備|機台/.test(s))return 'machine';
@@ -166,6 +177,10 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
         log('⏳ 讀取 '+f.name+' …');try{const rs=/\.xls[xm]$/i.test(f.name)?await readXlsx(f,log):/\.pdf$/i.test(f.name)||f.type==='application/pdf'?await readPdf(f,log):await readImage(f,log);
         rs.forEach(r=>{const p=parseRow(r.texts,r.cells);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,head:r.head||'',src:r.src,on:true,newName:p.code||p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
       {const gd=guessHead(files.map(f=>f.name).join(' ')+' '+[...new Set(rows.map(r=>r.head))].join(' '))||guessDomain(rows.map(r=>r.p.all).join(' '));if(gd&&gd!==dom){dom=gd;log('自動判斷是「'+(DOMS.find(d=>d[0]===gd)||[])[2]+'」，可在上面改')}}
+      /* v1.5 機台表：機台編號欄就是編號；其他類別的「機台編號」只是說明 */
+      rows.forEach(r=>{if(dom==='machine'&&!r.p.code&&r.p.mid){r.p.code=r.p.mid;r.newName=r.p.mid}else if(dom!=='machine'&&r.p.mid&&!r.p.code){r.newName=r.p.name||r.newName}});
+      /* v1.5 同一個項目同一張照片（每天一張表、照片重複貼）只留一列 */
+      {const seen=new Set(),keep=[];let dropped=0;for(const r of rows){let h='';try{const b=new Uint8Array(await r.blob.arrayBuffer());const d=await crypto.subtle.digest('SHA-1',b);h=[...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(_){h=r.blob.size+''}const k=(r.p.code||r.p.name||'').toUpperCase()+'|'+h;if(seen.has(k)){dropped++;continue}seen.add(k);keep.push(r)}if(dropped){rows=keep;log('同一項目、同一張照片重複出現 '+dropped+' 次，只留 1 張')}}
       await loadItems();rows.forEach(r=>{r.match=best(r.p);if(r.match)r.newName=''});
       /* 檔名＝編號的照片：這一類對不到，就到其他類別找（布料／零件／針／機台／款式／輔料），哪一類對到最多就放哪一類 */
       if(rows.length&&rows.every(r=>r.byName)&&rows.filter(r=>r.match).length<rows.length){let bestD=dom,bestN=rows.filter(r=>r.match).length;const keep=dom;
@@ -173,5 +188,5 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
         dom=bestD;await loadItems();rows.forEach(r=>{r.match=best(r.p);r.newName=r.match?'':r.p.code});if(bestD!==keep)log('照片檔名對到「'+(DOMS.find(x=>x[0]===bestD)||[])[2]+'」'+bestN+' 個編號，可在上面改')}
       {const seen=new Map();rows.forEach(r=>{const k=r.match?r.match.key:r.newName;if(!k)return;if(seen.has(k)){r.dupRow=seen.get(k)}else seen.set(k,r.src)});}log('✅ 共 '+rows.length+' 列，自動對到 '+rows.filter(r=>r.match).length+' 列，請核對後按匯入');paint()}
   paint();loadItems().then(()=>{if(opt.files&&opt.files.length)handle(opt.files)})}
-g.VRTPhotoImport={version:'1.4.0',codeOfName,open,readXlsx,gridCut,parseRow,score};
+g.VRTPhotoImport={version:'1.5.0',codeOfName,open,readXlsx,gridCut,parseRow,score};
 })(window);

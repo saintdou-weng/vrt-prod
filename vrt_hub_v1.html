@@ -9,7 +9,7 @@
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.34.0"></script>
 <script src="vrt-item-photos-v1.js?v=4.38.0"></script>
-<script src="vrt-photo-import-v1.js?v=4.39.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.40.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
    舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
@@ -142,7 +142,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.39.0';
+const V='4.40.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -268,7 +268,7 @@ const BI=(()=>{const T=[
 ['依機種','By machine type'],['依款式','By style'],['走勢','Trend'],['裝箱','Packing'],['車縫','Sewing'],['裁剪','Cutting'],['成本','Cost'],['原因','Reason'],['明細','Details'],
 ['庫存金額','Stock value'],['排單件數','Planned pcs'],['排單日產','Planned per day'],['實際每天','Actual per day'],['裁剪件數','Cut pcs'],['裝箱件數','Packed pcs'],['車縫件數','Sewn pcs'],
 ['換針（支）','Needles changed'],['換零件','Parts changed'],['條線出現','lines'],['項副料','trim items'],['項布料','fabric items'],['項用料','material items'],['個版本','versions'],
-['不良率','Defect %'],['加班件','OT pcs'],['出貨日','Ship date'],['下單日','Order date'],['操作員','Operator'],['已做好','Done'],['還沒做','Not done'],['已出件','Shipped pcs'],
+['不良率','Defect %'],['收到','Received'],['領用','Issued'],['加班件','OT pcs'],['出貨日','Ship date'],['下單日','Order date'],['操作員','Operator'],['已做好','Done'],['還沒做','Not done'],['已出件','Shipped pcs'],
 ['訂單件','Order pcs'],['安全量','Safety stock'],['碼/件','yd/pc'],['碼布','yd fabric'],['條線','lines'],
 ['不良','Defects'],['人數','Headcount'],['件數','Pcs'],['位置','Position'],['備註','Remarks'],['儲位','Location'],['動作','Action'],['名稱','Name'],['品名','Item name'],['品質','Quality'],
 ['單位','Unit'],['單價','Unit price'],['單號','Doc no.'],['回收','Returned'],['客戶','Customer'],['尺寸','Size'],['已出','Shipped'],['布料','Fabric'],['年份','Year'],['庫存','Stock'],
@@ -414,6 +414,20 @@ function partGroups(){return once('parts',async()=>{const [{rows},chg]=await Pro
       <h4>哪幾條線在換</h4>${CH.hbars([...groupBy(rel,x=>x.line||'—')].map(([l,b])=>({label:l,v:sum(b,x=>x.qty)})).sort((x,y)=>y.v-x.v).slice(0,12))}
       <h4>換零件明細</h4>${table([['日期',x=>E(x.date)],['線別',x=>E(x.line)],['名稱',x=>E(x.partType)],['數量',x=>F(x.qty),1],['機台',x=>x.machine?link('machine',nk(x.machine),x.machine):''],['原因',x=>{const c=RC[rcOf(x)]||RC.other;return `<span class="${c[1]}">${E(x.reason||c[0])}</span>`}]],rel.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))),200)}`}});
   return groups.sort((a,b)=>(b.low-a.low)||(b.used-a.used))})}
+/* v4.40（Paul 11/20）機修每日零件報表的每一個品項（送布牙、旋梭、針板…，沒有料號）也有自己的頁：庫存走勢、領用、換零件紀錄、⭐ 標準照（日報裡的照片欄可直接匯入） */
+function stockTypeGroups(){return once('stocktype',async()=>{const ms=monthsBack(3);const [{rows},chg]=await Promise.all([loadTool('spareparts',k=>/^p:maint_stock_/.test(k)),partChanges().catch(()=>[])]);
+  const snaps=rows.filter(r=>r&&Array.isArray(r.items)&&(r.start||r.sourceDate)).map(r=>({date:String(r.sourceDate||r.start||'').slice(0,10),items:r.items})).filter(x=>x.date).sort((a,b)=>a.date.localeCompare(b.date));
+  const by=new Map();snaps.forEach(sn=>sn.items.forEach(it=>{const nm=String(it.itemName||it.name||it.partType||'').replace(/[​]/g,'').replace(/\s+/g,' ').trim();if(!nm)return;const k=nk(nm);const o=by.get(k)||{name:nm,size:it.size||'',days:new Map()};o.days.set(sn.date,{open:+it.openingQty||0,rec:+it.receivedQty||0,iss:+it.issuedQty||0,close:+(it.closingQty!=null?it.closingQty:it.balance)||0});by.set(k,o)}));
+  const pc=chg.filter(r=>r.partType);const d30=addD(ymdToday(),-30);
+  return [...by].map(([k,o])=>{const days=[...o.days].sort((a,b)=>a[0].localeCompare(b[0]));const last=days[days.length-1]||['',{}];const iss30=sum(days.filter(d=>d[0]>=d30),d=>d[1].iss),rec30=sum(days.filter(d=>d[0]>=d30),d=>d[1].rec);
+    const rel=pc.filter(x=>{const t=nk(x.partType);return t===k||t.indexOf(k)>=0||k.indexOf(t)>=0});const low=(last[1].close||0)<=0?1:0;
+    const en=(o.name.match(/[A-Za-z][A-Za-z0-9 ,.\-\/()]+/g)||[]).join(' ').trim(),zh=(o.name.match(/[㐀-鿿（）()]+/g)||[]).join(' '),km=(o.name.match(/[ក-៿]+/g)||[]).join(' ');
+    return {key:k,kind:'機台零件',title:en||o.name,alt:o.name,sub:E([zh,km,o.size].filter(Boolean).join(' · ')),low,used:iss30,amt:last[1].close||0,search:o.name,chip:low?'⚠':'',badge:low?'<span class="lowtag">沒有庫存</span>':'',photo:{domain:'parts',key:k,name:o.name},
+     kpis:[[F(last[1].close),'目前結存 Balance（'+String(last[0]).slice(5)+'）',low?'crit':'ok'],[F(iss30),'近 30 天領用 Issued'],[F(rec30),'近 30 天收到 Received'],[F(sum(rel.filter(x=>x.date>=d30),x=>x.qty)),'近 30 天換零件 Changes']],
+     detail:()=>`<h4>基本資料</h4>${kv([['英文 English',en],['中文 Chinese',zh],['柬文 Khmer',km],['尺寸 Size',o.size]])}
+      <h4>每次日報的結存</h4>${CH.bars(days.slice(-30).map(([d,v])=>({label:d.slice(5),v:v.close})))}
+      <h4>每天收到／領用</h4>${table([['日期',d=>E(d[0])],['期初',d=>F(d[1].open),1],['收到',d=>F(d[1].rec),1],['領用',d=>F(d[1].iss),1],['結存',d=>`<b>${F(d[1].close)}</b>`,1]],days.slice().reverse(),60)}
+      <h4>換零件明細</h4>${rel.length?table([['日期',x=>E(x.date)],['線別',x=>E(x.line)],['數量',x=>F(x.qty),1],['機台',x=>x.machine?link('machine',nk(x.machine),x.machine):''],['原因',x=>{const c=RC[rcOf(x)]||RC.other;return `<span class="${c[1]}">${E(x.reason||c[0])}</span>`}]],rel.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))),200):'<p class="note">這段期間沒有換零件紀錄</p>'}`}}).sort((a,b)=>(b.low-a.low)||(b.used-a.used))})}
 function needleGroups(){return once('needle',async()=>{const chg=await partChanges();const nd=chg.filter(r=>r.needleType);const t=ymdToday(),d30=addD(t,-30),thisM=ymOf(t),lastM=ymOf(addD(thisM+'-01',-1));
   const G=groupBy(nd,r=>nk(r.needleType)+(r.size?' · '+nk(r.size):''));
   return [...G].map(([k,a])=>{const r30=a.filter(r=>r.date>=d30);const n30=sum(r30,r=>r.qty),fail=sum(a.filter(isFail),r=>r.qty),chgo=sum(a.filter(r=>rcOf(r)==='changeover'),r=>r.qty),tm=sum(a.filter(r=>ymOf(r.date)===thisM),r=>r.qty),lm=sum(a.filter(r=>ymOf(r.date)===lastM),r=>r.qty);
@@ -459,7 +473,7 @@ function fabricTypeGroups(){return once('fabtypes',async()=>{const [mj,stock]=aw
      detail:()=>`<h4>🧶 布種資料</h4>${table([['項目',r=>E(r[0])],['內容',r=>r[1]]],[['料號',E(code)],['品名',E(desc||'—')],['儲位',racks.length?racks.map(x=>`<span class="tag">${E(x)}</span>`).join(' '):'—'],['來源',m?'倉庫布料照片表 Picture_fabric.xlsx（2026-11-17）':'只在庫存資料（照片表沒有這個料號）']])}${g?g.detail():'<p class="note">這個布種目前庫存資料裡沒有數量，也沒有近 3 個月進出。</p>'}`}};
   const out=(mj.items||[]).map(m=>mk(nk(m.code),m,S.get(nk(m.code))));
   stock.forEach(g=>{const k=nk(g.key);if(!seen.has(k))out.push(mk(k,null,g))});return out})}
-REF.parts=()=>partGroups();REF.needle=()=>needleGroups();REF.defect=()=>defectGroups();REF.fabric=()=>fabricGroups();
+REF.parts=()=>Promise.all([partGroups().catch(()=>[]),stockTypeGroups().catch(()=>[])]).then(([a,b])=>a.concat(b));REF.needle=()=>needleGroups();REF.defect=()=>defectGroups();REF.fabric=()=>fabricGroups();
 const addPh=(l,domain)=>{l.forEach(g=>{if(!g.photo)g.photo={domain,key:g.key,name:g.title}});return l};
 ['parts','needle','defect','fabric'].forEach(k=>{const f=REF[k];REF[k]=()=>f().then(l=>addPh(l,k))});
 
@@ -683,6 +697,7 @@ const SPECS={
       detail:()=>`<h4>依機種</h4>${CH.hbars([...groupBy(a,r=>r.machineType||'—')].map(([m,b])=>({label:m,v:b.length})).sort((x,y)=>y.v-x.v).slice(0,15))}<h4>品項（低於安全量排前面）</h4>${table([['料號',r=>link('parts',r.partNo)],['名稱',r=>E(r.name)],['規格',r=>E(r.spec)],['機種',r=>E(r.machineType)],['庫存',r=>`<b class="${isLow(r)?'crit':''}">${F(r.qty)}</b>`,1],['安全量',r=>F(r.minStock),1],['單價',r=>F(r.unitPrice,2),1],['位置',r=>E(r.location)]],a.slice().sort((x,y)=>(isLow(y)-isLow(x))||String(x.partNo).localeCompare(String(y.partNo))))}`}});
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${rows.length}</div><div class="l">零件品項</div></div><div class="kpi"><div class="v crit">${rows.filter(isLow).length}</div><div class="l">低於安全量</div></div></div><p class="note">點類別 → 品項表的料號可再點開那一個零件（照片、換零件紀錄）。</p>`}}},
   {label:'🔩 每個零件（料號）',photo:'parts',photoTip:'放零件正確的樣子（型號、規格標籤）；收到不一樣的放每月異常。',sorts:[['低於安全量先',(a,b)=>(b.low-a.low)||(b.used-a.used)],['近 3 個月換得多',(a,b)=>b.used-a.used],['庫存金額',(a,b)=>b.amt-a.amt],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],build:async()=>({groups:await partGroups(),top:'<p class="note">點一個零件：照片、庫存、換零件紀錄。</p>'})},
+  {label:'🧰 機台零件（每日報表的品項）',photo:'parts',photoTip:'放這個零件正確的樣子；機修日報裡的照片欄可以用智慧匯入直接放進來。',sorts:[['近 30 天領用多',(a,b)=>b.used-a.used],['沒有庫存先',(a,b)=>(b.low-a.low)||(b.used-a.used)],['結存多',(a,b)=>b.amt-a.amt],['名稱',(a,b)=>a.title.localeCompare(b.title)]],build:async()=>({groups:await stockTypeGroups(),top:'<p class="note">機修每日零件報表的每一個品項（沒有料號）：結存走勢、收到／領用、換零件紀錄、⭐ 標準照。</p>'})},
   {label:'⚙️ 機台／設備（每一台）',photo:'machine',photoTip:'放這台機器的正面照與銘牌（廠牌、型號、序號），盤點時一看就對得上。',sorts:[['線別',(a,b)=>String(a.line).localeCompare(String(b.line),'en',{numeric:true})],['近 3 個月換得多',(a,b)=>b.used-a.used],['故障／待修先',(a,b)=>(/broken|repair/.test(b.cond)?1:0)-(/broken|repair/.test(a.cond)?1:0)],['資產編號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],build:async()=>{const l=await machineGroups();const bad=l.filter(g=>/broken|repair/.test(g.cond)).length;return {groups:l,top:`<div class="kpis"><div class="kpi"><div class="v">${l.length}</div><div class="l">台機器（清冊）</div></div><div class="kpi"><div class="v ${bad?'crit':'ok'}">${bad}</div><div class="l">故障／待修</div></div><div class="kpi"><div class="v">${new Set(l.map(g=>g.line).filter(Boolean)).size}</div><div class="l">條線／位置</div></div></div><p class="note">機台照片可以在每台的「📷 照片」上傳，或用照片庫的「📥 匯入對照表」把 Excel 裡的機台照片一次匯入（照片同一列要有資產編號）。</p>`}}},
   {label:'🪡 換針（依針型／尺寸）',photo:'needle',photoTip:'放這種針的正確樣子（針型、號數）；斷針／彎針的異常照放每月。',sorts:[['近 30 天支數',(a,b)=>b.n30-a.n30],['斷／損多→少',(a,b)=>b.fail-a.fail]],build:async()=>({groups:await needleGroups(),top:'<p class="note">換款（Change Style）是計畫內消耗，不算斷／損。</p>'})}
  ]}

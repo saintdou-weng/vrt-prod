@@ -161,6 +161,15 @@
   function hasMedia(u8){try{const t=new TextDecoder('latin1').decode(u8.length>4e6?u8.subarray(u8.length-4e6):u8);return /xl\/media\/image\d+\.(png|jpe?g|gif|bmp|emf|webp)/i.test(t)}catch(_){return false}}
   async function photoChart(name,u8){const e=extOf(name);if(!/^(xlsx|xlsm)$/.test(e)||!u8||!hasMedia(u8))return false;if(PHOTO_NAME.test(normName(name)))return true;
     try{const X=await needX();const wb=X.read(u8,{type:'array',sheetRows:12,bookVBA:false});const sn=wb.SheetNames[0];const a=X.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});return PHOTO_HEAD.test(a.slice(0,12).map(r=>r.join(' ')).join(' '))}catch(_){return false}}
+  /* v4.40（Paul 11/20 機修日報加了「រូបភាព Photo 照片」欄）：資料照常進原本的模組，同一份 Excel 裡的照片另外放到各項目的標準照 */
+  async function photoColumn(name,u8){const e=extOf(name);if(!/^(xlsx|xlsm)$/.test(e)||!u8||!hasMedia(u8))return false;
+    try{const X=await needX();const wb=X.read(u8,{type:'array',sheetRows:15,bookVBA:false});return wb.SheetNames.some(sn=>{const a=X.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});return a.slice(0,15).some(r=>r.some(v=>/^(?:.*\b(photo|picture|image)\b.*|.*(照片|圖片|图片|示意圖|示意图|រូបភាព).*)$/i.test(String(v))&&String(v).length<60))})}catch(_){return false}}
+  function photoBtn(files){if(!files.length)return;let b=document.getElementById('vrtSiPhBtn');if(b)b.remove();b=document.createElement('button');b.id='vrtSiPhBtn';b.type='button';
+    b.style.cssText='position:fixed;left:12px;bottom:70px;z-index:99980;border:0;border-radius:12px;background:#4f46e5;color:#fff;font:700 13px/1.3 system-ui,"Noto Sans TC",sans-serif;padding:11px 14px;box-shadow:0 6px 18px rgba(79,70,229,.4);cursor:pointer;max-width:280px;text-align:left';
+    b.innerHTML='📷 '+esc(L('這份 Excel 裡還有照片 → 放到各項目的標準照','This Excel also has photos → add as standard photos'))+'<br><small style="font-weight:400;opacity:.85">'+esc(L('資料匯入後再按也可以','you can do this after the data import'))+'</small>';
+    b.onclick=async()=>{b.remove();try{if(fullItems())await openPhotos(files);else{const batch='b'+Date.now().toString(36);let i=0;for(const f of files){const u8=new Uint8Array(await f.arrayBuffer());await idb.put('handoff',{id:batch+'_p'+(i++),batch,module:'photos',name:f.name,type:f.type||'',lastModified:f.lastModified||Date.now(),data:u8,hash:await sha256(u8),kids:[],from:pageFile(),createdAt:new Date().toISOString()})}
+      chip('📷 '+esc(L('到入口頁核對照片（入口頁有全部的零件、款式、機台清單可以對）…','opening the hub to match the photos…')));setTimeout(()=>{(g.top||g).location.href=MODULES.photos.page+VQ+'#smartimport'},700)}}catch(e){msg('❌ '+e.message)}};document.body.appendChild(b)}
+  function fullItems(){try{if(g.VRTPhotoItems&&g.VRTPhotoItems.full)return true;return !!(g.parent&&g.parent!==g&&g.parent.VRTPhotoItems&&g.parent.VRTPhotoItems.full)}catch(_){return false}}
   async function classify(name,u8,ctx){ctx=ctx||{};const e=extOf(name);if(await photoChart(name,u8))return {module:'photos',reason:L('Excel 裡有照片＋照片欄','photos inside the Excel')};
     /* v4.39 照片檔名就是編號（TCF0001.jpg、OL-0212.jpg、6095KC.png）→ 放到那個編號的標準照 */
     if(/^(jpe?g|png|webp|heic|heif)$/.test(e)){const stem=normName(name).replace(/\s*\(\d+\)$/,'').replace(/[_ ](\d{1,2})$/,'').replace(/\s+/g,'');if(stem&&!/^(img|dsc|dscn|pxl|mvimg|screenshot|photo|image|whatsapp|vid|telegram|signal|line|wechat|mmexport|\d{8})/i.test(stem)&&!/\d{6,}/.test(stem)&&/^(?:[A-Z]{1,6}-?\d{2,}[A-Z0-9\-.]*|(?=[A-Z0-9\-.]*[A-Z])\d[A-Z0-9\-.]{2,24})$/i.test(stem))return {module:'photos',reason:L('照片檔名＝編號 ','photo named by code ')+stem}}const lk=learned()[learnKey(name)];if(lk&&MODULES[lk])return {module:lk,reason:L('記住的選擇','remembered')};
@@ -183,7 +192,7 @@
         if(!kids.length){addRow(Object.assign(base,{module:subjM||'',reason:L('信裡沒有附件','no attachments in this mail'),subject:subj,status:subjM?'':'bad',include:!!subjM}));return}
         kids.forEach(k=>addRow(Object.assign({},k,{lastModified:base.lastModified,from:{parent:name,parentKind:e,subject:subj,date:M.date}})));return}
     }
-    const c=await classify(name,u8,from||{});addRow(Object.assign(base,{module:c.module,reason:c.reason,guess:c.guess}))}
+    const c=await classify(name,u8,from||{});const ph=c.module&&c.module!=='photos'?await photoColumn(name,u8):false;addRow(Object.assign(base,{module:c.module,reason:c.reason+(ph?L('（另有照片欄）',' (+ photo column)'):''),guess:c.guess,alsoPhotos:ph}))}
   /* ledger: local first, then the GAS inbox ledger (files the bots collected count too) */
   async function check(){const hs=[...new Set(rows.flatMap(r=>[r.hash].concat((r.kids||[]).map(k=>k.hash))))];const loc={};for(const h of hs){try{const x=await idb.get('ledger',h);if(x)loc[h]=x}catch(_){}}
     let remote={};if(gasUrl()&&hs.length){try{const d=await gas({action:'inboxLedger',hashes:hs});remote=d.found||{}}catch(_){remote={}}}
@@ -260,18 +269,19 @@
     try{for(const m of Object.keys(P.by)){const list=P.by[m];
         if(m==='photos'){let items=!!(g.VRTPhotoItems&&g.VRTPhotoItems.full);try{items=items||!!(g.parent&&g.parent!==g&&g.parent.VRTPhotoItems&&g.parent.VRTPhotoItems.full)}catch(_){}
           /* Excel 照片表：表頭有類別、編號，在這一頁就能匯入；只有「檔名＝編號」的照片而這一頁沒有物品清單 → 交給入口頁（有全部的料號、款號、機台清單可以對） */
-          const onlyImgs=list.every(r=>/^(jpe?g|png|webp|heic|heif)$/.test(extOf(r.name)));
-          if(items||!onlyImgs){if(!gopt.auto)close();await openPhotos(list.map(toFile));result.photos=list.length;for(const r of list)await record(r,m,'handed');continue}}
+          /* v4.40：要有完整清單才對得準（零件、款式、機台用名稱對）→ 入口頁或入口頁裡的子頁面就地匯入；QC 頁（瑕疵清單）也可以；其他頁交給入口頁 */
+          if(items||g.VRTPhotoItems){if(!gopt.auto)close();await openPhotos(list.map(toFile));result.photos=list.length;for(const r of list)await record(r,m,'handed');continue}}
         if(m===here&&reg()){if(!gopt.auto)close();await feedHere(list.map(toFile));result.here={module:m,n:list.length};}
-        else{for(const r of list)await idb.put('handoff',{id:batch+'_'+r.id,batch,module:m,name:r.name,type:r.type||'',lastModified:r.lastModified||Date.now(),data:r.u8,hash:r.hash,kids:(r.kids||[]).map(k=>k.hash),inboxId:r.inboxId||'',from:pageFile(),subject:r.subject||(r.from&&r.from.subject)||'',createdAt:new Date().toISOString()});result.away[m]=list.length}
+        else{for(const r of list)await idb.put('handoff',{id:batch+'_'+r.id,batch,module:m,alsoPhotos:!!r.alsoPhotos,name:r.name,type:r.type||'',lastModified:r.lastModified||Date.now(),data:r.u8,hash:r.hash,kids:(r.kids||[]).map(k=>k.hash),inboxId:r.inboxId||'',from:pageFile(),subject:r.subject||(r.from&&r.from.subject)||'',createdAt:new Date().toISOString()});result.away[m]=list.length}
         for(const r of list)await record(r,m,m===here?'handed':'queued')}
       rows=rows.filter(r=>!P.sel.includes(r));lastResult=result;await paintPending();paint();
+      {const hp=(P.by[here]||[]).filter(r=>r.alsoPhotos);if(hp.length&&result.here)photoBtn(hp.map(toFile))}
       const aw=Object.keys(result.away);if(result.here)await chipDone(result.here.module,result.here.n);else if(aw.length===1&&!gopt.auto){msg('→ '+mz(aw[0]));setTimeout(()=>{location.href=MODULES[aw[0]].page+VQ+'#smartimport'},700)}
     }catch(e){msg('❌ '+e.message)}finally{busy=false;paint()}
     upload(P.sel)}
   /* v4.37 照片對照表：在這一頁直接開「匯入照片對照表」（需要的元件自動載入） */
   function loadJs(src){return new Promise((res,rej)=>{if(document.querySelector('script[src^="'+src.split('?')[0]+'"]')){res();return}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(L('元件載入失敗：','failed to load: ')+src));document.head.appendChild(s)})}
-  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.39.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.39.0');
+  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.40.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.40.0');
     if(!g.VRTPhotoImport)throw new Error(L('照片匯入元件沒有載入','photo importer not loaded'));g.VRTPhotoImport.open({files,onDone:()=>{try{g.dispatchEvent(new CustomEvent('vrt-photos-imported'))}catch(_){}}})}
   const toFile=r=>new File([r.u8||r.data],r.name,{type:r.type||'',lastModified:r.lastModified||Date.now()});
   async function record(r,m,status){const at=new Date().toISOString();const base={module:m,at,status,name:r.name,page:pageFile()};
@@ -312,7 +322,7 @@
     if(!await pageReady()){chip('❌ '+esc(L('本頁匯入器沒有準備好，請重新整理再按「⇧ 智慧匯入」','the page importer is not ready — reload and open ⇧ Smart import')));return}
     try{await feedHere(mine.map(h=>new File([h.data],h.name,{type:h.type||'',lastModified:h.lastModified||Date.now()})));
       for(const h of mine){await idb.del('handoff',h.id);await idb.put('ledger',{hash:h.hash,module:here,at:new Date().toISOString(),status:'handed',name:h.name,page:pageFile()});for(const k of (h.kids||[]))await idb.put('ledger',{hash:k,module:here,at:new Date().toISOString(),status:'handed',name:h.name,page:pageFile(),parent:h.name})}
-      lastResult={here:{module:here,n:mine.length},away:{},at:new Date().toISOString(),received:true};await paintPending();await chipDone(here,mine.length)}catch(e){chip('❌ '+esc(e.message))}}
+      lastResult={here:{module:here,n:mine.length},away:{},at:new Date().toISOString(),received:true};await paintPending();{const hp=mine.filter(h=>h.alsoPhotos);if(hp.length)photoBtn(hp.map(h=>new File([h.data],h.name,{type:h.type||''})))}await chipDone(here,mine.length)}catch(e){chip('❌ '+esc(e.message))}}
   /* ── after import: summary / approval ── */
   function paintResult(){const R=lastResult;if(!R||!els.res)return;const here=pageModule();const H=R.here?HOOKS[R.here.module]||{}:{};
     els.res.innerHTML='<div class="res"><b>✓ '+esc(L('完成','Done'))+'</b>'+(R.here?'<div class="row">'+esc(mz(R.here.module))+' · '+R.here.n+L(' 檔已交給本頁（請在頁面上確認匯入）',' file(s) handed to this page (confirm on the page)')+
