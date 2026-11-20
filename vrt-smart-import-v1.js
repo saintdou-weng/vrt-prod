@@ -34,7 +34,7 @@
     podelivery:{zh:'🚚 採購單交期',en:'🚚 PO delivery',page:'VRT_PO_Delivery_Control_Center.html',ext:'xlsx xls csv'},
     bom:{zh:'🧵 BOM',en:'🧵 BOM',page:'VRT_BOM_Management_v2_AI.html',ext:'pdf xlsx xls csv'},
     erplink:{zh:'🔗 ERP 對照（手動 ERP 檔）',en:'🔗 ERP link (manual ERP file)',page:'vrt_erp_link_v1.html',ext:'csv txt tsv xlsx xls json'},
-    photos:{zh:'📷 照片對照表（標準照）',en:'📷 Photo reference chart',page:'vrt_hub_v1.html',ext:'xlsx xlsm pdf jpg jpeg png'},   /* v4.37 Paul 11/18：瑕疵／零件／針／輔料／布料的「編號＋照片＋名稱」Excel → 直接變成各物品的標準照，在哪一頁丟都可以 */
+    photos:{zh:'📷 照片對照表（布料／零件／針／瑕疵／款式／機台的照片）',en:'📷 Photo chart (fabric / parts / defects / styles / machines)',page:'vrt_hub_v1.html',ext:'xlsx xlsm pdf jpg jpeg png'},   /* v4.37 Paul 11/18：瑕疵／零件／針／輔料／布料的「編號＋照片＋名稱」Excel → 直接變成各物品的標準照，在哪一頁丟都可以 */
   };
   /* ── file-name routes (same order and patterns as the GAS inbox INBOX_ROUTES, v4.9; cutting is checked BEFORE the generic 'daily output') ── */
   const ROUTES=[
@@ -157,7 +157,7 @@
   const uploadOn=()=>ls('vrt_si_upload')!=='0';
   function accepts(m,name){const x=MODULES[m];return !!x&&(' '+x.ext+' ').indexOf(' '+extOf(name)+' ')>=0}
   /* v4.37 照片對照表：Excel 裡有嵌入圖片＋表頭有「照片／Photo／示意圖／រូប」→ 照片匯入（比檔名、記住的選擇都優先） */
-  const PHOTO_HEAD=/(PHOTO|PICTURE|IMAGE|示意圖|示意图|照片|圖片|图片|រូប)/i,PHOTO_NAME=/(reference\s*chart|photo|picture|對照表|对照表|示意|照片)/i;
+  const PHOTO_HEAD=/(PHOTO|PICTURE|IMAGE|示意圖|示意图|照片|圖片|图片|រូប)/i,PHOTO_NAME=/(reference\s*chart|photo|picture|\bpic\b|對照表|对照表|示意|照片|圖片|图片)/i;
   function hasMedia(u8){try{const t=new TextDecoder('latin1').decode(u8.length>4e6?u8.subarray(u8.length-4e6):u8);return /xl\/media\/image\d+\.(png|jpe?g|gif|bmp|emf|webp)/i.test(t)}catch(_){return false}}
   async function photoChart(name,u8){const e=extOf(name);if(!/^(xlsx|xlsm)$/.test(e)||!u8||!hasMedia(u8))return false;if(PHOTO_NAME.test(normName(name)))return true;
     try{const X=await needX();const wb=X.read(u8,{type:'array',sheetRows:12,bookVBA:false});const sn=wb.SheetNames[0];const a=X.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:'',raw:true});return PHOTO_HEAD.test(a.slice(0,12).map(r=>r.join(' ')).join(' '))}catch(_){return false}}
@@ -171,6 +171,8 @@
       chip('📷 '+esc(L('到入口頁核對照片（入口頁有全部的零件、款式、機台清單可以對）…','opening the hub to match the photos…')));setTimeout(()=>{(g.top||g).location.href=MODULES.photos.page+VQ+'#smartimport'},700)}}catch(e){msg('❌ '+e.message)}};document.body.appendChild(b)}
   function fullItems(){try{if(g.VRTPhotoItems&&g.VRTPhotoItems.full)return true;return !!(g.parent&&g.parent!==g&&g.parent.VRTPhotoItems&&g.parent.VRTPhotoItems.full)}catch(_){return false}}
   async function classify(name,u8,ctx){ctx=ctx||{};const e=extOf(name);if(await photoChart(name,u8))return {module:'photos',reason:L('Excel 裡有照片＋照片欄','photos inside the Excel')};
+    /* v4.41（Paul 11/20 布倉的 Picture fabric1.pdf）：PDF 照片對照表（檔名有 Picture／Photo／照片／對照表…）→ 照片對照表 */
+    if(e==='pdf'&&PHOTO_NAME.test(normName(name)))return {module:'photos',reason:L('PDF 照片對照表（檔名）','photo chart PDF (file name)')};
     /* v4.39 照片檔名就是編號（TCF0001.jpg、OL-0212.jpg、6095KC.png）→ 放到那個編號的標準照 */
     if(/^(jpe?g|png|webp|heic|heif)$/.test(e)){const stem=normName(name).replace(/\s*\(\d+\)$/,'').replace(/[_ ](\d{1,2})$/,'').replace(/\s+/g,'');if(stem&&!/^(img|dsc|dscn|pxl|mvimg|screenshot|photo|image|whatsapp|vid|telegram|signal|line|wechat|mmexport|\d{8})/i.test(stem)&&!/\d{6,}/.test(stem)&&/^(?:[A-Z]{1,6}-?\d{2,}[A-Z0-9\-.]*|(?=[A-Z0-9\-.]*[A-Z])\d[A-Z0-9\-.]{2,24})$/i.test(stem))return {module:'photos',reason:L('照片檔名＝編號 ','photo named by code ')+stem}}const lk=learned()[learnKey(name)];if(lk&&MODULES[lk])return {module:lk,reason:L('記住的選擇','remembered')};
     let m=routeName(name);if(m)return {module:m,reason:L('檔名','file name')};
@@ -203,7 +205,7 @@
       if(l&&l.status!=='dropped'){r.status='seen';r.include=false;r.note=L('已匯入過','imported before')+' · '+String(l.at||'').slice(0,16).replace('T',' ')+' · '+mz(l.module);return}
       if(x&&x.status==='done'){r.status='seen';r.include=false;r.note=L('已匯入過（雲端紀錄）','imported before (cloud record)')+' · '+String(x.doneAt||x.receivedAt||'').slice(0,16).replace('T',' ')+' · '+mz(x.module)+(x.source?' · '+x.source:'');return}
       if(x&&x.status==='pending'){r.status='inbox';r.inboxId=r.inboxId||x.id;r.note=L('群組／Email 已收到、還沒匯入','collected by the bot, not imported yet');if(!r.module&&x.module&&MODULES[x.module])r.module=x.module}
-      if(!r.module){r.include=false;r.status=r.status||'ask'}else if(!accepts(r.module,r.name)){r.status='type';r.include=false;r.note=mz(r.module)+L(' 不收這種檔',' does not take this file type')}else if(!r.status)r.status='new'});}
+      if(!r.module){r.include=false;r.status=r.status||'ask'}else if(!accepts(r.module,r.name)){if(/^(pdf|jpe?g|png|webp|heic|heif)$/.test(extOf(r.name))&&MODULES.photos){r.status='type';r.include=false;r.note=mz(r.module)+L(' 不收這種檔；照片表請選「📷 照片對照表」',' does not take this file type; for photos pick 📷 Photo chart')}else{r.status='type';r.include=false;r.note=mz(r.module)+L(' 不收這種檔',' does not take this file type')}}else if(!r.status)r.status='new'});}
   /* ── UI ── */
   const css=`#vrtSiBtn{position:fixed;right:178px;top:2px;z-index:9991;border:0;border-radius:4px;background:#ea580c;color:#fff;font:700 11.5px/1 system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;padding:4px 9px;cursor:pointer;box-shadow:0 2px 8px rgba(234,88,12,.35);display:flex;gap:5px;align-items:center}
   #vrtSiBtn:hover{background:#c2410c}#vrtSiBtn .n{background:#fff;color:#c2410c;border-radius:999px;padding:1px 6px;font-size:10px;display:none}#vrtSiBtn .n.on{display:inline}
@@ -281,7 +283,7 @@
     upload(P.sel)}
   /* v4.37 照片對照表：在這一頁直接開「匯入照片對照表」（需要的元件自動載入） */
   function loadJs(src){return new Promise((res,rej)=>{if(document.querySelector('script[src^="'+src.split('?')[0]+'"]')){res();return}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(L('元件載入失敗：','failed to load: ')+src));document.head.appendChild(s)})}
-  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.40.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.40.0');
+  async function openPhotos(files){if(!g.VRTPhotos)await loadJs('vrt-item-photos-v1.js?v=4.41.0');if(!g.VRTPhotoImport)await loadJs('vrt-photo-import-v1.js?v=4.41.0');
     if(!g.VRTPhotoImport)throw new Error(L('照片匯入元件沒有載入','photo importer not loaded'));g.VRTPhotoImport.open({files,onDone:()=>{try{g.dispatchEvent(new CustomEvent('vrt-photos-imported'))}catch(_){}}})}
   const toFile=r=>new File([r.u8||r.data],r.name,{type:r.type||'',lastModified:r.lastModified||Date.now()});
   async function record(r,m,status){const at=new Date().toISOString();const base={module:m,at,status,name:r.name,page:pageFile()};

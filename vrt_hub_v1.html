@@ -9,7 +9,7 @@
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.34.0"></script>
 <script src="vrt-item-photos-v1.js?v=4.38.0"></script>
-<script src="vrt-photo-import-v1.js?v=4.40.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.41.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
    舊頁面和資料都不動：每個分頁就是原本那一頁（同一個網站，資料共用）。第一個分頁「📊 一覽」是新的：點卡片展開圖表＋明細，往下滑自動載入更多。 */
@@ -142,7 +142,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.40.0';
+const V='4.41.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},

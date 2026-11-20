@@ -92,10 +92,27 @@ async function rowsFromCanvas(canvas,src,log,textAt){const g2=gridCut(canvas);if
     out.push({blob:await toBlob(pc),texts,src:src+' 第 '+(out.length+1)+' 列'})}log(src+'：切出 '+out.length+' 列');return out}
 async function readImage(file,log){const u=URL.createObjectURL(file);try{const im=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('圖片讀不到'));i.src=u});const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);return rowsFromCanvas(c,file.name,log)}finally{setTimeout(()=>URL.revokeObjectURL(u),3000)}}
 async function readPdf(file,log){await script(CDN.pdf);const lib=g.pdfjsLib;lib.GlobalWorkerOptions.workerSrc=CDN.pdfw;const pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise;const out=[];
-  for(let p=1;p<=Math.min(pdf.numPages,30);p++){const page=await pdf.getPage(p);const vp=page.getViewport({scale:2});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await page.render({canvasContext:x,viewport:vp}).promise;
+  const NP=Math.min(pdf.numPages,150);if(pdf.numPages>150)log('PDF 有 '+pdf.numPages+' 頁，這次先讀前 150 頁');for(let p=1;p<=NP;p++){if(p%5===1)log('⏳ 讀 PDF 第 '+p+'／'+NP+' 頁…');const page=await pdf.getPage(p);const vp=page.getViewport({scale:2});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await page.render({canvasContext:x,viewport:vp}).promise;
     const tc=await page.getTextContent();const items=tc.items.map(it=>{const [a,b]=vp.convertToViewportPoint(it.transform[4],it.transform[5]);return {x:a,y:b,s:it.str}}).filter(i=>i.s.trim());
     const textAt=items.length?(x0,y0,x1,y1)=>items.filter(i=>i.x>=x0-2&&i.x<=x1&&i.y>=y0&&i.y<=y1+4).sort((a,b)=>a.y-b.y||a.x-b.x).map(i=>i.s).join(' ').replace(/\s+/g,' ').trim():null;
+    /* v1.6（Paul 11/20 布倉 Picture fabric1.pdf，54 頁）：PDF 裡的照片直接找位置（不靠表格線），同一列左邊的文字＝編號＋名稱；空白頁、跨頁的照片邊角略過 */
+    const boxes=await imageBoxes(lib,page,vp,c.width,c.height);
+    if(boxes.length){let n=0;for(const bx of boxes){const cy0=bx.y0,cy1=bx.y1;const row=items.filter(i=>i.x<bx.x0-2&&i.y>=cy0-4&&i.y<=cy1+8).sort((a,b)=>a.x-b.x||a.y-b.y);if(!row.length)continue;
+        const cols=[];row.forEach(i=>{const last=cols[cols.length-1];if(last&&i.x-last.x1<30&&Math.abs(i.y-last.y)<14){last.s+=' '+i.s;last.x1=i.x+i.s.length*7}else cols.push({x:i.x,x1:i.x+i.s.length*7,y:i.y,s:i.s})});
+        out.push({blob:await toBlob(crop(c,bx.x0,bx.y0,bx.x1,bx.y1,2)),texts:cols.map(x=>x.s.replace(/\s+/g,' ').trim()).filter(Boolean),src:file.name+' p'+p+' 第 '+(++n)+' 張'})}
+      continue}
+    if(!items.length)continue;/* 沒有文字也沒有照片＝空白頁或跨頁的邊角 */
     (await rowsFromCanvas(c,file.name+' p'+p,log,textAt)).forEach(r=>out.push(r))}return out}
+async function imageBoxes(lib,page,vp,W,H){try{const ops=await page.getOperatorList();const O=lib.OPS;let ctm=[1,0,0,1,0,0];const st=[];const out=[];
+    const mul=(m,n)=>[m[0]*n[0]+m[2]*n[1],m[1]*n[0]+m[3]*n[1],m[0]*n[2]+m[2]*n[3],m[1]*n[2]+m[3]*n[3],m[0]*n[4]+m[2]*n[5]+m[4],m[1]*n[4]+m[3]*n[5]+m[5]];
+    const IMG=new Set([O.paintImageXObject,O.paintInlineImageXObject,O.paintJpegXObject,O.paintImageXObjectRepeat].filter(x=>x!=null));
+    for(let i=0;i<ops.fnArray.length;i++){const fn=ops.fnArray[i],a=ops.argsArray[i];
+      if(fn===O.save)st.push(ctm.slice());else if(fn===O.restore)ctm=st.pop()||ctm;else if(fn===O.transform)ctm=mul(ctm,a);
+      else if(fn===O.paintFormXObjectBegin&&a&&a[0])st.push(ctm.slice()),ctm=mul(ctm,a[0]);else if(fn===O.paintFormXObjectEnd)ctm=st.pop()||ctm;
+      else if(IMG.has(fn)){const m=mul(vp.transform,ctm);const xs=[m[4],m[0]+m[4],m[2]+m[4],m[0]+m[2]+m[4]],ys=[m[5],m[1]+m[5],m[3]+m[5],m[1]+m[3]+m[5]];
+        const b={x0:Math.max(0,Math.floor(Math.min(...xs))),x1:Math.min(W,Math.ceil(Math.max(...xs))),y0:Math.max(0,Math.floor(Math.min(...ys))),y1:Math.min(H,Math.ceil(Math.max(...ys)))};
+        if(b.x1-b.x0>=60&&b.y1-b.y0>=60)out.push(b)}}
+    /* 重疊的同一張只留一次 */return out.filter((b,i)=>!out.some((o,j)=>j<i&&Math.abs(o.x0-b.x0)<6&&Math.abs(o.y0-b.y0)<6)).sort((a,b)=>a.y0-b.y0)}catch(e){return []}}
 
 /* ── 名稱對物品（編號一樣最優先，再比英文字、中文字）── */
 const words=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9㐀-鿿]+/g,' ').split(' ').filter(w=>w.length>1||/[㐀-鿿]/.test(w));
@@ -122,7 +139,7 @@ function parseRow(texts,cells){texts=texts||[];const all=texts.join(' | ');
   /* 一格裡中英柬換行寫在一起的，拆開 */
   const parts=[];names.forEach(t=>String(t).split(/\s*\n\s*/).forEach(x=>x&&parts.push(x)));
   /* v1.5 同一行裡柬文＋英文＋中文寫在一起（សំបុកម្ជុល Single Needle Rotary Hook 单针旋梭）→ 依文字分成三段；純數字／時間／是否 不算名稱 */
-  const seg=t=>{const o=[];let cur='',k='';for(const ch of t){const c=/[\u1780-\u17FF\u19E0-\u19FF]/.test(ch)?'km':/[\u3400-\u9fff\uF900-\uFAFF]/.test(ch)?'zh':/[A-Za-z]/.test(ch)?'en':'';if(c&&c!==k&&cur.trim()){o.push([k,cur]);cur=''}if(c)k=c;cur+=ch}if(cur.trim())o.push([k||'en',cur]);return o.map(([k,v])=>[k,v.replace(/^[\s,，、;；:：\-\/]+|[\s,，、;；:：\-\/]+$/g,'').replace(/[\u200b]/g,'')]).filter(x=>x[1])};
+  const seg=t=>{const o=[];let cur='',k='';for(const ch of t){const c=/[\u1780-\u17FF\u19E0-\u19FF]/.test(ch)?'km':/[\u3400-\u9fff\uF900-\uFAFF]/.test(ch)?'zh':/[A-Za-z]/.test(ch)?'en':'';if(c&&k&&c!==k&&cur.trim()){o.push([k,cur]);cur=''}if(c)k=c;cur+=ch}if(cur.trim())o.push([k||'en',cur]);return o.map(([k,v])=>[k,v.replace(/^[\s,，、;；:：\-\/]+|[\s,，、;；:：\-\/]+$/g,'').replace(/[\u200b]/g,'')]).filter(x=>x[1])};
   parts.filter(t=>!/^[\d\s.,:\/\-%]*(am|pm)?$/i.test(t)&&!/^(yes|no|y|n|是|否|បាទ|ទេ)$/i.test(t)).forEach(t=>{let sg=seg(t);if(!/[\u1780-\u17FF]/.test(t)&&!sg.some(([k,v])=>k==='en'&&v.split(/\s+/).length>=2))sg=[[script3(t),t]];sg.forEach(([k,v])=>{if(/^[\d\s.]+$/.test(v))return;out[k]=out[k]?out[k]+' / '+v:v})});
   out.name=[out.en,out.zh,out.km].filter(Boolean).join(' · ')||out.cat||'';return out}
 const GENERIC=new Set(['STITCH','STITCHES','SEAM','NEEDLE','NEEDLES','FOR','THE','AND','OR','OF','PART','PARTS','SEWING','MACHINE','SINGLE','DOUBLE','DEFECT','FROM','WITH']);
@@ -157,7 +174,7 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
         <td style="padding:6px;min-width:180px">${r.p.code?`<b style="font-size:13px">${E(r.p.code)}</b> `:''}${r.p.no?`<b>#${E(r.p.no)}</b> `:''}<span>${E(r.p.en||'')}</span>${r.p.zh?`<div>${E(r.p.zh)}</div>`:''}${r.p.km?`<div style="color:var(--vp-mut)">${E(r.p.km)}</div>`:''}${!r.p.code&&!r.p.name?'<i>（沒讀到文字）</i>':''}
          ${r.p.cat?`<div style="font-size:11px">🏷️ ${E(r.p.cat)}</div>`:''}${r.p.note?`<div style="font-size:11px;color:var(--vp-mut)">🔎 ${E(r.p.note.slice(0,120))}</div>`:''}${r.p.loc?`<div style="font-size:11px">📍 ${E(r.p.loc)}</div>`:''}<div style="color:var(--vp-mut);font-size:10.5px">${E(r.src)}</div></td>
         <td style="padding:6px;min-width:220px"><input class="vp-in" list="piList" data-k="${i}" value="${E(key)}" placeholder="打料號或名稱 Type code / name" style="width:100%;max-width:280px">
-         <div style="font-size:11px;margin-top:3px">${r.match?`✅ 對到 ${E(r.match.name&&r.match.name!==r.match.key?r.match.name:r.match.key)}`:r.newName?`🆕 清單裡沒有，會新增「${E(r.newName)}」`:'❌ 還沒選（不會匯入）'}${ps&&ps.ref?` · 已有 ⭐ ${ps.ref} 張（同一張自動略過；不同的話新的當封面、舊的留歷史）`:''}${r.dupRow?`<br>📎 同一項的第 2 張（前一張在 ${E(r.dupRow)}），兩張都會放；不要可以取消勾選`:''}</div></td></tr>`}).join('')}</table></div></div>`:''}`;
+         <div style="font-size:11px;margin-top:3px">${r.match?`✅ 對到 ${E(r.match.name&&r.match.name!==r.match.key?r.match.name:r.match.key)}`:r.newName?`🆕 清單裡沒有，會新增「${E(r.newName)}」`:'❌ 還沒選（不會匯入）'}${ps&&ps.ref?` · 已有 ⭐ ${ps.ref} 張${r.hadRef?'（已經有標準照，預設不勾；要換成這張再勾）':'（同一張自動略過；不同的話新的當封面、舊的留歷史）'}`:''}${r.dupRow?`<br>📎 同一項的第 2 張（前一張在 ${E(r.dupRow)}），兩張都會放；不要可以取消勾選`:''}</div></td></tr>`}).join('')}</table></div></div>`:''}`;
     B.querySelector('#piDom').onchange=async e=>{dom=e.target.value;await loadItems();rows.forEach(r=>{r.match=best(r.p);r.newName=r.match?'':(r.p.code||r.p.name||'')});paint()};
     B.querySelector('#piSlot').onchange=e=>{slot=e.target.value};
     B.querySelector('#piFile').onchange=e=>handle([...e.target.files]);
@@ -175,7 +192,7 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
   async function handle(files){if(!files.length)return;if(!files.length)return;logs=[];rows=[];paint();
       for(const f of files){const cn=!/\.(xls[xm]|pdf)$/i.test(f.name)&&f.type!=='application/pdf'?codeOfName(f.name):'';if(cn){rows.push({blob:f,url:URL.createObjectURL(f),p:parseRow([cn],[{col:0,text:cn,head:'Code'}]),head:'',src:f.name+'（檔名＝編號）',on:true,newName:cn,byName:true});continue}
         log('⏳ 讀取 '+f.name+' …');try{const rs=/\.xls[xm]$/i.test(f.name)?await readXlsx(f,log):/\.pdf$/i.test(f.name)||f.type==='application/pdf'?await readPdf(f,log):await readImage(f,log);
-        rs.forEach(r=>{const p=parseRow(r.texts,r.cells);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,head:r.head||'',src:r.src,on:true,newName:p.code||p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
+        rs.forEach(r=>{const p=parseRow(r.texts,r.cells);rows.push({blob:r.blob,url:URL.createObjectURL(r.blob),p,head:r.head||'',src:r.src,on:true,render:!/\.xls[xm]$/i.test(f.name),newName:p.code||p.name||''})})}catch(err){log('⚠️ '+f.name+'：'+(err.message||err))}}
       {const gd=guessHead(files.map(f=>f.name).join(' ')+' '+[...new Set(rows.map(r=>r.head))].join(' '))||guessDomain(rows.map(r=>r.p.all).join(' '));if(gd&&gd!==dom){dom=gd;log('自動判斷是「'+(DOMS.find(d=>d[0]===gd)||[])[2]+'」，可在上面改')}}
       /* v1.5 機台表：機台編號欄就是編號；其他類別的「機台編號」只是說明 */
       rows.forEach(r=>{if(dom==='machine'&&!r.p.code&&r.p.mid){r.p.code=r.p.mid;r.newName=r.p.mid}else if(dom!=='machine'&&r.p.mid&&!r.p.code){r.newName=r.p.name||r.newName}});
@@ -186,7 +203,9 @@ function open(opt){opt=opt||{};const P=g.VRTPhotos;if(!P)return;const DOMS=P.DOM
       if(rows.length&&rows.every(r=>r.byName)&&rows.filter(r=>r.match).length<rows.length){let bestD=dom,bestN=rows.filter(r=>r.match).length;const keep=dom;
         for(const d of ['fabric','parts','needle','machine','style','accessory','defect','customer']){if(d===keep)continue;dom=d;await loadItems();const n=rows.filter(r=>best(r.p)).length;if(n>bestN){bestN=n;bestD=d}}
         dom=bestD;await loadItems();rows.forEach(r=>{r.match=best(r.p);r.newName=r.match?'':r.p.code});if(bestD!==keep)log('照片檔名對到「'+(DOMS.find(x=>x[0]===bestD)||[])[2]+'」'+bestN+' 個編號，可在上面改')}
+      /* PDF／圖片切出來的照片每次都不一樣（重新畫的），已經有標準照的預設不勾，要換再勾 */
+      rows.forEach(r=>{const k=r.match?r.match.key:r.newName;if(r.render&&k&&P.summary&&P.summary(dom,k).ref>0){r.on=false;r.hadRef=true}});
       {const seen=new Map();rows.forEach(r=>{const k=r.match?r.match.key:r.newName;if(!k)return;if(seen.has(k)){r.dupRow=seen.get(k)}else seen.set(k,r.src)});}log('✅ 共 '+rows.length+' 列，自動對到 '+rows.filter(r=>r.match).length+' 列，請核對後按匯入');paint()}
   paint();loadItems().then(()=>{if(opt.files&&opt.files.length)handle(opt.files)})}
-g.VRTPhotoImport={version:'1.5.0',codeOfName,open,readXlsx,gridCut,parseRow,score};
+g.VRTPhotoImport={version:'1.6.0',codeOfName,open,readXlsx,gridCut,parseRow,score};
 })(window);
