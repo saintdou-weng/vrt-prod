@@ -123,6 +123,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 .card .cv{float:right;width:46px;height:46px;border-radius:10px;object-fit:cover;margin:0 0 4px 8px;border:2px solid #f59e0b}
 .card .phc{font-size:10.5px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:99px;padding:1px 7px;margin-left:4px}
 .sh-t .lowtag,.lowtag{display:inline-block;color:#fff!important;font-size:10.5px;font-weight:800;color:#fff;background:var(--crit);border-radius:99px;padding:1px 7px}
+body.vrt-focus>.hdr,body.vrt-focus>.tabs,body.vrt-focus>a[href^="portal_v2.html"],body.vrt-focus>a[href*="PSJERP"]{display:none!important}
 </style>
 </head>
 <body>
@@ -142,7 +143,7 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 <script>
 (function(){
 'use strict';
-const V='4.41.0';
+const V='4.43.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -735,7 +736,9 @@ REF.popro=()=>once('popro',async()=>{const [sw,ct]=await Promise.all([loadTool('
      detail:()=>`<h4>🧵 車縫</h4>${s.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['效率',r=>P(+r.efficiency),1]],s.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有車縫紀錄。</p>'}
       <h4>✂️ 裁剪</h4>${c.length?table([['日期',r=>E(r.date)],['線別',r=>E(lineName(r))],['款號',r=>E(r.styleNo)],['布料',r=>E(r.fabricItem)],['顏色',r=>E(r.color)],['件數',r=>F(r.pieces),1],['總碼',r=>F(r.totalYds,1),1]],c.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))):'<p class="note">近 3 個月沒有裁剪紀錄。</p>'}`}})});
 REF.fabtype=()=>fabricTypeGroups().then(l=>{l.forEach(g=>{if(!g.photo)g.photo={domain:'fabric',key:g.key,name:g.title}});return l});
-window.VRTHubOpen=(k,key)=>SHEET.openRef(k,key);window.VRT_REF=REF;
+window.VRTHubOpen=(k,key)=>SHEET.openRef(k,key);
+/* v4.43（Paul 11/20）子頁面打開料號頁／瑕疵卡時，上面的入口標頭先收起來，關掉再出來 */
+window.VRTHubFocus=on=>{document.body.classList.toggle('vrt-focus',!!on)};window.VRT_REF=REF;
 /* v4.37 照片對照表匯入（智慧匯入或照片庫）用這裡的物品清單對名稱／料號 */
 window.VRTPhotoItems=d=>REF[d]?REF[d]().then(l=>l.map(x=>({key:(x.photo&&x.photo.key)||x.key,name:x.alt?x.alt:String(x.title).replace(/^[^A-Za-z0-9\u3400-\u9fff]+/,''),alt:x.title,code:x.code||''}))):Promise.resolve([]);window.VRTPhotoItems.full=true;
 /* v4.39 其他頁的智慧匯入交過來的「檔名＝編號」照片：在這裡用全部的清單對編號，開匯入核對 */

@@ -73,7 +73,8 @@ function phBlock(kind,code,cls){const ps=photoSum(kind,code);return ps&&ps.cover
 
 function open(kind,i){css();const rows=rowsOf(kind);const r=rows[i];if(!r)return false;const codes=codesOf(kind);let k=Math.max(0,codes.findIndex(c=>nk(c)===nk(r.itemCode)));let tab=g.__fiTab||'basic';let base=k,io=null;
   const el=document.createElement('div');el.className='fi-mask';document.body.appendChild(el);
-  const close=()=>{if(io)io.disconnect();el.remove();document.removeEventListener('keydown',key);off&&off()};
+  const focus=on=>{try{if(g.parent&&g.parent!==g&&g.parent.VRTHubFocus)g.parent.VRTHubFocus(on)}catch(_){}};focus(true);
+  const close=()=>{if(io)io.disconnect();el.remove();document.removeEventListener('keydown',key);off&&off();focus(false)};
   const key=e=>{if(document.querySelector('.vp-lb')||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='Escape')close();if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1)};document.addEventListener('keydown',key);
   const go=d=>{const n=k+d;if(n<0||n>=codes.length)return;k=n;paint()};
   function head(){const c=codes[k];const I=info(kind,c);const ps=photoSum(kind,c);
@@ -112,5 +113,5 @@ function init(){css();const ob=new MutationObserver(later);['curBody','oldBody',
   /* 點一列 → 料號頁（找不到資料就照原本的明細） */
   const prev=g.openRowDetail;if(typeof prev==='function'&&!prev.__fi){const fn=function(kind,i){try{if(open(kind,i))return}catch(e){console.warn('[VRTFabItem]',e)}return prev.apply(this,arguments)};fn.__fi=1;fn.orig=prev;g.openRowDetail=fn}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,300));else setTimeout(init,300);
-g.VRTFabItem={version:'1.0.0',open,deco};
+g.VRTFabItem={version:'1.1.0',open,deco};
 })(window);
