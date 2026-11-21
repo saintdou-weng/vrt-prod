@@ -50,16 +50,17 @@
       var liveFrom = addD(T, -12), L = {};
       Object.keys(dayMin).forEach(function (l) { if (!lastD[l] || lastD[l] < liveFrom) return; var v = Object.keys(dayMin[l]).map(function (d) { return dayMin[l][d]; }); L[l] = { cap: median(v) || 1, kind: secMin[l].A > secMin[l].G ? 'A' : 'G', t: 0, last: last[l], recent: recent[l] || {} }; });
       var lines = Object.keys(L); if (!lines.length) return { M: {}, blocks: [], lines: [] };
-      var sewn = {}; rows.forEach(function (r) { if (r.d < T) { var k = r.po + '|' + r.s; sewn[k] = (sewn[k] || 0) + r.q; } });
+      /* 訂單池以「款」為單位（車縫日報和排產表的 PO 寫法常對不上）：剩餘＝排產件數 −（排產開工日到 T 之間已做的件數） */
       var m0 = T.slice(0, 7), m1 = addD(T.slice(0, 8) + '01', 35).slice(0, 7), pool = {}, stale = addD(T, -14);
-      jobs.forEach(function (j) { if (j.month && j.month !== m0 && j.month !== m1 && !(j.a <= addD(T, 28) && j.b >= T)) return; if (j.b < stale) return; var k = j.po + '|' + j.s, p = pool[k] || (pool[k] = { k: k, s: j.s, po: j.po, q: 0, smv: j.smv, kind: j.kind, cust: j.cust, ready: false, a: j.a }); p.q += j.q; if (j.ready) p.ready = true; if (j.a < p.a) p.a = j.a; if (!p.smv) p.smv = j.smv; });
+      jobs.forEach(function (j) { if (j.month && j.month !== m0 && j.month !== m1 && !(j.a <= addD(T, 28) && j.b >= T)) return; if (j.b < stale) return; var k = j.s, p = pool[k] || (pool[k] = { k: k, s: j.s, po: j.po, q: 0, smv: j.smv, kind: j.kind, cust: j.cust, ready: false, a: j.a }); p.q += j.q; if (j.ready) p.ready = true; if (j.a < p.a) p.a = j.a; if (!p.smv) p.smv = j.smv; });
+      var sewn = {}; rows.forEach(function (r) { var p = pool[r.s]; if (p && r.d < T && r.d >= p.a) sewn[r.s] = (sewn[r.s] || 0) + r.q; });
       var list = Object.keys(pool).map(function (k) { var p = pool[k]; p.rem = p.q - (sewn[k] || 0); p.due = shipOf[p.s] || ''; p.smv = p.smv || smvOf[p.s] || 6; return p; }).filter(function (p) { return p.rem > Math.max(10, p.q * 0.02); });
       var rate = {};
       var rateOf = function (l, s2) { var x = rate && rate[l + '|' + s2]; if (!x) return 0; var v = Object.keys(x).map(function (d) { return x[d]; }); return v.length >= 2 ? median(v) : 0; };
       var blocks = [], place = function (p, l, qty) { var Li = L[l], ch = Li.last === p.s ? 0 : (qty < 200 ? 0.08 : 0.25), st = Li.t + ch, rt = rateOf(l, p.s), dur = rt ? qty / rt : qty * p.smv / Li.cap; blocks.push({ l: l, s: p.s, po: p.po, cust: p.cust, q: qty, st: st, en: st + dur, due: p.due }); Li.t = st + dur; Li.last = p.s; Li.recent[p.s] = T; };
       /* 1) 正在做的款留在原組先做完；同一款幾組一起做的，照最近 4 天各組做的量分 */
       var d3 = addD(T, -4), done = {}, rec = {}; rate = {};
-      hist.forEach(function (r) { var k = r.po + '|' + r.s; if (r.d >= d3) { var a = rec[k] || (rec[k] = {}); a[r.l] = (a[r.l] || 0) + r.q; } var x = rate[r.l + '|' + r.s] || (rate[r.l + '|' + r.s] = {}); x[r.d] = (x[r.d] || 0) + r.q; });
+      hist.forEach(function (r) { var k = r.s; if (r.d >= d3) { var a = rec[k] || (rec[k] = {}); a[r.l] = (a[r.l] || 0) + r.q; } var x = rate[r.l + '|' + r.s] || (rate[r.l + '|' + r.s] = {}); x[r.d] = (x[r.d] || 0) + r.q; });
       Object.keys(rec).sort(function (x, y) { return (pool[y] ? pool[y].rem || 0 : 0) - (pool[x] ? pool[x].rem || 0 : 0); }).forEach(function (k) { var p = pool[k]; if (!p || !(p.rem > Math.max(10, p.q * 0.02))) return; var ls = Object.keys(rec[k]).filter(function (l) { return L[l]; }); if (!ls.length) return; var sum = ls.reduce(function (a, l) { return a + rec[k][l]; }, 0); ls.forEach(function (l) { place(p, l, p.rem * rec[k][l] / sum); }); done[k] = 1; });
       /* 2) 其餘：料齊的先、交期早的先、量大的先；挑「最早做完」的組，做過同款的組優先 */
       list.filter(function (p) { return !done[p.k]; }).sort(function (x, y) { return (y.ready - x.ready) || ((x.due || '9999') < (y.due || '9999') ? -1 : (x.due || '9999') > (y.due || '9999') ? 1 : 0) || (y.rem - x.rem); }).forEach(function (p) {
