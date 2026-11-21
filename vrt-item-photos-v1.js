@@ -6,7 +6,7 @@
 (function(g){
 'use strict';
 if(g.VRTPhotos&&g.VRTPhotos.version)return;
-const VERSION='1.3.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
+const VERSION='1.4.0',TOOL='item_photos',DBN='VRT_ItemPhotos';
 const DOMAINS=[
  ['fabric','🧶','布料','Fabric'],['accessory','🧷','輔料','Accessories'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
  ['customer','👥','客戶','Customers'],['style','📐','款式／BOM','Styles / BOM'],['ship','🚢','成品／出貨','FG / Shipping'],
@@ -261,5 +261,5 @@ function seed(url){return seeding[url]||(seeding[url]=(async()=>{await ready;if(
 /* v1.2 每一頁打開就比對一次雲端照片索引（只抓有變的類別，縮圖在索引裡），還沒上傳完的照片也會接著上傳 */
 ready.then(()=>setTimeout(()=>{if(gasUrl())pull().catch(()=>{})},1200));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reloadIdx()});
-g.VRTPhotos={version:VERSION,pending:()=>[...IDX.values()].filter(r=>r._pend).length,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,seed,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
+g.VRTPhotos={rows:(d,k)=>itemRows(d,k).map(r=>({id:r.id,thumb:r.thumb,caption:r.caption||'',slot:r.slot,month:r.month,at:r.at,cover:!!r.cover})).sort((a,b)=>String(b.at).localeCompare(String(a.at))),version:VERSION,pending:()=>[...IDX.values()].filter(r=>r._pend).length,DOMAINS,ready,mount,library,viewer,summary,add,pull,push,seed,normKey,exportZip,status:()=>st,on:f=>{listeners.add(f);return()=>listeners.delete(f)}};
 })(window);

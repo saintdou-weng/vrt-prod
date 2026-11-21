@@ -7,7 +7,7 @@
    3) 全部唯讀：讀 IE 狀態、排產、車縫、零件備品（含機台清冊），不回寫。資料變動（其他分頁存檔、雲端同步）時自動重讀。 */
 (function(g){'use strict';
   if(g.VRTIEHub)return;
-  const VERSION='1.2.0';
+  const VERSION='1.3.0';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>{const n=Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n:0};
   const fmt=(v,d)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{maximumFractionDigits:d==null?0:d});
@@ -90,7 +90,19 @@
     if(u8[0]===0x50&&u8[1]===0x4B){cfb.FullPaths.forEach((p,i)=>{if(/\/xl\/media\/[^/]+\.(png|jpe?g)$/i.test(p)){const c=cfb.FileIndex[i].content;if(c&&c.length)blips.push({type:/png$/i.test(p)?'image/png':'image/jpeg',bytes:new Uint8Array(c)})}})}
     else{const i=cfb.FullPaths.findIndex(p=>/\/Workbook$|\/Book$/i.test(p));if(i>=0){const c=new Uint8Array(cfb.FileIndex[i].content);blips=scanBlips(xlsDrawingGroup(c));if(!blips.length)blips=scanBlips(c)}}
     return blips.filter(b=>b.bytes.length>8000).sort((a,b)=>b.bytes.length-a.bytes.length).slice(0,4)}
-  function imagesFor(key,obd){const docs=docsFor(key,obd),urls=[];for(const d of docs){let c=imgCache.get(d.id||d.name);if(!c){try{c=extractImages(b64u8(d.base64)).map(b=>URL.createObjectURL(new Blob([b.bytes],{type:b.type})))}catch(e){console.warn('OBD image',d.name,e);c=[]}imgCache.set(d.id||d.name,c)}urls.push(...c)}return [...new Set(urls)]}
+  /* v4.44（Paul 11/21：之前會把 sketch 捉下來，現在手機看不到）：OBD 原檔裡的款式圖，自動放進「款式」的標準照（caption＝Sketch · OBD），
+     所有裝置（手機、生產平台入口頁的款式清單／款式頁）都看得到；已經有的不重複放。這台沒有原檔時，這頁也改用標準照顯示。 */
+  const skK=s=>String(s==null?'':s).replace(/[\u200b\ufeff]/g,'').replace(/\s+/g,' ').trim().toUpperCase().replace(/\.0+$/,'');
+  function savedSketch(key){try{const P=g.VRTPhotos;if(!P||!P.rows)return [];return P.rows('style',skK(key)).filter(r=>r.slot==='ref').sort((a,b)=>(/sketch|OBD/i.test(b.caption)?1:0)-(/sketch|OBD/i.test(a.caption)?1:0)).map(r=>r.thumb)}catch(_){return []}}
+  let skBusy=false;async function syncSketches(){const P=g.VRTPhotos;if(skBusy||!P||!P.add||!src||!src.ie)return;skBusy=true;let n=0;
+    try{await (P.ready||Promise.resolve());const seen=new Set();for(const o of (src.ie.styles||[])){if(n>=40)break;if(!o||o.deleted||!o.style)continue;const K=skK(o.style);if(seen.has(K))continue;seen.add(K);
+      const sm0=P.summary('style',K);if(sm0&&sm0.ref)continue;const docs=docsFor(o.style,o);if(!docs.length)continue;let best=null;
+      for(const d of docs){try{const bl=extractImages(b64u8(d.base64));if(bl[0]&&(!best||bl[0].bytes.length>best.bytes.length))best=bl[0]}catch(_){}}
+      if(!best)continue;const f=new File([best.bytes],'sketch_'+K.replace(/[^A-Z0-9]+/g,'_')+(best.type==='image/png'?'.png':'.jpg'),{type:best.type});
+      try{const r=await P.add([f],{domain:'style',key:K,name:[o.style,o.customer,o.garmentName||o.category].filter(Boolean).join(' · '),caption:'Sketch · OBD',slot:'ref',by:'ie-obd'});if(r&&r.added)n++}catch(e){console.warn('[sketch]',K,e)}
+      await new Promise(r=>setTimeout(r,60))}}finally{skBusy=false}if(n)console.log('[VRTIEHub] 款式圖放進標準照：',n)}
+  g.addEventListener&&g.addEventListener('load',()=>setTimeout(()=>{data(false).then(()=>syncSketches()).catch(()=>{})},6000));
+  function imagesFor(key,obd){const docs=docsFor(key,obd),urls=[];for(const d of docs){let c=imgCache.get(d.id||d.name);if(!c){try{c=extractImages(b64u8(d.base64)).map(b=>URL.createObjectURL(new Blob([b.bytes],{type:b.type})))}catch(e){console.warn('OBD image',d.name,e);c=[]}imgCache.set(d.id||d.name,c)}urls.push(...c)}const u2=[...new Set(urls)];return u2.length?u2:savedSketch(key)}
 
   /* ── 共用 UI ── */
   const tag=(t,c)=>'<span class="tag '+(c||'')+'">'+t+'</span>';
@@ -243,5 +255,5 @@
   function fromHash(){const m=String((g.location&&g.location.hash)||'').match(/^#style=(.+)$/);if(m){const s=decodeURIComponent(m[1]);const go=()=>openStyle(s);(g.VRT_IE_SMV_APP&&g.VRT_IE_SMV_APP.ready?g.VRT_IE_SMV_APP.ready:Promise.resolve()).then(go)}}
   try{g.addEventListener('hashchange',fromHash)}catch(_){}setTimeout(()=>{try{fromHash()}catch(_){}},0);
   (g.VRT_IE_SMV_APP&&g.VRT_IE_SMV_APP.ready?g.VRT_IE_SMV_APP.ready:Promise.resolve()).then(()=>{try{if(g.VRT_IE_SMV_APP.getTab()==='board'&&!document.getElementById('ieHubStyle'))renderBoard()}catch(_){}});
-  g.VRTIEHub={version:VERSION,cutRule,renderBoard,openStyle,closeStyle,period,buckets,extractImages,styleStatus,data,invalidate,_xlsDrawingGroup:xlsDrawingGroup,_scanBlips:scanBlips};
+  g.VRTIEHub={syncSketches,version:VERSION,cutRule,renderBoard,openStyle,closeStyle,period,buckets,extractImages,styleStatus,data,invalidate,_xlsDrawingGroup:xlsDrawingGroup,_scanBlips:scanBlips};
 })(window);
