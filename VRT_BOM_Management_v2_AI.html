@@ -1387,7 +1387,18 @@ function accExpenseRowsFromState(state,source){
 function openAccFlowDB(){return new Promise(resolve=>{try{const q=indexedDB.open('VRTFlowCostDB');q.onsuccess=()=>resolve(q.result);q.onerror=()=>resolve(null);q.onupgradeneeded=()=>{try{q.transaction.abort()}catch(e){}resolve(null)}}catch(e){resolve(null)}})}
 async function loadAccFlowLocal(){const d=await openAccFlowDB();if(!d||!d.objectStoreNames.contains('app')){try{d&&d.close()}catch(e){}return[];}return new Promise(resolve=>{try{const q=d.transaction('app','readonly').objectStore('app').get('state');q.onsuccess=()=>{const rows=accExpenseRowsFromState(q.result,'ACC Flow Cost · Local IDB');d.close();resolve(rows)};q.onerror=()=>{d.close();resolve([])}}catch(e){try{d.close()}catch(_){}resolve([])}})}
 async function loadAccFlowCloud(){const url=(DB.settings.cloudProxy||VRTPlatform.getGasUrl()||'').trim();if(!url)return[];try{const join=url.includes('?')?'&':'?';const r=await fetch(url+join+'action=pull&tool=vrt_acc');const d=await r.json();if(!r.ok||d&&d.ok===false)return[];const p=d&&d.data&&d.data.schema==='vrt-flow-cost'?d.data:d&&d.payload&&d.payload.schema==='vrt-flow-cost'?d.payload:d&&d.data&&d.data.data&&d.data.data.schema==='vrt-flow-cost'?d.data.data:null;return p&&p.state?accExpenseRowsFromState(p.state,'ACC Flow Cost · Cloud'):[]}catch(e){return[]}}
-async function loadAccFlowCosts(preferCloud=false){let rows=preferCloud?await loadAccFlowCloud():await loadAccFlowLocal();if(!rows.length)rows=preferCloud?await loadAccFlowLocal():await loadAccFlowCloud();ACC_FLOW_COST_CACHE=rows;ACC_FLOW_COST_SOURCE=rows.length?(rows[0].source||'ACC Flow Cost'):'';return rows}
+/* v4.44.4（Paul 11/21 同意）：手機和別台電腦也要看到最新的會計月份。本機（有開過 ACC Flow Cost 的電腦）＋雲端合併，每個月份用比較新的；
+   本機比雲端新就自動把「每月合計」放上 PROD 雲端（tool vrt_acc）。只放：直接人工、製造費用、總額、PV、人數、工作天——不放個人薪資或明細。 */
+let ACC_PUSHED=false;
+async function pushAccSummary(rows){const url=(DB.settings.cloudProxy||VRTPlatform.getGasUrl()||'').trim();if(!url||!rows.length)return false;const periods={};
+  rows.forEach(r=>{periods[r.period]={updatedAt:r.updatedAt||'',modules:{expense:{meta:{sourceFile:'',summaryOnly:true},records:[{directLabor:+r.directLabor||0,overhead:+r.mfgOH||0,totalCost:+r.totalCost||0,pv:+r.pv||0,associates:+r.associates||0,workDays:+r.workDays||0}]}}}});
+  try{const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'push',tool:'vrt_acc',schema:'vrt-flow-cost',summaryOnly:true,state:{periods},recordCount:rows.length,savedAt:new Date().toISOString()}),redirect:'follow'});const j=await res.json().catch(()=>null);return !!(j&&j.ok!==false)}catch(e){console.warn('ACC push',e);return false}}
+async function loadAccFlowCosts(preferCloud=false){const [loc,cld]=await Promise.all([loadAccFlowLocal(),loadAccFlowCloud()]);const m=new Map();
+  cld.forEach(r=>m.set(r.period,r));let newer=false;loc.forEach(r=>{const c=m.get(r.period);if(!c||String(r.updatedAt||'')>String(c.updatedAt||'')||(+r.totalCost||0)!==(+c.totalCost||0)){m.set(r.period,r);newer=true}});
+  const rows=[...m.values()].sort((a,b)=>b.period.localeCompare(a.period));
+  if(newer&&loc.length&&!ACC_PUSHED){ACC_PUSHED=true;pushAccSummary(rows).then(ok=>{if(ok)console.log('[BOM] ACC 每月合計已放上雲端',rows.length,'個月')})}
+  ACC_FLOW_COST_CACHE=rows;ACC_FLOW_COST_SOURCE=rows.length?(rows[0].source||'ACC Flow Cost'):'';return rows}
+window.addEventListener('load',()=>setTimeout(()=>{loadAccFlowCosts().catch(()=>{})},8000));
 /* ====================================================================
    INTEGRATED COSTING — separate page, shared BOM/style record
    ==================================================================== */
@@ -1438,7 +1449,7 @@ async function sendCostingContext(mode){
   if(!s){ toast(t('msg.nodata'),'warn'); return; }
   if(!fr||!fr.contentWindow||!COSTING_FRAME_READY)return;
   const bomLines=VRTBomCost39.lines(s);
-  if(!ACC_FLOW_COST_CACHE.length)ACC_FLOW_COST_CACHE=await loadAccFlowLocal();
+  if(!ACC_FLOW_COST_CACHE.length)try{await loadAccFlowCosts()}catch(_){}
   fr.contentWindow.postMessage({type:'BOM_MANAGEMENT_COSTING_CONTEXT',mode:COSTING_PENDING_MODE,styleId:s.id,record:s.costing||null,bomStyle:s,
     styleNo:s.styleNo,customer:s.customerCode,category:s.styleName||s.department||s.description||'',revision:s.revision||'',effectiveDate:s.effectiveDate||'',
     productionSMV:(s.smvLink?.productionSMV??s.latestProductionSMV??s.costing?.profile?.productionSMV),smvNote:s.smvLink?`Official Production SMV ${s.smvLink.productionSMV} · ${s.smvLink.smvDate||''} · ${s.smvLink.section||''} · ${s.smvLink.source||'SMV Manager'}`:(s.costing?.profile?.smvNote||''),

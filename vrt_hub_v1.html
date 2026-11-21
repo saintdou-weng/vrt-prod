@@ -164,7 +164,7 @@ body.vrt-focus>.hdr,body.vrt-focus>.tabs,body.vrt-focus>a[href^="portal_v2.html"
 <script>
 (function(){
 'use strict';
-const V='4.44.0';
+const V='4.44.4';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -798,10 +798,27 @@ function styleMaster(){return once('stylemaster',async()=>{
       kpis:[[F(smv,2),'SMV'],[unit?'$'+F(unit,2):'—','成本/件 Cost'],[price?'$'+F(price,2):'—','售價 Price'],[F(pcs6),'近 6 個月車縫 Sewn'],[P(e),'效率 Eff.',effCls(e)]]};
     g.heroFn=(ps,kp)=>styleHero(g,ps,kp);
     g.detail=()=>styleDetail(g);return g}).sort((a,b)=>String(b.last).localeCompare(String(a.last))||a.title.localeCompare(b.title,'en',{numeric:true}))})}
-function styleHero(g,ps,kp){const rows=window.VRTPhotos&&VRTPhotos.rows?VRTPhotos.rows('style',g.key).filter(r=>r.slot==='ref'):[];
-  const sk=rows.find(r=>/sketch|款式圖|OBD/i.test(r.caption)),real=rows.find(r=>r!==sk);
+/* v4.44.4（Paul 11/21）：IE 給的如果已經是真實衣服照片就不用再加實物照；只有 IE 給的是線稿（sketch）才要加實物照。
+   自動判斷：背景佔大半、或幾乎沒有柔和漸層但有明顯線條 → 線稿（含拍照／掃描的線稿）；否則是照片。結果記在這台。 */
+const SKC=(()=>{let m={};try{m=JSON.parse(localStorage.getItem('vrt_sk_kind')||'{}')}catch(_){}const wait={};
+ const save=()=>{try{localStorage.setItem('vrt_sk_kind',JSON.stringify(m))}catch(_){}};
+ function calc(u){return new Promise(res=>{const im=new Image();im.onload=()=>{try{const N=96,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.drawImage(im,0,0,N,N);const d=x.getImageData(0,0,N,N).data,L=new Float32Array(N*N);
+   for(let i=0;i<N*N;i++)L[i]=.3*d[i*4]+.59*d[i*4+1]+.11*d[i*4+2];const h=new Array(52).fill(0);L.forEach(v=>h[Math.min(51,v/5|0)]++);let mi=0;h.forEach((v,i)=>{if(v>h[mi])mi=i});let bg=0;for(let i=mi-2;i<=mi+2;i++)if(h[i])bg+=h[i];
+   let soft=0,hard=0;for(let y=0;y<N-1;y++)for(let z=0;z<N-1;z++){const i=y*N+z,gg=Math.abs(L[i+1]-L[i])+Math.abs(L[i+N]-L[i]);if(gg>=22)hard++;else if(gg>=4)soft++}const T=(N-1)*(N-1);bg/=N*N;soft/=T;hard/=T;
+   res(bg>=.75||(soft<=.3&&hard>=.1)?'d':'p')}catch(_){res('d')}};im.onerror=()=>res('d');im.src=u})}
+ return {get:r=>r?m[r.id]:undefined,ask(r){if(!r||m[r.id]||wait[r.id])return wait[r.id]||Promise.resolve(m[r&&r.id]);return wait[r.id]=calc(r.thumb).then(k=>{m[r.id]=k;save();delete wait[r.id];return k})}}})();
+function stylePhotos(key){const rows=window.VRTPhotos&&VRTPhotos.rows?VRTPhotos.rows('style',key).filter(r=>r.slot==='ref'):[];const obd=rows.find(r=>/sketch|款式圖|OBD/i.test(r.caption));const other=rows.filter(r=>r!==obd);return {rows,obd,other,kind:obd?SKC.get(obd):undefined}}
+/* 需要補實物照：沒有任何照片，或 IE 給的是線稿且還沒有別的照片 */
+function needReal(key){const s=stylePhotos(key);if(s.other.length)return false;if(!s.obd)return true;return s.kind!=='p'}
+const HEROS={};
+function styleHero(g,ps,kp){const s=stylePhotos(g.key);HEROS[g.key]=[g,ps,kp];
+  if(s.obd&&!s.kind)SKC.ask(s.obd).then(k=>{if(k==='p')document.querySelectorAll('.sty-hero[data-sk="'+CSS.escape(g.key)+'"]').forEach(el=>{const a=HEROS[g.key];el.outerHTML=styleHero(a[0],a[1],a[2])})});
   const box=(r,lbl,empty)=>`<div class="sty-ph ${r?'':'none'}" data-a="photo" title="${lbl}" style="${r?`background-image:url('${r.thumb}')`:''}">${r?'':empty}<span>${lbl}</span></div>`;
-  return `<div class="sh-hero sty-hero"><div class="sty-phs">${box(sk,'款式圖 Sketch','📐<br>沒有款式圖')}${box(real,'實物 Real','📷<br>加實物照')}</div><div class="tx"><b>${E(g.title)}</b><div class="sub">${g.sub||''}</div><div class="chips">${g.badge||''}${ps&&ps.total?`<span class="tag">📷 ${ps.total}</span>`:''}</div>${kp||''}</div></div>`}
+  let phs;
+  if(s.obd&&s.kind==='p')phs=box(s.obd,'款式照（IE）Photo','')+(s.other[0]?box(s.other[0],'實物 Real',''):'');
+  else if(s.obd)phs=box(s.obd,'款式圖 Sketch','')+box(s.other[0],'實物 Real','📷<br>加實物照');
+  else phs=s.other[0]?box(s.other[0],'款式照 Photo','')+(s.other[1]?box(s.other[1],'實物 Real',''):''):box(null,'款式照 Photo','📷<br>加款式照');
+  return `<div class="sh-hero sty-hero" data-sk="${E(g.key)}"><div class="sty-phs">${phs}</div><div class="tx"><b>${E(g.title)}</b><div class="sub">${g.sub||''}</div><div class="chips">${g.badge||''}${ps&&ps.total?`<span class="tag">📷 ${ps.total}</span>`:''}${needReal(g.key)?'<span class="tag warn">缺實物照</span>':''}</div>${kp||''}</div></div>`}
 function styleDetail(g){const ie=g.ie,it=g.items,cs=g.bom&&g.bom.costingSummary||{},cat=x=>x.category||'其他';
   const d30=lastDays(g.sew,30,r=>r.date);
   return `<h4>基本資料</h4>${kv([['款號 Style',g.title],['客戶 Customer',g.cust],['品名／類別 Item',g.name],['SMV',g.smv?F(g.smv,3)+'（'+g.smvFrom+'）':''],['工序數 Operations',ie[0]&&ie[0].operationCount],['BOM 用料 Materials',it.length?it.length+' 項':''],['成本/件 Unit cost',g.unit?'$'+F(g.unit,3):''],['售價 Price',g.price?'$'+F(g.price,3):''],['毛利率 Margin',g.gm!=null?F(g.gm,1)+'%':''],['最後車縫 Last sewn',g.lastSew],['排單 Plan',g.planNow?[g.planNow.startDate,g.planNow.endDate].filter(Boolean).join('～')+' '+(g.planNow.line||''):'']])}
@@ -825,14 +842,14 @@ function styleListUI(p){
   const range=()=>{const a=st.anc;if(st.mode==='d')return [a,a];if(st.mode==='w'){const s=monday(a);return [s,addD(s,6)]}if(st.mode==='m'){const s=a.slice(0,7)+'-01';const e=addD(addD(s,32).slice(0,7)+'-01',-1);return [s,e]}if(st.mode==='y')return [a.slice(0,4)+'-01-01',a.slice(0,4)+'-12-31'];return null};
   const shift=d=>{const a=st.anc;if(st.mode==='d')st.anc=addD(a,d);else if(st.mode==='w')st.anc=addD(a,7*d);else if(st.mode==='m'){const x=new Date(a.slice(0,7)+'-15T00:00:00');x.setMonth(x.getMonth()+d);st.anc=x.toISOString().slice(0,10)}else if(st.mode==='y')st.anc=(+a.slice(0,4)+d)+a.slice(4)};
   const label=()=>{const r=range();if(!r)return '全部期間 All';if(st.mode==='d')return r[0];if(st.mode==='m')return r[0].slice(0,7);if(st.mode==='y')return r[0].slice(0,4);return r[0].slice(5)+'～'+r[1].slice(5)};
-  const drawPer=()=>{$per.innerHTML=[['all','全部'],['d','日'],['w','週'],['m','月'],['y','年']].map(x=>`<button data-m="${x[0]}" class="${st.mode===x[0]?'on':''}">${x[1]}</button>`).join('')+(st.mode!=='all'?`<button data-sh="-1">◀</button><b class="sty-lb">${E(label())}</b><button data-sh="1">▶</button>`:'')+`<button data-ph="1" class="${st.noPh?'on':''}" title="只看還沒有款式圖／照片的">📷 缺照片</button>`};
+  const drawPer=()=>{$per.innerHTML=[['all','全部'],['d','日'],['w','週'],['m','月'],['y','年']].map(x=>`<button data-m="${x[0]}" class="${st.mode===x[0]?'on':''}">${x[1]}</button>`).join('')+(st.mode!=='all'?`<button data-sh="-1">◀</button><b class="sty-lb">${E(label())}</b><button data-sh="1">▶</button>`:'')+`<button data-ph="1" class="${st.noPh?'on':''}" title="只看還要補實物照的（沒有照片，或 IE 給的是線稿）">📷 缺實物照</button>`};
   const inPer=g=>{const r=range();if(!r)return true;return g.ds.some(d=>d>=r[0]&&d<=r[1])};
   const CMAP={};const ckOf=g=>CMAP[g.ck]||g.ck;const drawCu=()=>{const base=all.filter(inPer);const C=new Map();base.forEach(g=>{if(!g.ck)return;const o=C.get(g.ck)||{n:0,lb:g.cust};o.n++;C.set(g.ck,o)});
     /* 同一個客戶不同寫法（ALSCO／ALSCOL、MAGNUS／MAGNUS TEXTILE）併成一顆 */const ks=[...C.keys()].sort((a,b)=>a.length-b.length);ks.forEach(k=>{const p0=ks.find(x=>x!==k&&x.length>=4&&k.length>x.length&&k.startsWith(x)&&C.has(x));if(p0){const a=C.get(p0),b=C.get(k);a.n+=b.n;C.delete(k);CMAP[k]=p0}});
     const cs=[...C].sort((a,b)=>b[1].n-a[1].n);$cu.innerHTML=`<button data-c="" class="${!st.cust?'on':''}">全部客戶 <i>${base.length}</i></button>`+cs.map(([k,o])=>`<button data-c="${E(k)}" class="${st.cust===k?'on':''}">${E(o.lb.length>14?o.lb.slice(0,13)+'…':o.lb)} <i>${o.n}</i></button>`).join('')};
   const phS=g=>window.VRTPhotos?VRTPhotos.summary('style',g.key):null;
   const filt=()=>{const q=st.q.toUpperCase();let a=all.filter(g=>inPer(g)&&(!st.cust||ckOf(g)===st.cust)&&(!q||(g.title+' '+g.search).toUpperCase().includes(q)));
-    if(st.noPh)a=a.filter(g=>{const s=phS(g);return !(s&&s.ref)});const k=SORTS[st.sort][1];
+    if(st.noPh)a=a.filter(g=>needReal(g.key));const k=SORTS[st.sort][1];
     a=a.slice().sort(k==='title'?(x,y)=>x.title.localeCompare(y.title,'en',{numeric:true}):k==='smv'?(x,y)=>(y.smv||0)-(x.smv||0):k==='pcs'?(x,y)=>y.pcs-x.pcs:k==='cost'?(x,y)=>(y.unit||0)-(x.unit||0):(x,y)=>String(y.last).localeCompare(String(x.last)));return a};
   const row=(g,i)=>{const s=phS(g);const r=window.VRTPhotos&&VRTPhotos.rows?VRTPhotos.rows('style',g.key).filter(x=>x.slot==='ref'):[];const sk=r.find(x=>/sketch|款式圖|OBD/i.test(x.caption))||r[0];
     const sub2=[g.lastSew?'車縫 '+g.lastSew.slice(5):'',g.pcs6?F(g.pcs6)+' 件':'',g.unit?'成本 $'+F(g.unit,2):'',g.planNow&&(g.planNow.endDate||g.planNow.startDate||'')>=ymdToday()?'📅 '+String(g.planNow.startDate||'').slice(5)+' '+(g.planNow.line||'').replace(/^Line\s*/i,'L'):''].filter(Boolean).join(' · ');
@@ -846,7 +863,7 @@ function styleListUI(p){
   new IntersectionObserver(es=>{if(es.some(x=>x.isIntersecting))more()},{root:p,rootMargin:'400px'}).observe($m);
   try{window.VRTPhotos&&VRTPhotos.on&&VRTPhotos.on(()=>{clearTimeout(p.__pt);p.__pt=setTimeout(()=>{if(p.isConnected&&all.length){const y=p.scrollTop;draw();p.scrollTop=y}},600)})}catch(_){}
   $m.textContent='⏳ 讀取款式資料（IE、BOM、車縫、排單）…第一次比較久';
-  styleMaster().then(l=>{all=l;draw()}).catch(e=>{$m.innerHTML='⚠️ '+E(e.message||e)})}
+  styleMaster().then(async l=>{all=l;draw();let ch=false;for(const g of l){const o=stylePhotos(g.key).obd;if(o&&!SKC.get(o)){await SKC.ask(o);ch=true}}if(ch&&st.noPh){const y=p.scrollTop;draw();p.scrollTop=y}}).catch(e=>{$m.innerHTML='⚠️ '+E(e.message||e)})}
 SPECS.style.custom=styleListUI;
 
 window.VRTHubOpen=(k,key)=>SHEET.openRef(k,key);
