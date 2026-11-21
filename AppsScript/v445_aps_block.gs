@@ -10,7 +10,10 @@
   'use strict';
   var K = function (s) { return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, ''); };
   var num = function (v) { v = Number(v); return isFinite(v) ? v : 0; };
-  var HOL = { '2026-11-09': 1, '2026-11-23': 1, '2026-11-24': 1, '2026-11-25': 1, '2026-12-29': 1, '2027-01-01': 1, '2027-01-07': 1 };
+  var HOL = { '2026-11-09': 1, '2026-11-23': 1, '2026-11-24': 1, '2026-11-25': 1, '2027-01-01': 1, '2027-01-02': 1, '2027-01-07': 1 };   /* 12/29 和平日調到 1/2（11/18 排單報告） */
+  /* 停工（依 11/18「12 月停工申請與生產安排」）：哪幾組、哪幾天不排。之後有新的停工在這裡加一行。 */
+  var SHUT = [{ a: '2026-12-01', b: '2026-12-05', lines: ['L2', 'L5', 'L6', 'L9', 'L10'] }, { a: '2026-12-14', b: '2026-12-19', lines: ['L1', 'L3', 'L4', 'L7', 'L8'] }];
+  function isShut(l, d) { for (var i = 0; i < SHUT.length; i++) { var x = SHUT[i]; if (d >= x.a && d <= x.b && x.lines.indexOf(l) >= 0) return true; } return false; }
   function addD(d, n) { var x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
   function dow(d) { return new Date(d + 'T00:00:00Z').getUTCDay(); }
   function monOf(d) { return addD(d, -((dow(d) + 6) % 7)); }
@@ -33,7 +36,7 @@
       var d = String(r.date || '').slice(0, 10); if (d < FROM || d > today) return; var q = num(r.pieces); if (!(q > 0)) return;
       var l = lineN(r.lineNo || r.line); if (!l) return; var s = sk(r.styleNo || r.style); if (!s) return;
       var sv = num(r.smv) || 0; put(act, d, l, s, q); sewDays[d] = 1; if (d > lastSew) lastSew = d;
-      rows.push({ d: d, l: l, s: s, po: K(r.po || r.selfKey), q: q, sm: q * (sv || 6), sec: /apron|nap/i.test(r.section || '') ? 'A' : 'G' });
+      rows.push({ d: d, l: l, s: s, po: K(r.po || r.selfKey), q: q, sm: q * (sv || 6), sec: /garment/i.test(r.section || '') ? 'G' : 'A' });
       if (sv > 0) smvOf[s] = sv;
     });
     rows.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
@@ -45,10 +48,10 @@
     (data.plan || []).forEach(function (r) {
       var q = num(r.sewingQty) || num(r.orderQty), a = String(r.startDate || '').slice(0, 10), b = String(r.endDate || '').slice(0, 10);
       var l = lineN(r.line), s = sk(r.style); if (!(q > 0) || !a || !l || !s) return; if (!b || b < a) b = a; if (b < FROM) return;
-      var ds = workIn(a, b); if (!ds.length) ds = [a];
+      var ds = workIn(a, b).filter(function (d) { return !isShut(l, d); }); if (!ds.length) ds = [a];
       ds.forEach(function (d) { put(plan, d, l, s, q / ds.length); });
       if (r.customer) custOf[s] = r.customer; if (num(r.smv) > 0 && !smvOf[s]) smvOf[s] = num(r.smv);
-      jobs.push({ l: l, s: s, po: K(r.po), q: q, a: a, b: b, smv: num(r.smv) || 0, kind: /apron|nap/i.test(r.product || '') ? 'A' : 'G', cust: r.customer || '', ready: /齐全|齊全|complete|ready/i.test(r.remark || ''), month: String(r.month || '').slice(0, 7) });
+      jobs.push({ l: l, s: s, po: K(r.po), q: q, a: a, b: b, smv: num(r.smv) || 0, kind: /garment/i.test(r.product || '') ? 'G' : 'A', daily: num(r.dailyOutput), cust: r.customer || '', ready: /齐全|齊全|complete|ready/i.test(r.remark || ''), month: String(r.month || '').slice(0, 7) });
     });
     /* ── AI 預排（以 T＝週一為基準，只看 T 以前的實績）── */
     function aiPlan(T, horizonDays) {
@@ -60,12 +63,12 @@
       var lines = Object.keys(L); if (!lines.length) return { M: {}, blocks: [], lines: [] };
       /* 訂單池以「款」為單位（車縫日報和排產表的 PO 寫法常對不上）：剩餘＝排產件數 −（排產開工日到 T 之間已做的件數） */
       var m0 = T.slice(0, 7), m1 = addD(T.slice(0, 8) + '01', 35).slice(0, 7), pool = {}, stale = addD(T, -14);
-      jobs.forEach(function (j) { if (j.month && j.month !== m0 && j.month !== m1 && !(j.a <= addD(T, 28) && j.b >= T)) return; if (j.b < stale) return; var k = j.s, p = pool[k] || (pool[k] = { k: k, s: j.s, po: j.po, q: 0, smv: j.smv, kind: j.kind, cust: j.cust, ready: false, a: j.a }); p.q += j.q; if (j.ready) p.ready = true; if (j.a < p.a) p.a = j.a; if (!p.smv) p.smv = j.smv; });
+      jobs.forEach(function (j) { if (j.month && j.month !== m0 && j.month !== m1 && !(j.a <= addD(T, 28) && j.b >= T)) return; if (j.b < stale) return; var k = j.s, p = pool[k] || (pool[k] = { k: k, s: j.s, po: j.po, q: 0, smv: j.smv, kind: j.kind, cust: j.cust, ready: false, a: j.a }); p.q += j.q; if (j.daily > (p.daily || 0)) p.daily = j.daily; if (j.ready) p.ready = true; if (j.a < p.a) p.a = j.a; if (!p.smv) p.smv = j.smv; });
       var sewn = {}; rows.forEach(function (r) { var p = pool[r.s]; if (p && r.d < T && r.d >= p.a) sewn[r.s] = (sewn[r.s] || 0) + r.q; });
       var list = Object.keys(pool).map(function (k) { var p = pool[k]; p.rem = p.q - (sewn[k] || 0); p.due = shipOf[p.s] || ''; p.smv = p.smv || smvOf[p.s] || 6; return p; }).filter(function (p) { return p.rem > Math.max(10, p.q * 0.02); });
       var rate = {};
       var rateOf = function (l, s2) { var x = rate && rate[l + '|' + s2]; if (!x) return 0; var v = Object.keys(x).map(function (d) { return x[d]; }); return v.length >= 2 ? median(v) : 0; };
-      var blocks = [], place = function (p, l, qty) { var Li = L[l], ch = Li.last === p.s ? 0 : (qty < 200 ? 0.08 : 0.25), st = Li.t + ch, rt = rateOf(l, p.s), dur = rt ? qty / rt : qty * p.smv / Li.cap; blocks.push({ l: l, s: p.s, po: p.po, cust: p.cust, q: qty, st: st, en: st + dur, due: p.due }); Li.t = st + dur; Li.last = p.s; Li.recent[p.s] = T; };
+      var blocks = [], place = function (p, l, qty) { var Li = L[l], ch = Li.last === p.s ? 0 : (qty < 200 ? 0.08 : 0.25), st = Li.t + ch, rt = rateOf(l, p.s) || p.daily || 0, dur = rt ? qty / rt : qty * p.smv / Li.cap; blocks.push({ l: l, s: p.s, po: p.po, cust: p.cust, q: qty, st: st, en: st + dur, due: p.due }); Li.t = st + dur; Li.last = p.s; Li.recent[p.s] = T; };
       /* 1) 正在做的款留在原組先做完；同一款幾組一起做的，照最近 4 天各組做的量分 */
       var d3 = addD(T, -4), done = {}, rec = {}; rate = {};
       hist.forEach(function (r) { var k = r.s; if (r.d >= d3) { var a = rec[k] || (rec[k] = {}); a[r.l] = (a[r.l] || 0) + r.q; } var x = rate[r.l + '|' + r.s] || (rate[r.l + '|' + r.s] = {}); x[r.d] = (x[r.d] || 0) + r.q; });
@@ -80,13 +83,14 @@
       });
       /* 展開成每天件數 */
       var days = workIn(T, addD(T, horizonDays || 27)), M = {};
-      blocks.forEach(function (b) { var per = b.q / Math.max(b.en - b.st, 0.01); for (var i = Math.floor(b.st); i < days.length && i < b.en; i++) { var lo = Math.max(b.st, i), hi = Math.min(b.en, i + 1); if (hi > lo) put(M, days[i], b.l, b.s, per * (hi - lo)); } b.d0 = days[Math.min(Math.floor(b.st), days.length - 1)]; b.d1 = days[Math.min(Math.max(Math.ceil(b.en) - 1, 0), days.length - 1)]; });
+      var ldays = {}; lines.forEach(function (l) { ldays[l] = days.filter(function (d) { return !isShut(l, d); }); });
+      blocks.forEach(function (b) { var dl = ldays[b.l] || days, per = b.q / Math.max(b.en - b.st, 0.01); for (var i = Math.floor(b.st); i < dl.length && i < b.en; i++) { var lo = Math.max(b.st, i), hi = Math.min(b.en, i + 1); if (hi > lo) put(M, dl[i], b.l, b.s, per * (hi - lo)); } b.d0 = dl[Math.min(Math.floor(b.st), dl.length - 1)] || ''; b.d1 = dl[Math.min(Math.max(Math.ceil(b.en) - 1, 0), dl.length - 1)] || ''; });
       return { M: M, blocks: blocks, lines: lines, T: T };
     }
     /* 每週一重排一次，只取那一週的結果（＝當時的 AI 預排） */
     var firstPlan = Object.keys(plan).sort()[0] || today, wk = monOf(firstPlan < '2026-07-06' ? '2026-07-06' : firstPlan), curWk = monOf(today), ai = {}, weeks = [], fwd = null;
     for (var n = 0; wk <= curWk && n < 80; n++, wk = addD(wk, 7)) { var r = aiPlan(wk, wk === curWk ? 27 : 6); var end = addD(wk, 6); Object.keys(r.M).forEach(function (d) { if (d <= end) ai[d] = r.M[d]; }); if (wk === curWk) fwd = r; weeks.push(wk); }
-    return { today: today, lastSew: lastSew, act: act, plan: plan, ai: ai, weeks: weeks, fwd: fwd, custOf: custOf, isWork: isWork, HOL: HOL };
+    return { today: today, lastSew: lastSew, act: act, plan: plan, ai: ai, weeks: weeks, fwd: fwd, custOf: custOf, smvOf: smvOf, isWork: isWork, HOL: HOL, SHUT: SHUT };
   }
 
   /* 期間彙總＋相合度；dim: 'line' | 'style' | 'cust' */
@@ -97,20 +101,22 @@
     var cells = Object.keys(cell).map(function (k) { return cell[k]; });
     var ov = function (x, y, keyf) { var A = {}, Bm = {}, sa = 0, sb = 0, mn = 0; cells.forEach(function (c) { var k = keyf ? keyf(c) : c.l + '|' + c.s; A[k] = (A[k] || 0) + c[x]; Bm[k] = (Bm[k] || 0) + c[y]; }); Object.keys(A).forEach(function (k) { sa += A[k]; sb += Bm[k]; mn += Math.min(A[k], Bm[k]); }); var mx = Math.max(sa, sb); return mx > 0 ? Math.round(mn / mx * 1000) / 10 : null; };
     var byS = function (c) { return c.s; };
+    var ovM = function (x, y) { var sa = 0, sb = 0, mn = 0; cells.forEach(function (c) { var w = (B.smvOf && B.smvOf[c.s]) || 6; sa += c[x] * w; sb += c[y] * w; mn += Math.min(c[x], c[y]) * w; }); var mx = Math.max(sa, sb); return mx > 0 ? Math.round(mn / mx * 1000) / 10 : null; };
     var dim = opt.dim || 'line', grp = {};
     cells.forEach(function (c) { var k = dim === 'style' ? c.s : dim === 'cust' ? (B.custOf[c.s] || '（未標客戶）') : c.l, G = grp[k] || (grp[k] = { k: k, ai: 0, plan: 0, act: 0, mAP: 0, mPA: 0, mAA: 0, cells: [] }); G.ai += c.ai; G.plan += c.plan; G.act += c.act; G.mAP += Math.min(c.ai, c.plan); G.mPA += Math.min(c.plan, c.act); G.mAA += Math.min(c.ai, c.act); G.cells.push(c); });
     var rows = Object.keys(grp).map(function (k) { var G = grp[k], p = function (m, x, y) { var mx = Math.max(x, y); return mx > 0 ? Math.round(m / mx * 100) : null; }; G.sAP = p(G.mAP, G.ai, G.plan); G.sPA = p(G.mPA, G.plan, G.act); G.sAA = p(G.mAA, G.ai, G.act); return G; });
     rows.sort(dim === 'line' ? function (x, y) { return Number(x.k.slice(1)) - Number(y.k.slice(1)); } : function (x, y) { return Math.max(y.plan, y.act, y.ai) - Math.max(x.plan, x.act, x.ai); });
-    return { a: a, b: b, tot: tot, aiPlan: ov('ai', 'plan'), planAct: ov('plan', 'act'), aiAct: ov('ai', 'act'), aiPlanS: ov('ai', 'plan', byS), planActS: ov('plan', 'act', byS), aiActS: ov('ai', 'act', byS), rows: rows, cells: cells };
+    return { a: a, b: b, tot: tot, aiPlanM: ovM('ai', 'plan'), planActM: ovM('plan', 'act'), aiActM: ovM('ai', 'act'), aiPlan: ov('ai', 'plan'), planAct: ov('plan', 'act'), aiAct: ov('ai', 'act'), aiPlanS: ov('ai', 'plan', byS), planActS: ov('plan', 'act', byS), aiActS: ov('ai', 'act', byS), rows: rows, cells: cells };
   }
-  function trend(B) { return B.weeks.map(function (w) { var r = range(B, w, addD(w, 6)); return { w: w, aiPlan: r.aiPlan, planAct: r.planAct, aiAct: r.aiAct, act: r.tot.act }; }).filter(function (x) { return x.act > 0; }); }
+  function trend(B) { return B.weeks.map(function (w) { var r = range(B, w, addD(w, 6)); return { w: w, aiPlan: r.aiPlan, planAct: r.planAct, aiAct: r.aiAct, aiPlanM: r.aiPlanM, planActM: r.planActM, aiActM: r.aiActM, act: r.tot.act }; }).filter(function (x) { return x.act > 0; }); }
 
   /* 報告用短文字（Telegram／日報週報共用） */
   function text(B, a, b, title) {
     var N = function (v) { return Math.round(v).toLocaleString('en-US'); }, P = function (v) { return v == null ? '—' : v + '%'; }, md = function (d) { return Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)); };
     var r = range(B, a, b), T = trend(B), prev = T.length > 1 ? T[T.length - 2] : null, L = [];
     L.push('🤖 <b>AI 排單比對</b>　' + (title || (a === r.b ? md(a) : md(a) + '–' + md(r.b))));
-    L.push('　實排↔實績 ' + P(r.planAct) + '｜AI↔實績 ' + P(r.aiAct) + '｜AI↔實排 ' + P(r.aiPlan) + '（目標 90%）');
+    L.push('　件數　　　實排↔實績 ' + P(r.planAct) + '｜AI↔實績 ' + P(r.aiAct) + '｜AI↔實排 ' + P(r.aiPlan) + '（目標 90%）');
+    L.push('　標準工時　實排↔實績 ' + P(r.planActM) + '｜AI↔實績 ' + P(r.aiActM) + '｜AI↔實排 ' + P(r.aiPlanM));
     L.push('　件數　AI ' + N(r.tot.ai) + '・實排 ' + N(r.tot.plan) + '・實績 ' + N(r.tot.act));
     var gaps = r.cells.map(function (c) { return { c: c, g: Math.abs(c.plan - c.act) }; }).filter(function (x) { return x.g >= 300; }).sort(function (x, y) { return y.g - x.g; }).slice(0, 3);
     gaps.forEach(function (x) { var c = x.c; L.push('　' + c.l + ' ' + c.s + '：排 ' + N(c.plan) + '／做 ' + N(c.act) + '／AI ' + N(c.ai)); });
@@ -149,8 +155,8 @@
     var card = function (t, v, sub, pv) { return '<div style="flex:1;min-width:170px;background:var(--card,#fff);border:1px solid var(--bd,#e5e7eb);border-left:5px solid ' + col(v) + ';border-radius:10px;padding:10px 14px"><div style="font-size:12px;color:var(--muted,#6b7280)">' + t + '</div><div style="font-size:26px;font-weight:800;color:' + col(v) + '">' + P(v) + (pv === undefined ? '' : dl(v, pv)) + '</div><div style="font-size:11px;color:var(--muted,#6b7280)">' + sub + '</div></div>'; };
     var lines = {}, custs = {}; ['ai', 'plan', 'act'].forEach(function (sn) { Object.keys(B[sn]).forEach(function (d) { Object.keys(B[sn][d]).forEach(function (l) { lines[l] = 1; Object.keys(B[sn][d][l]).forEach(function (s) { if (B.custOf[s]) custs[B.custOf[s]] = 1; }); }); }); });
     var seg = function (name, cur2, opts) { return opts.map(function (o) { return '<button class="fbtn" style="' + (cur2 === o[0] ? 'background:#2563eb;color:#fff;border-color:#2563eb' : '') + '" onclick="VRTAPS.set(\'' + name + '\',\'' + o[0] + '\')">' + o[1] + '</button>'; }).join(''); };
-    var h = '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;line-height:1.7"><b>怎麼看：</b>🤖 AI 預排＝每週一用「當時看得到的資料」自己排；📋 實排＝排產表；🧵 實績＝車縫日報。相合度＝同一期間、同一組、同一款的件數重疊（100%＝完全一樣）。目標 90% 以上。車縫日報到 <b>' + B.lastSew + '</b>。</div>';
-    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">' + card('📋 實排 ↔ 🧵 實績', r.planAct, '排單準不準・只看款不看組 ' + P(r.planActS), ST.view === 'week' && ST.key === cur.w ? prev.planAct : undefined) + card('🤖 AI ↔ 🧵 實績', r.aiAct, 'AI 準不準・只看款不看組 ' + P(r.aiActS), ST.view === 'week' && ST.key === cur.w ? prev.aiAct : undefined) + card('🤖 AI ↔ 📋 實排', r.aiPlan, 'AI 像不像生管・只看款不看組 ' + P(r.aiPlanS), ST.view === 'week' && ST.key === cur.w ? prev.aiPlan : undefined) + '</div>';
+    var h = '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;line-height:1.7"><b>怎麼看：</b>🤖 AI 預排＝每週一用「當時看得到的資料」自己排；📋 實排＝排產表；🧵 實績＝車縫日報。相合度＝同一期間、同一組、同一款的件數重疊（100%＝完全一樣）；大字是件數，小字「標準工時」把餐巾這類件數多、工時少的款拉回同一把尺。目標 90% 以上。12 月兩階段停工的組、12/29 調到 1/2 已算進去。車縫日報到 <b>' + B.lastSew + '</b>。</div>';
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">' + card('📋 實排 ↔ 🧵 實績', r.planAct, '排單準不準・<b>標準工時 ' + P(r.planActM) + '</b>・只看款 ' + P(r.planActS), ST.view === 'week' && ST.key === cur.w ? prev.planAct : undefined) + card('🤖 AI ↔ 🧵 實績', r.aiAct, 'AI 準不準・<b>標準工時 ' + P(r.aiActM) + '</b>・只看款 ' + P(r.aiActS), ST.view === 'week' && ST.key === cur.w ? prev.aiAct : undefined) + card('🤖 AI ↔ 📋 實排', r.aiPlan, 'AI 像不像生管・<b>標準工時 ' + P(r.aiPlanM) + '</b>・只看款 ' + P(r.aiPlanS), ST.view === 'week' && ST.key === cur.w ? prev.aiPlan : undefined) + '</div>';
     h += '<div class="card" style="padding:12px 14px;margin-bottom:10px"><div class="ctit" style="margin-bottom:6px">每週相合度走勢（越高越好）</div>' + chart(T) + '</div>';
     h += '<div class="fbar" style="gap:6px;flex-wrap:wrap">' + seg('view', ST.view, [['day', '日'], ['week', '週'], ['month', '月'], ['year', '年']]) + '<select onchange="VRTAPS.set(\'key\',this.value)">' + ps.map(function (x) { return '<option value="' + x.k + '"' + (x.k === ST.key ? ' selected' : '') + '>' + x.t + '</option>'; }).join('') + '</select><span style="margin-left:8px;font-size:12px;color:var(--muted,#6b7280)">分組</span>' + seg('dim', ST.dim, [['line', '組別'], ['style', '款式'], ['cust', '客戶']]) + '<select onchange="VRTAPS.set(\'line\',this.value)"><option value="">全部組</option>' + Object.keys(lines).sort(function (a, b) { return a.slice(1) - b.slice(1); }).map(function (l) { return '<option' + (l === ST.line ? ' selected' : '') + '>' + l + '</option>'; }).join('') + '</select><select onchange="VRTAPS.set(\'cust\',this.value)"><option value="">全部客戶</option>' + Object.keys(custs).sort().map(function (c) { return '<option' + (c === ST.cust ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>';
     var mx = Math.max.apply(null, r.rows.map(function (G) { return Math.max(G.ai, G.plan, G.act); }).concat([1]));
