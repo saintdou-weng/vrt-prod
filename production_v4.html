@@ -1210,10 +1210,11 @@ function go(name,el){
   if(name==='daily')drOpenTab();
   if(name==='aps')apsOpen();
 }
-/* 🤖 AI 排單比對（vrt-aps-v1.js）：資料一變就重算 */
+/* 🤖 AI 排單比對（vrt-aps-v1.js）：資料一變就重算；網址加 #aps 直接開這一頁 */
+window.addEventListener('load',()=>{if(location.hash==='#aps')setTimeout(()=>{const b=document.getElementById('tb-aps');if(b)b.click()},800)});
 function apsData(){const S=VRTDailyReport.helpers.sewPick(SEW),sew=[];Object.keys(S).forEach(d=>{if(d>='2026-06-01')S[d].forEach(r=>sew.push(r))});return VRTAPS.build({sewing:sew,plan:PLAN,styles:STYLES,resolveSk:resolveSk,today:TODAY})}
-function apsOpen(){const el=document.getElementById('aps-root');if(!el||!window.VRTAPS)return;try{window.APS_B=apsData();VRTAPS.render(el,window.APS_B)}catch(e){el.innerHTML='<div class="card" style="padding:16px">AI 排單比對算不出來：'+String(e&&e.message||e)+'</div>'}}
-function rebuildAndRender(){SCHED=buildSchedule();fillPlanPeriodSelect();renderGantt();renderQueue();}
+let APS_TRY=0;function apsOpen(){const el=document.getElementById('aps-root');if(!el||!window.VRTAPS)return;if(!PLAN.length||!SEW.length){el.innerHTML='<div class="card" style="padding:16px">⏳ 排產和車縫資料還在讀取，讀完會自動顯示…</div>';if(APS_TRY++<20)setTimeout(apsOpen,2000);return}APS_TRY=0;try{window.APS_B=apsData();VRTAPS.render(el,window.APS_B)}catch(e){el.innerHTML='<div class="card" style="padding:16px">AI 排單比對算不出來：'+String(e&&e.message||e)+'</div>'}}
+function rebuildAndRender(){try{const pa=document.getElementById('pane-aps');if(pa&&pa.classList.contains('on'))setTimeout(apsOpen,50)}catch(_){}SCHED=buildSchedule();fillPlanPeriodSelect();renderGantt();renderQueue();}
 function setL(m){document.getElementById('loading').style.display='flex';document.getElementById('lmsg').textContent=m;}
 function hideL(){document.getElementById('loading').style.display='none';}
 function setDot(id,cls){document.getElementById(id).className='dot '+cls;}
@@ -1432,7 +1433,7 @@ window.addEventListener('DOMContentLoaded',()=>loadAll());
 
 
 <script src="vrt-daily-report-v1.js?v=4.21.0"></script>
-<script src="vrt-aps-v1.js?v=4.45.0"></script>
+<script src="vrt-aps-v1.js?v=4.45.1"></script>
 <script>
 /* ═══ v4.16 D1 生產日報 Daily production report — numbers computed by code (vrt-daily-report-v1.js), AI only rewrites text ═══ */
 (function(){
