@@ -791,7 +791,7 @@ function styleMaster(){return once('stylemaster',async()=>{
     const planNow=o.plan.slice().sort((a,b)=>String(b.startDate||b.month||'').localeCompare(String(a.startDate||a.month||'')))[0]||null;
     const cust=top(o.custs),name=top(o.names);const items=o.bom?(o.bom.items||[]).filter(x=>x&&(x.itemName||x.item||x.description)):[];
     const unit=+cs.unitCost||+cs.cost||null,price=+cs.salePrice||+cs.price||null,gm=cs.gm!=null&&isFinite(+cs.gm)?+cs.gm*100:null;
-    const g={key:o.key,kind:'款式',title:o.title||o.key,cust,ck:custKey(cust),name,smv,smvFrom,ds,last,pcs,pcs6,e,lastSew,unit,price,gm,ie:ieS,bom:o.bom,sew:o.sew,plan:o.plan,planNow,items,
+    const g={key:o.key,kind:'款式',title:o.title||o.key,cust,ck:custKey(cust).split(' ')[0]||'',name,smv,smvFrom,ds,last,pcs,pcs6,e,lastSew,unit,price,gm,ie:ieS,bom:o.bom,sew:o.sew,plan:o.plan,planNow,items,
       search:[o.title,cust,name,...o.plan.map(r=>r.po),...o.sew.map(r=>r.po)].join(' '),
       sub:E([cust,name].filter(Boolean).join(' · ')),photo:{domain:'style',key:o.key,name:[o.title,cust,name].filter(Boolean).join(' · '),tip:'第一張放款式圖（sketch，IE 的 OBD 原檔有圖會自動放進來），再放實物照（樣衣、成品）。'},
       badge:(ieOk&&/approved/i.test(ieOk.approval||'')?'<span class="tag ok">SMV 已簽核</span>':ieOk?'<span class="tag warn">SMV 待簽核</span>':'')+(planNow&&(planNow.endDate||planNow.startDate||'')>=ymdToday()?`<span class="tag">📅 排單 ${E(String(planNow.startDate||'').slice(5))} ${E(planNow.line||'')}</span>`:''),
@@ -827,10 +827,11 @@ function styleListUI(p){
   const label=()=>{const r=range();if(!r)return '全部期間 All';if(st.mode==='d')return r[0];if(st.mode==='m')return r[0].slice(0,7);if(st.mode==='y')return r[0].slice(0,4);return r[0].slice(5)+'～'+r[1].slice(5)};
   const drawPer=()=>{$per.innerHTML=[['all','全部'],['d','日'],['w','週'],['m','月'],['y','年']].map(x=>`<button data-m="${x[0]}" class="${st.mode===x[0]?'on':''}">${x[1]}</button>`).join('')+(st.mode!=='all'?`<button data-sh="-1">◀</button><b class="sty-lb">${E(label())}</b><button data-sh="1">▶</button>`:'')+`<button data-ph="1" class="${st.noPh?'on':''}" title="只看還沒有款式圖／照片的">📷 缺照片</button>`};
   const inPer=g=>{const r=range();if(!r)return true;return g.ds.some(d=>d>=r[0]&&d<=r[1])};
-  const drawCu=()=>{const base=all.filter(inPer);const C=new Map();base.forEach(g=>{if(!g.ck)return;const o=C.get(g.ck)||{n:0,lb:g.cust};o.n++;C.set(g.ck,o)});
+  const CMAP={};const ckOf=g=>CMAP[g.ck]||g.ck;const drawCu=()=>{const base=all.filter(inPer);const C=new Map();base.forEach(g=>{if(!g.ck)return;const o=C.get(g.ck)||{n:0,lb:g.cust};o.n++;C.set(g.ck,o)});
+    /* 同一個客戶不同寫法（ALSCO／ALSCOL、MAGNUS／MAGNUS TEXTILE）併成一顆 */const ks=[...C.keys()].sort((a,b)=>a.length-b.length);ks.forEach(k=>{const p0=ks.find(x=>x!==k&&x.length>=4&&k.length>x.length&&k.startsWith(x)&&C.has(x));if(p0){const a=C.get(p0),b=C.get(k);a.n+=b.n;C.delete(k);CMAP[k]=p0}});
     const cs=[...C].sort((a,b)=>b[1].n-a[1].n);$cu.innerHTML=`<button data-c="" class="${!st.cust?'on':''}">全部客戶 <i>${base.length}</i></button>`+cs.map(([k,o])=>`<button data-c="${E(k)}" class="${st.cust===k?'on':''}">${E(o.lb.length>14?o.lb.slice(0,13)+'…':o.lb)} <i>${o.n}</i></button>`).join('')};
   const phS=g=>window.VRTPhotos?VRTPhotos.summary('style',g.key):null;
-  const filt=()=>{const q=st.q.toUpperCase();let a=all.filter(g=>inPer(g)&&(!st.cust||g.ck===st.cust)&&(!q||(g.title+' '+g.search).toUpperCase().includes(q)));
+  const filt=()=>{const q=st.q.toUpperCase();let a=all.filter(g=>inPer(g)&&(!st.cust||ckOf(g)===st.cust)&&(!q||(g.title+' '+g.search).toUpperCase().includes(q)));
     if(st.noPh)a=a.filter(g=>{const s=phS(g);return !(s&&s.ref)});const k=SORTS[st.sort][1];
     a=a.slice().sort(k==='title'?(x,y)=>x.title.localeCompare(y.title,'en',{numeric:true}):k==='smv'?(x,y)=>(y.smv||0)-(x.smv||0):k==='pcs'?(x,y)=>y.pcs-x.pcs:k==='cost'?(x,y)=>(y.unit||0)-(x.unit||0):(x,y)=>String(y.last).localeCompare(String(x.last)));return a};
   const row=(g,i)=>{const s=phS(g);const r=window.VRTPhotos&&VRTPhotos.rows?VRTPhotos.rows('style',g.key).filter(x=>x.slot==='ref'):[];const sk=r.find(x=>/sketch|款式圖|OBD/i.test(x.caption))||r[0];

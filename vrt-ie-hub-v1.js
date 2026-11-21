@@ -95,7 +95,7 @@
   const skK=s=>String(s==null?'':s).replace(/[\u200b\ufeff]/g,'').replace(/\s+/g,' ').trim().toUpperCase().replace(/\.0+$/,'');
   function savedSketch(key){try{const P=g.VRTPhotos;if(!P||!P.rows)return [];return P.rows('style',skK(key)).filter(r=>r.slot==='ref').sort((a,b)=>(/sketch|OBD/i.test(b.caption)?1:0)-(/sketch|OBD/i.test(a.caption)?1:0)).map(r=>r.thumb)}catch(_){return []}}
   let skBusy=false;async function syncSketches(){const P=g.VRTPhotos;if(skBusy||!P||!P.add||!src||!src.ie)return;skBusy=true;let n=0;
-    try{await (P.ready||Promise.resolve());const seen=new Set();for(const o of (src.ie.styles||[])){if(n>=40)break;if(!o||o.deleted||!o.style)continue;const K=skK(o.style);if(seen.has(K))continue;seen.add(K);
+    try{await (P.ready||Promise.resolve());const seen=new Set();for(const o of (src.ie.styles||[])){if(n>=80)break;if(!o||o.deleted||!o.style)continue;const K=skK(o.style);if(seen.has(K))continue;seen.add(K);
       const sm0=P.summary('style',K);if(sm0&&sm0.ref)continue;const docs=docsFor(o.style,o);if(!docs.length)continue;let best=null;
       for(const d of docs){try{const bl=extractImages(b64u8(d.base64));if(bl[0]&&(!best||bl[0].bytes.length>best.bytes.length))best=bl[0]}catch(_){}}
       if(!best)continue;const f=new File([best.bytes],'sketch_'+K.replace(/[^A-Z0-9]+/g,'_')+(best.type==='image/png'?'.png':'.jpg'),{type:best.type});
