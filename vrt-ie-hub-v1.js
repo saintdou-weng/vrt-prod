@@ -7,7 +7,7 @@
    3) 全部唯讀：讀 IE 狀態、排產、車縫、零件備品（含機台清冊），不回寫。資料變動（其他分頁存檔、雲端同步）時自動重讀。 */
 (function(g){'use strict';
   if(g.VRTIEHub)return;
-  const VERSION='1.3.0';
+  const VERSION='1.3.1';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>{const n=Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n:0};
   const fmt=(v,d)=>v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('en-US',{maximumFractionDigits:d==null?0:d});
@@ -94,11 +94,18 @@
      所有裝置（手機、生產平台入口頁的款式清單／款式頁）都看得到；已經有的不重複放。這台沒有原檔時，這頁也改用標準照顯示。 */
   const skK=s=>String(s==null?'':s).replace(/[\u200b\ufeff]/g,'').replace(/\s+/g,' ').trim().toUpperCase().replace(/\.0+$/,'');
   function savedSketch(key){try{const P=g.VRTPhotos;if(!P||!P.rows)return [];return P.rows('style',skK(key)).filter(r=>r.slot==='ref').sort((a,b)=>(/sketch|OBD/i.test(b.caption)?1:0)-(/sketch|OBD/i.test(a.caption)?1:0)).map(r=>r.thumb)}catch(_){return []}}
+  /* 只認單款 OBD／PI Study 原檔，而且檔名裡款號要完整對上（183 ≠ 1835、A0953 ≠ A0953S）；週報 Excel 裡的圖不算款式圖 */
+  function skDocs(style){const K=skK(style).replace(/[^A-Z0-9]/g,'');if(K.length<3)return [];
+    const docK=n=>{n=String(n||'').toUpperCase().replace(/\.(XLSX?|XLSM|CSV)$/,'').replace(/\(.*?\)|（.*?）/g,' ').replace(/PENDING|OBD|PI[ _-]?STUDY/g,' ');return [n.replace(/[^A-Z0-9]/g,'')].concat(n.split(/[\s_]+/).map(t=>t.replace(/[^A-Z0-9]/g,'')))};
+    return ((src&&src.ie&&src.ie.sourceDocuments)||[]).filter(d=>d&&d.base64&&/OBD|PI[ _-]?STUDY/i.test(d.name||'')&&!/WEEKLY|UPDATE[ _-]?REPORT|SMV[ _-]?UPDATE/i.test(d.name||'')&&docK(d.name).includes(K))}
+  async function skFix(P){/* v4.44.2：v4.44 第一次跑時把週報裡同一張圖放進 22 款、183 放到 1835…，全部收回再照新規則重放（只動 caption＝Sketch · OBD 的） */
+    try{if(localStorage.getItem('vrt_sk_fix_4442'))return;if(!P.retire||!P.rows)return;let n=0;for(const o of (src.ie.styles||[])){if(!o||!o.style)continue;for(const r of P.rows('style',skK(o.style)))if(r.caption==='Sketch · OBD'){await P.retire(r.id);n++}}
+      localStorage.setItem('vrt_sk_fix_4442','1');if(n)console.log('[VRTIEHub] 收回自動款式圖',n)}catch(e){console.warn('[skFix]',e)}}
   let skBusy=false;async function syncSketches(){const P=g.VRTPhotos;if(skBusy||!P||!P.add||!src||!src.ie)return;skBusy=true;let n=0;
-    try{await (P.ready||Promise.resolve());const seen=new Set();for(const o of (src.ie.styles||[])){if(n>=80)break;if(!o||o.deleted||!o.style)continue;const K=skK(o.style);if(seen.has(K))continue;seen.add(K);
-      const sm0=P.summary('style',K);if(sm0&&sm0.ref)continue;const docs=docsFor(o.style,o);if(!docs.length)continue;let best=null;
+    try{await (P.ready||Promise.resolve());await skFix(P);const seen=new Set();const usedH=new Map();for(const o of (src.ie.styles||[])){if(n>=80)break;if(!o||o.deleted||!o.style)continue;const K=skK(o.style);if(seen.has(K))continue;seen.add(K);
+      const sm0=P.summary('style',K);if(sm0&&sm0.ref)continue;const docs=skDocs(o.style);if(!docs.length)continue;let best=null;
       for(const d of docs){try{const bl=extractImages(b64u8(d.base64));if(bl[0]&&(!best||bl[0].bytes.length>best.bytes.length))best=bl[0]}catch(_){}}
-      if(!best)continue;const f=new File([best.bytes],'sketch_'+K.replace(/[^A-Z0-9]+/g,'_')+(best.type==='image/png'?'.png':'.jpg'),{type:best.type});
+      if(!best)continue;const hk=best.bytes.length+':'+best.bytes[100]+best.bytes[best.bytes.length>>1];if(usedH.has(hk)&&usedH.get(hk)!==K)continue;usedH.set(hk,K);const f=new File([best.bytes],'sketch_'+K.replace(/[^A-Z0-9]+/g,'_')+(best.type==='image/png'?'.png':'.jpg'),{type:best.type});
       try{const r=await P.add([f],{domain:'style',key:K,name:[o.style,o.customer,o.garmentName||o.category].filter(Boolean).join(' · '),caption:'Sketch · OBD',slot:'ref',by:'ie-obd'});if(r&&r.added)n++}catch(e){console.warn('[sketch]',K,e)}
       await new Promise(r=>setTimeout(r,60))}}finally{skBusy=false}if(n)console.log('[VRTIEHub] 款式圖放進標準照：',n)}
   g.addEventListener&&g.addEventListener('load',()=>setTimeout(()=>{data(false).then(()=>syncSketches()).catch(()=>{})},6000));
