@@ -19,6 +19,11 @@
     var today = data.today, rs = data.resolveSk, skc = {};
     var sk = function (raw) { var k = K(raw); if (!k) return ''; if (skc[k] != null) return skc[k]; var v = ''; try { v = rs ? K(rs(raw)) : ''; } catch (e) { v = ''; } return (skc[k] = v || k); };
     var FROM = data.from || '2026-06-01';
+    /* 同一款不同寫法併成一個（例：GCRCLS320ZF／GCRCLS320ZFWH）：長的款號開頭＝短的款號（短的 ≥5 碼、只多 ≤4 碼）就算同款 */
+    var uni = {}, sk0 = sk; (data.sewing || []).forEach(function (r) { var d = String(r.date || '').slice(0, 10); if (d >= FROM) { var k = sk0(r.styleNo || r.style); if (k) uni[k] = 1; } }); (data.plan || []).forEach(function (r) { var k = sk0(r.style); if (k) uni[k] = 1; });
+    var keys = Object.keys(uni).sort(function (a, b) { return a.length - b.length; }), canon = {};
+    keys.forEach(function (k) { for (var i = 0; i < keys.length; i++) { var p = keys[i]; if (p.length >= k.length) break; if (p.length >= 5 && k.length - p.length <= 4 && k.indexOf(p) === 0) { canon[k] = canon[p] || p; return; } } });
+    sk = function (raw) { var k = sk0(raw); return canon[k] || k; };
     /* ── 實績 ── */
     var act = {}, sewDays = {}, rows = [], lastSew = '', custOf = {}, smvOf = {};
     (data.sewing || []).forEach(function (r) {
