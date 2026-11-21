@@ -30,7 +30,7 @@ function classify(name,code){const s=String(name||''),c=String(code||'');
   if(/机油|機油|砂纸|砂紙|粘纸|黏紙|贴纸|貼紙|胶带|膠帶|\boil\b|sand ?paper|sticker|label|tape|numbering/i.test(s))return 'supply';
   if(/钳|鉗|剪刀|螺丝刀|螺絲起子|扳手|镊子|鑷子|\bpliers?\b|scissors?|screwdriver|wrench|\btools?\b/i.test(s))return 'tool';
   return 'parts'}
-const typeOf=x=>x&&x.costType&&CTN[x.costType]?x.costType:classify(x&&(x.name||x.partNo),x&&x.erpCode);
+const typeOf=x=>{if(!x)return 'parts';if(x.costType&&CTN[x.costType])return x.costType;const c=String(x.category||'');if(/repair/i.test(c))return 'repair';if(/rent/i.test(c))return 'rental';const k=classify(x.name||x.partNo,x.erpCode);if(k!=='parts')return k;if(/needle/i.test(c))return 'needle';if(/consumable|chemical/i.test(c))return 'supply';if(/^tool/i.test(c))return 'tool';return k};
 const catOf=t=>({needle:'Needle',supply:'Consumable'}[t]||'Other');
 
 /* ── 載入工具 ── */
@@ -166,11 +166,15 @@ function edit(r){return new Promise(done=>{const el=modal(`<div class="ps-hd"><b
 
 /* 存對帳單：同供應商＋同單號的舊資料（對帳單或會計先記的）換成這次的明細；會計記錄留在備註 */
 function saveStatement(h,ls){const now=new Date().toISOString();let all=TX().slice();const invs=[...new Set(ls.map(l=>l.inv).filter(Boolean))];const accBy={};
-  all=all.filter(x=>{if(!x||supK(x.supplier)!==supK(h.supplier)||!invs.includes(invK(x.invoiceNo)))return true;if(x.source!=='supplier'&&x.source!=='acc')return true;if(x.acc)accBy[invK(x.invoiceNo)]=x.acc;return false});
+  /* 同供應商同單號的舊列（之前的收據照片、會計先記的、上次的對帳單）全部換成這張對帳單的明細；舊的先備份在這台 */
+  const removed=[];all=all.filter(x=>{if(!x||supK(x.supplier)!==supK(h.supplier)||!invs.includes(invK(x.invoiceNo)))return true;if(String(x.type||'').toUpperCase()==='OUT')return true;if(x.acc)accBy[invK(x.invoiceNo)]=x.acc;removed.push(x);return false});
+  if(removed.length)try{const bk=JSON.parse(localStorage.getItem('vrt_stmt_backup')||'[]');bk.push({at:now,file:h.file,rows:removed});localStorage.setItem('vrt_stmt_backup',JSON.stringify(bk.slice(-20)))}catch(_){}
+  const oldBy={};removed.filter(x=>x.source!=='acc').forEach(x=>{const k=invK(x.invoiceNo);oldBy[k]=(oldBy[k]||0)+1});
   const out=ls.map((l,i)=>{const amt=l.amt!=null?l.amt:Math.round((l.qty||0)*(l.price||0)*100)/100;return {id:'STMT-'+hash([supK(h.supplier),l.inv,l.name,l.qty,l.price,i].join('|')),type:'PURCHASE',source:'supplier',date:l.date||(h.month?h.month+'-01':''),invoiceDate:l.date||'',invoiceNo:l.inv,partNo:l.name,name:l.name,qty:l.qty||0,unit:l.unit,unitPrice:l.price||0,amount:amt,
     statementMonth:h.month||String(l.date||'').slice(0,7),supplier:h.supplier,supplierZh:h.supplierZh||'',costType:l.type,category:catOf(l.type),includeInMaster:l.type!=='rental'&&l.type!=='repair',remark:l.note||'',sourceFile:h.file,sourceSheet:'statement',sourceRow:i+1,createdAt:now,updatedAt:now}});
   /* 會計先記過的 → 比金額 */
   invs.forEach(iv=>{const a=accBy[iv];if(!a)return;const rows=out.filter(x=>invK(x.invoiceNo)===iv),t=rows.reduce((s,x)=>s+(+x.amount||0),0);rows.forEach(x=>x.acc=a);rows[0].accNote=Math.abs(t-(+a.amount||0))<.01?L('會計相符','Accounting matches')+'（'+(a.voucher||'')+'）':L('會計記 ','Accounting ')+M2(+a.amount)+'（'+(a.voucher||'')+' '+(a.remark||'')+'），'+L('對帳單 ','statement ')+M2(t)+L('，以對帳單為準',' — statement wins')});
+  Object.keys(oldBy).forEach(iv=>{const r0=out.find(x=>invK(x.invoiceNo)===iv);if(r0)r0.remark=[r0.remark,L('取代之前的 ','Replaced ')+oldBy[iv]+L(' 列（收據照片／舊資料）',' old rows')].filter(Boolean).join('；')});
   setTX(all.concat(out));return out.length}
 async function persist(){try{await saveAll()}catch(e){console.warn(e)}try{renderTab(_curTab)}catch(_){}}
 
@@ -181,11 +185,11 @@ function accSheets(wb){const out=[];for(const name of wb.SheetNames){const a=XLS
   for(let k=h+1;k<a.length;k++){const r=a[k],sup=String(r[ci.s]||'').trim(),iv=invK(r[ci.i]),amt=N(r[ci.t]);if(!sup||!iv||amt==null)continue;let mo=r[ci.m];
     if(typeof mo==='number'){const d=new Date(Math.round((mo-25569+.5)*864e5));mo=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')}else if(mo instanceof Date){const d=new Date(mo.getTime()+12*36e5);mo=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}else mo=String(mo||'').slice(0,7);
     out.push({sheet:name,voucher:String(r[ci.v]||'').trim(),supplier:sup,inv:iv,erp:ci.e>=0?String(r[ci.e]||'').trim():'',amount:amt,remark:ci.r>=0?String(r[ci.r]||'').trim():'',month:mo})}}return out}
-function accPlan(rows){return rows.map(a=>{const st=TX().filter(x=>x&&x.source==='supplier'&&supK(x.supplier)===supK(a.supplier)&&invK(x.invoiceNo)===a.inv);const t=st.reduce((s,x)=>s+(+x.amount||0),0);
+function accPlan(rows){return rows.map(a=>{const st=TX().filter(x=>x&&x.source!=='acc'&&String(x.type||'').toUpperCase()!=='OUT'&&supK(x.supplier)===supK(a.supplier)&&invK(x.invoiceNo)===a.inv);const t=st.reduce((s,x)=>s+(+x.amount||0),0);
   const prev=TX().find(x=>x&&x.source==='acc'&&supK(x.supplier)===supK(a.supplier)&&invK(x.invoiceNo)===a.inv);
   return Object.assign({},a,{stTotal:st.length?t:null,status:!st.length?(prev?'same-acc':'add'):(Math.abs(t-a.amount)<.01?'match':'diff'),type:classify(a.remark,a.erp)})})}
 async function importAcc(file,rows){const plan=accPlan(rows);const months=[...new Set(plan.map(p=>p.month).filter(Boolean))];
-  const miss=TX().filter(x=>x&&x.source==='supplier'&&months.includes(String(x.statementMonth||'').slice(0,7))&&plan.some(p=>supK(p.supplier)===supK(x.supplier))&&!plan.some(p=>supK(p.supplier)===supK(x.supplier)&&p.inv===invK(x.invoiceNo)));
+  const miss=TX().filter(x=>x&&x.source!=='acc'&&String(x.type||'').toUpperCase()!=='OUT'&&months.includes(String(x.statementMonth||'').slice(0,7))&&plan.some(p=>supK(p.supplier)===supK(x.supplier))&&!plan.some(p=>supK(p.supplier)===supK(x.supplier)&&p.inv===invK(x.invoiceNo)));
   const missInv=[...new Set(miss.map(x=>invK(x.invoiceNo)))];
   const lab={match:['ok',L('相符','Match')],diff:['bad',L('不同（以對帳單為準）','Different — statement wins')],add:['warn',L('還沒有對帳單，先記會計這筆','No statement yet — add accounting row')],'same-acc':['',L('已記過','Already recorded')]};
   return new Promise(done=>{const el=modal(`<div class="ps-hd"><b>📒 ${L('會計發票對照','Accounting invoices')} · ${E(file.name)}</b><button class="ps-btn" data-x>✕</button></div><div class="ps-bd">
@@ -196,8 +200,8 @@ async function importAcc(file,rows){const plan=accPlan(rows);const months=[...ne
    el.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{el.remove();done(false)});
    el.querySelector('[data-ok]').onclick=async()=>{const now=new Date().toISOString();const all=TX().slice();
      plan.forEach(p=>{const acc={voucher:p.voucher,amount:p.amount,remark:p.remark,erp:p.erp,month:p.month,file:file.name};
-       if(p.status==='match'||p.status==='diff'){const rows=all.filter(x=>x&&x.source==='supplier'&&supK(x.supplier)===supK(p.supplier)&&invK(x.invoiceNo)===p.inv);rows.forEach(x=>{x.acc=acc;x.updatedAt=now});if(rows[0])rows[0].accNote=p.status==='match'?L('會計相符','Accounting matches')+'（'+p.voucher+'）':L('會計記 ','Accounting ')+M2(p.amount)+'（'+p.voucher+' '+p.remark+'），'+L('對帳單 ','statement ')+M2(p.stTotal)+L('，以對帳單為準',' — statement wins')}
-       else if(p.status==='add')all.push({id:'ACC-'+hash(supK(p.supplier)+'|'+p.inv),type:'PURCHASE',source:'acc',date:(p.month||'')+'-01',invoiceDate:'',invoiceNo:p.inv,partNo:p.remark||('INV '+p.inv),name:p.remark||('INV '+p.inv),qty:1,unit:'',unitPrice:p.amount,amount:p.amount,statementMonth:p.month,supplier:(all.find(x=>x&&x.source==='supplier'&&supK(x.supplier)===supK(p.supplier))||{}).supplier||p.supplier,costType:p.type,category:catOf(p.type),erpCode:p.erp,includeInMaster:false,acc,
+       if(p.status==='match'||p.status==='diff'){const rows=all.filter(x=>x&&x.source!=='acc'&&String(x.type||'').toUpperCase()!=='OUT'&&supK(x.supplier)===supK(p.supplier)&&invK(x.invoiceNo)===p.inv);rows.forEach(x=>{x.acc=acc;x.updatedAt=now});if(rows[0])rows[0].accNote=p.status==='match'?L('會計相符','Accounting matches')+'（'+p.voucher+'）':L('會計記 ','Accounting ')+M2(p.amount)+'（'+p.voucher+' '+p.remark+'），'+L('對帳單 ','statement ')+M2(p.stTotal)+L('，以對帳單為準',' — statement wins')}
+       else if(p.status==='add')all.push({id:'ACC-'+hash(supK(p.supplier)+'|'+p.inv),type:'PURCHASE',source:'acc',date:(p.month||'')+'-01',invoiceDate:'',invoiceNo:p.inv,partNo:p.remark||('INV '+p.inv),name:p.remark||('INV '+p.inv),qty:1,unit:'',unitPrice:p.amount,amount:p.amount,statementMonth:p.month,supplier:(all.find(x=>x&&x.source!=='acc'&&supK(x.supplier)===supK(p.supplier))||{}).supplier||p.supplier,costType:p.type,category:catOf(p.type),erpCode:p.erp,includeInMaster:false,acc,
          accNote:L('只有會計記錄（傳票 ','Accounting only (')+p.voucher+L('），還沒有對帳單明細',') — no statement yet'),remark:'',sourceFile:file.name,sourceSheet:p.sheet,createdAt:now,updatedAt:now})});
      miss.forEach(x=>{if(!x.accNote)x.accNote=L('會計 ','Not in accounting ')+String(x.statementMonth||'').slice(0,7)+L(' 的帳沒有這張單','')});
      setTX(all);el.remove();await persist();toastX(L('會計對照已套用','Accounting applied'));done(true)}})}
