@@ -165,7 +165,7 @@ body.vrt-focus>.hdr,body.vrt-focus>.tabs,body.vrt-focus>a[href^="portal_v2.html"
 <script>
 (function(){
 'use strict';
-const V='4.50.0';
+const V='4.50.1';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -318,7 +318,7 @@ const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
  const split=html=>{const p=String(html).split(/<h4[^>]*>([\s\S]*?)<\/h4>/);const secs=[];for(let k=1;k<p.length;k+=2)secs.push([p[k],p[k+1]||'']);return {pre:p[0]||'',secs}};
  const PH='📷 照片 Photos';
  function ensure(){if(el)return;el=document.createElement('div');el.className='sheet';
-  el.innerHTML=`<div class="sh-box"><div class="sh-hd"><button class="btn sh-back" data-a="back" title="回上一層">↩</button><button class="btn" data-a="prev" title="上一個（←）">◀</button><div class="sh-cv"></div><div class="sh-t"><b></b><span></span></div><span class="sh-pos"></span><button class="btn" data-a="next" title="下一個（→）">▶</button><button class="btn sh-ct" data-a="cont" title="連續瀏覽：捲到底自動接下一個 Continuous scroll">⇣</button><button class="btn" data-a="close" title="關閉（Esc）">✕</button></div><div class="sh-tabs"></div><div class="sh-body"></div><div class="sh-rel"></div></div>`;
+  el.innerHTML=`<div class="sh-box"><div class="sh-hd"><button class="btn sh-back" data-a="back" title="回上一層">↩</button><button class="btn" data-a="prev" title="上一個（←）">◀</button><div class="sh-cv"></div><div class="sh-t"><b></b><span></span></div><span class="sh-pos"></span><button class="btn" data-a="next" title="下一個（→）">▶</button><button class="btn" data-a="close" title="關閉（Esc）">✕</button></div><div class="sh-tabs"></div><div class="sh-body"></div><div class="sh-rel"></div></div>`;
   document.body.appendChild(el);
   el.addEventListener('click',e=>{if(e.target===el)return close();const a=e.target.closest('[data-a]');if(a){({prev:()=>go(-1),next:()=>go(1),close,back,photo:()=>{tabI=-1;draw()},cont:()=>{try{localStorage.setItem(CK,contOn()?'0':'1')}catch(e){}a.classList.toggle('on',contOn());draw()}})[a.dataset.a]();return}
    const o=e.target.closest('[data-open]');if(o){const [kind,key]=String(o.dataset.open).split('|');openRef(kind,key);return}
@@ -338,7 +338,7 @@ const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
  function photoTab(g){return g.photo&&window.VRTPhotos}
  /* v4.35（Paul 11/17）像 PSJHR 員工頁：最上面大張 ⭐ 標準照＋名稱；捲到底自動接下一個（連續往下滑），捲到誰上方標頭就換成誰；◀ ▶／左右滑照舊 */
  let base=0,CIO=null;const CK='vrt_sheet_cont';
- const contOn=()=>{try{return localStorage.getItem(CK)!=='0'}catch(e){return true}};
+ /* v4.50.1（Paul 11/22）：連續往下滑一律開著，不再有開關（之前不小心按掉就變成要一直按 ◀ ▶） */const contOn=()=>true;try{localStorage.removeItem(CK)}catch(e){}
  function hero(g,ps,t,kp){if(g.heroFn&&window.VRTPhotos)return g.heroFn(ps,kp);if(!photoTab(g)||t>0)return '';const has=ps&&ps.cover;
   return `<div class="sh-hero"><div class="ph ${has?'':'none'}" data-a="photo" title="看／加照片 Photos" style="${has?`background-image:url('${ps.cover}')`:''}">${has?'':'📷<br>加標準照<br><small>Add photo</small>'}</div>
    <div class="tx"><b>${E(g.title)}</b><div class="sub">${g.sub||''}</div><div class="chips">${ps&&ps.ref?`<span class="tag">⭐ 標準照 ${ps.ref}</span>`:''}${ps&&ps.month?`<span class="tag">⚠️ 每月異常 ${ps.month}</span>`:''}${g.badge||''}</div>${kp||''}</div></div>`}
@@ -367,7 +367,7 @@ const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
   el.querySelector('.sh-back').style.display=stack.length?'inline-block':'none';
   el.querySelector('.sh-cv').innerHTML=ps&&ps.cover?`<img src="${ps.cover}" alt="" data-a="photo" title="看照片">`:'';
   el.querySelector('.sh-t b').textContent=g.title;el.querySelector('.sh-t span').innerHTML=(g.sub||'')+(g.badge?' '+g.badge:'')+(ps&&ps.total?` <span class="tag">📷 ${ps.total}${ps.thisMonth?` · 本月異常 ${ps.thisMonth}`:''}</span>`:'');
-  el.querySelector('.sh-pos').textContent=(i+1)+' / '+list.length;el.querySelector('.sh-ct').classList.toggle('off',!contOn());
+  el.querySelector('.sh-pos').textContent=(i+1)+' / '+list.length;
   el.querySelector('[data-a=prev]').disabled=i===0;el.querySelector('[data-a=next]').disabled=i===list.length-1;
   el.querySelector('.sh-tabs').innerHTML=tabs.map((t,k)=>`<button data-tab="${k}" class="${k===tabI?'on':''}">${t[0]}</button>`).join('')+(hasPh?`<button data-tab="-1" class="${tabI===-1?'on':''}">${PH}${ps.total?` <span class="pill">${ps.total}</span>`:''}</button>`:'');
   const kp=g.kpis?`<div class="kpis">${g.kpis.map(k=>`<div class="kpi"><div class="v ${k[2]||''}">${k[0]}</div><div class="l">${E(k[1])}</div></div>`).join('')}</div>`:'';
