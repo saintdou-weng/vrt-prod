@@ -34,3 +34,19 @@
   else document.body.insertBefore(b,document.body.firstChild);
   /* 生產平台：右上小標與智慧匯入鈕原本貼在最上面，往下讓開這一條 */document.body.classList.add('fxhome');var st=document.createElement('style');st.textContent='body.fxhome .vrt-badge,body.fxhome #vrtSiBtn{top:'+(b.offsetHeight+3)+'px!important}';document.head.appendChild(st)}catch(e){}}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(run,700)});else setTimeout(run,700)})();
+
+/* v4.49（Paul 11/22）卡片互動微變色：滑鼠移入（電腦）或手指按下（手機）時，卡片背景與邊框柔和變色，看得出現在要按哪一張。
+   用半透明色光（inset 陰影，可以平滑過渡）疊在原本底色上（淺色主題＝淺藍／淺綠／粉紅／粉橘；深色主題同色光約 12% 透明度，文字對比不變），四色輪替。只變色，不動位置（不跟 3D 傾斜打架）。 */
+(function(){if(document.getElementById('vrtTintCss'))return;
+ var C='.cards>.card,.sty-it,.pi-it,.mcard,.rr-k>div,.fi-sh,.sh-cont-hd,.card[onclick],.card[data-k],.sh-rel>button';
+ var T=[['96,165,250','.55'],['74,222,128','.55'],['244,114,182','.5'],['251,146,60','.55']],cs='';
+ function each(sel,fn){return sel.split(',').map(fn).join(',')}
+ T.forEach(function(t,i){var nth=':nth-child(4n+'+(i+1)+')';
+  var rule='{box-shadow:inset 0 0 0 2000px rgba('+t[0]+',.12),0 2px 8px rgba(15,23,42,.08)!important;border-color:rgba('+t[0]+','+t[1]+')!important}';
+  cs+='@media (hover:hover){'+each(C,function(x){return x+nth+':hover'})+rule+'}';
+  cs+='@media (hover:none){'+each(C,function(x){return x+nth+':active'})+rule+'}'});
+ cs+='@media (hover:hover){'+C+'{transition:border-color 150ms ease-out,box-shadow 150ms ease-out,transform .2s}}'
+   +'@media (hover:none){'+C+'{-webkit-tap-highlight-color:transparent;transition:none}}';
+ var st=document.createElement('style');st.id='vrtTintCss';st.textContent=cs;(document.head||document.documentElement).appendChild(st);
+ /* iPhone 要有 touchstart 監聽，:active 才會在按下時出現 */
+ try{document.addEventListener('touchstart',function(){},{passive:true})}catch(e){}})();
