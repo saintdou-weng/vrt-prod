@@ -9,8 +9,8 @@
  g.VRTPlatform={version:'4.21.0',getGasUrl:get,setGasUrl:set,validGasUrl:valid,erpUrl:ERP_URL};get();
  addEventListener('storage',e=>{if(e.key===KEY&&valid(e.newValue))set(e.newValue)});
  /* v4.15: PROD ↔ ERP 互相入口 — every PROD page carries a small "VRT ERP ↗" link next to the version badge (ERP pages link back to the portal). */
- function ready(){/* v4.44：在生產平台入口頁的分頁裡（?embed=1）不再重複放「VRT ERP ↗／PROD」小標，入口頁上面已經有 */let emb=false;try{emb=!!window.VRT_HUBS||window.parent!==window&&(/[?&]embed=1/.test(location.search)||!!window.parent.VRTPlatform||!!window.parent.VRT_HUBS)}catch(_){}if(emb){const u0=get();if(u0)document.querySelectorAll('input').forEach(e=>{if(/gas|endpoint/i.test(e.id)&&!e.value)e.value=u0});return}const badge=document.createElement('a');badge.href='portal_v2.html?v=4.22.0';badge.textContent='PROD v4.22';badge.title='本頁程式版本 · 返回平台';badge.setAttribute('data-no-i18n','');badge.style.cssText='position:fixed;right:8px;top:2px;z-index:9990;background:#14213d;color:#fff;font:11px system-ui;padding:3px 7px;border-radius:4px;text-decoration:none';document.body.appendChild(badge);
-  const erp=document.createElement('a');erp.href=ERP_URL;erp.target='_blank';erp.rel='noopener';erp.textContent='VRT ERP ↗';erp.title='VRT ERP（PSJERP）另開新分頁';erp.setAttribute('data-no-i18n','');erp.style.cssText='position:fixed;right:86px;top:2px;z-index:9990;background:#1d3557;color:#bfdbfe;font:11px system-ui;padding:3px 7px;border-radius:4px;text-decoration:none;border:1px solid #2a5298';document.body.appendChild(erp);
+ function ready(){/* v4.44：在生產平台入口頁的分頁裡（?embed=1）不再重複放「VRT ERP ↗／PROD」小標，入口頁上面已經有 */let emb=false;try{emb=!!window.VRT_HUBS||window.parent!==window&&(/[?&]embed=1/.test(location.search)||!!window.parent.VRTPlatform||!!window.parent.VRT_HUBS)}catch(_){}if(emb){const u0=get();if(u0)document.querySelectorAll('input').forEach(e=>{if(/gas|endpoint/i.test(e.id)&&!e.value)e.value=u0});return}const badge=document.createElement('a');badge.href='portal_v2.html?v=4.22.0';badge.textContent='PROD v4.22';badge.title='本頁程式版本 · 返回平台';badge.setAttribute('data-no-i18n','');badge.className='vrt-badge';badge.style.cssText='position:fixed;right:8px;top:2px;z-index:9990;background:#14213d;color:#fff;font:11px system-ui;padding:3px 7px;border-radius:4px;text-decoration:none';document.body.appendChild(badge);
+  const erp=document.createElement('a');erp.href=ERP_URL;erp.target='_blank';erp.rel='noopener';erp.textContent='VRT ERP ↗';erp.title='VRT ERP（PSJERP）另開新分頁';erp.setAttribute('data-no-i18n','');erp.className='vrt-badge';erp.style.cssText='position:fixed;right:86px;top:2px;z-index:9990;background:#1d3557;color:#bfdbfe;font:11px system-ui;padding:3px 7px;border-radius:4px;text-decoration:none;border:1px solid #2a5298';document.body.appendChild(erp);
   const u=get();if(u)document.querySelectorAll('input').forEach(e=>{if(/gas|endpoint/i.test(e.id)&&!e.value)e.value=u});}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
  /* v4.47（Paul 11/22「全部都要」）：模組頁「單獨打開」時也有介面動效——用行政中心共用的 ux_motion.js（HRA／Admin OS／GASCheck 同一支）。
@@ -20,3 +20,17 @@
   Object.assign(s.dataset,{cards:'.kpi,.metric,.kpi-card,.stat-card,.hstat,.mcard,.hra-kpi',grid:'.kpi-strip,.kpis,.metrics,.cards,.grid',nav:'.header,.topbar,header,.hdr',skip:'table,thead,.tabs,.tab,#tabBar,nav,.seg,[role=tablist],.vtt-tabs,.vp-grid,.pi-sw,.sty-per,.sty-cu'});document.head.appendChild(s)}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',motion);else motion();
 })(window);
+/* ── 回平台選單（2026-11-22 Paul：每頁最上面一條，不用退出再進來；頁面最上面已經有回選單的連結就不加；放在平台框架裡面時不加）── */
+(function(){var O={href:'vrt_hub_v1.html',name:'生產平台',skip:/^(vrt_hub_v1|portal_v2|index)\.html$/,alt:/\/(portal_v2|vrt_hub_v1)\.html$/};
+ function run(){try{if(window.top!==window.self||document.getElementById('fx-home')||/[?&]embed=1/.test(location.search))return;
+  var file=location.pathname.split('/').pop()||'index.html';if(O.skip.test(file))return;
+  var target=new URL(O.href,location.href).pathname,ls=document.querySelectorAll('a[href]');
+  for(var i=0;i<ls.length;i++){var a=ls[i];if(/^\s*PROD v/i.test(a.textContent||''))continue;var u;try{u=new URL(a.getAttribute('href'),location.href)}catch(e){continue}
+   if(u.pathname===target||(O.alt&&O.alt.test(u.pathname))){var r=a.getBoundingClientRect();if(r.width>0&&r.height>0&&r.top<180)return}}
+  var b=document.createElement('a');b.id='fx-home';b.href=O.href;b.setAttribute('data-fx','off');b.title='回 '+O.name+' 選單 Back to menu';
+  b.innerHTML='<span style="font-size:15px">‹</span> 🏠 <b>'+O.name+'</b> 選單 Menu';
+  b.style.cssText='font:600 13px/1 system-ui,"Noto Sans TC",sans-serif;color:#fff;background:#0f172a;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;width:100%;box-sizing:border-box;position:relative;z-index:5';
+  var bs=getComputedStyle(document.body);if((bs.display==='flex'&&!/column/.test(bs.flexDirection))||bs.display==='grid'){b.style.cssText+=';position:fixed;top:6px;left:50%;transform:translateX(-50%);width:auto;border-radius:999px;z-index:80;box-shadow:0 2px 10px rgba(15,23,42,.3);opacity:.94';document.body.appendChild(b)}
+  else document.body.insertBefore(b,document.body.firstChild);
+  /* 生產平台：右上小標與智慧匯入鈕原本貼在最上面，往下讓開這一條 */document.body.classList.add('fxhome');var st=document.createElement('style');st.textContent='body.fxhome .vrt-badge,body.fxhome #vrtSiBtn{top:'+(b.offsetHeight+3)+'px!important}';document.head.appendChild(st)}catch(e){}}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(run,700)});else setTimeout(run,700)})();
