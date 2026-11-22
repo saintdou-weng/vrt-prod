@@ -13,6 +13,7 @@ function css(){if(document.getElementById('qdCss'))return;const s=document.creat
 .qd-tabs{display:flex;gap:4px;padding:6px 10px;background:#fff;border-bottom:1px solid #e2e8f0;overflow-x:auto}.qd-tabs button{border:0;background:none;padding:7px 11px;border-radius:9px;font-size:13px;white-space:nowrap;cursor:pointer;color:#475569}.qd-tabs button.on{background:#fef3c7;color:#92400e;font-weight:700}.qd-tabs i{font-style:normal;background:#f59e0b;color:#fff;border-radius:99px;padding:0 6px;font-size:10.5px}
 .qd-hero{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:start;margin-bottom:6px}.qd-hph{width:150px;height:150px;border-radius:12px;border:2px solid #f59e0b;background:#f1f5f9 center/cover no-repeat;cursor:pointer;position:relative}.qd-hph i{position:absolute;right:6px;bottom:6px;font-style:normal;font-size:11px;background:rgba(15,23,42,.75);color:#fff;border-radius:99px;padding:1px 7px}
 .qd-hph.none{border:2px dashed #cbd5e1;display:grid;place-items:center;text-align:center;color:#94a3b8;font-size:12px}.qd-hcv{width:34px;height:34px;border-radius:8px;object-fit:cover;float:left;margin-right:8px;border:2px solid #f59e0b;cursor:pointer}
+.qd-sec+.qd-sec{margin-top:20px;border-top:3px dashed #e2e8f0;padding-top:6px}.qd-sh{display:flex;align-items:center;gap:10px;padding:8px;margin:8px 0;background:#fff;border:1px solid #e2e8f0;border-radius:12px;cursor:pointer}.qd-sh img{width:48px;height:48px;border-radius:10px;object-fit:cover}.qd-sh span{font-size:24px}.qd-sh b{font-size:16px}.qd-sh small{margin-left:auto;color:#64748b;font-size:12px}
 .qd-more{display:block;width:100%;margin-top:12px;padding:11px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;font-size:13.5px;cursor:pointer;color:#334155}.qd-mut{color:#64748b;font-size:12px}
 @media (max-width:640px){.qd-hero{grid-template-columns:110px 1fr}.qd-hph{width:110px;height:110px}.qd-hero .qd-k{grid-template-columns:1fr 1fr}.qd-hero .qd-k div{padding:7px 8px}.qd-hero .qd-k b{font-size:17px}.qd-hd b{font-size:15px}}
 
@@ -54,8 +55,8 @@ function open(list,i){css();let k=i;const el=document.createElement('div');el.cl
   const go=d=>{const n=k+d;if(n<0||n>=list.length)return;k=n;paint()};
   /* v1.2（Paul 11/18）分頁：總覽／每月／線別／款式／每日／照片，換下一種瑕疵時停在同一個分頁；每日改成一天一列＋分頁顯示，不用一直往下滑 */
   const TABS=[['sum','📊 總覽'],['mon','📈 每月'],['line','🧵 線別'],['sty','👕 款式'],['day','📋 每日'],['ph','📷 照片']];let tab='sum',dayN=30;
-  function paint(){const d=list[k],a=d.a,qc=a.filter(x=>x.src==='qc'),kp=a.filter(x=>x.src==='kpi');const lines=new Map(),sty=new Map();d.a.filter(x=>x.src==='qc'&&x.date>=d.r0&&x.date<=d.r1).forEach(x=>{lines.set(x.line,(lines.get(x.line)||0)+x.qty);x.styles.forEach(s=>sty.set(s,(sty.get(s)||0)+x.qty))});
-    const ch=d.prev?(d.n-d.prev)/d.prev:null;const lc=k>0,rc=k<list.length-1;const ps=g.VRTPhotos?g.VRTPhotos.summary('defect',d.k):null;
+  function view(ix,tb){const d=list[ix],a=d.a,qc=a.filter(x=>x.src==='qc'),kp=a.filter(x=>x.src==='kpi');const lines=new Map(),sty=new Map();d.a.filter(x=>x.src==='qc'&&x.date>=d.r0&&x.date<=d.r1).forEach(x=>{lines.set(x.line,(lines.get(x.line)||0)+x.qty);x.styles.forEach(s=>sty.set(s,(sty.get(s)||0)+x.qty))});
+    const ch=d.prev?(d.n-d.prev)/d.prev:null;const ps=g.VRTPhotos?g.VRTPhotos.summary('defect',d.k):null;
     const L=[...lines].map(([l,v])=>({l,v})).sort((x,y)=>y.v-x.v),S=[...sty].map(([l,v])=>({l,v})).sort((x,y)=>y.v-x.v);
     const byDay=new Map();a.forEach(x=>{const o=byDay.get(x.date)||{qc:0,kpi:0,ln:new Map()};o[x.src]+=x.qty;o.ln.set(x.line,(o.ln.get(x.line)||0)+x.qty);byDay.set(x.date,o)});const days=[...byDay].sort((x,y)=>String(y[0]).localeCompare(String(x[0])));
     const hero=`<div class="qd-hero"><div data-a="tph" class="qd-hph ${ps&&ps.cover?'':'none'}" style="${ps&&ps.cover?`background-image:url('${ps.cover}')`:''}" title="看照片 Photos">${ps&&ps.cover?(ps.total>1?`<i>📷 ${ps.total}</i>`:''):'📷<br>還沒有標準照<br><small>No photo yet</small>'}</div>
@@ -67,12 +68,21 @@ function open(list,i){css();let k=i;const el=document.createElement('div');el.cl
       sty:()=>`<h4>👕 哪幾款（這段期間）By style</h4>${S.length?hbars(S,'#6366f1'):'<p class="qd-mut">沒有款式資料</p>'}`,
       day:()=>`<h4>📋 每日（一天一列，新的在上面）Daily</h4><div class="qd-tb"><table><thead><tr><th>日期</th><th>Final QC</th><th>車縫 KPI</th><th>線別 Lines</th></tr></thead><tbody>${days.slice(0,dayN).map(([dt,o])=>`<tr><td>${E(dt)}</td><td><b>${F(o.qc)}</b></td><td>${o.kpi?F(o.kpi):''}</td><td style="white-space:normal">${[...o.ln].sort((x,y)=>y[1]-x[1]).map(([l,v])=>E(l)+' '+F(v)).join(' · ')}</td></tr>`).join('')}</tbody></table></div>${days.length>dayN?`<button data-a="dm" class="qd-more">再看 30 天 More（還有 ${days.length-dayN} 天）</button>`:''}`,
       ph:()=>'<div id="qdPh"></div>'};
+    return {d,ps,html:body[tb]()}}
+  function paint(){const V=view(k,tab),d=V.d,ps=V.ps;const lc=k>0,rc=k<list.length-1;
     el.innerHTML=`<div class="qd-box"><div class="qd-hd"><button data-a="p" ${lc?'':'disabled'}>◀</button><div style="flex:1;min-width:0">${ps&&ps.cover?`<img src="${ps.cover}" alt="" data-a="tph" class="qd-hcv">`:''}<b>🔍 ${E(d.name)}</b><small>${d.code?'代碼 '+E(d.code)+' · ':''}${E(d.r0)}～${E(d.r1)}</small></div><small>${k+1} / ${list.length}</small><button data-a="n" ${rc?'':'disabled'}>▶</button><button data-a="x">✕</button></div>
      <div class="qd-tabs">${TABS.map(t=>`<button data-t="${t[0]}" class="${t[0]===tab?'on':''}">${t[1]}${t[0]==='ph'&&ps&&ps.total?` <i>${ps.total}</i>`:''}</button>`).join('')}</div>
-     <div class="qd-body">${body[tab]()}${rc?`<button data-a="n" class="qd-more">下一個 Next：${E(list[k+1].name)} ▶</button>`:''}</div>
+     <div class="qd-body"><section class="qd-sec" data-i="${k}">${V.html}</section>${rc&&tab!=='ph'?`<div class="qd-more qd-cont">⬇ 繼續往下捲：下一個 <b>${E(list[k+1].name)}</b></div>`:''}</div>
      <div class="qd-rel">${list.slice(Math.max(0,k-4),k+12).map((x,j)=>{const ix=Math.max(0,k-4)+j;return `<button data-j="${ix}" class="${ix===k?'on':''}">${E(x.name)} ${F(x.n)}</button>`}).join('')}</div></div>`;
     if(tab==='ph'){if(g.VRTPhotos)g.VRTPhotos.mount(el.querySelector('#qdPh'),{domain:'defect',key:d.k,name:d.name,tip:'放這種瑕疵的標準範例照，大家才知道什麼叫這個瑕疵。'});else el.querySelector('#qdPh').innerHTML='<p style="color:#64748b">照片元件沒有載入</p>'}
-    el.querySelector('.qd-body').scrollTop=0;const on=el.querySelector('.qd-rel .on');on&&on.scrollIntoView({block:'nearest',inline:'center'});const ot=el.querySelector('.qd-tabs .on');ot&&ot.scrollIntoView({block:'nearest',inline:'center'})}
+    el.querySelector('.qd-body').scrollTop=0;cont();const on=el.querySelector('.qd-rel .on');on&&on.scrollIntoView({block:'nearest',inline:'center'});const ot=el.querySelector('.qd-tabs .on');ot&&ot.scrollIntoView({block:'nearest',inline:'center'})}
+  /* v1.3（Paul 11/22）連續往下滑：捲到底自動接下一種瑕疵（同一個分頁），捲到誰，上面標題就換成誰 */
+  let io=null;function cont(){if(io){io.disconnect();io=null}const B=el.querySelector('.qd-body'),more=B.querySelector('.qd-cont');if(!more)return;let last=k;const base=k;
+    const lab=()=>{const nx=list[last+1];more.innerHTML=nx?'⬇ 繼續往下捲：下一個 <b>'+E(nx.name)+'</b>':'— 已經是最後一個 —'};
+    const add=()=>{if(!more.isConnected||!list[last+1])return false;last++;const V=view(last,tab);more.insertAdjacentHTML('beforebegin',`<section class="qd-sec" data-i="${last}"><div class="qd-sh" data-j="${last}">${V.ps&&V.ps.cover?`<img src="${V.ps.cover}" alt="">`:'<span>🔍</span>'}<b>${E(V.d.name)}</b><small>${last+1} / ${list.length} · ${F(V.d.n)}</small></div>${V.html}</section>`);lab();return true};
+    lab();more.onclick=()=>add();const near=()=>more.getBoundingClientRect().top<B.getBoundingClientRect().bottom+450;const fill=()=>{let n=0;while(near()&&n++<3&&add());};
+    if(g.IntersectionObserver){io=new IntersectionObserver(es=>{if(es.some(x=>x.isIntersecting))fill()},{root:B,rootMargin:'0px 0px 450px 0px'});io.observe(more)}
+    let tk=0;B.onscroll=()=>{if(tk)return;tk=setTimeout(()=>{tk=0;fill();let c=base;for(const x of B.querySelectorAll('.qd-sec')){if(x.offsetTop<=B.scrollTop+70)c=+x.dataset.i;else break}if(c!==k){k=c;const d=list[k];const hd=el.querySelector('.qd-hd');hd.querySelector('b').textContent='🔍 '+d.name;hd.querySelectorAll('small')[1].textContent=(k+1)+' / '+list.length;el.querySelectorAll('.qd-rel [data-j]').forEach(b=>b.classList.toggle('on',+b.dataset.j===k))}},90)}}
   /* 照片匯入／雲端下載完，開著的卡片也跟著換照片 */
   let un=null;try{un=g.VRTPhotos&&g.VRTPhotos.on&&g.VRTPhotos.on(()=>{if(el.isConnected&&tab!=='ph')paint()})}catch(_){}
   const close0=close;close=()=>{try{un&&un()}catch(_){}close0()};
@@ -106,5 +116,5 @@ function thumbs(root){if(!root||!g.VRTPhotos)return;root.querySelectorAll('[data
 if(!g.VRTPhotoItems)g.VRTPhotoItems=async dom=>{if(dom!=='defect')return [];const c=ctxAll();if(!c)return [];return build(c.all,c.kpi,c.all).map(x=>({key:x.k,name:x.name,code:x.code||'',alt:''}))};
 try{g.VRTPhotos&&g.VRTPhotos.on&&g.VRTPhotos.on(()=>thumbs(document.getElementById('qcContent')))}catch(_){}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-qd]');if(!t||t.closest('.qd-sheet'))return;if(openName(t.dataset.qd))e.preventDefault()});
-g.VRTQCDefect={version:'1.2.0',render,build,openName,thumbs};
+g.VRTQCDefect={version:'1.3.0',render,build,openName,thumbs};
 })(window);
