@@ -67,7 +67,7 @@ function pageDB(){try{/* eslint-disable-next-line no-undef */const d=typeof DB!=
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 function periodOf(v,yr){v=String(v||'').trim();let m;
   if((m=v.match(/^(20\d\d)-(\d\d)-(\d\d)/)))return [m[0],m[0]];
-  if((m=v.match(/^(20\d\d)[-\/](\d{1,2})(?!\d)/))&&!/^(20\d\d)[-\/]\d{1,2}[-\/]\d/.test(v)){const a=m[1]+'-'+m[2].padStart(2,'0');return [a+'-01',a+'-31']}
+  if((m=v.match(/^(20\d\d)[-\/](\d{1,2})(?!\d)/))&&!/^(20\d\d)[-\/]\d{1,2}[-\/]\d/.test(v)){const a=m[1]+'-'+m[2].padStart(2,'0');return [a+'-01',a+'-'+String(new Date(+m[1],+m[2],0).getDate()).padStart(2,'0')]}
   if((m=v.match(/^(20\d\d)(年)?$/)))return [m[1]+'-01-01',m[1]+'-12-31'];
   if((m=v.match(/(\d{1,2})\/(\d{1,2})\s*[–~～\-至]\s*(\d{1,2})\/(\d{1,2})/))){const a=ymd(new Date(yr,m[1]-1,+m[2])),b=ymd(new Date(+m[3]<+m[1]?yr+1:yr,m[3]-1,+m[4]));return [a,b]}
   if((m=v.match(/^(\d{1,2})\/(\d{1,2})$/))){const a=ymd(new Date(yr,m[1]-1,+m[2]));return [a,a]}
