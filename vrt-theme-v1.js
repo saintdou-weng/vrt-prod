@@ -28,3 +28,5 @@
 })();
 /* v4.34（Paul 11/14）每一頁都載入「點了就連」：表格裡的款號／PO／線別／日期／客戶／料號／機台可點，開相關資訊卡 */
 (function(){try{if(window.VRTLink||document.querySelector('script[src*="vrt-link-v1.js"]'))return;var s=document.createElement('script');s.src='vrt-link-v1.js?v=4.34.0';(document.head||document.documentElement).appendChild(s)}catch(e){}})();
+/* v4.47（Paul 11/22）每一頁上方都有 🎵 放鬆音樂的 ON/OFF 小開關（預設關）；程式共用 PSJERP 的 music.js，各平台同一份 */
+(function(){try{if(window.__VRT_MUSIC||document.querySelector('script[src*="/PSJERP/music.js"]'))return;var s=document.createElement('script');s.src='https://saintdou-weng.github.io/PSJERP/music.js?v=1.0.2';s.defer=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
