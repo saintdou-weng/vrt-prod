@@ -13,4 +13,10 @@
   const erp=document.createElement('a');erp.href=ERP_URL;erp.target='_blank';erp.rel='noopener';erp.textContent='VRT ERP ↗';erp.title='VRT ERP（PSJERP）另開新分頁';erp.setAttribute('data-no-i18n','');erp.style.cssText='position:fixed;right:86px;top:2px;z-index:9990;background:#1d3557;color:#bfdbfe;font:11px system-ui;padding:3px 7px;border-radius:4px;text-decoration:none;border:1px solid #2a5298';document.body.appendChild(erp);
   const u=get();if(u)document.querySelectorAll('input').forEach(e=>{if(/gas|endpoint/i.test(e.id)&&!e.value)e.value=u});}
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
+ /* v4.47（Paul 11/22「全部都要」）：模組頁「單獨打開」時也有介面動效——用行政中心共用的 ux_motion.js（HRA／Admin OS／GASCheck 同一支）。
+    在入口頁的分頁裡（iframe）不載入：入口頁自己的 vrt-ui-fx 已經處理，避免按鈕上移兩次、兩顆回到頂部。網址加 ?fx=off 可關。 */
+ function motion(){try{if(g.VRT_HUBS||g.top!==g.self||/[?&](fx=off|embed=1)/.test(location.search)||localStorage.getItem('ac_ui_fx')==='off'||document.getElementById('uxMotionCss'))return}catch(_){return}
+  const s=document.createElement('script');s.src='https://saintdou-weng.github.io/ac-admin/shared/ux_motion.js?v=2';s.async=true;
+  Object.assign(s.dataset,{cards:'.kpi,.metric,.kpi-card,.stat-card,.hstat,.mcard,.hra-kpi',grid:'.kpi-strip,.kpis,.metrics,.cards,.grid',nav:'.header,.topbar,header,.hdr',skip:'table,thead,.tabs,.tab,#tabBar,nav,.seg,[role=tablist],.vtt-tabs,.vp-grid,.pi-sw,.sty-per,.sty-cu'});document.head.appendChild(s)}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',motion);else motion();
 })(window);
