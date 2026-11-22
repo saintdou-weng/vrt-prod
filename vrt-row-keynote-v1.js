@@ -129,7 +129,7 @@ function deco(){try{const sk='#vkn,.pkn-box,.sheet,[data-keynote="off"],[data-ic
  }catch(e){}}
 function decoInit(){if(!document.getElementById('vkIcCss')){const s=document.createElement('style');s.id='vkIcCss';s.textContent='[data-vic]::before{content:attr(data-vic);margin-right:4px;font-style:normal;font-weight:400;letter-spacing:0;text-transform:none}';document.head.appendChild(s)}
   deco();setTimeout(deco,1500);setTimeout(deco,4000);let tm=0;try{new MutationObserver(()=>{if(!tm)tm=setTimeout(()=>{tm=0;deco()},700)}).observe(document.body,{childList:true,subtree:true})}catch(e){}}
-function init(){if(g.VRT_HUBS)return;css();document.addEventListener('click',onClick);document.addEventListener('mouseover',over,{passive:true});decoInit()}
+function init(){if(g.VRT_HUBS)return;css();document.addEventListener('click',onClick);document.addEventListener('mouseover',over,{passive:true});decoInit();setTimeout(()=>{try{const d=pageDB();if(d)dbIdx(d)}catch(e){}},3500)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-g.VRTKeynote={version:'1.2.0',open,close};
+g.VRTKeynote={version:'1.2.1',open,close};
 })(window);
