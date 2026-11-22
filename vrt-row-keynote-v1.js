@@ -15,7 +15,7 @@ const F=(n,d)=>n==null||!isFinite(n)?'—':Number(n).toLocaleString('en-US',{max
 const KINDS=[[/款號|款式|style/i,'style','👕','款式頁'],[/線別|組別|^line|生產線/i,'line','🧵','線別頁'],[/^po\b|po no|訂單號|po#|採購單/i,'po','📄','PO 頁'],[/瑕疵|缺點|defect/i,'defect','🔍','瑕疵頁'],[/客戶|customer|buyer/i,'customer','👥','客戶頁'],[/料號|item code|布號|fabric code/i,'item','🧶','料號頁'],[/日期|^date|day$/i,'date','📅','那一天']];
 const ICON=[[/日期|date|月份|期間|週|week|month|year|年/i,'📅'],[/人數|人力|worker|operator|manpower|headcount/i,'👥'],[/件數|產量|數量|pcs|qty|output|pieces/i,'📦'],[/smv|工時|minute|分鐘|hours?/i,'⏱️'],[/效率|eff/i,'📈'],[/不良|瑕疵|defect|reject/i,'🔍'],[/金額|價|cost|amount|\$|usd/i,'💲'],[/線別|line|組別/i,'🧵'],[/款|style/i,'👕'],[/客戶|customer/i,'👥'],[/天|day/i,'🗓️'],[/率|%|rate/i,'📊']];
 const iconOf=h=>{for(const [re,ic] of ICON)if(re.test(h))return ic;return '•'};
-const isCount=h=>/數|count|qty|件|人|天|率|%|total|合計|sum|avg|平均/i.test(h);const kindOf=h=>isCount(h)&&!/日期|date/i.test(h)?null:KINDS.find(k=>k[0].test(h));
+const isCount=h=>/數|count|qty|件|人|天|率|%|total|合計|sum|avg|平均/i.test(h);const kindOf=h=>(isCount(h)&&!/日期|date/i.test(h))||/名稱|類型|類別|name|type|desc|說明|備註/i.test(h)?null:KINDS.find(k=>k[0].test(h));
 
 function css(){if(document.getElementById('vknCss'))return;const s=document.createElement('style');s.id='vknCss';s.textContent=`
 #vkn{position:fixed;inset:0;z-index:99960;background:rgba(15,23,42,.55);display:none;align-items:flex-end;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}#vkn.on{display:flex}
@@ -114,5 +114,5 @@ function onClick(e){if(e.defaultPrevented||e.button)return;const t=e.target;if(!
 function over(e){const tr=e.target.closest&&e.target.closest('tbody tr');if(!tr||tr.hasAttribute('data-vkn-mine')||tr.__vkn)return;tr.__vkn=1;const t=tr.closest('table');if(!t||t.closest(SKIP_IN)||tr.matches(ROW_OWN)||tr.cells.length<2)return;if(getComputedStyle(tr).cursor==='pointer')return;tr.setAttribute('data-vkn-mine','');tr.style.cursor='pointer'}
 function init(){if(g.VRT_HUBS)return;css();document.addEventListener('click',onClick);document.addEventListener('mouseover',over,{passive:true})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-g.VRTKeynote={version:'1.1.1',open,close};
+g.VRTKeynote={version:'1.1.2',open,close};
 })(window);

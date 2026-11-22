@@ -51,4 +51,4 @@
  /* iPhone 要有 touchstart 監聽，:active 才會在按下時出現 */
  try{document.addEventListener('touchstart',function(){},{passive:true})}catch(e){}})();
 /* v4.50（Paul 11/22）列表點一列跳 Keynote（大字卡、可連續往下滑、款號／線別／PO… 可直接開物品頁）。入口頁本身不載入（它有自己的物品頁）。 */
-(function(){try{if(window.VRT_HUBS||window.VRTKeynote||document.getElementById('vrtKnJs'))return;var s=document.createElement('script');s.id='vrtKnJs';s.src='vrt-row-keynote-v1.js?v=4.50.2';s.async=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
+(function(){try{if(window.VRT_HUBS||window.VRTKeynote||document.getElementById('vrtKnJs'))return;var s=document.createElement('script');s.id='vrtKnJs';s.src='vrt-row-keynote-v1.js?v=4.50.3';s.async=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
