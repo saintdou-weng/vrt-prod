@@ -7,7 +7,7 @@
 <script src="vrt-deploy-config.js?v=4.25.0"></script>
 <script src="vrt-platform-v40.js?v=4.44.0"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
-<script src="vrt-theme-v1.js?v=4.47.1"></script>
+<script src="vrt-theme-v1.js?v=4.48.0"></script>
 <script src="vrt-item-photos-v1.js?v=4.44.2"></script>
 <script src="vrt-photo-import-v1.js?v=4.41.0"></script>
 <script src="vrt-ui-fx-v1.js?v=4.46.0"></script>
@@ -144,6 +144,8 @@ body[data-bg] .pane,body[data-bg] .stage iframe{background:transparent}body[data
 .sty-ph.none{background:var(--chip);border:2px dashed var(--line)}.sty-ph span{position:absolute;left:0;right:0;bottom:0;font-size:10.5px;font-weight:700;background:rgba(15,23,42,.65);color:#fff;border-radius:0 0 10px 10px;padding:2px}
 @media(max-width:640px){.sty-hero{flex-direction:column;align-items:stretch}.sty-hero .sty-phs{justify-content:center}.sty-ph{width:46%;height:180px}.sty-th{width:56px;height:56px}}
 @media(max-width:760px){.hdr{padding:5px 10px;gap:6px}.hdr .home{width:30px;height:30px;font-size:16px}.hdr .sub{display:none}.hdr h1{font-size:14px}.hdr .tools{gap:4px;margin-left:auto}.hdr .tools .btn{padding:4px 7px;font-size:11px}.hub-pick{gap:2px}.hub-pick a{padding:3px 7px;font-size:11px}.tabs button{padding:8px 10px}}
+/* 2026-11-23 Paul：上方 8 個入口最多 1～2 列。視窗不夠寬時，第一列＝標題＋工具，第二列＝8 個入口整排（原本擠在中間會折成 3 列） */
+@media(max-width:1700px){.hub-pick{order:3;flex-basis:100%;justify-content:flex-start;margin-top:-2px}.hdr .tools{margin-left:auto}}
 .hdr{transition:margin-top .2s}body.hub-min>.hdr{margin-top:calc(-1 * var(--hdrH,120px))}
 body.vrt-focus>.hdr,body.vrt-focus>.tabs,body.vrt-focus>a[href^="portal_v2.html"],body.vrt-focus>a[href*="PSJERP"]{display:none!important}
 </style>
