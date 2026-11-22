@@ -109,10 +109,10 @@ function onClick(e){if(e.defaultPrevented||e.button)return;const t=e.target;if(!
   if(t.closest('a,button,input,select,textarea,label,summary,[onclick],[contenteditable="true"],[role="button"]'))return;
   const tr=t.closest('tr');if(!tr||!tr.parentElement||tr.parentElement.tagName!=='TBODY')return;const table=tr.closest('table');if(!table||table.closest(SKIP_IN))return;
   if(tr.matches(ROW_OWN)||tr.cells.length<2)return;if(String(g.getSelection&&g.getSelection())!=='')return;
-  if(!tr.hasAttribute('data-vkn-mine')&&getComputedStyle(tr).cursor==='pointer')return;   /* 頁面自己讓這一列可以點（會做別的事）→ 不搶 */
+  if(!tr.hasAttribute('data-vkn-mine')&&!tr.classList.contains('pkn-row')&&getComputedStyle(tr).cursor==='pointer')return;   /* 頁面自己讓這一列可以點（會做別的事）→ 不搶 */
   open(table,tr)}
 function over(e){const tr=e.target.closest&&e.target.closest('tbody tr');if(!tr||tr.hasAttribute('data-vkn-mine')||tr.__vkn)return;tr.__vkn=1;const t=tr.closest('table');if(!t||t.closest(SKIP_IN)||tr.matches(ROW_OWN)||tr.cells.length<2)return;if(getComputedStyle(tr).cursor==='pointer')return;tr.setAttribute('data-vkn-mine','');tr.style.cursor='pointer'}
 function init(){if(g.VRT_HUBS)return;css();document.addEventListener('click',onClick);document.addEventListener('mouseover',over,{passive:true})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-g.VRTKeynote={version:'1.1.0',open,close};
+g.VRTKeynote={version:'1.1.1',open,close};
 })(window);
