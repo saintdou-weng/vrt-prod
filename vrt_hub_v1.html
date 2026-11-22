@@ -102,7 +102,7 @@ table.dt td.r,table.dt th.r{text-align:right}
 .glegend{font-size:11px;color:var(--mut);margin-left:auto;display:flex;align-items:center;gap:4px;flex-wrap:wrap}.glegend i{display:inline-block;width:18px;height:10px;border-radius:3px;margin-left:8px}
 .lg-plan{background:var(--bar)}.lg-act{background:none!important;width:auto!important}.lg-act::before{content:'792';font-style:normal;font-size:10px;color:var(--ok);font-weight:700}
 .lg-gap,.g-c.gap{background:repeating-linear-gradient(135deg,transparent 0 5px,rgba(148,163,184,.28) 5px 7px)}.lg-today{background:rgba(245,158,11,.35)}
-.gantt{min-width:calc(120px + var(--n)*var(--cw))}.g-row{display:flex;border-bottom:1px solid var(--line);position:relative}
+.gantt{min-width:calc(120px + var(--n)*var(--cw))}.g-l[data-l]{cursor:pointer}.g-l[data-l]:hover b{text-decoration:underline}.lnp{display:grid;gap:8px}.lnp-r{border:1px solid var(--line);border-radius:12px;padding:9px 11px;background:var(--card)}.lnp-r.now{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.18)}.lnp-r.past{opacity:.7}.lnp-h{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}.lnp-h span{font-size:12px;color:var(--mut)}.lnp-h em{color:#4f46e5;font-style:normal;font-weight:700}.lnp-b{height:8px;border-radius:4px;background:var(--line);margin:7px 0 5px;overflow:hidden}.lnp-b i{display:block;height:100%;background:#22c55e}.lnp-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between;font-size:12.5px}.g-row{display:flex;border-bottom:1px solid var(--line);position:relative}
 .g-l{width:120px;flex:none;position:sticky;left:0;z-index:3;background:var(--card);border-right:1px solid var(--line);padding:4px 8px;display:flex;flex-direction:column;justify-content:center}
 .g-l b{font-size:14px;display:flex;align-items:center;gap:6px}.g-l b i{width:10px;height:10px;border-radius:3px;display:inline-block}.g-l span{font-size:10.5px;color:var(--mut)}.g-l em{font-style:normal;color:var(--crit);font-weight:700}
 .g-t{position:relative;flex:none;width:calc(var(--n)*var(--cw))}.g-head{position:sticky;top:0;z-index:5;background:var(--chip)}.g-head .g-l{background:var(--chip);font-size:12px;font-weight:700}.g-head .g-t{display:flex}
@@ -165,7 +165,7 @@ body.vrt-focus>.hdr,body.vrt-focus>.tabs,body.vrt-focus>a[href^="portal_v2.html"
 <script>
 (function(){
 'use strict';
-const V='4.50.1';
+const V='4.51.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -678,14 +678,24 @@ const SPECS={
     const busy=new Set();rs.forEach(r=>days.forEach(d=>{if(d>=r.start&&d<=r.end)busy.add(d)}));
     const gaps=days.filter(d=>d>=today&&new Date(d+'T00:00:00').getDay()!==0&&!busy.has(d));gapAll+=gaps.length;if(!rs.some(r=>r.end>=today))noPlan.push(l);
     const qty=sum(rs,r=>r.qty),act=sew.get(l)||new Map();const lh=Math.max(1,lanes.length)*26+22;
-    h+=`<div class="g-row" style="height:${lh}px"><div class="g-l"><b><i style="background:${col}"></i>${E(l)}</b><span>${F(qty)} 件・${rs.length} 張${gaps.length?`・<em>空 ${gaps.length} 天</em>`:''}</span></div><div class="g-t">`+
+    h+=`<div class="g-row" style="height:${lh}px"><div class="g-l" data-l="${E(l)}" title="點了看這條線做哪些款、做到哪"><b><i style="background:${col}"></i>${E(l)}</b><span>${F(qty)} 件・${rs.length} 張${gaps.length?`・<em>空 ${gaps.length} 天</em>`:''}</span></div><div class="g-t">`+
      days.map((d,di)=>{const w=new Date(d+'T00:00:00').getDay();const a=act.get(d);return `<div class="g-c ${w===0?'sun':''} ${d===today?'today':''} ${gaps.includes(d)?'gap':''}" style="left:calc(${di}*var(--cw))">${a?`<s>${F(a)}</s>`:''}</div>`}).join('')+
      rs.map(r=>{const a=Math.max(0,dd(start,r.start)),b=Math.min(days.length-1,dd(start,r.end));const past=r.end<today;return `<div class="g-b ${past?'past':''}" data-i="${flat.indexOf(r)}" style="left:calc(${a}*var(--cw) + 2px);width:calc(${b-a+1}*var(--cw) - 4px);top:${r._lane*26+3}px;background:${col}" title="${E(r.style)}・${F(r.qty)} 件・${r.start.slice(5)}～${r.end.slice(5)}">${E(r.style)}・${F(r.qty)}</div>`}).join('')+`</div></div>`});
    h+='</div>';p.querySelector('#gScroll').innerHTML=h;
    const maxEnd=runs.map(r=>r.end).sort().pop()||'';
    p.querySelector('#gLead').innerHTML=`📌 ${start.slice(5).replace('-','/')}～${end.slice(5).replace('-','/')}：<b>${lines.length}</b> 條線、<b>${vis.length}</b> 張排單、<b>${F(sum(vis,r=>r.qty))}</b> 件。${gapAll?`今天起有 <b class="crit">${gapAll}</b> 個工作天沒排單`:'今天起沒有空檔'}${noPlan.length?`；<b class="crit">${noPlan.join('、')}</b> 今天之後表上完全沒單`:''}。<span class="small">排單表：${E(src)}，最晚排到 ${E(maxEnd)}。點色條看這張單做到哪。</span>`;
    p.querySelectorAll('.g-b').forEach(b=>b.onclick=()=>SHEET.open(flat.map(runGroup),+b.dataset.i));
+   /* v4.51（Paul 11/22：排單按 line 沒顯示做什麼款、進度）→ 點左邊線別開「線別進度」頁，可左右換線、往下滑接下一條線 */
+   p.querySelectorAll('.g-l[data-l]').forEach(b=>b.onclick=()=>SHEET.open(lines.map(x=>lineGroup(x,days)),lines.indexOf(b.dataset.l)));
    const t=p.querySelector('.g-d.today');t&&t.scrollIntoView({block:'nearest',inline:'center'})};
+  const lineGroup=(l,days)=>{const today=ymdToday(),from=addD(today,-21);const rs=runs.filter(r=>r.line===l&&r.end>=from).sort((a,b)=>a.start.localeCompare(b.start));const act=sew.get(l)||new Map();
+    const it=rs.map(r=>{const done=sum(r.sewRows,x=>x.pieces);return {r,done,pct:r.qty?Math.min(100,done/r.qty*100):0,g:runGroup(r)}});const qty=sum(it,x=>x.r.qty),done=sum(it,x=>x.done);
+    const busy=new Set();runs.filter(r=>r.line===l).forEach(r=>days.forEach(d=>{if(d>=r.start&&d<=r.end)busy.add(d)}));const gaps=days.filter(d=>d>=today&&new Date(d+'T00:00:00').getDay()!==0&&!busy.has(d)).length;
+    const now=it.find(x=>x.r.start<=today&&x.r.end>=today);const ds=[...act.keys()].sort().slice(-30);
+    return {key:l,kind:'線別',title:'🧵 '+l,sub:now?'現在做：'+E(now.r.style)+'・'+E(now.r.customer||''):'今天沒有排單',chip:F(qty),badge:gaps?`<span class="tag crit">空 ${gaps} 天</span>`:'<span class="tag ok">排滿</span>',
+     kpis:[[F(it.length),'張排單'],[F(qty),'排單件數'],[F(done),'已車',done?'ok':''],[F(Math.max(0,qty-done)),'還剩','warn'],[F(gaps),'空的工作天',gaps?'crit':'ok']],
+     detail:()=>`<h4>📋 這條線的排單進度</h4>${it.length?`<div class="lnp">`+it.map(x=>`<div class="lnp-r ${x.r.end<today?'past':''} ${x===now?'now':''}"><div class="lnp-h"><b>👕 ${E(x.r.style)}</b><span>${E(x.r.customer||'')}・📅 ${x.r.start.slice(5)}～${x.r.end.slice(5)}${x===now?'・<em>做中</em>':''}</span></div><div class="lnp-b"><i style="width:${x.pct.toFixed(1)}%"></i></div><div class="lnp-f"><span>🧵 已車 <b>${F(x.done)}</b> / ${F(x.r.qty)} 件（${P(x.pct)}）</span>${x.g.badge}</div></div>`).join('')+`</div><p class="note">最近 3 週到之後的排單；點上面的色條可看單張的訂單→裁剪→車縫→裝箱→出貨。</p>`:'<p class="note">最近 3 週到之後，這條線表上沒有排單。</p>'}
+      <h4>📈 這條線每天實際車縫</h4>${ds.length?CH.bars(ds.map(d=>({label:d.slice(5),v:act.get(d)||0})),{legend:'長條＝這條線每天車縫件數（車縫日報）'}):'<p class="note">車縫日報裡還沒有這條線的紀錄。</p>'}`}};
   const runGroup=r=>{const act=sew.get(r.line)||new Map();const mine=r.sewRows;const done=sum(mine,x=>x.pieces),rem=Math.max(0,r.qty-done);const dys=lastDays(mine,30,x=>x.date);const rate=dys.length?done/dys.length:0;const today=ymdToday();
     let est='';if(rem>0&&rate>0){let d=today,n=Math.ceil(rem/rate);while(n>0){d=addD(d,1);if(new Date(d+'T00:00:00').getDay()!==0)n--}est=d}
     const late=est&&est>r.end;

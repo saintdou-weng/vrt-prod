@@ -51,4 +51,6 @@
  /* iPhone 要有 touchstart 監聽，:active 才會在按下時出現 */
  try{document.addEventListener('touchstart',function(){},{passive:true})}catch(e){}})();
 /* v4.50（Paul 11/22）列表點一列跳 Keynote（大字卡、可連續往下滑、款號／線別／PO… 可直接開物品頁）。入口頁本身不載入（它有自己的物品頁）。 */
-(function(){try{if(window.VRT_HUBS||window.VRTKeynote||document.getElementById('vrtKnJs'))return;var s=document.createElement('script');s.id='vrtKnJs';s.src='vrt-row-keynote-v1.js?v=4.50.3';s.async=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
+(function(){try{if(window.VRT_HUBS||window.VRTKeynote||document.getElementById('vrtKnJs'))return;var s=document.createElement('script');s.id='vrtKnJs';s.src='vrt-row-keynote-v1.js?v=4.51.0';s.async=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
+/* v4.51（Paul 11/22：各分頁上面的 KPI 小卡點了沒反應）→ KPI 卡交給共用 psj-keynote（大字卡＋同區明細：各期走勢、各客戶／款式／線別、最大幾筆，可連續往下滑）；列表的列仍由 VRTKeynote 負責 */
+(function(){try{if(window.VRT_HUBS||window.PSJKN||document.getElementById('vrtPknJs'))return;window.__vrtKpiLoose=1;var s=document.createElement('script');s.id='vrtPknJs';s.src='https://saintdou-weng.github.io/ac-admin/shared/psj-keynote.js?v=24';s.defer=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();

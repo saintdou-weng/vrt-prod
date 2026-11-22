@@ -12,7 +12,7 @@ const txt=el=>String(el?el.innerText||el.textContent||'':'').replace(/\s+/g,' ')
 const numOf=s=>{s=String(s||'').replace(/[,$\s]/g,'').replace(/[▲▼↑↓]/g,'');const m=s.match(/^-?\d+(\.\d+)?%?$/);return m?parseFloat(s):null};
 const F=(n,d)=>n==null||!isFinite(n)?'—':Number(n).toLocaleString('en-US',{maximumFractionDigits:d==null?2:d});
 /* 欄位 → 圖示、可連結的物品種類 */
-const KINDS=[[/款號|款式|style/i,'style','👕','款式頁'],[/線別|組別|^line|生產線/i,'line','🧵','線別頁'],[/^po\b|po no|訂單號|po#|採購單/i,'po','📄','PO 頁'],[/瑕疵|缺點|defect/i,'defect','🔍','瑕疵頁'],[/客戶|customer|buyer/i,'customer','👥','客戶頁'],[/料號|item code|布號|fabric code/i,'item','🧶','料號頁'],[/日期|^date|day$/i,'date','📅','那一天']];
+const KINDS=[[/款號|款式|style/i,'style','👕','款式頁'],[/線別|組別|^line|生產線|^線$|^組$/i,'line','🧵','線別頁'],[/^po\b|po no|訂單號|po#|採購單/i,'po','📄','PO 頁'],[/瑕疵|缺點|defect/i,'defect','🔍','瑕疵頁'],[/客戶|customer|buyer/i,'customer','👥','客戶頁'],[/料號|item code|布號|fabric code/i,'item','🧶','料號頁'],[/日期|^date|day$/i,'date','📅','那一天']];
 const ICON=[[/日期|date|月份|期間|週|week|month|year|年/i,'📅'],[/人數|人力|worker|operator|manpower|headcount/i,'👥'],[/件數|產量|數量|pcs|qty|output|pieces/i,'📦'],[/smv|工時|minute|分鐘|hours?/i,'⏱️'],[/效率|eff/i,'📈'],[/不良|瑕疵|defect|reject/i,'🔍'],[/金額|價|cost|amount|\$|usd/i,'💲'],[/線別|line|組別/i,'🧵'],[/款|style/i,'👕'],[/客戶|customer/i,'👥'],[/天|day/i,'🗓️'],[/率|%|rate/i,'📊']];
 const iconOf=h=>{for(const [re,ic] of ICON)if(re.test(h))return ic;return '•'};
 const isCount=h=>/數|count|qty|件|人|天|率|%|total|合計|sum|avg|平均/i.test(h);const kindOf=h=>(isCount(h)&&!/日期|date/i.test(h))||/名稱|類型|類別|name|type|desc|說明|備註/i.test(h)?null:KINDS.find(k=>k[0].test(h));
@@ -34,6 +34,7 @@ function css(){if(document.getElementById('vknCss'))return;const s=document.crea
 #vkn .vk-bar{height:5px;border-radius:3px;background:#e2e8f0;margin:6px 0 4px;overflow:hidden}#vkn .vk-bar i{display:block;height:100%;background:#4f46e5;border-radius:3px}#vkn .vk-ref{font-size:10.5px;color:#64748b}
 #vkn .vk-rows{margin-top:8px}#vkn .vk-r{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}#vkn .vk-rl{flex:0 0 38%;color:#64748b;font-size:12.5px}#vkn .vk-rv{flex:1;font-weight:600;word-break:break-word}
 #vkn .vk-pd{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f5f3ff;border:1px solid #e0e7ff}#vkn .vk-pt{font-weight:700;font-size:13px;margin-bottom:6px}#vkn .vk-pt small{font-weight:400;color:#64748b;margin-left:4px}#vkn .vk-pl{font-size:11.5px;color:#64748b;margin:6px 0 4px}#vkn .vk-pd .vk-lk button small{font-weight:500}
+#vkn .vk-lst{display:block}#vkn .vk-lst .vk-it{display:flex;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-top:1px solid #e0e7ff;background:none;color:inherit;font:inherit;padding:7px 2px;cursor:pointer;border-radius:0}#vkn .vk-lst .vk-it:first-child{border-top:0}#vkn .vk-it .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#vkn .vk-it .bx{flex:0 0 26%;height:7px;border-radius:4px;background:#e2e8f0;overflow:hidden}#vkn .vk-it .bx i{display:block;height:100%;background:#6366f1}#vkn .vk-it .vl{font-weight:800;min-width:56px;text-align:right}#vkn .vk-it .sb{font-size:11px;color:#64748b;min-width:30px;text-align:right}
 #vkn .vk-more{margin:16px 0 4px;padding:12px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px;cursor:pointer;font-size:13px}
 table tbody tr[data-vkn-mine]:hover td{background:rgba(79,70,229,.06)}
 @media (prefers-color-scheme:dark){}`;document.head.appendChild(s)}
@@ -59,7 +60,7 @@ function rowHtml(M,idx){const r=M.rows[idx];const cells=[...r.cells];const first
       nums.push(`<div class="vk-n"><div class="vk-nl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-nv">${E(v)}</div><div class="vk-bar"><i style="width:${w.toFixed(1)}%"></i></div><div class="vk-ref">${c.pct?'平均 '+F(c.avg,1)+'%':'合計 '+F(c.sum)+' · 平均 '+F(c.avg)}${c.n>1?' · 第 '+rank+' / '+c.n+' 名':''}</div></div>`)}
     else plain.push(`<div class="vk-r"><div class="vk-rl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-rv">${E(v)}</div></div>`)});
   const lk=links.length?`<div class="vk-lk">${links.map(([k,v])=>`<button data-open="${E(k[1])}|${E(v)}">${k[2]} ${E(v)} · ${k[3]} ›</button>`).join('')}</div>`:'';
-  return `<section class="vk-sec" data-i="${idx}"><div class="vk-st"><b>${E(first)}</b><span>${idx+1} / ${M.rows.length}</span></div>${lk}${nums.length?`<div class="vk-nums">${nums.join('')}</div>`:''}<div class="vk-rows">${plain.join('')}</div>${periodHtml(M,r)}</section>`}
+  return `<section class="vk-sec" data-i="${idx}"><div class="vk-st"><b>${E(first)}</b><span>${idx+1} / ${M.rows.length}</span></div>${periodHtml(M,r)}${lk}${nums.length?`<div class="vk-nums">${nums.join('')}</div>`:''}<div class="vk-rows">${plain.join('')}</div></section>`}
 
 /* ── v1.1 週／月／年／日 列 → 這段期間做了哪些款、哪些線（讀頁面自己的車縫資料 DB，點了開款式頁／線別頁） ── */
 function pageDB(){try{/* eslint-disable-next-line no-undef */const d=typeof DB!=='undefined'?DB:g.DB;return Array.isArray(d)&&d.length&&d[0]&&('date' in d[0])?d:null}catch(_){return null}}
@@ -71,15 +72,18 @@ function periodOf(v,yr){v=String(v||'').trim();let m;
   if((m=v.match(/(\d{1,2})\/(\d{1,2})\s*[–~～\-至]\s*(\d{1,2})\/(\d{1,2})/))){const a=ymd(new Date(yr,m[1]-1,+m[2])),b=ymd(new Date(+m[3]<+m[1]?yr+1:yr,m[3]-1,+m[4]));return [a,b]}
   if((m=v.match(/^(\d{1,2})\/(\d{1,2})$/))){const a=ymd(new Date(yr,m[1]-1,+m[2]));return [a,a]}
   return null}
-function periodHtml(M,r){const db=pageDB();if(!db)return '';const cells=[...r.cells];let pr=null;
-  const yr=(()=>{const ds=db.map(x=>String(x.date||'')).filter(d=>/^20\d\d/.test(d)).sort();return ds.length?+ds[ds.length-1].slice(0,4):new Date().getFullYear()})();
-  const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),yr)))break}
-  if(!pr)return '';const [a,b]=pr;const rs=db.filter(x=>{const d=String(x.date||'').slice(0,10);return d>=a&&d<=b});if(!rs.length)return '';
-  const pc=x=>+x.pieces||+x.qty||+x.output||0;
+/* 日索引（同一份 DB 只建一次）→ 每次只看那段期間的天數，不再整份掃（車縫週月年點開變快） */
+let IDX=null;
+function dbIdx(db){if(IDX&&IDX.db===db&&IDX.n===db.length)return IDX;const by=new Map();let mx='';db.forEach(x=>{if(x.tSrc!=null&&x.tSrc!=='norm')return;const d=String(x.date||'').slice(0,10);if(!/^20\d\d-\d\d-\d\d$/.test(d))return;let a=by.get(d);if(!a)by.set(d,a=[]);a.push(x);if(d>mx)mx=d});return IDX={db,n:db.length,by,yr:mx?+mx.slice(0,4):new Date().getFullYear()}}
+function daysIn(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');for(let k=0;d<=e&&k<400;k++){out.push(ymd(d));d.setDate(d.getDate()+1)}return out}
+function periodHtml(M,r){const db=pageDB();if(!db)return '';const X=dbIdx(db);const cells=[...r.cells];let pr=null;
+  const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),X.yr)))break}
+  if(!pr)return '';const [a,b]=pr;const rs=[];let nd=0;daysIn(a,b).forEach(d=>{const l=X.by.get(d);if(l){nd++;rs.push(...l)}});if(!rs.length)return '';
+  const pc=x=>+x.pieces||+x.qty||+x.output||0;const tot=rs.reduce((s,x)=>s+pc(x),0);
   const top=(f,n)=>{const m=new Map();rs.forEach(x=>{const k=String(f(x)||'').trim();if(k)m.set(k,(m.get(k)||0)+pc(x))});return [...m].sort((p,q)=>q[1]-p[1]).slice(0,n)};
-  const st=top(x=>x.styleNo||x.style,12),ln=top(x=>x.lineNo||x.line,16);if(!st.length&&!ln.length)return '';
-  const bt=(k,ic,l)=>l.map(([v,n])=>`<button data-open="${k}|${E(v)}">${ic} ${E(v)} <small style="opacity:.7">${F(n,0)} 件</small> ›</button>`).join('');
-  return `<div class="vk-pd"><div class="vk-pt">🔗 這段期間（${E(a===b?a:a+' ～ '+b)}）做的款式／線別 <small>依件數排序，點了開物品頁</small></div>${st.length?`<div class="vk-pl">👕 款式 Styles</div><div class="vk-lk">${bt('style','👕',st)}</div>`:''}${ln.length?`<div class="vk-pl">🧵 線別 Lines</div><div class="vk-lk">${bt('line','🧵',ln)}</div>`:''}</div>`}
+  const st=top(x=>x.styleNo||x.style,10),ln=top(x=>x.lineNo||x.line,14);if(!st.length&&!ln.length)return '';
+  const list=(k,ic,l)=>{const mx=l.length?l[0][1]:0;return l.map(([v,n])=>`<button class="vk-it" data-open="${k}|${E(v)}"><span class="nm">${ic} ${E(v)}</span><span class="bx"><i style="width:${mx?Math.max(3,n/mx*100).toFixed(1):0}%"></i></span><span class="vl">${F(n,0)}</span><span class="sb">${tot?F(n/tot*100,0)+'%':''}</span></button>`).join('')};
+  return `<div class="vk-pd"><div class="vk-pt">🔗 ${E(a===b?a:a+' ～ '+b)}：做了什麼 <small>${nd} 個生產日 · ${F(tot,0)} 件 · ${st.length} 款 · ${ln.length} 條線；點了開款式／線別頁（只在這幾個之間往下滑）</small></div>${st.length?`<div class="vk-pl">👕 款式 Styles（件數）</div><div class="vk-lk vk-lst">${list('style','👕',st)}</div>`:''}${ln.length?`<div class="vk-pl">🧵 線別 Lines（件數）</div><div class="vk-lk vk-lst">${list('line','🧵',ln)}</div>`:''}</div>`}
 
 function openRef(kind,key,sib){if(kind==='defect'&&g.VRTQCDefect&&g.VRTQCDefect.openName){close();if(g.VRTQCDefect.openName(key))return}try{if(g.parent&&g.parent!==g&&typeof g.parent.VRTHubOpen==='function'){close();g.parent.VRTHubOpen(kind,key,sib);return}}catch(_){}
   if(typeof g.VRTHubOpen==='function'){close();g.VRTHubOpen(kind,key,sib);return}
@@ -112,7 +116,20 @@ function onClick(e){if(e.defaultPrevented||e.button)return;const t=e.target;if(!
   if(!tr.hasAttribute('data-vkn-mine')&&!tr.classList.contains('pkn-row')&&getComputedStyle(tr).cursor==='pointer')return;   /* 頁面自己讓這一列可以點（會做別的事）→ 不搶 */
   open(table,tr)}
 function over(e){const tr=e.target.closest&&e.target.closest('tbody tr');if(!tr||tr.hasAttribute('data-vkn-mine')||tr.__vkn)return;tr.__vkn=1;const t=tr.closest('table');if(!t||t.closest(SKIP_IN)||tr.matches(ROW_OWN)||tr.cells.length<2)return;if(getComputedStyle(tr).cursor==='pointer')return;tr.setAttribute('data-vkn-mine','');tr.style.cursor='pointer'}
-function init(){if(g.VRT_HUBS)return;css();document.addEventListener('click',onClick);document.addEventListener('mouseover',over,{passive:true})}
+/* ── v1.2 名稱旁小圖示（像 HRA-PAY／Portal）＋手機 KPI 一排 2 張 ──
+   圖示用 CSS ::before 畫（data-vic），不改文字本身 → 匯出 Excel／複製文字不會多出圖示。 */
+const LIC=[[/不良|reject|瑕疵|defect|缺點/i,'⚠️'],[/圍裙|apron/i,'🧵'],[/成衣|garment|上衣|餐巾/i,'👕'],[/客戶|customer|buyer/i,'👥'],[/^po\b|po |po張|訂單|order/i,'📄'],[/款|style/i,'👕'],[/線別|^線|line|組別|^組/i,'🧵'],[/箱|carton|ctn/i,'📦'],[/出貨|ship|批次|wave/i,'🚚'],[/布|fabric/i,'🧶'],[/金額|usd|\$|amount|產值|成本|cost|售價|price/i,'💰'],[/檢驗|inspect/i,'🔍'],[/效率|eff/i,'📈'],[/率|%|佔比|占比/i,'📊'],[/人數|人力|worker|manpower|operator|人均/i,'👷'],[/smv|工時|分鐘|minute/i,'⏱️'],[/日期|date|週|week|月|month|年|year|期間|天|day/i,'📅'],[/件|pcs|qty|數量|產量|output|產出|合計|total/i,'🧮'],[/狀態|status/i,'🚦'],[/備註|note|remark/i,'📝']];
+const EMO=/\p{Extended_Pictographic}/u;const licOf=t=>{for(const [re,ic] of LIC)if(re.test(t))return ic;return ''};
+function deco(){try{const sk='#vkn,.pkn-box,.sheet,[data-keynote="off"],[data-icon="off"]';
+  document.querySelectorAll('thead th:not([data-vic]):not([data-vicn])').forEach((th,k)=>{if(k>600)return;const t=txt(th);if(!t||t.length>24||EMO.test(t)||th.children.length>2||th.closest(sk)){th.setAttribute('data-vicn','');return}const ic=licOf(t);if(ic)th.setAttribute('data-vic',ic);else th.setAttribute('data-vicn','')});
+  const ps=new Set();document.querySelectorAll('.pkn-kpi:not([data-vk2])').forEach(k=>{k.setAttribute('data-vk2','');if(k.closest(sk))return;ps.add(k.parentElement);
+    const lf=[...k.querySelectorAll('*')].filter(e=>!e.children.length&&!e.hasAttribute('data-vic')).map(e=>[e,txt(e)]).find(([e,t])=>t&&t.length>=2&&t.length<=30&&!/^[\d$,.%\s+\-—]+\s*[A-Za-z%件]*$/.test(t));
+    if(lf&&!EMO.test(lf[1])){const ic=licOf(lf[1]);if(ic)lf[0].setAttribute('data-vic',ic)}});
+  if(g.innerWidth<640)ps.forEach(P=>{if(!P||P.__vk2)return;P.__vk2=1;const cs=getComputedStyle(P);if(/grid/.test(cs.display)&&cs.gridTemplateColumns.trim().split(/\s+/).length===1&&P.children.length>=2){P.style.gridTemplateColumns='repeat(2,minmax(0,1fr))';[...P.children].forEach(c=>{c.style.minWidth='0'})}});
+ }catch(e){}}
+function decoInit(){if(!document.getElementById('vkIcCss')){const s=document.createElement('style');s.id='vkIcCss';s.textContent='[data-vic]::before{content:attr(data-vic);margin-right:4px;font-style:normal;font-weight:400;letter-spacing:0;text-transform:none}';document.head.appendChild(s)}
+  deco();setTimeout(deco,1500);setTimeout(deco,4000);let tm=0;try{new MutationObserver(()=>{if(!tm)tm=setTimeout(()=>{tm=0;deco()},700)}).observe(document.body,{childList:true,subtree:true})}catch(e){}}
+function init(){if(g.VRT_HUBS)return;css();document.addEventListener('click',onClick);document.addEventListener('mouseover',over,{passive:true});decoInit()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-g.VRTKeynote={version:'1.1.2',open,close};
+g.VRTKeynote={version:'1.2.0',open,close};
 })(window);
