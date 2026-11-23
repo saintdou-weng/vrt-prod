@@ -60,7 +60,7 @@ function rowHtml(M,idx){const r=M.rows[idx];const cells=[...r.cells];const first
       nums.push(`<div class="vk-n"><div class="vk-nl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-nv">${E(v)}</div><div class="vk-bar"><i style="width:${w.toFixed(1)}%"></i></div><div class="vk-ref">${c.pct?'平均 '+F(c.avg,1)+'%':'合計 '+F(c.sum)+' · 平均 '+F(c.avg)}${c.n>1?' · 第 '+rank+' / '+c.n+' 名':''}</div></div>`)}
     else plain.push(`<div class="vk-r"><div class="vk-rl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-rv">${E(v)}</div></div>`)});
   const lk=links.length?`<div class="vk-lk">${links.map(([k,v])=>`<button data-open="${E(k[1])}|${E(v)}">${k[2]} ${E(v)} · ${k[3]} ›</button>`).join('')}</div>`:'';
-  return `<section class="vk-sec" data-i="${idx}"><div class="vk-st"><b>${E(first)}</b><span>${idx+1} / ${M.rows.length}</span></div>${periodHtml(M,r)}${lk}${nums.length?`<div class="vk-nums">${nums.join('')}</div>`:''}<div class="vk-rows">${plain.join('')}</div></section>`}
+  return `<section class="vk-sec" data-i="${idx}"><div class="vk-st"><b>${E(first)}</b><span>${idx+1} / ${M.rows.length}</span></div>${periodHtml(M,r)}${staffHtml(M,r)}${lk}${nums.length?`<div class="vk-nums">${nums.join('')}</div>`:''}<div class="vk-rows">${plain.join('')}</div></section>`}
 
 /* ── v1.1 週／月／年／日 列 → 這段期間做了哪些款、哪些線（讀頁面自己的車縫資料 DB，點了開款式頁／線別頁） ── */
 function pageDB(){try{/* eslint-disable-next-line no-undef */const d=typeof DB!=='undefined'?DB:g.DB;return Array.isArray(d)&&d.length&&d[0]&&('date' in d[0])?d:null}catch(_){return null}}
@@ -76,6 +76,13 @@ function periodOf(v,yr){v=String(v||'').trim();let m;
 let IDX=null;
 function dbIdx(db){if(IDX&&IDX.db===db&&IDX.n===db.length)return IDX;const by=new Map();let mx='';db.forEach(x=>{if(x.tSrc!=null&&x.tSrc!=='norm')return;const d=String(x.date||'').slice(0,10);if(!/^20\d\d-\d\d-\d\d$/.test(d))return;let a=by.get(d);if(!a)by.set(d,a=[]);a.push(x);if(d>mx)mx=d});return IDX={db,n:db.length,by,yr:mx?+mx.slice(0,4):new Date().getFullYear()}}
 function daysIn(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');for(let k=0;d<=e&&k<400;k++){out.push(ymd(d));d.setDate(d.getDate()+1)}return out}
+/* ── v1.2（2026-11-23 Paul）PSJ 生產連動：這一列有日期／期間（和線別）→ 接 PSJHR 那段時間的出勤人員（這條線的車工、組長；全廠品管、包裝、裁剪），由 PSJERP/psj-links.js 畫卡 ── */
+function psjLoad(){if(g.PSJLinks||document.getElementById('psjLinksJs'))return;const s=document.createElement('script');s.id='psjLinksJs';s.src='https://saintdou-weng.github.io/PSJERP/psj-links.js?v=1';s.async=true;(document.head||document.documentElement).appendChild(s)}
+function staffHtml(M,r){try{psjLoad();if(!g.PSJLinks)return '';const cells=[...r.cells];const db=pageDB();const yr=db?dbIdx(db).yr:new Date().getFullYear();let pr=null;
+  const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),yr)))break}
+  if(!pr)return '';let line='';for(const c of M.cols){const k=kindOf(c.h);if(k&&k[1]==='line'&&cells[c.i]){line=g.PSJLinks.lineOf(txt(cells[c.i]).split(/[\s,，/]+/)[0]);if(line)break}}
+  if(!line)for(let i=0;i<Math.min(3,cells.length);i++){const l=g.PSJLinks.lineOf(txt(cells[i]));if(l){line=l;break}}
+  return g.PSJLinks.sectionHtml({line:line,from:pr[0],to:pr[1]})}catch(_){return ''}}
 function periodHtml(M,r){const db=pageDB();if(!db)return '';const X=dbIdx(db);const cells=[...r.cells];let pr=null;
   const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),X.yr)))break}
   if(!pr)return '';const [a,b]=pr;const rs=[];let nd=0;daysIn(a,b).forEach(d=>{const l=X.by.get(d);if(l){nd++;rs.push(...l)}});if(!rs.length)return '';
