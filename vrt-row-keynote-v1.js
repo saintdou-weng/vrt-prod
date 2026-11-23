@@ -78,6 +78,7 @@ function dbIdx(db){if(IDX&&IDX.db===db&&IDX.n===db.length)return IDX;const by=ne
 function daysIn(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');for(let k=0;d<=e&&k<400;k++){out.push(ymd(d));d.setDate(d.getDate()+1)}return out}
 /* ── v1.2（2026-11-23 Paul）PSJ 生產連動：這一列有日期／期間（和線別）→ 接 PSJHR 那段時間的出勤人員（這條線的車工、組長；全廠品管、包裝、裁剪），由 PSJERP/psj-links.js 畫卡 ── */
 function psjLoad(){if(g.PSJLinks||document.getElementById('psjLinksJs'))return;const s=document.createElement('script');s.id='psjLinksJs';s.src='https://saintdou-weng.github.io/PSJERP/psj-links.js?v=3';s.async=true;(document.head||document.documentElement).appendChild(s)}
+setTimeout(function(){try{psjLoad()}catch(_){}},0);   /* 頁面一開就先載，第一張卡才不會少那一段 */
 function staffHtml(M,r){try{psjLoad();if(!g.PSJLinks)return '';const cells=[...r.cells];const db=pageDB();const yr=db?dbIdx(db).yr:new Date().getFullYear();let pr=null;
   const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),yr)))break}
   if(!pr){/* 列裡沒有日期（例如每日報告的線別彙整表）→ 用同一頁上方選的日期 */let n=r.closest&&r.closest('table');for(let up=0;n&&up<8&&!pr;up++){n=n.parentElement;if(!n)break;for(const f of n.querySelectorAll('select,input')){const v=String(f.value||'');if(f.offsetParent!==null&&/^20\d\d-\d\d(-\d\d)?$/.test(v)&&(pr=periodOf(v,yr)))break}}}
