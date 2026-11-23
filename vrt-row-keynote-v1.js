@@ -57,7 +57,7 @@ function rowHtml(M,idx){const r=M.rows[idx];const cells=[...r.cells];const first
   M.cols.forEach(c=>{const td=cells[c.i];if(!td)return;if(/^(操作|動作|action)s?$/i.test(c.h))return;const tb=td.cloneNode(true);tb.querySelectorAll('button,input,select').forEach(x=>x.remove());const v=txt(tb);if(!v||v==='—'||v==='-')return;const k=kindOf(c.h);
     if(k&&!c.numeric){if(k[1]==='date'){if(/^20\d\d-\d\d-\d\d/.test(v))links.push([k,v.slice(0,10)])}else splitEnt(v,k[1]==='defect').forEach(x=>links.push([k,x]))}
     if(c.numeric&&numOf(v)!=null&&di>=0){const x=numOf(v);const rank=1+c.vals.filter(o=>o!=null&&o>x).length;const w=c.max?Math.abs(x)/c.max*100:0;
-      nums.push(`<div class="vk-n"><div class="vk-nl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-nv">${E(v)}</div><div class="vk-bar"><i style="width:${w.toFixed(1)}%"></i></div><div class="vk-ref">${c.pct?'平均 '+F(c.avg,1)+'%':'合計 '+F(c.sum)+' · 平均 '+F(c.avg)}${c.n>1?' · 第 '+rank+' / '+c.n+' 名':''}</div></div>`)}
+      nums.push(`<div class="vk-n"><div class="vk-nl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-nv">${E(/^-?[\d,]+\.\d{3,}$/.test(v)?F(x,2):v)}</div><div class="vk-bar"><i style="width:${w.toFixed(1)}%"></i></div><div class="vk-ref">${c.pct?'平均 '+F(c.avg,1)+'%':'合計 '+F(c.sum)+' · 平均 '+F(c.avg)}${c.n>1?' · 第 '+rank+' / '+c.n+' 名':''}</div></div>`)}
     else plain.push(`<div class="vk-r"><div class="vk-rl">${iconOf(c.h)} ${E(c.h)}</div><div class="vk-rv">${E(v)}</div></div>`)});
   const lk=links.length?`<div class="vk-lk">${links.map(([k,v])=>`<button data-open="${E(k[1])}|${E(v)}">${k[2]} ${E(v)} · ${k[3]} ›</button>`).join('')}</div>`:'';
   return `<section class="vk-sec" data-i="${idx}"><div class="vk-st"><b>${E(first)}</b><span>${idx+1} / ${M.rows.length}</span></div>${periodHtml(M,r)}${staffHtml(M,r)}${lk}${nums.length?`<div class="vk-nums">${nums.join('')}</div>`:''}<div class="vk-rows">${plain.join('')}</div></section>`}
@@ -80,6 +80,7 @@ function daysIn(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'
 function psjLoad(){if(g.PSJLinks||document.getElementById('psjLinksJs'))return;const s=document.createElement('script');s.id='psjLinksJs';s.src='https://saintdou-weng.github.io/PSJERP/psj-links.js?v=3';s.async=true;(document.head||document.documentElement).appendChild(s)}
 function staffHtml(M,r){try{psjLoad();if(!g.PSJLinks)return '';const cells=[...r.cells];const db=pageDB();const yr=db?dbIdx(db).yr:new Date().getFullYear();let pr=null;
   const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),yr)))break}
+  if(!pr){/* 列裡沒有日期（例如每日報告的線別彙整表）→ 用同一頁上方選的日期 */let n=r.closest&&r.closest('table');for(let up=0;n&&up<8&&!pr;up++){n=n.parentElement;if(!n)break;for(const f of n.querySelectorAll('select,input')){const v=String(f.value||'');if(f.offsetParent!==null&&/^20\d\d-\d\d(-\d\d)?$/.test(v)&&(pr=periodOf(v,yr)))break}}}
   if(!pr)return '';let line='';for(const c of M.cols){const k=kindOf(c.h);if(k&&k[1]==='line'&&cells[c.i]){line=g.PSJLinks.lineOf(txt(cells[c.i]).split(/[\s,，/]+/)[0]);if(line)break}}
   if(!line)for(let i=0;i<Math.min(3,cells.length);i++){const l=g.PSJLinks.lineOf(txt(cells[i]));if(l){line=l;break}}
   return g.PSJLinks.sectionHtml({line:line,from:pr[0],to:pr[1]})}catch(_){return ''}}
