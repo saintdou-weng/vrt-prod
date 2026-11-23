@@ -77,7 +77,7 @@ let IDX=null;
 function dbIdx(db){if(IDX&&IDX.db===db&&IDX.n===db.length)return IDX;const by=new Map();let mx='';db.forEach(x=>{if(x.tSrc!=null&&x.tSrc!=='norm')return;const d=String(x.date||'').slice(0,10);if(!/^20\d\d-\d\d-\d\d$/.test(d))return;let a=by.get(d);if(!a)by.set(d,a=[]);a.push(x);if(d>mx)mx=d});return IDX={db,n:db.length,by,yr:mx?+mx.slice(0,4):new Date().getFullYear()}}
 function daysIn(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');for(let k=0;d<=e&&k<400;k++){out.push(ymd(d));d.setDate(d.getDate()+1)}return out}
 /* ── v1.2（2026-11-23 Paul）PSJ 生產連動：這一列有日期／期間（和線別）→ 接 PSJHR 那段時間的出勤人員（這條線的車工、組長；全廠品管、包裝、裁剪），由 PSJERP/psj-links.js 畫卡 ── */
-function psjLoad(){if(g.PSJLinks||document.getElementById('psjLinksJs'))return;const s=document.createElement('script');s.id='psjLinksJs';s.src='https://saintdou-weng.github.io/PSJERP/psj-links.js?v=2';s.async=true;(document.head||document.documentElement).appendChild(s)}
+function psjLoad(){if(g.PSJLinks||document.getElementById('psjLinksJs'))return;const s=document.createElement('script');s.id='psjLinksJs';s.src='https://saintdou-weng.github.io/PSJERP/psj-links.js?v=3';s.async=true;(document.head||document.documentElement).appendChild(s)}
 function staffHtml(M,r){try{psjLoad();if(!g.PSJLinks)return '';const cells=[...r.cells];const db=pageDB();const yr=db?dbIdx(db).yr:new Date().getFullYear();let pr=null;
   const ci=M.cols.filter(c=>/期間|日期|date|週|week|月份|month|年|year/i.test(c.h)).map(c=>c.i);for(const i of ci.concat([0])){if(cells[i]&&(pr=periodOf(txt(cells[i]),yr)))break}
   if(!pr)return '';let line='';for(const c of M.cols){const k=kindOf(c.h);if(k&&k[1]==='line'&&cells[c.i]){line=g.PSJLinks.lineOf(txt(cells[c.i]).split(/[\s,，/]+/)[0]);if(line)break}}
