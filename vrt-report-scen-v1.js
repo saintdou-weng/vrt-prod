@@ -8,7 +8,7 @@
    chart(f) → {title,labels[],values[],tones[],unit}（給 GAS Charts 畫圖用） */
 (function(g){'use strict';
   const DR=g.VRTDailyReport;if(!DR){return}
-  const H=DR.helpers,TH=DR.TH,VERSION='1.1.0';
+  const H=DR.helpers,TH=DR.TH,VERSION='1.2.0';
   const num=v=>{const n=Number(v);return isFinite(n)?n:0};
   const N=v=>v==null||isNaN(v)?'—':Math.round(Number(v)).toLocaleString('en-US');
   const P1=v=>v==null||isNaN(v)?'—':(Math.round(Number(v)*10)/10).toFixed(1);
@@ -28,6 +28,19 @@
   const cut=(s,n)=>{s=String(s||'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n-1)+'…':s};
   const ISSUE_ZH={material:'缺料',machine:'機台',manpower:'缺人',changeover:'換款',quality:'品質',others:'其他'};
   const ISSUE_KEYS=['material','machine','manpower','changeover','quality','others'];
+  /* v1.2：現場備註分類（照 Paul 10–11 月週報怎麼讀 DPO 備註）。relabel＝改標／補標支援，不是閒置；wipOnly＝舊半成品只補標，效率不可和完整車縫比；
+     trimHold＝缺輔料半成品（件數是當天快照，不同天不能相加）；changeover＝換款／新款不熟；cutSupply＝裁片不足轉做別款；smvMissing＝沒有 IE 工時；machine＝機台 */
+  function classifyRemark(t){t=String(t||'');const k=[];if(!t.trim())return {kinds:k,qty:0,item:''};
+    if(/改标|改標|拆箱|商标更新|商標更新|补标|補標|加标|加標|relabel/i.test(t)&&!/只是顶|只是頂|只是上|之前的半成品/.test(t))k.push('relabel');
+    if(/之前的半成品|只是顶|只是頂|只是上商标|只是上商標|补钉|補釘|old WIP/i.test(t))k.push('wipOnly');
+    const m=t.match(/(\d[\d,]*)\s*(?:件|条|條|pcs)?\s*(?:就)?是?半成品/);let qty=m?Number(m[1].replace(/,/g,'')):0;if(!qty){const m2=t.match(/半成品[^\d]{0,6}(\d[\d,]*)/);if(m2)qty=Number(m2[1].replace(/,/g,''))}
+    let item='';const addI=v=>{if(item.indexOf(v)<0)item=item?item+'＋'+v:v};if(/热转印|熱轉印/.test(t))addI('熱轉印標');else if(/商标|商標|label/i.test(t))addI('商標');if(/螺纹|羅紋|罗纹/.test(t))addI('袖口羅紋');if(/纽扣|鈕扣|钮扣|扣子|button/i.test(t))addI('鈕扣');if(/织带|織帶|tape/i.test(t))addI('織帶');if(/绣花|繡花|embroid/i.test(t))addI('繡花片');
+    if((/辅料短缺|輔料短缺|短缺|缺料|缺|等待/.test(t)&&(qty||item))&&k.indexOf('wipOnly')<0&&k.indexOf('relabel')<0)k.push('trimHold');
+    if(/换款|換款|新款|不熟|熟手|学习|學習|changeover/i.test(t))k.push('changeover');
+    if(/裁片供应不足|裁片供應不足|裁片不足|裁片跟不上|转做|轉做/.test(t))k.push('cutSupply');
+    if(/没有\s*IE|沒有\s*IE|无法算效率|無法算效率/i.test(t))k.push('smvMissing');else if(/SMV.{0,8}(有问题|有問題|不正确|不正確|重新测|重新測)|重新测试|重新測試/i.test(t))k.push('smvReview');
+    if(/机器|機器|机台|機台|设备|設備|故障|调顺|調順|machine/i.test(t))k.push('machine');
+    return {kinds:k,qty,item}}
 
   const lsList=arr=>{if(arr.length<=5)return arr.join('、');const n=arr.map(lno),contig=n.every((v,i)=>i===0||v===n[i-1]+1);return contig?arr[0]+'–'+arr[arr.length-1]+' 共 '+arr.length+' 組':arr.slice(0,5).join('、')+' 等 '+arr.length+' 組'};
   /* 排單負荷扣掉國定假日（函式庫的週負荷是週一到週六，不扣假日）：每組每天一格 🟦 有排／⬜ 空檔／🎌 放假 */
@@ -120,9 +133,18 @@
     if(f.loading){x.load={week:adjLoad(f.loading.week),next:adjLoad(f.loading.next)}}
     try{x.po=planOutlook(data,f)}catch(e){x.poError=String(e&&e.message||e)}
     x.stdHours=f.sewing&&f.sewing.prodMin?Math.round(f.sewing.prodMin/60):null;
+    /* 現場備註（任何來源的 remark／comment），一組一天只記一次 */
+    {const fl={relabel:[],wipOnly:[],trimHold:[],changeover:[],cutSupply:[],smvMissing:[],smvReview:[],machine:[]},seen={};
+      sewAll.forEach(r=>{const d=dayKey(r.date);if(!inP(d))return;const t=r.remark||r.comment||r.comments||'';if(!String(t).trim())return;const key=d+'|'+LS(r.lineNo)+'|'+t;if(seen[key])return;seen[key]=1;const c=classifyRemark(t);
+        c.kinds.forEach(k=>{if(fl[k].some(z=>z.date===d&&z.line===LS(r.lineNo)))return;fl[k].push({date:d,line:LS(r.lineNo),qty:k==='trimHold'?c.qty:0,item:c.item})})});
+      x.floor=Object.keys(fl).some(k=>fl[k].length)?fl:null}
     x.v=VERSION;return x}
 
   /* ── 情境：今天（這週）是哪一種日子。w＝重要度（開頭只講最重的一件，其餘變標籤）；tone＝燈號；focus＝哪一段排最前面 ── */
+  /* 週報那一週含月底最後一個工作天 → 月結（Paul 11/3：少做幾天不代表效率變差，用每工作日標準工時＋加權效率比） */
+  function monthCloseOf(f){if(f.period!=='week'||!f.months)return null;const M=f.months;let ym=null;for(let d=f.start;d&&d<=f.end;d=addDays(d,1)){if(addDays(d,1).slice(0,7)!==d.slice(0,7)){ym=d.slice(0,7);break}}if(!ym)return null;
+    const list=[M.cur,M.prev,M.prev2].filter(Boolean);const i=list.findIndex(m=>m.ym===ym);if(i<0)return null;const cur=list[i],prev=list[i+1]||null;if(!cur||!cur.days)return null;
+    return {cur,prev,daysChg:prev&&prev.days?Math.round((cur.days-prev.days)/prev.days*1000)/10:null,ehChg:prev&&prev.earnedH?Math.round((cur.earnedH-prev.earnedH)/prev.earnedH*1000)/10:null}}
   function scenarios(f){const S=[];const x=f.x||{};const s=f.sewing||{},c=f.compare||{},pv=f.prevDay||{},M=f.months||{},cal=f.cal||{},o=f.outlook||{},q=f.qc||{},fb=f.fabric||{},w=f.wip||{},sh=f.shipping||{},pl=f.plan,L=f.loading;
     const W=f.period==='week',PL=f.kind==='plan';const when=W?'這週':'今天',prevW=W?'上週':'昨天';
     /* 舊版存下來的報告沒有 stale 旗標：客戶統計快照超過 14 天一律當過期，不拿來判斷缺布 */
@@ -130,8 +152,10 @@
     const add=(id,wt,tone,tag,head,focus,who,act)=>S.push({id,w:wt,tone,tag,head,focus:focus||'',who:who||'',act:act||''});
     const has=id=>(f.scenarios||[]).some(z=>z.id===id);
     const hol=(x.holidays||[]);const holTxt=hol.map(r=>r.name+(r.days>1?' '+r.days+' 天':'')).join('、');
-    const weak=(f.lines||[]).filter(z=>z.verdict==='weak'&&z.eff!=null).sort((a,b)=>a.eff-b.eff);
-    const weakTxt=weak.slice(0,3).map(z=>LS(z.line)+' '+P0(z.eff)+'%').join('、');
+    const FL=x.floor||{};const relabelLines=[...new Set((FL.relabel||[]).map(z=>z.line))];
+    const weak=(f.lines||[]).filter(z=>z.verdict==='weak'&&z.eff!=null&&relabelLines.indexOf(LS(z.line))<0).sort((a,b)=>a.eff-b.eff);
+    const RZ={trimHold:'缺輔料',changeover:'換款',cutSupply:'裁片不足',smvReview:'SMV 重測',smvMissing:'沒 SMV',machine:'機台'};const why=l=>{const r=Object.keys(RZ).filter(k=>(FL[k]||[]).some(z=>z.line===l)).map(k=>{const n=(FL[k]||[]).filter(z=>z.line===l).length;return RZ[k]+(n>1?' '+n+' 天':'')});return r.length?'（'+r.join('、')+'）':''};
+    const weakTxt=weak.slice(0,3).map(z=>LS(z.line)+' '+P0(z.eff)+'%'+(W&&z.pieces?'・'+N(z.pieces)+' 件':'')+why(LS(z.line))).join('、');
     /* ── 共用：行事曆、出貨、料、月進度、接單 ── */
     if(cal.nextOff&&cal.wdToNextOff!=null&&cal.wdToNextOff<=3){const r=cal.nextOff;const rng=md(r.start)+(r.days>1?'–'+md(r.end):'');
       if(W||PL)add('beforeHoliday',PL?72:70,'A','下週放 '+r.days+' 天','接下來放'+r.name+'（'+rng+'，'+r.days+' 天）'+(PL?'，那 '+r.days+' 天排單要扣掉':'')+'，手上的款和要出的櫃假前先收乾淨。','plan');
@@ -190,7 +214,13 @@
       if(x.offDayWork){}
       else if(mpPct!=null&&mpPct<=-5&&dLines>=0)add('absent',74,'A','少 '+N(Math.abs(c.manpowerVsPrev))+' 人',when+'車縫少了 '+N(Math.abs(c.manpowerVsPrev))+' 人（'+N(pv.manpower)+' → '+N(s.manpower)+'），件數 '+N(s.pieces)+arrow(c.piecesVsPrev).trim()+'。先分清楚是請假還是離職。','sew');
       else if(f.manpowerTrend&&f.manpowerTrend.vsMonthPct!=null&&f.manpowerTrend.vsMonthPct<=-6)add('manpower',66,'A','人力少 '+P0(Math.abs(f.manpowerTrend.vsMonthPct))+'%','車縫人力 '+N(s.manpower)+' 人，比'+(M.prev?M.prev.label:'上月')+'每天平均 '+N(f.manpowerTrend.monthAvg)+' 人少 '+P0(Math.abs(f.manpowerTrend.vsMonthPct))+'%。排單件數要跟著人數調，HRA 盤缺員和補人進度。','sew');
-      if(c.piecesVsPrev!=null&&Math.abs(c.piecesVsPrev)>=50&&!x.offDayWork&&!cal.afterBreak&&!(x.stopDays&&x.stopDays.length)&&!(W&&hol.length)&&Math.abs(dLines)<2)add('bigSwing',78,'A','差 '+P0(Math.abs(c.piecesVsPrev))+'% 先查','件數和'+prevW+'差了 '+P0(Math.abs(c.piecesVsPrev))+'%（'+N(pv.pieces)+' → '+N(s.pieces)+'），先確認日報有沒有缺或重複，再看原因。','sew');
+      /* v1.2（11/24，照 Paul 7–11 月週報）：週報一律用「每個生產日」比；上一期只有 1–3 天（收假、停工後）不跳「先查」，改寫「恢復」；
+         件數大漲大跌但每日標準工時差不多＝產品結構（餐巾、桌布、圍裙），不是產能變了 */
+      const pvShort=W&&pv.dayCount!=null&&pv.dayCount<=3;const swing=W?c.perDayVsPrev:c.piecesVsPrev;const stdSw=c.stdPerDayVsPrev;
+      const famTop=(s.fam||[]).filter(z=>z.fam!=='GARMENT').sort((a,b)=>b.share-a.share)[0];const FZ={NAPKIN:'餐巾',TOP:'桌布',APRON:'圍裙',OTHER:'其他'};
+      if(W&&pvShort&&s.perDay&&pv.perDay)add('recovery',80,'I','恢復','上週只做 '+N(pv.dayCount)+' 天（收假或停工後），這週 '+N(s.dayCount)+' 天、日均 '+N(s.perDay)+' 件（上週 '+N(pv.perDay)+'）'+(s.eff!=null?'，效率 '+P1(s.eff)+'%':'')+'。用每天平均和標準工時比，不拿總件數比。','sew');
+      else if(swing!=null&&Math.abs(swing)>=25&&stdSw!=null&&Math.abs(stdSw)<=12&&famTop&&famTop.share>=20)add('mixPcs',79,'I',(swing>0?'件數多是':'件數少是')+FZ[famTop.fam]+'帶的',(W?'日均':'件數')+'件數'+(swing>0?'多了 ':'少了 ')+P0(Math.abs(swing))+'%，但每天標準工時只'+(stdSw>=0?'多 ':'少 ')+P0(Math.abs(stdSw))+'%（'+N(pv.stdHoursPerDay)+' → '+N(s.stdHoursPerDay)+' 小時）：'+FZ[famTop.fam]+'占 '+P0(famTop.share)+'% 件數、只占 '+P0(famTop.hourShare)+'% 工時。產能沒有跟著件數變，看效率和標準工時。','sew');
+      else if(swing!=null&&Math.abs(swing)>=50&&!x.offDayWork&&!cal.afterBreak&&!(x.stopDays&&x.stopDays.length)&&!(W&&hol.length)&&Math.abs(dLines)<2)add('bigSwing',78,'A','差 '+P0(Math.abs(swing))+'% 先查',(W?'日均':'件數')+'和'+prevW+'差了 '+P0(Math.abs(swing))+'%（'+N(W?pv.perDay:pv.pieces)+' → '+N(W?s.perDay:s.pieces)+'），先確認日報有沒有缺或重複，再看原因。','sew');
       if(c.effVsPrevPt!=null&&s.eff!=null){
         if(c.effVsPrevPt<=-3){const mpDown=mpPct!=null&&mpPct<=-5;add('effDown',s.eff<TH.effA?77:72,s.eff<TH.effA?'R':'A','效率 ▼'+P1(Math.abs(c.effVsPrevPt)),'效率掉到 '+P1(s.eff)+'%（'+prevW+' '+P1(pv.eff)+'%）'+(mpDown?'，人也少了 '+N(Math.abs(c.manpowerVsPrev))+' 位':'，人沒少')+(weakTxt?'，拖住的是 '+weakTxt:'')+'。','lines')}
         else if(c.effVsPrevPt>=3){const best=(f.lines||[]).filter(z=>z.eff!=null).sort((a,b)=>b.eff-a.eff).slice(0,2).map(z=>LS(z.line)+' '+P0(z.eff)+'%').join('、');add('effUp',48,'G','效率 ▲'+P1(c.effVsPrevPt),'效率 '+P1(s.eff)+'%，比'+prevW+'高 '+P1(c.effVsPrevPt)+' 點'+(best?'，'+best+' 帶頭':'')+'。','lines')}}
@@ -211,6 +241,16 @@
       if(w.daysOfOutput!=null){if(w.daysOfOutput>=TH.wipR)add('wipPile',44,'A','裁片堆 '+P0(w.daysOfOutput)+' 天','已裁未縫 '+N(w.cutNotSewn)+' 件，夠縫 '+P1(w.daysOfOutput).replace(/\.0$/,'')+' 天。裁得比縫快，裁剪可以放慢。','cut');else if(w.daysOfOutput<1.5&&w.cutNotSewn!=null)add('wipLow',54,'A','裁片快斷','已裁未縫只剩 '+N(w.cutNotSewn)+' 件（'+P1(w.daysOfOutput)+' 天），裁片快接不上，裁剪要先趕。','cut')}
       if(!W&&f.cutting&&!f.cutting.rows)add('noCut',24,'I','','今天沒有裁剪報告（沒排裁或等布）。','cut');
       if(cal.monthStart&&M.prev)add('monthStart',50,'I','月初',mon(f.anchor.slice(0,7))+'剛開始。'+M.prev.label+'結算 '+N(M.prev.pieces)+' 件／'+N(M.prev.days)+' 天，日均 '+N(M.prev.perDay)+(M.prev.eff!=null?'，效率 '+P1(M.prev.eff)+'%':'')+'。','sew')}
+    const MC=monthCloseOf(f);if(MC){const c0=MC.cur,p0=MC.prev;if(p0&&p0.days&&c0.days<p0.days&&c0.earnedHPerDay!=null&&p0.earnedHPerDay!=null&&c0.earnedHPerDay>=p0.earnedHPerDay)add('monthClose',84,'G',c0.label+'月結',c0.label+'少做幾天，不代表效率變差：'+N(c0.days)+' 天（'+p0.label+' '+N(p0.days)+' 天），月總標準工時少 '+P0(Math.abs(MC.ehChg))+'%、比工作日少的 '+P0(Math.abs(MC.daysChg))+'% 還小；每工作日標準工時 '+N(p0.earnedHPerDay)+' → '+N(c0.earnedHPerDay)+' h'+(c0.eff!=null&&p0.eff!=null?'，效率 '+P1(p0.eff)+'% → '+P1(c0.eff)+'%':'')+'。','sew');
+      else add('monthClose',58,'I',c0.label+'月結',c0.label+'月結 '+N(c0.pieces)+' 件、'+N(c0.days)+' 天、日均 '+N(c0.perDay)+(c0.eff!=null?'、效率 '+P1(c0.eff)+'%':'')+(p0?'（'+p0.label+' '+N(p0.pieces)+' 件、'+N(p0.days)+' 天'+(p0.eff!=null?'、'+P1(p0.eff)+'%':'')+'）':'')+'。','sew')}
+    if(FL.relabel&&FL.relabel.length){const ls=relabelLines.sort((a,b)=>lno(a)-lno(b));const dd=[...new Set(FL.relabel.map(z=>z.date))].sort();add('relabel',81,'I',ls.join('、')+' 補標',ls.join('、')+' '+(dd.length>1?md(dd[0])+'–'+md(dd[dd.length-1])+'（'+dd.length+' 天）':md(dd[0]))+'做成品改標／補標，新車縫件數低或 0 不是閒置。這幾組的效率另看，補標完成數和用了多少人時要另外記。','lines','車縫主管／IE','補標另記完成數與人時')}
+    if(FL.wipOnly&&FL.wipOnly.length)add('wipOnly',47,'I','舊半成品補標',FL.wipOnly.slice(0,3).map(z=>z.line+' '+md(z.date)).join('、')+' 的件數是舊半成品補標（只差商標／鈕扣），效率會偏高，不和完整車縫比。','lines');
+    if(FL.trimHold&&FL.trimHold.length){const by={};FL.trimHold.forEach(z=>{const o=by[z.line]=by[z.line]||{line:z.line,days:0,max:0,items:{}};o.days++;o.max=Math.max(o.max,z.qty||0);if(z.item)z.item.split('＋').forEach(i=>{o.items[i]=1})});
+      const arr=Object.values(by).sort((a,b)=>b.days-a.days||b.max-a.max);const items=[...new Set(FL.trimHold.map(z=>z.item).filter(Boolean).join('＋').split('＋'))].filter(Boolean).join('、')||'輔料';
+      add('trimHold',arr.length>=3||arr.some(o=>o.days>=3)?70:56,'A','缺'+items,'缺'+items+'反覆卡住：'+arr.slice(0,4).map(o=>o.line+(o.days>1?' '+o.days+' 天':'')+(o.max?'（最多 '+N(o.max)+' 件）':'')).join('、')+'，車好了不能結成品。每天的半成品數是當天快照，不能相加。','floor','倉庫／採購','D-1 確認商標／鈕扣到線邊')}
+    if(FL.cutSupply&&FL.cutSupply.length)add('cutSupply',52,'A','裁片不足轉款',[...new Set(FL.cutSupply.map(z=>z.line))].join('、')+' 裁片不夠，轉做別款（例如圍裙）撐著，那幾天效率要分開看。','cut','裁剪','裁片先供原排款');
+    if(FL.smvReview&&FL.smvReview.length)add('smvReview',46,'A','SMV 重測',[...new Set(FL.smvReview.map(z=>z.line))].join('、')+' 的款 SMV 有問題、IE 在重測，這幾組效率先不拿來評現場（分母不對）。','lines','IE','重測 SMV 並公告');
+    if(FL.smvMissing&&FL.smvMissing.length)add('smvNo',44,'A','沒有 IE 工時',[...new Set(FL.smvMissing.map(z=>z.line))].join('、')+' 的款還沒有 IE 工時，效率算不出來，IE 要補。','lines','IE','補 SMV');
     if(!S.some(z=>z.w>=45))add('steady',45,'G','平穩',when+'平穩：'+N(s.pieces)+' 件'+(s.eff!=null?'、效率 '+P1(s.eff)+'%':'')+(c.piecesVsPrev!=null?'，和'+prevW+'差不多':'')+'。','sew');
     return S.sort((a,b)=>b.w-a.w)}
 
@@ -244,9 +284,11 @@
     /* 車縫 */
     SEC.sew=()=>{const o=[];if(!s.rows)return o;const t=effTone(s.eff);
       o.push('🧵 '+b('車縫')+'　'+N(s.pieces)+' 件'+arrow(cmp.piecesVsPrev)+(W&&s.perDay?'・日均 '+N(s.perDay):''));
-      const sub=[];if(s.lines)sub.push(N(s.lines)+' 線');if(s.manpower)sub.push(N(s.manpower)+' 人');if(W&&s.dayCount)sub.push(N(s.dayCount)+' 天');if(x.stdHours)sub.push('標準工時 '+N(x.stdHours)+' h');if(sub.length)o.push('　'+sub.join('・'));
-      if(s.eff!=null)o.push('　效率 '+bar(s.eff/50,t)+' '+b(P1(s.eff)+'%')+(pv.eff!=null?'（'+(W?'上週':'昨')+' '+P1(pv.eff)+'%）':''));
-      if(f.mix&&f.mix.filter(m=>m.pieces>0).length>1)o.push('　'+f.mix.filter(m=>m.pieces>0).map(m=>(m.product==='Apron'?'圍裙':m.product==='Garment'?'成衣':esc(m.product))+' '+N(m.pieces)).join('｜'));
+      const sub=[];if(s.lines)sub.push(N(s.lines)+' 線');if(s.manpower)sub.push(N(s.manpower)+' 人');if(W&&s.dayCount)sub.push(N(s.dayCount)+' 天');if(x.stdHours)sub.push('標準工時 '+(W&&s.stdHours!=null?s.stdHours.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}):N(x.stdHours))+' h'+(W&&s.labourHours?'／投入 '+s.labourHours.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+' h':''));if(sub.length)o.push('　'+sub.join('・'));
+      const P2=v=>(Math.round(Number(v)*100)/100).toFixed(2);if(s.eff!=null)o.push('　效率 '+bar(s.eff/50,t)+' '+b((W?P2(s.eff):P1(s.eff))+'%')+(pv.eff!=null?'（'+(W?'上週':'昨')+' '+(W?P2(pv.eff):P1(pv.eff))+'%'+(W?'，'+(s.eff-pv.eff>=0?'+':'')+P2(s.eff-pv.eff)+' 個百分點':'')+'）':''));
+      const MC=monthCloseOf(f);if(MC)o.push('📆 '+b(MC.cur.label+'月結')+'　'+N(MC.cur.pieces)+' 件・'+N(MC.cur.days)+' 天・日均 '+N(MC.cur.perDay)+(MC.cur.eff!=null?'・效率 '+P1(MC.cur.eff)+'%':'')+(MC.cur.earnedH?'・標準工時 '+N(MC.cur.earnedH)+' h（每工作日 '+N(MC.cur.earnedHPerDay)+(MC.prev&&MC.prev.earnedHPerDay?'，'+MC.prev.label+' '+N(MC.prev.earnedHPerDay):'')+'）':''));
+      if(s.fam&&s.fam.length>1){const FZ={GARMENT:'成衣',APRON:'圍裙',NAPKIN:'餐巾',TOP:'桌布',OTHER:'其他'};o.push('　'+s.fam.map(m=>FZ[m.fam]+' '+N(m.pieces)+'（件 '+P1(m.share)+'%／工時 '+P1(m.hourShare)+'%）').join('｜')+(s.grs?'｜GRS '+N(s.grs.pieces):''))}
+      else if(f.mix&&f.mix.filter(m=>m.pieces>0).length>1)o.push('　'+f.mix.filter(m=>m.pieces>0).map(m=>(m.product==='Apron'?'圍裙':m.product==='Garment'?'成衣':esc(m.product))+' '+N(m.pieces)).join('｜'));
       if(x.target&&x.target.ach!=null)o.push('　目標 '+N(x.target.target)+'・達成 '+P0(x.target.ach)+'%');
       if(x.ot&&x.ot.pcs)o.push('　加班 '+N(x.ot.pcs)+' 件'+(x.ot.workers?'・'+N(x.ot.workers)+' 人次':''));
       return o};
@@ -314,6 +356,6 @@
     const ls=(f.lines||[]).filter(z=>z.eff!=null).slice().sort((a,b)=>lno(a.line)-lno(b.line));if(ls.length<2)return null;
     return {title:md(f.anchor)+' 各組效率 %（綠≥'+TH.lineOk+'　黃≥'+TH.lineLow+'　紅＜'+TH.lineLow+'）',labels:ls.map(z=>LS(z.line)),values:ls.map(z=>Math.round(z.eff*10)/10),tones:ls.map(z=>lineTone(z.eff)),unit:'%'}}
 
-  const CATALOG=['nodata','partial','otHoliday','shortWeek','stopDays','stopGap','afterBreak','beforeHoliday','lineCut','lineAdd','absent','manpower','bigSwing','effDown','effUp','effRed','weakLines','allGreen','dayHigh','dayLow','mix','overtime','floorIssue','targetMiss','dualRisk','qcHigh','qcMismatch','qcMissing','needle','wipPile','wipLow','noCut','monthStart','monthEnd','behind','ahead','shipOverdue','shipSoon','fabric','fabricStale','backlogHigh','backlogLow','backlogOk','cmt','noplan','emptyLines','nextEmpty','loadLow','loadFull','gap','attainLow','attainHigh','changeover','nextChange','undated','smvMissing','concentration','dataLag','overCap','underCap','slip','idleAfter','dueNoBox','unscheduled','dupStyle','finishedListed','steady'];
-  g.VRTReportScen={version:VERSION,extras,scenarios,render,chart,todoLines,adjLoad,CATALOG};
+  const CATALOG=['monthClose','recovery','mixPcs','relabel','wipOnly','trimHold','cutSupply','smvNo','smvReview','nodata','partial','otHoliday','shortWeek','stopDays','stopGap','afterBreak','beforeHoliday','lineCut','lineAdd','absent','manpower','bigSwing','effDown','effUp','effRed','weakLines','allGreen','dayHigh','dayLow','mix','overtime','floorIssue','targetMiss','dualRisk','qcHigh','qcMismatch','qcMissing','needle','wipPile','wipLow','noCut','monthStart','monthEnd','behind','ahead','shipOverdue','shipSoon','fabric','fabricStale','backlogHigh','backlogLow','backlogOk','cmt','noplan','emptyLines','nextEmpty','loadLow','loadFull','gap','attainLow','attainHigh','changeover','nextChange','undated','smvMissing','concentration','dataLag','overCap','underCap','slip','idleAfter','dueNoBox','unscheduled','dupStyle','finishedListed','steady'];
+  g.VRTReportScen={version:VERSION,extras,scenarios,render,chart,todoLines,adjLoad,CATALOG,classifyRemark};
 })(typeof window!=='undefined'?window:globalThis);

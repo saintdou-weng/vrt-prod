@@ -7,12 +7,12 @@
  {
   "name": "月度比較用每個生產日：本月到今天、上月、前月；標準工時＝件數×SMV（日報沒有 producedMinutes 時）",
   "status": "PASS",
-  "detail": "Oct 23 days, 4950/day · Sep earned 16500 h"
+  "detail": "Oct 21 days, 4950/day · Sep earned 16500 h"
  },
  {
   "name": "月初：先回頭看上月（含和前月比）",
   "status": "PASS",
-  "detail": "11月剛開始，先回頭看10月：113,850 件、23 個生產日，每天 4,950 件，效率 30.0%。和9月比，每個"
+  "detail": "11月剛開始，先回頭看10月：103,950 件、21 個生產日，每天 4,950 件，效率 30.0%。和9月比，每個"
  },
  {
   "name": "節後復工：送水節後第一天",
@@ -67,7 +67,12 @@
  {
   "name": "接單可做幾個月（週報）：≥2 個月可考慮加班、<1 個月併組；以上月實做為一個月產能",
   "status": "PASS",
-  "detail": "7.9 / 0.4 / 1.4 months"
+  "detail": "8.7 / 0.5 / 1.4 months"
+ },
+ {
+  "name": "客戶統計太舊（9/29 → 11/5，超過 14 天）：不拿來判斷缺布和接單，改成提醒匯入（Paul 11/05：30 多萬缺布不對）",
+  "status": "PASS",
+  "detail": "age 37 days"
  },
  {
   "name": "平穩日與沒有資料的日子",
@@ -82,11 +87,11 @@
  {
   "name": "週報與排單週報：只有中文、整齊（・項目）、有每天、月比較、接下來；排單週報保留負荷段落",
   "status": "PASS",
-  "detail": "week 731 chars · plan 371 chars"
+  "detail": "week 730 chars · plan 371 chars"
  },
  {
   "name": "AI 提示詞：只要中文、照 Paul 週報語氣（範例）、禁用翻案句與破折號、數字只能來自事實；AI 結果標題加粗",
   "status": "PASS",
-  "detail": "system 758 chars"
+  "detail": "system 1051 chars"
  }
 ]

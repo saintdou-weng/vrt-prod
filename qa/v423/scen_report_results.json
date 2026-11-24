@@ -67,6 +67,6 @@
  {
   "name": "情境至少 40 種都被測到；圖表資料",
   "status": "PASS",
-  "detail": "62 種；未測到：needle nextChange smvMissing overCap finishedListed"
+  "detail": "62 種；未測到：monthClose recovery mixPcs relabel wipOnly trimHold cutSupply smvNo smvReview needle nextChange smvMissing overCap finishedListed"
  }
 ]

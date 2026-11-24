@@ -1,0 +1,37 @@
+[
+ {
+  "name": "①工廠行事曆：9/24 調休上班、9/26 休、10/9–15 亡人節全休、10/29 照常上班、12/29 上班、1/2 休",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "⑤日報備註分類（簡體原文）",
+  "status": "PASS",
+  "detail": "ok"
+ },
+ {
+  "name": "②效率口徑＝Paul 週報（有人 0 產出的組進分母）",
+  "status": "PASS",
+  "detail": "10-24 30.83%、10-31 35.28%、11-07 34.84%、11-14 37.67%"
+ },
+ {
+  "name": "③產品別：W46 餐巾 38,300／成衣 20,508／桌布 6,825／GRS 5,500（P050 誤列 TOP 自動校正）",
+  "status": "PASS",
+  "detail": "{\"NAPKIN\":38300,\"GARMENT\":20508,\"TOP\":6825,\"APRON\":5560}"
+ },
+ {
+  "name": "④週比較與情境：恢復／產品結構／補標不是閒置／缺標快照",
+  "status": "PASS",
+  "detail": "10-24:recovery/trimHold/weakLines  10-31:relabel/trimHold/monthClose  11-07:relabel/mixPcs/beforeHoliday  11-14:shortWeek/trimHold/weakLines"
+ },
+ {
+  "name": "⑥寫法 lint：Paul 自己的信不被誤抓；錯誤寫法抓得到",
+  "status": "PASS",
+  "detail": "9 種"
+ },
+ {
+  "name": "⑦相似度：引擎週報 vs Paul 同期週報（基準，往 95 走）",
+  "status": "PASS",
+  "detail": "10-27 52.5、11-03 52.7、11-10 53.1、11-17 58"
+ }
+]

@@ -12,7 +12,7 @@
    docHtml(facts, text) → full management report (Word-compatible HTML, .doc)   aiPrompt / checkAiText / checkNumbersAgainstText */
 (function(g){'use strict';
   if(g.VRTDailyReport)return;
-  const VERSION='2.0.0';
+  const VERSION='2.1.0';
   /* ── small helpers (standalone so the file does not depend on vrt-tg-summary-v1.js) ── */
   const num=v=>{const n=Number(v);return isFinite(n)?n:0};
   const N=n=>{const v=Number(n||0);return (Number.isInteger(v)?v:Math.round(v*10)/10).toLocaleString('en-US')};
@@ -41,9 +41,18 @@
   const rag=(v,g,a,higherIsBetter)=>v==null||!isFinite(v)?null:higherIsBetter?(v>=g?'G':v>=a?'A':'R'):(v<=g?'G':v<=a?'A':'R');
 
   /* ── sewing: same de-dup rule as sewing_v5 / production_v4 (one source per day: norm > target > dpo) ── */
-  function sewPick(rows){const byDay={};(rows||[]).forEach(r=>{if(!r||num(r.pieces)<=0)return;const d=dayKey(r.date);if(!d)return;const src=r.tSrc==='target'?'target':r.tSrc==='dpo'?'dpo':'norm';const x=byDay[d]=byDay[d]||{norm:[],target:[],dpo:[]};x[src].push(r)});const out={};Object.keys(byDay).forEach(d=>{const x=byDay[d];out[d]=x.norm.length?x.norm:x.target.length?x.target:x.dpo});return out}
-  function sewAgg(rows){const o={pieces:0,garment:0,apron:0,other:0,rows:0,prodMin:0,attMin:0,w:0,effW:0,cartons:0,lines:{},styles:{},days:{}};
+  function sewPick(rows){const byDay={},zero={};(rows||[]).forEach(r=>{if(!r)return;const d=dayKey(r.date);if(!d)return;const src=r.tSrc==='target'?'target':r.tSrc==='dpo'?'dpo':'norm';
+      /* v2.1（11/24 照 Paul 週報口徑）：有人上班但 0 產出的組（缺料、補標、換款）也要進分母；只收有人數／出勤分鐘的 0 件列 */
+      if(num(r.pieces)<=0){if(num(r.workers)>0||num(r.attendedMinutes)>0){const z=zero[d]=zero[d]||{norm:[],target:[],dpo:[]};z[src].push(r)}return}
+      const x=byDay[d]=byDay[d]||{norm:[],target:[],dpo:[]};x[src].push(r)});const out={};Object.keys(byDay).forEach(d=>{const x=byDay[d];const src=x.norm.length?'norm':x.target.length?'target':'dpo';const pick=x[src].slice();
+      const z=zero[d]&&zero[d][src];if(z&&z.length){const has={};pick.forEach(r=>{has[String(r.lineNo||'').replace(/\D/g,'')]=1});const add={};z.forEach(r=>{const k=String(r.lineNo||'').replace(/\D/g,'');if(k&&!has[k]&&!add[k]){add[k]=1;pick.push(r)}})}out[d]=pick});return out}
+  function famOf(r){const t=String(r.productType||r.product||r.typeOfProduct||'').toUpperCase();if(/NAPKIN|餐巾/.test(t))return 'NAPKIN';if(/TOP|TABLE|桌布|台布/.test(t))return 'TOP';if(/APRON|圍裙/.test(t))return 'APRON';if(/GARMENT|COVERALL|成衣|SHIRT|PANT/.test(t))return 'GARMENT';return r.section==='Garment'?'GARMENT':r.section==='Apron'?'APRON':'OTHER'}
+  const isGRS=st=>/-RC\b|RC$|-RC-/i.test(String(st||''));
+  function sewAgg(rows){const o={pieces:0,garment:0,apron:0,other:0,rows:0,prodMin:0,attMin:0,w:0,effW:0,cartons:0,lines:{},styles:{},days:{},fam:{},grs:{pieces:0,prodMin:0}};
+    /* 同一款被日報分錯類（例：11/12 P050 餐巾寫成 TOP）→ 用這一款在期間內件數最多的類別 */
+    const sf={};(rows||[]).forEach(r=>{const p=num(r.pieces);if(p<=0)return;const k=String(r.styleNo||r.style||'').toUpperCase();if(!k)return;const fk=famOf(r);const m=sf[k]=sf[k]||{};m[fk]=(m[fk]||0)+p});const famFix=r=>{const k=String(r.styleNo||r.style||'').toUpperCase();const m=sf[k];if(!m)return famOf(r);return Object.keys(m).sort((x,y)=>m[y]-m[x])[0]};
     (rows||[]).forEach(r=>{const p=num(r.pieces),ln=String(r.lineNo||'—').trim()||'—',w=num(r.workers),e=num(r.efficiency),d=dayKey(r.date);o.rows++;o.pieces+=p;o.cartons+=num(r.cartons);if(r.section==='Garment')o.garment+=p;else if(r.section==='Apron')o.apron+=p;else o.other+=p;
+      if(p>0){const fk=famFix(r),F=o.fam[fk]=o.fam[fk]||{pieces:0,prodMin:0};F.pieces+=p;F.prodMin+=num(r.producedMinutes);if(isGRS(r.styleNo||r.style)){o.grs.pieces+=p;o.grs.prodMin+=num(r.producedMinutes)}}
       const L=o.lines[ln]=o.lines[ln]||{line:ln,pieces:0,prodMin:0,attMin:0,effW:0,_wsum:0,styles:{},dayW:{}};L.pieces+=p;const pm=num(r.producedMinutes),am=num(r.attendedMinutes);o.prodMin+=pm;o.attMin+=am;L.prodMin+=pm;L.attMin+=am;if(w>0&&e>0){o.w+=w;o.effW+=w*e;L.effW+=w*e;L._wsum+=w}if(w>0)L.dayW[d]=Math.max(L.dayW[d]||0,w);if(r.styleNo){o.styles[r.styleNo]=(o.styles[r.styleNo]||0)+p;L.styles[r.styleNo]=1}
       const D=o.days[d]=o.days[d]||{date:d,pieces:0,cartons:0,prodMin:0,attMin:0,w:0,effW:0,lineW:{}};D.pieces+=p;D.cartons+=num(r.cartons);D.prodMin+=pm;D.attMin+=am;if(w>0&&e>0){D.w+=w;D.effW+=w*e}if(w>0)D.lineW[ln]=Math.max(D.lineW[ln]||0,w)});
     o.eff=o.attMin>0?o.prodMin/o.attMin*100:o.w>0?o.effW/o.w:null;o.effBasis=o.attMin>0?'minutes':o.w>0?'workers':'';
@@ -77,9 +86,10 @@
     const f={version:VERSION,period,kind,week:period==='week'?isoWeekKey(A):'',date:P.key,anchor:A,start:P.start,end:P.end,label:P.label,labelEn:P.labelEn,dow:period==='day'?DOW_ZH[dowMon0(A)]:'',dowEn:period==='day'?DOW_EN[dowMon0(A)]:'',today,generatedAt:new Date().toISOString(),source:{},prevLabel:prev.label,prevLabelEn:prev.labelEn};
     /* sewing */
     const sc=sewAgg(rowsIn(inP)),sp=sewAgg(rowsIn(inPrev)),sw=sewAgg(rowsIn(inLw));
-    f.sewing={pieces:sc.pieces,garment:sc.garment,apron:sc.apron,other:sc.other,lines:sc.lineCount,eff:sc.eff,effBasis:sc.effBasis,prodMin:sc.prodMin,attMin:sc.attMin,rows:sc.rows,cartons:Math.round(sc.cartons*10)/10,manpower:Math.round(sc.manpower*10)/10,dayCount:sc.dayCount,perDay:sc.dayCount?Math.round(sc.pieces/sc.dayCount):0,byLine:sc.byLine.slice(0,20),topStyles:top(sc.styles,5).map(([k,v])=>({style:k,pieces:v})),avgSmv:sc.pieces>0&&sc.prodMin>0?Math.round(sc.prodMin/sc.pieces*100)/100:null};
+    f.sewing={pieces:sc.pieces,garment:sc.garment,apron:sc.apron,other:sc.other,lines:sc.lineCount,eff:sc.eff,effBasis:sc.effBasis,prodMin:sc.prodMin,attMin:sc.attMin,rows:sc.rows,cartons:Math.round(sc.cartons*10)/10,manpower:Math.round(sc.manpower*10)/10,dayCount:sc.dayCount,perDay:sc.dayCount?Math.round(sc.pieces/sc.dayCount):0,byLine:sc.byLine.slice(0,20),topStyles:top(sc.styles,5).map(([k,v])=>({style:k,pieces:v})),avgSmv:sc.pieces>0&&sc.prodMin>0?Math.round(sc.prodMin/sc.pieces*100)/100:null,stdHours:Math.round(sc.prodMin/60*10)/10,stdHoursPerDay:sc.dayCount?Math.round(sc.prodMin/60/sc.dayCount*10)/10:null,labourHours:Math.round(sc.attMin/60*10)/10,
+      fam:Object.keys(sc.fam).map(k=>({fam:k,pieces:sc.fam[k].pieces,share:sc.pieces?Math.round(sc.fam[k].pieces/sc.pieces*1000)/10:0,stdHours:Math.round(sc.fam[k].prodMin/60*10)/10,hourShare:sc.prodMin?Math.round(sc.fam[k].prodMin/sc.prodMin*1000)/10:0})).sort((a,b)=>b.pieces-a.pieces),grs:sc.grs.pieces?{pieces:sc.grs.pieces,stdHours:Math.round(sc.grs.prodMin/60*10)/10}:null};
     f.days=sc.byDay;f.mix=[['Garment',sc.garment],['Apron',sc.apron],['Other',sc.other]].filter(x=>x[1]>0).map(([k,v])=>({product:k,pieces:v,share:sc.pieces?v/sc.pieces*100:0}));
-    f.prevDay={date:prev.start,label:prev.label,pieces:sp.rows?sp.pieces:null,eff:sp.rows?sp.eff:null,lines:sp.rows?sp.lineCount:null,manpower:sp.rows?Math.round(sp.manpower*10)/10:null,dayCount:sp.dayCount,perDay:sp.dayCount?Math.round(sp.pieces/sp.dayCount):null,cartons:sp.rows?Math.round(sp.cartons*10)/10:null};
+    f.prevDay={date:prev.start,label:prev.label,pieces:sp.rows?sp.pieces:null,eff:sp.rows?sp.eff:null,lines:sp.rows?sp.lineCount:null,manpower:sp.rows?Math.round(sp.manpower*10)/10:null,dayCount:sp.dayCount,perDay:sp.dayCount?Math.round(sp.pieces/sp.dayCount):null,cartons:sp.rows?Math.round(sp.cartons*10)/10:null,stdHoursPerDay:sp.dayCount&&sp.prodMin?Math.round(sp.prodMin/60/sp.dayCount*10)/10:null};
     f.lastWeek={date:lw?lw.start:'',pieces:sw.rows?sw.pieces:null,eff:sw.rows?sw.eff:null,lines:sw.rows?sw.lineCount:null};
     f.source.sewing=(data.sewing||[]).length;f.source.sewingDates=sewDates.length;
     /* cutting */
@@ -121,7 +131,7 @@
     /* v1.2 排單負荷 (week): line-days, gaps, changeovers, next week, concentration — from the Production Plan rows */
     f.loading=period==='week'?loadingFacts(data,P,sewDays,prev,today):null;
     /* comparisons */
-    f.compare={piecesVsPrev:delta(f.sewing.pieces,f.prevDay.pieces),piecesVsLastWeek:delta(f.sewing.pieces,f.lastWeek.pieces),perDayVsPrev:delta(f.sewing.perDay,f.prevDay.perDay),effVsPrevPt:f.sewing.eff!=null&&f.prevDay.eff!=null?f.sewing.eff-f.prevDay.eff:null,effVsLastWeekPt:f.sewing.eff!=null&&f.lastWeek.eff!=null?f.sewing.eff-f.lastWeek.eff:null,manpowerVsPrev:f.prevDay.manpower!=null?Math.round((f.sewing.manpower-f.prevDay.manpower)*10)/10:null,cutVsPrev:delta(f.cutting.pieces,f.cutting.prevPieces),cutVsLastWeek:delta(f.cutting.pieces,f.cutting.lastWeekPieces),qcVsPrevPt:f.qc.rate!=null&&f.qc.prevRate!=null?f.qc.rate-f.qc.prevRate:null,qcVsLastWeekPt:f.qc.rate!=null&&f.qc.lastWeekRate!=null?f.qc.rate-f.qc.lastWeekRate:null};
+    f.compare={stdPerDayVsPrev:delta(f.sewing.stdHoursPerDay,f.prevDay.stdHoursPerDay),piecesVsPrev:delta(f.sewing.pieces,f.prevDay.pieces),piecesVsLastWeek:delta(f.sewing.pieces,f.lastWeek.pieces),perDayVsPrev:delta(f.sewing.perDay,f.prevDay.perDay),effVsPrevPt:f.sewing.eff!=null&&f.prevDay.eff!=null?f.sewing.eff-f.prevDay.eff:null,effVsLastWeekPt:f.sewing.eff!=null&&f.lastWeek.eff!=null?f.sewing.eff-f.lastWeek.eff:null,manpowerVsPrev:f.prevDay.manpower!=null?Math.round((f.sewing.manpower-f.prevDay.manpower)*10)/10:null,cutVsPrev:delta(f.cutting.pieces,f.cutting.prevPieces),cutVsLastWeek:delta(f.cutting.pieces,f.cutting.lastWeekPieces),qcVsPrevPt:f.qc.rate!=null&&f.qc.prevRate!=null?f.qc.rate-f.qc.prevRate:null,qcVsLastWeekPt:f.qc.rate!=null&&f.qc.lastWeekRate!=null?f.qc.rate-f.qc.lastWeekRate:null};
     /* line table with 判讀 (thresholds TH) and quality × capacity risk class */
     {const qcL={};f.qc.byLine.forEach(q=>{qcL[q.line]=q});f.lines=f.sewing.byLine.map(L=>{const q=qcL[L.line]||qcL[String(L.line).replace(/^Line\s*/i,'')]||qcL['Line '+L.line]||null;const rej=q?q.rate:null;
       const v=L.eff==null?null:L.eff>=TH.lineOk?'ok':L.eff>=TH.lineLow?'low':'weak';const r=rej==null?null:rej>=TH.lineRejHigh?'high':rej>=TH.lineRejMid?'mid':'normal';
@@ -461,8 +471,11 @@
      所有數字仍由這裡的程式算出（compute／enrich），AI 只改寫文字並經 checkAiText 核對。 */
   /* 柬埔寨國定假日（官方公告，2026；工廠臨時調班可用 data.calendar 覆寫：{off:{'yyyy-mm-dd':'名稱'}, on:['yyyy-mm-dd']}） */
   const HOLIDAYS_KH={'2026-01-01':'元旦','2026-01-07':'勝利日','2026-03-08':'婦女節','2026-04-14':'高棉新年','2026-04-15':'高棉新年','2026-04-16':'高棉新年','2026-05-01':'勞動節','2026-05-05':'御耕節','2026-05-14':'國王誕辰','2026-06-18':'太后誕辰','2026-09-24':'憲法日','2026-10-10':'亡人節','2026-10-11':'亡人節','2026-10-12':'亡人節','2026-10-15':'太皇紀念日','2026-10-29':'國王登基日','2026-11-09':'獨立日','2026-11-23':'送水節','2026-11-24':'送水節','2026-11-25':'送水節','2026-12-29':'和平日'};
-  let CAL={off:Object.assign({},HOLIDAYS_KH),on:{}};
-  function setCalendar(c){CAL={off:Object.assign({},HOLIDAYS_KH,(c&&c.off)||{}),on:{}};((c&&c.on)||[]).forEach(d=>{CAL.on[d]=1;delete CAL.off[d]})}
+  /* 工廠實際行事曆（和國定假日不同的地方，出處：Paul 9/29、9/30、10/22、11/18 生產信）。data.calendar 仍可再覆寫。 */
+  const FACTORY_CAL={off:{'2026-09-26':'工廠休假（憲法日調休）','2026-10-09':'亡人節','2026-10-13':'亡人節','2026-10-14':'亡人節','2027-01-02':'和平日（調休）'},on:['2026-09-24','2026-10-29','2026-12-29']};
+  const baseOff=()=>{const o=Object.assign({},HOLIDAYS_KH,FACTORY_CAL.off);FACTORY_CAL.on.forEach(d=>{delete o[d]});return o};
+  let CAL={off:baseOff(),on:{}};
+  function setCalendar(c){CAL={off:Object.assign(baseOff(),(c&&c.off)||{}),on:{}};((c&&c.on)||[]).forEach(d=>{CAL.on[d]=1;delete CAL.off[d]})}
   const holidayName=d=>CAL.off[d]||'';
   const isWorkday=d=>!!d&&(CAL.on[d]||(dowMon0(d)<6&&!CAL.off[d]));
   const workdaysCal=(a,b)=>{let n=0;for(let d=a;d&&d<=b;d=addDays(d,1))if(isWorkday(d))n++;return n};
@@ -600,7 +613,12 @@
     '月份之間比較要用每個生產日來比（假日會讓月總量自然變少）；件數和標準工時分開看（短工時的款件數多、工時少）；退修率是檢驗紀錄，不能直接從產量扣。',
     '要處理的事寫明哪一組／哪張 PO、誰負責（車縫主管、生管、QC、倉庫、船務、HRA、IE）。日期只能用事實裡已經有的日期（假日、出貨日、資料日期），不要自己訂期限。',
     '不要用「不是…」來對比解釋原因，直接說原因。',
-    '資料沒有的不要猜，不知道就說「資料還沒進來」。數字一個都不能改，也不能自己算新的數字。'
+    '資料沒有的不要猜，不知道就說「資料還沒進來」。數字一個都不能改，也不能自己算新的數字。',
+    /* v2.1（11/24，照 Paul 7–11 月 24 封生產信，完整規則在 PSJERP/PROD_REPORT_PLAYBOOK.md、vrt-report-style-v1.js） */
+    '補標／改標／拆箱換標的組，新車縫 0 件不是閒置，寫「補標支援」，效率另看；舊半成品只補商標的件數會讓效率偏高，不和完整車縫比。',
+    '日報每天的半成品（缺商標、缺鈕扣）是當天快照，不同天不能相加；QC 檢驗－完成－不良的差額也不是期末 WIP。',
+    '排單負荷（組日）不是效率、也不是產能利用率；排單和實際做的款或組別不同，先寫「要回寫排單」，不寫成生產做錯；大單分批出貨就用分批目標判斷。',
+    '有人上班但 0 產出的組也算在效率分母裡（程式已經這樣算）；效率週報的百分比照程式給的兩位小數。'
   ].join('\n');
   /* 參考：Paul 自己寫的報告片段（只學語氣，不抄數字） */
   const STYLE_SAMPLES='範例一（月結）：10月有亡人節假期，生產日由9月25天降至21天，月完成標準工時少了是合理的；但每日完成標準工時由645增至661小時，效率由29.6%升至30.8%，按工作日看反而小幅改善。\n範例二（線別）：10/31第6、8組新車縫數為0，兩組其實在做既有成品拆包、換標和熱轉印，應記入補標工序，不能算成車縫閒置。\n範例三（排單）：前半月合理，11個組都有物料齊全的單；後半月靠11/13那櫃布，到廠當天驗布、11/14裁、11/16上線比較實際。\n範例四（行動）：HRA核實車縫缺員，第5組26、第6組23、第7組27人，先補到28–29人。';
@@ -622,7 +640,9 @@
   function checkAiText(text,f){const allowed=factNumbers(f);const bad=[];
     const scrub=String(text||'').replace(/\d{4}-W\d{2}/g,' ').replace(/\d{4}-\d{2}-\d{2}/g,' ').replace(/\d{4}-\d{2}\b/g,' ').replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g,' ').replace(/\b(?:19|20)\d{2}\b/g,' ').replace(/\b\d{1,2}[\/\-]\d{1,2}\b/g,' ').replace(/\bPO\s*#?\s*[A-Za-z0-9\-]+/gi,' ').replace(/\bLine\s*[A-Za-z0-9\-]+/gi,' ').replace(/\bL\d{1,2}\b/g,' ').replace(/\b[A-Z]{1,4}\d{2,}[A-Z0-9\-]*\b/g,' ').replace(/[1-9]️⃣/g,' ');
     for(const m of scrub.matchAll(/[-−+]?\d[\d,]*(?:\.\d+)?/g)){const raw=m[0].replace(/[−+\-]/g,'').replace(/,/g,'');if(raw===''||/^0+$/.test(raw))continue;const n=Number(raw);if(!isFinite(n))continue;if(allowed.has(raw)||allowed.has(String(n))||allowed.has(n.toLocaleString('en-US')))continue;bad.push(m[0])}
-    return {ok:bad.length===0,bad:[...new Set(bad)]}}
+    /* v2.1：有載寫法模組（vrt-report-style-v1.js）就順便列出寫法問題（不擋發送，只給檢查用） */
+    let style=[];try{if(g.VRTReportStyle)style=g.VRTReportStyle.lint(text).map(z=>({id:z.id,msg:z.msg,text:z.text}))}catch(e){}
+    return {ok:bad.length===0,bad:[...new Set(bad)],style}}
   // generic check for the per-module AI summaries (D2): every number in the AI text must already appear in the computed input text
   function checkNumbersAgainstText(out,inText){const have=new Set();const plainIn=String(inText||'').replace(/<[^>]+>/g,'');for(const m of plainIn.matchAll(/\d[\d,]*(?:\.\d+)?/g)){const raw=m[0].replace(/,/g,'');have.add(raw);const n=Number(raw);if(isFinite(n)){have.add(String(n));have.add(n.toLocaleString('en-US'))}}
     const scrub=String(out||'').replace(/\d{4}-\d{2}-\d{2}/g,' ').replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g,' ').replace(/[1-9]️⃣/g,' ');const bad=[];
@@ -730,5 +750,5 @@
     f.basis.zh.forEach((z,i)=>{s+=para(z,f.basis.en[i]||'')});
     s+=footer();return shell(s,W?'生產效率週報':'生產日報','')}
 
-  g.VRTDailyReport={version:VERSION,TH,STYLE_GUIDE,STYLE_ZH,HOLIDAYS_KH,compute,render,renderStory,renderV13,aiHtml,holidayRuns,isWorkday,renderCompact,aiPrompt,checkAiText,checkNumbersAgainstText,docHtml,zhCount,helpers:{sewPick,sewAgg,cutAgg,qcPick,qcAgg,chgAgg,anyDate,addDays,dayKey,dowMon0,isoWeekKey,N,pct,esc,planRuns,weekLoading,lineShort}};
+  g.VRTDailyReport={version:VERSION,TH,STYLE_GUIDE,STYLE_ZH,HOLIDAYS_KH,FACTORY_CAL,famOf,compute,render,renderStory,renderV13,aiHtml,holidayRuns,isWorkday,renderCompact,aiPrompt,checkAiText,checkNumbersAgainstText,docHtml,zhCount,helpers:{sewPick,sewAgg,cutAgg,qcPick,qcAgg,chgAgg,anyDate,addDays,dayKey,dowMon0,isoWeekKey,N,pct,esc,planRuns,weekLoading,lineShort}};
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,0 +1,88 @@
+{
+ "at": "2026-11-24T11:23:03.565Z",
+ "engine": {
+  "daily": "2.1.0",
+  "scen": "1.2.0",
+  "style": "1.0.0"
+ },
+ "res": [
+  {
+   "report": "2026-10-27",
+   "week": "2026-10-24",
+   "total": 52.5,
+   "kpi": 50,
+   "kpiMissing": [
+    "eff",
+    "octMtd",
+    "grsDone",
+    "rejectRate"
+   ],
+   "scen": 67,
+   "scenMissing": [
+    "splitShipment",
+    "upstreamDefect"
+   ],
+   "sections": 0,
+   "lint": []
+  },
+  {
+   "report": "2026-11-03",
+   "week": "2026-10-31",
+   "total": 52.7,
+   "kpi": 73,
+   "kpiMissing": [
+    "perDay",
+    "stdPerDaySep",
+    "grsBatch"
+   ],
+   "scen": 33,
+   "scenMissing": [
+    "resequence",
+    "rushInsert",
+    "mixPcs",
+    "splitShipment"
+   ],
+   "sections": 0,
+   "lint": []
+  },
+  {
+   "report": "2026-11-10",
+   "week": "2026-11-07",
+   "total": 53.1,
+   "kpi": 63,
+   "kpiMissing": [
+    "stdHours",
+    "eff",
+    "rejectRate"
+   ],
+   "scen": 50,
+   "scenMissing": [
+    "resequence",
+    "maintNoProof",
+    "sourceConflict"
+   ],
+   "sections": 0,
+   "lint": []
+  },
+  {
+   "report": "2026-11-17",
+   "week": "2026-11-14",
+   "total": 58,
+   "kpi": 73,
+   "kpiMissing": [
+    "labourHours",
+    "l1Pcs",
+    "l1Eff",
+    "qcRate1114"
+   ],
+   "scen": 50,
+   "scenMissing": [
+    "routingMismatch",
+    "maintNoProof",
+    "upstreamDefect"
+   ],
+   "sections": 0,
+   "lint": []
+  }
+ ]
+}
