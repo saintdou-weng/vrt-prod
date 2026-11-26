@@ -7,7 +7,7 @@
 <script src="vrt-deploy-config.js?v=4.25.0"></script>
 <script src="vrt-platform-v40.js?v=4.51.7"></script>
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
-<script src="vrt-theme-v1.js?v=4.48.14"></script>
+<script src="vrt-theme-v1.js?v=4.52.0"></script>
 <script src="vrt-item-photos-v1.js?v=4.44.2"></script>
 <script src="vrt-photo-import-v1.js?v=4.45.1"></script>
 <script src="vrt-ui-fx-v1.js?v=4.46.0"></script>
@@ -173,7 +173,7 @@ const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
  {id:'orders',ic:'📋',name:'訂單與交期',drill:'orders',tabs:[['orders','訂單','orders_v3.html'],['po','PO 交期控制','VRT_PO_Delivery_Control_Center.html']]},
  {id:'plan',ic:'📅',name:'排單',drill:'plan',tabs:[['cap','排單／產能','production_plan_capacity_v1.html'],['cutplan','裁剪計劃','cutting_plan_v2.html']]},
- {id:'output',ic:'🧵',name:'生產實績',drill:'output',tabs:[['cut','裁剪','cutting_v3.html'],['sew','車縫','sewing_v5.html'],['cutpack','裁剪用布＋裝箱','vrt_cut_pack_v1.html'],['qc','QC 品檢','vrt_final_qc_v1.html']]},
+ {id:'output',ic:'🧵',name:'生產實績',drill:'output',tabs:[['cut','裁剪','cutting_v3.html'],['sew','車縫','sewing_v5.html'],['cutpack','裁剪用布＋裝箱','vrt_cut_pack_v1.html'],['qc','QC 品檢','vrt_final_qc_v1.html'],['abn','🚨 異常報告','vrt_anomaly_v1.html']]},
  {id:'style',ic:'📐',name:'款式',drill:'style',tabs:[['ie','IE／SMV','ie_smv_report_v2_1.html'],['bom','BOM＋成本','VRT_BOM_Management_v2_AI.html']]}, /* v4.44：拿掉「成本」分頁——它其實是 BOM 頁裡面的 Costing Sheet，單獨開沒有 BOM 資料（USD 0、ACC 月份空白），跟 BOM 重複 */
  {id:'fabric',ic:'🧶',name:'布料',drill:'fabric',tabs:[['stock','布料／副料庫存','vrt_fabric_stock_control_v1.html'],['inbound','布料進倉','vrt_fabric_delivery_greige_center_v1.html']]},
  {id:'ship',ic:'🚢',name:'成品與出貨',drill:'ship',tabs:[['fg','成品庫存','VRT_FG_Inventory_Management_v1.html'],['shipping','出貨進度','shipping_v2.html'],['month','月出貨','vrt_monthly_shipping_control_center_v1.html']]},
@@ -376,7 +376,7 @@ const SHEET=(()=>{let list=[],i=0,tabI=1,el,stack=[];
   const nx=list[i+1];const B=el.querySelector('.sh-body');
   if(tabI===-1){B.innerHTML=kp+'<div id="shPh"></div>'+(nx?`<button class="btn sh-next" data-a="next">下一個 Next：${E(nx.title)} ▶</button>`:'');VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
   else{const body=tabI===0?secs.map(s=>`<h4>${s[0]}</h4>${s[1]}`).join(''):tabs[tabI][1];
-   const hr=hero(g,ps,tabI,kp);B.innerHTML=(hr||kp)+pre+body+(hasPh&&tabI===0?'<h4>'+PH+'</h4><div id="shPh"></div>':'')+(nx&&!contOn()?`<button class="btn sh-next" data-a="next">下一個 Next：${E(nx.title)} ▶</button>`:'');
+   const hr=hero(g,ps,tabI,kp);const ab=window.VRTAnomaly?VRTAnomaly.banner(g.key,g.title):'';B.innerHTML=(hr||kp)+ab+pre+body+(hasPh&&tabI===0?'<h4>'+PH+'</h4><div id="shPh"></div>':'')+(nx&&!contOn()?`<button class="btn sh-next" data-a="next">下一個 Next：${E(nx.title)} ▶</button>`:'');
    if(hasPh&&tabI===0)VRTPhotos.mount(B.querySelector('#shPh'),Object.assign({},g.photo))}
   const hp=B.querySelector('#hrPh');if(hp)hrPhoto(hp.dataset.pid).then(d=>{if(d&&hp.isConnected)hp.innerHTML=`<img src="${d}" alt="" style="width:96px;height:120px;object-fit:cover;border-radius:12px;border:2px solid var(--line)">`}).catch(()=>{});
   BI.apply(B);B.scrollTop=0;base=i;contInit(B,tabI===-1?null:(tabI===0?null:tabs[tabI][0]));

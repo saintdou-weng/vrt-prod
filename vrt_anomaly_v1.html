@@ -1,0 +1,105 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🚨 生產異常報告 · VRT 生產平台</title>
+<script src="vrt-deploy-config.js?v=4.25.0"></script>
+<script src="vrt-platform-v40.js?v=4.51.7"></script>
+<script src="vrt-theme-v1.js?v=4.52.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-anomaly-v1.js?v=1.0.0"></script>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#b45309;--red:#dc2626;--grn:#059669}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;font-size:14px}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:9px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+header h1{margin:0;font-size:17px;flex:1}header a{color:#4f46e5;font-weight:700;text-decoration:none}
+main{max-width:1000px;margin:0 auto;padding:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer}.kpi b{display:block;font-size:22px}.kpi small{color:var(--mut)}.kpi.on{border-color:var(--acc);box-shadow:0 0 0 2px #fde68a}
+.tabs{display:flex;gap:6px;margin:6px 0 10px;overflow-x:auto}.tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 13px;font:inherit;cursor:pointer;white-space:nowrap}.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.flt{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:10px}@media(min-width:700px){.flt{grid-template-columns:2fr 1fr 1fr 1fr 1fr}}
+input,select,textarea{font:inherit;border:1px solid #d6dde8;border-radius:9px;padding:8px 10px;background:#fff;color:var(--ink);width:100%}
+.btn{border:0;background:var(--acc);color:#fff;border-radius:10px;padding:9px 14px;font:inherit;font-weight:800;cursor:pointer}.btn.g{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.mon{margin:14px 0 6px;font-weight:800;color:var(--mut)}
+.row{background:#fff;border:1px solid var(--line);border-left:5px solid var(--sev,#94a3b8);border-radius:12px;margin:6px 0;overflow:hidden}
+.rh{display:flex;gap:8px;align-items:center;padding:10px 12px;cursor:pointer}.rh .t{flex:1;min-width:0}.rh .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rh .t small{color:var(--mut)}
+.chip{display:inline-block;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;color:#fff}.st{font-size:11px;font-weight:800;border-radius:99px;padding:2px 8px}.st.o{background:#fee2e2;color:#b91c1c}.st.c{background:#dcfce7;color:#166534}
+.rb{display:none;padding:0 12px 12px;border-top:1px dashed var(--line);line-height:1.6}.row.open .rb{display:block}
+.rb h5{margin:10px 0 2px;font-size:12px;color:var(--mut)}.rb p{margin:0;white-space:pre-wrap}
+.watch{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:8px 10px;margin-top:8px}
+.wl{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0}.wl b{font-size:15px}
+.form{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px}.form label{font-size:12px;color:var(--mut);display:grid;gap:3px}.form .w{grid-column:1/-1}
+.note{font-size:12px;color:var(--mut);line-height:1.5}#msg{margin:8px 0;font-weight:700}
+</style></head><body>
+<header><a href="vrt_hub_v1.html">◀ 生產平台</a><h1>🚨 生產異常報告 <small style="font-weight:400;color:#64748b;font-size:12px">Production Anomaly Reports</small></h1>
+<button class="btn" id="add">＋ 新增異常</button></header>
+<main>
+<div class="kpis" id="kpis"></div>
+<div class="tabs" id="tabs"><button data-v="list" class="on">📋 清單 List</button><button data-v="watch">⚠️ 款式／機台警示 Watchlist</button><button data-v="import">📥 匯入 Import</button></div>
+<div id="msg"></div>
+<div id="view"></div>
+</main>
+<script src="vendor/xlsx.full.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),E=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const A=VRTAnomaly,ZH=A.ZH;let VIEW='list',KF='all',Q=decodeURIComponent((location.hash.match(/q=([^&]*)/)||[])[1]||''),FC='',FU='',FY='';
+const sevC=r=>/crit|極/i.test(r.sev)?'#dc2626':/high|高/i.test(r.sev)?'#ea580c':/med|中/i.test(r.sev)?'#d97706':'#64748b';
+const lastPart=s=>String(s||'').split('/').pop().trim();
+const FIELDS=[['case','編號 Case No.'],['date','日期 Date','date'],['cust','客戶 Customer'],['style','款號 Style（多個用逗號）'],['po','PO'],['machine','機台 Machine（多個用逗號）'],['line','線別 Line'],
+ ['cat','類別 Category','sel',['Quality / 品質','Sewing / 車縫','Cutting / 裁剪','Machine / 機台','Material / 原料','Shipment / 出貨','Customer complaint / 客訴','Safety / 安全','Other / 其他']],
+ ['dept','部門 Department'],['sev','嚴重度 Severity','sel',['Critical / 極嚴重','High / 高','Medium / 中','Low / 低']],['status','狀態 Status','sel',['Open','Correcting','Closed']],['target','目標完成日 Target','date'],
+ ['title','標題 Title','w'],['issue','異常內容 Issue','ta'],['root','根本原因 Root cause','ta'],['imm','立即處理 Immediate action','ta'],['ca','改善對策 Corrective action','ta'],
+ ['watch','⚠️ 以後生產要注意什麼（會顯示在款式／機台旁）Watch-out','ta'],['cost','損失金額 Cost (USD)'],['latest','最新進度 Latest update','ta'],['remarks','備註 Remarks','ta']];
+function msg(t,ok){$('msg').innerHTML=t?`<span style="color:${ok===false?'var(--red)':'var(--grn)'}">${t}</span>`:''}
+function rows(){return A.rows().slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)))}
+function filtered(){const q=Q.trim().toUpperCase();const ym=new Date().toISOString().slice(0,7);
+  return rows().filter(r=>(KF==='all'||(KF==='open'&&A.isOpen(r))||(KF==='crit'&&A.isOpen(r)&&/crit|high|極|高/i.test(r.sev))||(KF==='month'&&String(r.date).slice(0,7)===ym))
+   &&(!FC||lastPart(r.cat)===FC)&&(!FU||r.cust===FU)&&(!FY||String(r.date).slice(0,4)===FY)
+   &&(!q||Object.values(r).join(' ').toUpperCase().includes(q)))}
+function kpis(){const R=rows(),ym=new Date().toISOString().slice(0,7);const k=[['all','全部 All',R.length],['open','未結案 Open',R.filter(A.isOpen).length],['crit','高風險未結 High open',R.filter(r=>A.isOpen(r)&&/crit|high|極|高/i.test(r.sev)).length],['month','本月新增 This month',R.filter(r=>String(r.date).slice(0,7)===ym).length]];
+  $('kpis').innerHTML=k.map(x=>`<div class="kpi ${KF===x[0]?'on':''}" data-k="${x[0]}"><b style="color:${x[0]==='all'?'var(--ink)':x[2]?'var(--red)':'var(--grn)'}">${x[2]}</b><small>${x[1]}</small></div>`).join('');
+  document.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>{KF=d.dataset.k;VIEW='list';render()})}
+function rowHtml(r){const sec=(k,t)=>r[k]?`<h5>${t}</h5><p>${E(ZH(r[k]))}</p>`:'';
+  return `<div class="row" style="--sev:${sevC(r)}" data-id="${E(r.id)}"><div class="rh"><span class="chip" style="background:${sevC(r)}">${E(lastPart(r.sev)||'—')}</span><div class="t"><b>${E(ZH(r.title)||'(無標題)')}</b><small>${E(r.case||r.id)} · ${E(r.date)} · ${E(r.cust||'')} · ${E(r.style||'')}${r.machine?' · 🛠 '+E(r.machine):''} · ${E(lastPart(r.cat))}</small></div><span class="st ${A.isOpen(r)?'o':'c'}">${A.isOpen(r)?'未結 '+E(r.status||'Open'):'已結案'}</span></div>
+   <div class="rb">${r.watch?`<div class="watch">👉 <b>以後要注意：</b>${E(ZH(r.watch))}</div>`:''}${sec('issue','異常內容 Issue')}${sec('root','根本原因 Root cause')}${sec('imm','立即處理 Immediate action')}${sec('ca','改善對策 Corrective action')}${sec('latest','最新進度 Latest')}${sec('remarks','備註 Remarks')}
+   <h5>其他 Other</h5><p>PO：${E(r.po||'—')}　部門：${E(r.dept||'—')}　目標日：${E(r.target||'—')}${r.cost?'　損失：USD '+E(r.cost):''}</p>
+   <div style="display:flex;gap:6px;margin-top:10px"><button class="btn g" data-edit="${E(r.id)}">✏️ 修改 Edit</button></div></div></div>`}
+function listView(){const R=filtered();const cats=[...new Set(rows().map(r=>lastPart(r.cat)).filter(Boolean))],custs=[...new Set(rows().map(r=>r.cust).filter(Boolean))].sort(),yrs=[...new Set(rows().map(r=>String(r.date).slice(0,4)).filter(Boolean))].sort().reverse();
+  const sel=(id,v,opts,ph)=>`<select id="${id}"><option value="">${ph}</option>${opts.map(o=>`<option ${o===v?'selected':''}>${E(o)}</option>`).join('')}</select>`;
+  let h=`<div class="flt"><input id="q" placeholder="🔍 搜尋款號、PO、機台、客戶…" value="${E(Q)}">${sel('fc',FC,cats,'全部類別')}${sel('fu',FU,custs,'全部客戶')}${sel('fy',FY,yrs,'全部年份')}<button class="btn g" id="clr">清除篩選</button></div>`;
+  if(!R.length)h+=`<p class="note">${rows().length?'沒有符合的異常。':'還沒有異常資料（雲端讀取中，或尚未匯入）。'}</p>`;
+  let m='';R.forEach(r=>{const mm=String(r.date).slice(0,7)||'未填日期';if(mm!==m){m=mm;h+=`<div class="mon">📅 ${E(mm)}　${R.filter(x=>String(x.date).slice(0,7)===mm).length} 筆</div>`}h+=rowHtml(r)});
+  $('view').innerHTML=h;
+  $('q').oninput=e=>{Q=e.target.value;clearTimeout(window._qt);window._qt=setTimeout(()=>{const p=$('q').selectionStart;render();$('q').focus();$('q').setSelectionRange(p,p)},300)};
+  $('fc').onchange=e=>{FC=e.target.value;render()};$('fu').onchange=e=>{FU=e.target.value;render()};$('fy').onchange=e=>{FY=e.target.value;render()};$('clr').onclick=()=>{Q='';FC=FU=FY='';KF='all';render()};
+  bindRows()}
+function bindRows(){document.querySelectorAll('.rh').forEach(h=>h.onclick=()=>h.parentNode.classList.toggle('open'));document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>form(A.rows().find(r=>r.id===b.dataset.edit)))}
+/* 警示清單：每個款號／機台一張，列出曾發生什麼、以後注意什麼 */
+function watchView(){const M=new Map();rows().forEach(r=>[['style','👕 款號'],['machine','🛠 機台'],['line','🧵 線別']].forEach(([f,lab])=>A.toks(r[f]).forEach(t=>{const k=lab+'｜'+t.toUpperCase();let o=M.get(k);if(!o)M.set(k,o={lab,key:t,rs:[]});o.rs.push(r)})));
+  const L=[...M.values()].sort((a,b)=>(b.rs.some(A.isOpen)-a.rs.some(A.isOpen))||b.rs.length-a.rs.length||String(b.rs[0].date).localeCompare(String(a.rs[0].date)));
+  $('view').innerHTML=`<p class="note">這些款號／機台以前出過問題。排單、裁剪、車縫、QC、機修頁面的表格裡，它們旁邊會出現 ⚠️，點一下就看到要注意什麼。混款（MIXED）的異常不會掛到單一款號。</p>`+
+   (L.length?L.map(o=>`<div class="wl"><b>${o.lab} ${E(o.key)}</b> <span class="st ${o.rs.some(A.isOpen)?'o':'c'}">${o.rs.length} 筆${o.rs.some(A.isOpen)?'・有未結案':''}</span>${o.rs.map(r=>`<div style="margin-top:6px;font-size:13px"><span class="chip" style="background:${sevC(r)}">${E(lastPart(r.sev))}</span> ${E(r.case||r.id)} ${E(r.date)}｜${E(A.short(r.title,60))}${r.watch?`<div class="watch" style="margin-top:4px">👉 ${E(ZH(r.watch))}</div>`:''}</div>`).join('')}</div>`).join(''):'<p class="note">還沒有可對到款號／機台的異常。</p>')}
+/* 新增／修改 */
+function form(r){r=r||{status:'Open',date:new Date().toISOString().slice(0,10)};VIEW='form';document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('on'));
+  $('view').innerHTML=`<div class="form">${FIELDS.map(([k,l,t,o])=>{const v=E(r[k]||'');const w=t==='ta'||t==='w'?' w':'';
+    if(t==='sel'){const opts=o.includes(r[k])||!r[k]?o:[r[k]].concat(o);return `<label>${l}<select data-f="${k}">${opts.map(x=>`<option ${x===r[k]?'selected':''}>${E(x)}</option>`).join('')}</select></label>`}
+    if(t==='ta')return `<label class="w">${l}<textarea data-f="${k}" rows="${k==='watch'?2:3}">${v}</textarea></label>`;
+    return `<label class="${w.trim()}">${l}<input data-f="${k}" ${t==='date'?'type="date"':''} value="${v}"></label>`}).join('')}
+   <div class="w" style="display:flex;gap:8px"><button class="btn g" id="cancel">取消</button><button class="btn" id="save" style="flex:1">💾 儲存並上傳雲端</button>${r.id?'<button class="btn g" id="del" style="color:var(--red)">刪除</button>':''}</div></div>`;
+  scrollTo(0,0);$('cancel').onclick=()=>{VIEW='list';render()};
+  const collect=()=>{const o=Object.assign({},r);document.querySelectorAll('[data-f]').forEach(x=>o[x.dataset.f]=x.value.trim());return o};
+  $('save').onclick=async()=>{const o=collect();if(!o.title&&!o.issue){msg('請至少填標題或異常內容',false);return}await push(A.upsert(o),'已儲存 ✅')};
+  if($('del'))$('del').onclick=async()=>{if(!confirm('刪除這筆異常？（會標記為已刪除，不會真的消失）'))return;await push(A.upsert(Object.assign(collect(),{deleted:true})),'已刪除')}}
+async function push(all,ok){msg('上傳雲端中…');$('view').style.opacity=.5;try{await A.save(all,t=>msg(t));msg(ok+'（共 '+A.rows().length+' 筆）');VIEW='list';render()}catch(e){msg('上傳失敗：'+(e.message||e),false)}finally{$('view').style.opacity=1}}
+/* 匯入：JSON（陣列）或 Excel（VRT Anomaly Report 格式，看表頭） */
+const HMAP=[['case',/case|編號|report\s*no/i],['date',/^date|日期|發生/i],['cust',/cust|客戶|buyer/i],['style',/style|款/i],['po',/^po|訂單/i],['machine',/machine|機台/i],['line',/^line|線別|組別/i],['cat',/categ|類別/i],['dept',/dept|部門/i],['sev',/sever|嚴重/i],
+ ['title',/title|標題|subject/i],['issue',/issue|problem|異常內容|描述|descr/i],['root',/root|原因/i],['imm',/immediate|立即|containment/i],['ca',/corrective|改善|對策|action/i],['target',/target|due|目標|完成日/i],['status',/status|狀態/i],['cost',/cost|金額|損失/i],['watch',/watch|注意|警示|lesson/i],['remarks',/remark|備註|note/i]];
+function importView(){$('view').innerHTML=`<div class="wl"><b>📥 匯入異常報告</b><p class="note">可放 Excel（VRT Anomaly Report，有表頭的那張表）或 JSON。相同編號（Case No.）會更新，不會重複。匯入前先看預覽，確認才上傳。</p><input type="file" id="imf" accept=".xlsx,.xls,.json,.csv"><div id="imp"></div></div>`;
+  $('imf').onchange=async e=>{const f=e.target.files[0];if(!f)return;let recs=[];try{if(/\.json$/i.test(f.name)){const j=JSON.parse(await f.text());recs=(Array.isArray(j)?j:j.rows||j.records||[]).filter(r=>r&&(r.kind==null||r.kind==='abn'))}
+    else{const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,raw:true});for(const sn of wb.SheetNames){const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:''});const hi=a.findIndex(r=>r.filter(c=>HMAP.some(([,re])=>re.test(String(c)))).length>=4);if(hi<0)continue;
+      const map=a[hi].map(h=>{const m=HMAP.find(([,re])=>re.test(String(h).trim()));return m?m[0]:null});a.slice(hi+1).forEach(r=>{const o={};map.forEach((k,i)=>{if(k&&r[i]!==''&&o[k]==null)o[k]=String(r[i]).trim()});if(o.issue||o.title||o.case)recs.push(o)})}}
+    recs=recs.map(r=>{const o={};FIELDS.forEach(([k])=>{if(r[k]!=null&&r[k]!=='')o[k]=String(r[k])});o.date=normD(o.date);o.target=normD(o.target);o.title=o.title||A.short(o.issue,60);const ex=A.rows().find(x=>(o.case&&x.case===o.case&&o.case!=='（未編號）')||(x.date===o.date&&ZH(x.title)===ZH(o.title)));o.id=ex?ex.id:(r.id||r.rid||(o.case&&o.case!=='（未編號）'?o.case.replace(/[^A-Za-z0-9]/g,''):''));return o})}catch(x){$('imp').innerHTML='<p style="color:var(--red)">讀不到：'+E(x.message||x)+'</p>';return}
+    if(!recs.length){$('imp').innerHTML='<p style="color:var(--red)">檔案裡找不到異常資料（表頭要有 Case／Date／Customer／Style／Issue 這類欄位）。</p>';return}
+    $('imp').innerHTML=`<p><b>${recs.length}</b> 筆（新增 ${recs.filter(r=>!A.rows().some(x=>x.id===r.id)).length}，更新 ${recs.filter(r=>A.rows().some(x=>x.id===r.id)).length}）</p>`+recs.slice(0,30).map(r=>`<div class="note">• ${E(r.case||'')} ${E(r.date||'')} ${E(r.cust||'')} ${E(r.style||'')}｜${E(A.short(r.title,50))}</div>`).join('')+`<button class="btn" id="impgo" style="margin-top:8px;width:100%">✅ 確認匯入並上傳</button>`;
+    $('impgo').onclick=async()=>{let all=A.all().slice();recs.forEach(r=>{const now=new Date().toISOString();const i=all.findIndex(x=>x.id&&x.id===r.id);if(i>=0)all[i]=Object.assign({},all[i],r,{updatedAt:now});else all.push(Object.assign({id:r.id||('AR'+Math.random().toString(36).slice(2,9).toUpperCase()),createdAt:now,updatedAt:now},r))});await push(all,'匯入完成 ✅')}}}
+function normD(v){v=String(v||'').trim();if(!v)return '';let m=v.match(/(20\d\d)[-\/.](\d{1,2})[-\/.](\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');if(/^\d{5}$/.test(v)){const d=new Date(Math.round((+v-25569)*864e5));return d.toISOString().slice(0,10)}m=v.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](20\d\d)/);if(m)return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');return v}
+function render(){kpis();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));if(VIEW==='watch')watchView();else if(VIEW==='import')importView();else if(VIEW==='list')listView()}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;render()});$('add').onclick=()=>form();
+A.on(()=>{if(VIEW!=='form')render()});render();A.load().then(()=>{if(VIEW!=='form')render()});
+</script></body></html>
