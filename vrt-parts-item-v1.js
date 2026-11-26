@@ -36,7 +36,7 @@ function itemFor(t,tr,td,M){
     const nm=r.needleType||r.partType||'',s=splitName(nm);const key=t==='needlechange'?nk(nm)+(r.size?' · '+nk(r.size):''):nk(nm);
     return {kind:t==='needlechange'?'needle':'parts',key,dom:t==='needlechange'?'needle':'parts',pk:key,t1:s.en+(r.size?' · '+r.size:''),t2:[r.date,[r.line,r.machine].filter(Boolean).join(' / '),r.reason].filter(Boolean).join(' · '),big:F(r.qty),bigL:t==='needlechange'?L('支','pcs','ម្ជុល'):L('件','pcs','ដុំ'),tag:''}}
   if(t==='machines'){const a=td[0]&&td[0].textContent.trim();if(!a)return null;
-    return {kind:'machine',key:nk(a),dom:'machine',pk:nk(a),t1:a+(td[2]?' · '+td[2].textContent.trim():''),t2:[td[4]&&td[4].textContent.trim(),td[5]&&td[5].textContent.trim()].filter(x=>x&&x!=='—').join(' · '),big:'',bigL:'',tag:''}}
+    return {kind:'machine',key:nk(a),dom:'machine',pk:nk(a),t1:a+(td[2]?' · '+td[2].textContent.trim():''),t2:[td[4]&&td[4].textContent.trim(),td[5]&&td[5].textContent.trim()].filter(x=>x&&x!=='—').join(' · '),big:'',bigL:'',tag:(()=>{const c=tr&&tr.dataset.cond||'';const M={good:['🟢','正常','Good','#dcfce7','#166534'],idle:['🟡','閒置','Idle','#fef3c7','#92400e'],damaged:['🔴','損壞','Damaged','#fee2e2','#991b1b'],unknown:['⚪','未盤點','Not checked','#f1f5f9','#475569']}[c];return M?'<span class="pi-b" style="background:'+M[3]+';color:'+M[4]+'">'+M[0]+' '+L(M[1],M[2],M[2])+'</span>':''})()}}
   return null}
 const TABS=['inventory','history','machine','needle','needlechange','partchange','machines'];
 
