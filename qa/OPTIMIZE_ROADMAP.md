@@ -22,7 +22,8 @@ Paul 11/26 22:36：「生產平台持續優化各項功能，有缺的改掉，�
 - 前 10 張沒照片：parts 10/10、bom 10/10、po 10/10、accessory 10/10、style 9/10、line、customer —— 要判斷是「真的沒照片」還是「key 對不上」（先查 parts／style：雲端有 123／109 張）。
 
 ## 待辦
-- [ ] 確認 B 店機台 326 張照片已上雲端、機台卡片／清冊都看得到
+- [ ] 查 B 店清冊 13 列照片沒對到機台（Machine ID 和清冊編號不同？）
+- [x] B 店機台照片上雲端（11/26 23:23 確認：idx_machine 314＝原 1＋這次 313；清冊 326 列中 13 列沒對到機台編號，待查哪幾台）；機台清冊頁實際顯示照片 ✅
 - [ ] parts／style 照片 key 對照（雲端有照片但卡片顯示沒有？）
 - [ ] VRT_REF 其餘種類（date, popro, fabtype, sewer, shipcust, pdfpo…）跑完稽核
 - [ ] 每個分頁 console error 掃一遍
