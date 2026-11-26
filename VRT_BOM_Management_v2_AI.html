@@ -2271,7 +2271,7 @@ window.addEventListener('load',function(){setTimeout(function(){try{if(window.VR
 <script src="vrt-bom-import-v39.js?v=4.19.0"></script>
 <script src="vrt-bom-costing-ui-v44.js?v=4.19.0"></script><script src="vrt-bom-card-v1.js?v=4.22.5"></script>
 <!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
-<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
+<script src="vrt-smart-import-v1.js?v=4.45.1"></script>
 <script>/* v4.19 智慧匯入：本頁收哪些檔、交給哪個匯入器 */try{VRTSmartImport.init({module:'bom',feedAll:fs=>{const p=fs.filter(f=>/\.pdf$/i.test(f.name)),x=fs.filter(f=>!/\.pdf$/i.test(f.name));if(x.length)importExcelFiles(x);if(p.length)return handlePdfFiles(p)}})}catch(e){console.warn('VRTSmartImport init',e)}</script>
 </body>
 </html>

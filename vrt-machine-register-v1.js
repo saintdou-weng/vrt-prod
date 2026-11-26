@@ -37,21 +37,25 @@
   /* 「B SHOP B店」→ B SHOP；「Line 5」「L5」→ Line 5（車縫線）。 */
   function placeOf(v){const t=norm(v);if(!t)return {place:'',line:''};const lm=t.match(/^(?:LINE|L)\s*-?\s*(\d{1,2})\b/i)||t.match(/\bLINE\s*-?\s*(\d{1,2})\b/i);if(lm)return {place:t,line:'Line '+Number(lm[1])};const sm=t.match(/\b([A-Z])\s*SHOP\b/i);return {place:sm?sm[1].toUpperCase()+' SHOP':t,line:''}}
   const HEAD={assetNo:/^ASSET\s*NO|資產編號|资产编号/i,machineId:/^MACHINE\s*ID|機台編號|机台编号/i,type:/^MACHINE\s*TYPE|機種|机种|機台類型/i,brand:/^BRAND|品牌/i,model:/^MODEL|型號|型号/i,serial:/^SERIAL|序號|序号/i,year:/^YEAR|年份/i,location:/^LOCATION|PLACE|位置|地點/i,line:/^LINE\b|線別|线别/i,condition:/^CONDITION|狀況|状况/i,remark:/^REMARK|備註|备注/i};
-  function findHeader(aoa){for(let r=0;r<Math.min(aoa.length,30);r++){const row=aoa[r]||[],cols={};row.forEach((c,i)=>{const t=norm(c);if(!t)return;for(const [k,re] of Object.entries(HEAD))if(cols[k]==null&&re.test(t))cols[k]=i});if(cols.assetNo!=null&&cols.type!=null)return {row:r,cols}}return null}
+  function findHeader(aoa){for(let r=0;r<Math.min(aoa.length,30);r++){const row=aoa[r]||[],cols={};row.forEach((c,i)=>{const t=norm(c);if(!t)return;for(const [k,re] of Object.entries(HEAD))if(cols[k]==null&&re.test(t))cols[k]=i});if((cols.assetNo!=null||cols.machineId!=null)&&cols.type!=null)return {row:r,cols}}return null}
+  /* 2026-11-26 Paul：只要機台編號號碼一樣就是同一台 → OL-0008＝OL-8＝OL 0008 */
+  function idKey(v){const t=String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');return t.replace(/(\D|^)0+(\d)/g,'$1$2')}
   function isRegisterWorkbook(wb){try{return (wb.SheetNames||[]).some(n=>{const ws=wb.Sheets[n];if(!ws||!g.XLSX)return false;return !!findHeader(g.XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:false}).slice(0,30))})}catch(_){return false}}
   /* 回傳 {machines:[…], sheet, skipped, duplicates}；同一個資產編號只留一筆（後面的覆蓋前面的，數量記在 duplicates）。 */
   function parseWorkbook(wb,fileName){const X=g.XLSX;for(const name of wb.SheetNames||[]){const aoa=X.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:'',blankrows:true,raw:true});const h=findHeader(aoa);if(!h)continue;
       const by=new Map();let skipped=0,duplicates=0;const now=new Date().toISOString();
-      for(let r=h.row+1;r<aoa.length;r++){const row=aoa[r]||[],cell=k=>h.cols[k]==null?'':norm(row[h.cols[k]]);const assetNo=cell('assetNo').toUpperCase(),type=cell('type');if(!assetNo||!type){if(assetNo||type)skipped++;continue}
+      for(let r=h.row+1;r<aoa.length;r++){const row=aoa[r]||[],cell=k=>h.cols[k]==null?'':norm(row[h.cols[k]]);const assetNo=cell('assetNo').toUpperCase(),mid0=cell('machineId').toUpperCase(),type=cell('type');if((!assetNo&&!mid0)||!type){if(assetNo||mid0||type)skipped++;continue}
         const fam=familyOf(type),loc=placeOf(cell('location')),lineCol=cell('line'),line=lineCol?placeOf(/^\d+$/.test(lineCol)?'Line '+lineCol:lineCol).line:loc.line,yr=cell('year');
-        const rec={id:'MCH-'+assetNo,assetNo,machineId:cell('machineId').toUpperCase(),type,typeEn:type.replace(/\s*[\u3400-\u9fff][\s\S]*$/,'').trim()||type,family:fam.family,sewing:fam.sewing,brand:cell('brand'),model:cell('model'),serial:cell('serial'),year:yr,location:loc.place,line,condition:conditionOf(cell('condition')),conditionText:cell('condition'),remark:cell('remark'),sourceFile:fileName||'',sourceSheet:name,sourceRow:r+1,createdAt:now,updatedAt:now};
+        const rec={id:assetNo?'MCH-'+assetNo:'',assetNo,machineId:cell('machineId').toUpperCase(),type,typeEn:type.replace(/\s*[\u3400-\u9fff][\s\S]*$/,'').trim()||type,family:fam.family,sewing:fam.sewing,brand:cell('brand'),model:cell('model'),serial:cell('serial'),year:yr,location:loc.place,line,condition:conditionOf(cell('condition')),conditionText:cell('condition'),remark:cell('remark'),sourceFile:fileName||'',sourceSheet:name,sourceRow:r+1,createdAt:now,updatedAt:now};
         rec.fingerprint=hash([rec.assetNo,rec.machineId,rec.type,rec.brand,rec.model,rec.serial,rec.year,rec.location,rec.line,rec.condition,rec.remark].join('|'));
-        if(by.has(assetNo))duplicates++;by.set(assetNo,rec)}
+        const bk=assetNo||('MID:'+idKey(mid0));if(by.has(bk))duplicates++;by.set(bk,rec)}
       return {machines:[...by.values()],sheet:name,skipped,duplicates,headerRow:h.row+1}}
     return null}
   /* 匯入合併：新資產加入；同資產內容有變才更新（保留手動填的線別／狀況，除非新檔有填）；清冊沒列到的舊資產不刪。 */
-  function merge(existing,incoming){const map=new Map((existing||[]).map(m=>[m.assetNo,m]));let added=0,updated=0,same=0;const now=new Date().toISOString();
-    for(const m of incoming||[]){const old=map.get(m.assetNo);if(!old){map.set(m.assetNo,m);added++;continue}if(old.fingerprint===m.fingerprint){same++;continue}
+  function nextNo(list){const cnt={};list.forEach(m=>{const x=String(m.assetNo||'').match(/^(.*?)(\d+)$/);if(x)cnt[x[1]]=(cnt[x[1]]||0)+1});const pre=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0],p=pre?pre[0]:'VRT-AMCH-';let mx=0,w=4;list.forEach(m=>{const x=String(m.assetNo||'').match(/^(.*?)(\d+)$/);if(x&&x[1]===p){mx=Math.max(mx,+x[2]);w=Math.max(w,x[2].length)}});return p+String(mx+1).padStart(w,'0')}
+  function merge(existing,incoming){const map=new Map((existing||[]).map(m=>[m.assetNo,m]));const byId=new Map();(existing||[]).forEach(m=>{const k=idKey(m.machineId);if(k&&!m.deleted&&!byId.has(k))byId.set(k,m)});let added=0,updated=0,same=0;const now=new Date().toISOString();
+    for(const m0 of incoming||[]){let m=m0;if(!m.assetNo){const hit=byId.get(idKey(m.machineId));m=Object.assign({},m0,{assetNo:hit?hit.assetNo:nextNo([...map.values()])},hit&&hit.machineId?{machineId:hit.machineId}:{});m.id=m.id||'MCH-'+m.assetNo;m.fingerprint=hash([m.assetNo,m.machineId,m.type,m.brand,m.model,m.serial,m.year,m.location,m.line,m.condition,m.remark].join('|'));if(!hit){map.set(m.assetNo,m);byId.set(idKey(m.machineId),m);added++;continue}}
+      const old=map.get(m.assetNo);if(!old){map.set(m.assetNo,m);added++;continue}if(old.fingerprint===m.fingerprint){same++;continue}
       const next={...old,...m,id:old.id,createdAt:old.createdAt||m.createdAt,updatedAt:now};if(!m.line&&old.line)next.line=old.line;if(m.condition==='unknown'&&old.condition&&old.condition!=='unknown'){next.condition=old.condition;next.conditionText=old.conditionText}
       next.fingerprint=hash([next.assetNo,next.machineId,next.type,next.brand,next.model,next.serial,next.year,next.location,next.line,next.condition,next.remark].join('|'));map.set(m.assetNo,next);updated++}
     return {machines:[...map.values()].sort((a,b)=>String(a.assetNo).localeCompare(String(b.assetNo),undefined,{numeric:true})),added,updated,same}}
@@ -64,5 +68,5 @@
   /* IE 用：某家族「工廠可用台數」與「某線可用台數」。拷克 3／4／5 線另外合計，因為 5 線機常兼做 3 線。 */
   function availability(list,family,line){const ms=(list||[]).filter(usable);const isOvl=f=>/Overlock$/.test(f);const same=ms.filter(m=>m.family===family),ovl=isOvl(family)?ms.filter(m=>isOvl(m.family)):[];
     return {factory:same.length,factoryOverlockAll:isOvl(family)?ovl.length:null,line:line?same.filter(m=>m.line===line).length:null,lineKnown:ms.some(m=>m.line),damaged:(list||[]).filter(m=>!m.deleted&&m.family===family&&m.condition==='damaged').length}}
-  g.VRTMachineRegister={version:VERSION,familyOf,conditionOf,placeOf,findHeader,isRegisterWorkbook,parseWorkbook,merge,summary,availability,usable,FAMILY_ZH};
+  g.VRTMachineRegister={version:VERSION,idKey,nextNo,familyOf,conditionOf,placeOf,findHeader,isRegisterWorkbook,parseWorkbook,merge,summary,availability,usable,FAMILY_ZH};
 })(typeof window!=='undefined'?window:globalThis);

@@ -40,6 +40,7 @@
   const ROUTES=[
     {re:/packing\s*(?:output|report)|daily\s*packing|cutting\s*(?:&|and)\s*packing/i,module:'cutpack'},   /* v4.23: Och Chanmalen 的 Cutting & Packing Report（裁剪用布明細＋裝箱） */
     {re:/daily\s*cutting\s*report\s*for/i,module:'cutpack'},
+    {re:/asset\s*register|machine\s*register|idle\s*machine|machine\s*list|機台清冊|閒置機台|资产登记|資產登記/i,module:'spareparts'},   /* 2026-11-26 機台清冊（閒置機台及資產登記表）→ 機修零件的機台清冊 */
     {re:/daily\s*needles?|needles?\s*change|換針/i,module:'spareparts'},
     {re:/spare\s*parts?|part\s*change|換件|machine\s*parts?\s*stock/i,module:'spareparts'},
     {re:/final\s*qc|end-?line|top\s*\d?\s*defect|qc\s*inspection/i,module:'qc'},

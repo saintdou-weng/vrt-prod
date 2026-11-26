@@ -785,7 +785,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   </script>
 <script>
 (async()=>{const app=VRT_IE_SMV_APP;await app.ready;if(new URLSearchParams(location.search).get('import')==='queued'){const rows=await VRTDomain39.read('vrt_ie_smv_integrated_v2','state','import-handoff-v40')||[];if(rows.length){const ok=await app.handleFiles(rows.map(r=>({name:r.name,lastModified:r.lastModified,arrayBuffer:async()=>r.bytes})));if(ok)await VRTDomain39.write('vrt_ie_smv_integrated_v2',{state:{key:'import-handoff-v40',value:[]}})}}})().catch(e=>{console.error(e);alert('IE 匯入預覽失敗：'+e.message)});
-</script><script src="vrt-machine-register-v1.js?v=4.22.0"></script><script src="vrt-ie-balancing-v1.js?v=4.22.0"></script><style id="ieCompact44">/* v4.44（Paul 11/21：上方一堆介面擋住下方資料）手機：收起重複的頂端、篩選只留 日週月年＋搜尋，其他放「⚙️ 篩選」 */
+</script><script src="vrt-machine-register-v1.js?v=4.45.1"></script><script src="vrt-ie-balancing-v1.js?v=4.22.0"></script><style id="ieCompact44">/* v4.44（Paul 11/21：上方一堆介面擋住下方資料）手機：收起重複的頂端、篩選只留 日週月年＋搜尋，其他放「⚙️ 篩選」 */
 @media(max-width:760px){body.ie-emb>nav:first-of-type{display:none!important}.topbar .brand-sub,.topbar .tool-label{display:none}.topbar-inner{padding:6px 10px!important;gap:6px}.topbar .tool-btn{min-width:34px;padding:4px}
  body:not(.ie-fx) .filter-panel .field:not(.ie-keep){display:none!important}.filter-panel{padding:8px!important;gap:6px!important}.ie-fbtn{display:inline-flex!important}}
 .ie-fbtn{display:none;align-items:center;justify-content:center;border:1px solid #cbd5e1;background:#fff;border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}</style>
@@ -802,6 +802,6 @@ try{VRTTelegram.init({kind:"ie",tool:"smv",getData:()=>{const s=VRT_IE_SMV_APP.g
 </script>
 <script src="vrt-inbox-v1.js?v=4.19.0"></script><script>/* v4.16 (修改指令 C) ☁ 待匯入 */try{VRTInbox.init({module:"ie",label:"📐 IE／SMV",feed:f=>VRT_IE_SMV_APP.importSmart(f,{auto:VRTInbox.autoOn&&VRTInbox.autoOn()}),autoDone:true})}catch(e){console.warn("VRTInbox init",e)}</script>
 <!-- v4.19 ⇧ 智慧匯入（每頁同一顆，固定在最上面） -->
-<script src="vrt-smart-import-v1.js?v=4.19.0"></script>
+<script src="vrt-smart-import-v1.js?v=4.45.1"></script>
 </body>
 </html>

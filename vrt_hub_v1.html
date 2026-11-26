@@ -9,7 +9,7 @@
 <script>/* 先套主題，免得閃一下 */(function(){var t='';try{t=localStorage.getItem('vrt_theme')||''}catch(e){}if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';document.documentElement.setAttribute('data-theme',t)})();</script>
 <script src="vrt-theme-v1.js?v=4.48.14"></script>
 <script src="vrt-item-photos-v1.js?v=4.44.2"></script>
-<script src="vrt-photo-import-v1.js?v=4.41.0"></script>
+<script src="vrt-photo-import-v1.js?v=4.45.1"></script>
 <script src="vrt-ui-fx-v1.js?v=4.46.0"></script>
 <style>
 /* v4.25（2026-11-12）8 個入口：Paul 11/11 核可、11/12「還沒進行合併的動作」→ 這一頁就是合併後的入口。
@@ -533,7 +533,7 @@ const COND={good:['正常','ok'],repair:['待修','warn'],broken:['故障','crit
 function machineGroups(){return once('machine',async()=>{const [{rows},chg]=await Promise.all([loadTool('spareparts',k=>/^p:maint_machines_/.test(k)||/^h:[0-9a-f]{8}$/.test(k)),partChanges().catch(()=>[])]);
   const ms=rows.filter(r=>r&&r.assetNo&&r.type);const byM=new Map();chg.forEach(x=>{const k=nk(x.machine);if(!k)return;if(!byM.has(k))byM.set(k,[]);byM.get(k).push(x)});const since=addD(ymdToday(),-92);
   return ms.map(r=>{const rel=[...(byM.get(nk(r.assetNo))||[]),...(r.machineId&&nk(r.machineId)!==nk(r.assetNo)?byM.get(nk(r.machineId))||[]:[])];const nd=rel.filter(x=>x.needleType),pc=rel.filter(x=>x.partType);const c=COND[r.condition]||[r.conditionText||r.condition||'—',''];const recent=rel.filter(x=>x.date>=since);
-    return {key:nk(r.assetNo),kind:'機台',title:r.assetNo,alt:[r.typeEn||r.type,r.brand,r.model].filter(Boolean).join(' '),sub:E([r.type,r.brand,r.model].filter(Boolean).join(' · ')),line:r.line||r.location||'',cond:r.condition||'',used:recent.length,
+    return {key:nk(r.assetNo),code:r.machineId||'',kind:'機台',title:r.assetNo,alt:[r.typeEn||r.type,r.brand,r.model].filter(Boolean).join(' '),sub:E([r.type,r.brand,r.model].filter(Boolean).join(' · ')),line:r.line||r.location||'',cond:r.condition||'',used:recent.length,
      search:[r.machineId,r.type,r.family,r.brand,r.model,r.serial,r.line,r.location].join(' '),badge:`<span class="tag ${c[1]}">${E(c[0])}</span>`,chip:c[1]==='crit'?'⚠':'',
      kpis:[[E(r.line||r.location||'—'),'線別／位置'],[E(c[0]),'狀況',c[1]],[F(sum(nd,x=>x.qty)),'換針（支）'],[F(sum(pc,x=>x.qty)),'換零件'],[E(r.year||'—'),'年份']],
      detail:()=>`<h4>基本資料</h4>${kv([['資產編號 Asset No.',r.assetNo],['機台編號 Machine ID',r.machineId],['機種 Type',r.type],['家族 Family',r.family],['廠牌 Brand',r.brand],['型號 Model',r.model],['序號 Serial',r.serial],['年份 Year',r.year],['線別 Line',r.line],['位置 Location',r.location],['狀況 Condition',c[0]],['備註 Remark',r.remark]])}

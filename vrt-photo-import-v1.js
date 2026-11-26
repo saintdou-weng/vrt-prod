@@ -144,7 +144,8 @@ function parseRow(texts,cells){texts=texts||[];const all=texts.join(' | ');
   out.name=[out.en,out.zh,out.km].filter(Boolean).join(' · ')||out.cat||'';return out}
 const GENERIC=new Set(['STITCH','STITCHES','SEAM','NEEDLE','NEEDLES','FOR','THE','AND','OR','OF','PART','PARTS','SEWING','MACHINE','SINGLE','DOUBLE','DEFECT','FROM','WITH']);
 const ck=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
-function score(row,it){let s=0,dist=0;if(row.code){const c=ck(row.code);if(c&&(ck(it.key)===c||ck(it.code)===c||ck(it.title)===c))return 99;}
+const ckz=v=>ck(v).replace(/(\D|^)0+(\d)/g,'$1$2');/* 2026-11-26 編號號碼一樣就算：OL-0008＝OL-8 */
+function score(row,it){let s=0,dist=0;if(row.code){const c=ck(row.code);if(c&&(ck(it.key)===c||ck(it.code)===c||ck(it.title)===c))return 99;const cz=ckz(row.code);if(cz&&/\d/.test(cz)&&(ckz(it.key)===cz||ckz(it.code)===cz||ckz(it.title)===cz))return 98;}
   if(row.no&&it.code&&String(it.code).trim()===row.no)s+=3;
   /* v1.5 柬文名稱完全一樣再加分（Needle Plate 有兩種，只差柬文） */if(row.km){const ka=String(row.km).split(' / ')[0].replace(/[\s\u200b]/g,''),kb=(String(it.name||'')+' '+(it.alt||'')+' '+(it.key||'')).replace(/\u200b/g,'').match(/[\u1780-\u17FF]+/g)||[];if(ka&&kb.includes(ka)){s+=3;dist++}}const A=new Set(words(row.name)),B=words(it.name+' '+(it.alt||'')+' '+it.key);let hit=0;const AA=[...A],has=w=>A.has(w)||(w.length>=4&&AA.some(x=>x.length>=4&&(x.startsWith(w)||w.startsWith(x))));new Set(B).forEach(w=>{if(has(w)){hit++;if(!GENERIC.has(w))dist++}});s+=hit/Math.max(1,Math.min(A.size,new Set(B).size||1))*2;
   const ca=cjk(row.name),cb=cjk(it.name+' '+(it.alt||''));if(ca.size&&cb.size){let h=0;ca.forEach(x=>{if(cb.has(x))h++});s+=h/Math.min(ca.size,cb.size)*2;if(h)dist++}return dist||s>=3?s:0}
