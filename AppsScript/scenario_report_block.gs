@@ -77,3 +77,6 @@ function previewScenarioChart(dateOpt,period,kind){
 /* 免參數預覽（編輯器下拉選單直接跑；不存、不發） */
 function previewPlanWeekly(){ return previewScenarioReport(todayYmd_(),'week','plan'); }
 function previewEffWeekly(){ return previewScenarioReport(todayYmd_(),'week','eff'); }
+
+/* v4.48：上週效率週報預覽（只印不發） */
+function previewEffLastWeekV448(){ return previewScenarioReport(DR.helpers.addDays(todayYmd_(),-7),'week','eff'); }

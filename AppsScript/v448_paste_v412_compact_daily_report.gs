@@ -13,7 +13,7 @@
    render(facts, {lang:'zh'|'both'}) → {text, html, zhChars}   Telegram version (compact, 中文一行＋English 一行; lang 'zh' = 只有中文)
    docHtml(facts, text) → full management report (Word-compatible HTML, .doc)   aiPrompt / checkAiText / checkNumbersAgainstText */
 (function(g){'use strict';
-  if(g.VRTDailyReport)return;
+  if(g.VRTDailyReport&&String(g.VRTDailyReport.version||'')>='2.1.0')return;   /* GAS：主檔先載入舊版 1.x，這裡要蓋過去 */
   const VERSION='2.1.0';
   /* ── small helpers (standalone so the file does not depend on vrt-tg-summary-v1.js) ── */
   const num=v=>{const n=Number(v);return isFinite(n)?n:0};
@@ -1196,3 +1196,6 @@ function previewScenarioChart(dateOpt,period,kind){
 /* 免參數預覽（編輯器下拉選單直接跑；不存、不發） */
 function previewPlanWeekly(){ return previewScenarioReport(todayYmd_(),'week','plan'); }
 function previewEffWeekly(){ return previewScenarioReport(todayYmd_(),'week','eff'); }
+
+/* v4.48：上週效率週報預覽（只印不發） */
+function previewEffLastWeekV448(){ return previewScenarioReport(DR.helpers.addDays(todayYmd_(),-7),'week','eff'); }
