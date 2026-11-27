@@ -41,6 +41,7 @@ a{color:var(--acc)}
 .seg{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .seg button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer}
 .seg button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.qchips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.qchips button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer;text-align:left;line-height:1.3;box-shadow:0 1px 2px rgba(0,0,0,.12),0 6px 12px -8px rgba(0,0,0,.35)}.qchips button b{display:block;font-size:13px}.qchips button.on{background:var(--acc);border-color:var(--acc);color:#fff}@media(max-width:560px){.qchips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.qchips button{flex:none}}
 .seg input{flex:1;min-width:160px;max-width:280px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px}
 .seg select{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px}
 .note{font-size:12px;color:var(--mut);margin:6px 0 12px;line-height:1.5}
@@ -400,6 +401,7 @@ const DRILL={
     seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{si=+b.dataset.i;sortI=0;load()});
     const inp=seg.querySelector('input');let tm;inp.oninput=()=>{clearTimeout(tm);tm=setTimeout(()=>{q=inp.value.trim().toUpperCase();reset()},200)};
     const sel=seg.querySelector('select');if(sel)sel.onchange=()=>{sortI=+sel.value;reset()}};
+  top.addEventListener('click',e=>{const b=e.target.closest('[data-q]');if(!b)return;q=(q===b.dataset.q.toUpperCase()?'':b.dataset.q.toUpperCase());drawSeg();reset();top.querySelectorAll('[data-q]').forEach(x=>x.classList.toggle('on',x.dataset.q.toUpperCase()===q))});
   const filtered=()=>{const s=segs[si];let a=list.filter(g=>!q||(g.title+' '+(g.search||'')).toUpperCase().includes(q));if(s.sorts)a=a.slice().sort(s.sorts[sortI][1]);return a};
   const phS=g=>g.photo&&window.VRTPhotos?VRTPhotos.summary(g.photo.domain,g.photo.key):null;
   const cardHtml=g=>{const ps=phS(g);return `<div class="card" data-k="${E(g.key)}">${ps&&ps.cover?`<img class="cv" src="${ps.cover}" alt="" loading="lazy">`:(g.noPhoto?`<div class="nop">📷 還沒有標準照 No photo yet</div>`:'')}<div class="t"><b>${E(g.title)}${ps&&ps.total?`<span class="phc">📷${ps.total}</span>`:''}</b><span>${g.sub||''}</span></div>${g.badge?`<div style="margin-top:4px">${g.badge}</div>`:''}<div class="m">${g.kpis.map(k=>`<div><b class="${k[2]||''}">${k[0]}</b>${E(k[1])}</div>`).join('')}</div>${g.bar!=null?`<div class="pbar"><i style="width:${Math.max(0,Math.min(100,g.bar)).toFixed(0)}%"></i></div><div class="pcap">${g.barCap||''}</div>`:''}${g.spark?CH.spark(g.spark)+(g.sparkCap?`<div class="pcap">${g.sparkCap}</div>`:''):''}</div>`};
@@ -534,12 +536,16 @@ REF.bom=()=>bomGroups().then(l=>addPh(l,'style'));REF.po=()=>poGroups().then(l=>
 const COND={good:['正常','ok'],repair:['待修','warn'],broken:['故障','crit'],idle:['閒置',''],scrap:['報廢','crit']};
 function machineGroups(){return once('machine',async()=>{const [{rows},chg]=await Promise.all([loadTool('spareparts',k=>/^p:maint_machines_/.test(k)||/^h:[0-9a-f]{8}$/.test(k)),partChanges().catch(()=>[])]);
   const ms=rows.filter(r=>r&&r.assetNo&&r.type);const byM=new Map();chg.forEach(x=>{const k=nk(x.machine);if(!k)return;if(!byM.has(k))byM.set(k,[]);byM.get(k).push(x)});const since=addD(ymdToday(),-92);
+  /* v4.53（Paul 11/27 要每台的換針／換零件花費）：目前日報只寫到「線」，沒有寫機台編號，也沒有單價 → 先給這台所在那條線的每月數量和每台平均，並寫清楚缺什麼 */
+  const lnNo=v=>{const m=String(v||'').toUpperCase().match(/(?:LINE|L)\s*0*(\d{1,2})\b/);return m?m[1]:''};const byL=groupBy(chg.filter(x=>lnNo(x.line)),x=>lnNo(x.line));const mPerL=groupBy(ms.filter(r=>lnNo(r.line||r.location)),r=>lnNo(r.line||r.location));
   return ms.map(r=>{const rel=[...(byM.get(nk(r.assetNo))||[]),...(r.machineId&&nk(r.machineId)!==nk(r.assetNo)?byM.get(nk(r.machineId))||[]:[])];const nd=rel.filter(x=>x.needleType),pc=rel.filter(x=>x.partType);const c=COND[r.condition]||[r.conditionText||r.condition||'—',''];const recent=rel.filter(x=>x.date>=since);
     return {key:nk(r.assetNo),code:r.machineId||'',kind:'機台',title:r.assetNo,alt:[r.typeEn||r.type,r.brand,r.model].filter(Boolean).join(' '),sub:E([r.type,r.brand,r.model].filter(Boolean).join(' · ')),line:r.line||r.location||'',cond:r.condition||'',used:recent.length,
      search:[r.machineId,r.type,r.family,r.brand,r.model,r.serial,r.line,r.location].join(' '),badge:`<span class="tag ${c[1]}">${E(c[0])}</span>`,chip:c[1]==='crit'?'⚠':'',
      kpis:[[E(r.line||r.location||'—'),'線別／位置'],[E(c[0]),'狀況',c[1]],[F(sum(nd,x=>x.qty)),'換針（支）'],[F(sum(pc,x=>x.qty)),'換零件'],[E(r.year||'—'),'年份']],
      detail:()=>`<h4>基本資料</h4>${kv([['資產編號 Asset No.',r.assetNo],['機台編號 Machine ID',r.machineId],['機種 Type',r.type],['家族 Family',r.family],['廠牌 Brand',r.brand],['型號 Model',r.model],['序號 Serial',r.serial],['年份 Year',r.year],['線別 Line',r.line],['位置 Location',r.location],['狀況 Condition',c[0]],['備註 Remark',r.remark]])}
       <h4>每月換針／換零件</h4>${rel.length?CH.bars(monthBars(rel,x=>x.date,x=>x.needleType?x.qty:0,x=>x.partType?x.qty:0),{v2:true,legend:'長條＝換針支數，橘線＝換零件數'}):'<p class="note">換針／換零件紀錄裡還沒有寫到這台的編號（紀錄的「機台」欄要填資產編號才對得到）。</p>'}
+      ${(()=>{const L=lnNo(r.line||r.location),a=L?byL.get(L)||[]:[],nM=L?(mPerL.get(L)||[]).length:0;if(!a.length)return '';const mb=monthBars(a,x=>x.date,x=>x.needleType?x.qty:0,x=>x.partType?x.qty:0),nMon=Math.max(1,mb.length),nd=sum(a,x=>x.needleType?x.qty:0),pc=sum(a,x=>x.partType?x.qty:0);
+        return `<h4>這台所在的線（Line ${E(L)}）每月換針／換零件</h4>${CH.bars(mb,{v2:true,legend:'長條＝換針支數，橘線＝換零件數'})}${kv([['這條線登記的機台',nM+' 台'],['每月平均換針',F(nd/nMon,1)+' 支'],['每月平均換零件',F(pc/nMon,1)+' 個'],['平均每台每月換針',nM?F(nd/nMon/nM,2)+' 支':'—'],['平均每台每月換零件',nM?F(pc/nMon/nM,2)+' 個':'—']])}<p class="note">⚠️ 這是「整條線」的數字除以台數，不是這一台實際換的。要算到每一台、算出金額，還缺兩樣：① 換針／換零件日報的「機台」欄要填資產編號（現在 ${F(chg.length)} 筆都沒填）；② 每種針、零件的單價。</p>`})()}
       ${rel.length?`<h4>換針／換零件明細</h4>${table([['日期',x=>E(x.date)],['類型',x=>x.needleType?'🪡 針':'🔩 零件'],['名稱',x=>x.needleType?link('needle',nk(x.needleType)+(x.size?' · '+nk(x.size):''),x.needleType+' '+(x.size||'')):E(x.partType)],['數量',x=>F(x.qty),1],['線別',x=>E(x.line)],['原因',x=>{const cc=RC[rcOf(x)]||RC.other;return `<span class="${cc[1]}">${E(x.reason||cc[0])}</span>`}]],rel.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))),200)}`:''}`}}).sort((a,b)=>String(a.line).localeCompare(String(b.line),'en',{numeric:true})||a.title.localeCompare(b.title,'en',{numeric:true}))})}
 REF.machine=()=>machineGroups().then(l=>addPh(l,'machine'));
 
@@ -565,14 +571,19 @@ function sewerGroups(){return once('sewer',async()=>{const db=await hrIdb();cons
   return out.sort((a,b)=>String(a.line).localeCompare(String(b.line),'en',{numeric:true})||a.title.localeCompare(b.title))})}
 async function hrPhoto(pid){const db=await hrIdb();return db?await hrGet(db,'photo|'+pid):null}
 
-function accGroups(){return once('acc',async()=>{const {rows}=await loadTool('fabricstock',keepMonths(12));const acc=rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted);const last=acc.map(r=>r.snapshotDate).filter(Boolean).sort().pop()||'';
+/* v4.53（Paul 11/27）輔料：哪些款在用（BOM 的用料文字裡有寫到這個料號就算） */
+function bomTexts(){return once('bomtxt',async()=>{const {rows}=await loadTool('bom').catch(()=>({rows:[]}));return rows.filter(r=>r&&r.styleNo&&Array.isArray(r.items)).map(r=>({style:String(r.styleNo).trim(),name:r.styleName||'',cust:r.customerCode||'',items:r.items.filter(Boolean).map(x=>({x,t:normK(Object.values(x).filter(v=>typeof v==='string'||typeof v==='number').join(' '))}))}))})}
+function accGroups(){return once('acc',async()=>{const BT=await bomTexts().catch(()=>[]);const {rows}=await loadTool('fabricstock',keepMonths(12));const acc=rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted);const last=acc.map(r=>r.snapshotDate).filter(Boolean).sort().pop()||'';
   const now=acc.filter(r=>r.snapshotDate===last);const H=groupBy(acc,r=>nk(r.itemCode)),N=groupBy(now,r=>nk(r.itemCode));
   return [...N].map(([k,a])=>{const bal=sum(a,r=>r.balance),unit=(a[0]||{}).unit||'',desc=(a.find(r=>r.description)||{}).description||'',cat=(a.find(r=>r.category)||{}).category||'';const hist=H.get(k)||[];
     const trend=[...groupBy(hist,r=>r.snapshotDate)].sort((x,y)=>x[0].localeCompare(y[0])).map(([d,b])=>({label:d.slice(5),v:sum(b,r=>r.balance)}));
-    return {key:k,kind:'輔料',title:a[0].itemCode,alt:desc,bal,sub:E([desc,cat].filter(Boolean).join(' · ')),search:[desc,cat,...a.map(r=>(r.colorName||'')+' '+(r.size||''))].join(' '),
+    const NK=normK(a[0].itemCode);const used=NK.length>=6?BT.map(b=>{const it=b.items.filter(i=>i.t.indexOf(NK)>=0);return it.length?{b,it}:null}).filter(Boolean):[];
+    return {key:k,kind:'輔料',title:a[0].itemCode,alt:desc,bal,cat:cat||'未分類',nUsed:used.length,sub:E([desc,cat].filter(Boolean).join(' · ')),search:[desc,cat,...a.map(r=>(r.colorName||'')+' '+(r.size||'')),...used.map(u=>u.b.style)].join(' '),
      kpis:[[F(bal),'結存 '+unit+(last?'（'+last.slice(5)+'）':''),bal>0?'ok':'crit'],[String(a.length),'個顏色／尺寸'],[E(cat||'—'),'分類']],
      detail:()=>`<h4>目前結存（${E(last)}）</h4>${table([['顏色',r=>E([r.colorCode,r.colorName].filter(Boolean).join(' '))],['尺寸',r=>E(r.size)],['期初',r=>F(r.opening,1),1],['結存',r=>`<b>${F(r.balance,1)}</b>`,1],['單位',r=>E(r.unit)]],a.slice().sort((x,y)=>(+y.balance||0)-(+x.balance||0)))}
-      ${trend.length>1?`<h4>每次盤點的結存</h4>${CH.bars(trend)}`:''}<p class="note">輔料的進出明細、編輯請到「布料／副料庫存」分頁的副料。</p>`}}).sort((a,b)=>b.bal-a.bal)})}
+      ${trend.length>1?`<h4>每次盤點的結存</h4>${CH.bars(trend)}`:''}
+      <h4>👕 哪些款在用（${used.length} 款）</h4>${used.length?table([['款號',u=>link('style',styleK(u.b.style),u.b.style)],['品名',u=>E(String(u.b.name).slice(0,28))],['客戶',u=>u.b.cust?link('customer',u.b.cust):''],['每件用量',u=>F(sum(u.it,i=>+i.x.qtyPcs||0),4),1],['單位',u=>E(u.it[0].x.unit||'')]],used):'<p class="note">BOM 裡還沒有寫到這個料號（很多 BOM 的副料只寫品名、沒寫料號，所以對不到；BOM 補上料號後這裡就會列出來）。</p>'}
+      <p class="note">輔料的進出明細、編輯請到「布料／副料庫存」分頁的副料。</p>`}}).sort((a,b)=>b.bal-a.bal)})}
 REF.accessory=()=>accGroups().then(l=>addPh(l,'accessory'));
 const SPECS={
  output:{segments:[
@@ -601,7 +612,12 @@ const SPECS={
     return {groups,top:`<div class="kpis"><div class="kpi"><div class="v">${F(sum(rows,r=>r.qty))}</div><div class="l">已裝箱件數（11 月起）</div></div><div class="kpi"><div class="v">${F(sum(rows,r=>r.ctns),1)}</div><div class="l">箱</div></div><div class="kpi"><div class="v">${E(days[days.length-1]||'—')}</div><div class="l">最新裝箱日</div></div></div>`}}}
  ]},
  style:{segments:[
-  {label:'🧾 BOM（每一款用料）',photo:'style',photoTip:'放這一款的樣品照、正確成品照；換料或做法不同的放每月。',sorts:[['款號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})],['用料多→少',(a,b)=>b.n-a.n]],build:async()=>({groups:await bomGroups(),top:'<p class="note">每一款的 BOM 用料：布料、副料、每件用量、損耗。布料料號點進去看庫存與照片。</p>'})},
+  {label:'🧾 BOM（每一款用料）',photo:'style',photoTip:'放這一款的樣品照、正確成品照；換料或做法不同的放每月。',sorts:[['款號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})],['最近有車縫的先',(a,b)=>String(b.lastSew||'').localeCompare(String(a.lastSew||''))],['近 6 個月車縫多→少',(a,b)=>(b.pcs6||0)-(a.pcs6||0)],['排單中／未來的先',(a,b)=>String(b.planEnd||'').localeCompare(String(a.planEnd||''))],['用料多→少',(a,b)=>b.n-a.n]],
+   build:async()=>{const [l,sm]=await Promise.all([bomGroups(),styleMaster().catch(()=>[])]);const M=new Map(sm.map(g=>[g.key,g]));const today=ymdToday();
+    l.forEach(g=>{if(g._j)return;g._j=1;const m=M.get(styleK(g.title));g.cust=(m&&m.cust)||String(g.sub||'').replace(/<[^>]+>/g,'').split(' · ').pop()||'—';g.pcs6=m?m.pcs6:0;g.lastSew=m?m.lastSew:'';const pe=m&&m.plan?m.plan.map(r=>String(r.endDate||r.startDate||'')).sort().pop():'';g.planEnd=pe&&pe>=today?pe:'';
+      g.kpis=g.kpis.concat([[F(g.pcs6),'近 6 個月車縫'],[g.lastSew?g.lastSew.slice(5):'—','最後車縫']]);if(g.planEnd)g.badge=(g.badge||'')+`<span class="tag ok">📅 排單到 ${E(g.planEnd.slice(5))}</span>`;g.search+=' '+g.cust+(g.planEnd?' 排單中':'')+(g.pcs6?' 有生產':' 沒生產')});
+    const C=[...groupBy(l,g=>g.cust)].map(([c,a])=>({c,n:a.length})).sort((x,y)=>y.n-x.n);
+    return {groups:l,top:`<p class="note">每一款的 BOM 用料。<b>點客戶或狀態篩選</b>（再點一次取消）；右上排序可選：最近有車縫、近 6 個月件數、排單中。點卡片看用料、每件用量；布料料號點進去看庫存與照片。</p><div class="qchips">${C.map(x=>`<button data-q="${E(x.c)}"><b>${E(x.c)}</b>${x.n} 款</button>`).join('')}<button data-q="排單中"><b>📅 排單中</b>${l.filter(g=>g.planEnd).length} 款</button><button data-q="有生產"><b>🧵 近 6 個月有生產</b>${l.filter(g=>g.pcs6).length} 款</button><button data-q="沒生產"><b>💤 近 6 個月沒生產</b>${l.filter(g=>!g.pcs6).length} 款</button></div>`}}},
   {label:'📐 每一款（近 3 個月車縫）',photo:'style',photoTip:'放這一款的樣品、BOM 用料、正確成品照。',sorts:[['件數',(a,b)=>b.n-a.n],['效率低→高',(a,b)=>(a.e||999)-(b.e||999)],['SMV 高→低',(a,b)=>(b.smv||0)-(a.smv||0)],['最近做的',(a,b)=>String(b.d).localeCompare(String(a.d))]],
    async build(){const [{rows},cut]=await Promise.all([loadTool('sewing',keepMonths(3)),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]}))]);
     const S=groupBy(rows,r=>String(r.styleNo||'').trim().toUpperCase());const C=groupBy(cut.rows,r=>String(r.styleNo||'').trim().toUpperCase());
@@ -734,7 +750,9 @@ const SPECS={
    build:async()=>{const l=await fabricTypeGroups();const ph=window.VRTPhotos?l.filter(g=>VRTPhotos.summary('fabric',g.key).total).length:0;return {groups:l,top:`<div class="kpis"><div class="kpi"><div class="v">${F(l.length)}</div><div class="l">布種（料號）</div></div><div class="kpi"><div class="v ok">${F(ph)}</div><div class="l">已有標準照</div></div><div class="kpi"><div class="v ${l.length-ph?'warn':'ok'}">${F(l.length-ph)}</div><div class="l">還沒有照片</div></div></div><p class="note">點一張卡 → 大張標準照、布種資料、庫存；左右滑換布種，往下滑一直看下去。照片表（Excel 內嵌照片）用「📷 照片庫 → 📥 匯入對照表」一次放進來。</p>`}}},
   {label:'🧶 每個料號（庫存＋近 3 個月進出）',photo:'fabric',photoTip:'放這個布的正確顏色／布面照；當月收到色差或不同的，放在下面的每月異常。',sorts:[['庫存多→少',(a,b)=>b.bal-a.bal],['發出多→少',(a,b)=>b.iss-a.iss],['進倉多→少',(a,b)=>b.rec-a.rec],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
    build:async()=>({groups:await fabricGroups(),top:'<p class="note">每個料號：目前庫存（最近一次盤點）＋近 3 個月進出。點進去可放正確布面照與每月色差／異常照。</p>'})},
-  {label:'🧷 輔料（每個料號）',photo:'accessory',photoTip:'放這個輔料（鈕扣、拉鍊、吊牌、織帶…）正確的樣子；當月收到不同顏色或規格的放每月異常。',sorts:[['結存多→少',(a,b)=>b.bal-a.bal],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],build:async()=>({groups:await accGroups(),top:'<p class="note">最近一次副料盤點的每個料號：結存、顏色／尺寸。點進去可放輔料照片。</p>'})}
+  {label:'🧷 輔料（每個料號）',photo:'accessory',photoTip:'放這個輔料（鈕扣、拉鍊、吊牌、織帶…）正確的樣子；當月收到不同顏色或規格的放每月異常。',sorts:[['結存多→少',(a,b)=>b.bal-a.bal],['分類',(a,b)=>String(a.cat).localeCompare(String(b.cat))||b.bal-a.bal],['有照片的先',(a,b)=>((window.VRTPhotos&&VRTPhotos.summary('accessory',b.key).total)||0)-((window.VRTPhotos&&VRTPhotos.summary('accessory',a.key).total)||0)||b.bal-a.bal],['用在最多款',(a,b)=>b.nUsed-a.nUsed||b.bal-a.bal],['料號',(a,b)=>a.title.localeCompare(b.title,'en',{numeric:true})]],
+   build:async()=>{const l=await accGroups();const C=[...groupBy(l,g=>g.cat)].map(([c,a])=>({c,n:a.length,ph:a.filter(g=>window.VRTPhotos&&VRTPhotos.summary('accessory',g.key).total).length})).sort((x,y)=>y.n-x.n);
+    return {groups:l,top:`<p class="note">最近一次副料盤點的每個料號。<b>先點下面的分類</b>（再點一次取消），就只看那一類有哪些料號、各多少、有沒有照片；點卡片看顏色／尺寸結存、哪些款在用、照片。</p><div class="qchips">${C.map(x=>`<button data-q="${E(x.c)}"><b>${E(x.c)}</b>${x.n} 個料號・📷 ${x.ph}</button>`).join('')}</div>`}}}
  ]},
  parts:{segments:[
   {label:'🔧 零件（依類別）',sorts:[['低於安全量',(a,b)=>b.low-a.low],['品項數',(a,b)=>b.n-a.n]],
@@ -752,17 +770,36 @@ const SPECS={
 
 /* ══ v4.34 點了就連：每一種東西去哪裡找（找不到就換下一種）══ */
 const segBuild=(hub,re)=>{const s=SPECS[hub]&&SPECS[hub].segments.find(x=>re.test(x.label));return s?()=>once('seg|'+hub+'|'+s.label,async()=>{const r=await s.build();const l=r.groups||[];if(s.photo)l.forEach(g=>{if(!g.photo)g.photo={domain:s.photo,key:s.photoKey?s.photoKey(g):(g.photoKey||g.key),name:g.title}});return l}):null};
-const CHAIN={style:['style','bom'],line:['line'],customer:['customer','shipcust'],po:['po','pdfpo','popro'],date:['date'],item:['parts','fabric','fabtype','accessory','machine'],fabric:['fabric','fabtype','accessory'],fabtype:['fabtype','fabric'],parts:['parts'],part:['parts'],machine:['machine'],needle:['needle'],defect:['defect'],accessory:['accessory'],bom:['bom']};
+const CHAIN={style:['style','bom'],line:['line'],customer:['customer','custstyle','shipcust'],po:['po','pdfpo','popro'],date:['date'],item:['parts','fabric','fabtype','accessory','machine'],fabric:['fabric','fabtype','accessory'],fabtype:['fabtype','fabric'],parts:['parts'],part:['parts'],machine:['machine'],needle:['needle'],defect:['defect'],accessory:['accessory'],bom:['bom']};
 const normK=s=>String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9\u3400-\u9fff]+/g,'');
+const custWords=t=>String(t||'').toUpperCase().replace(/\(.*?\)/g,'').replace(/[^A-Z ]/g,' ').split(/\s+/).filter(Boolean);
+const custAb=t=>{const w=custWords(t);return [w.map(x=>x[0]).join(''),w.filter(x=>!/^(INC|LTD|PTE|CO|LLC|CORP)$/.test(x)).map(x=>x[0]).join('')]};
+function custSame(a,b){const A=normK(String(a).replace(/\(.*?\)/g,'')),B=normK(String(b).replace(/\(.*?\)/g,''));if(!A||!B)return false;if(A===B)return true;const ka=custKey(a),kb=custKey(b);if(ka&&ka===kb)return true;
+  const short=(x,full)=>x.length>=2&&x.length<=6&&(custAb(full).includes(x)||custWords(full)[0]===x);return short(A,b)||short(B,a)||(A.length>=5&&B.length>=5&&(A.startsWith(B)||B.startsWith(A)))}
 function matchIdx(l,kind,key){const K=String(key).toUpperCase().trim(),N=normK(key);let i=l.findIndex(x=>String(x.key).toUpperCase()===K||String(x.title).toUpperCase()===K);if(i>=0)return i;
   if(kind==='line'){const n=(K.match(/(\d{1,2})\s*$/)||[])[1];const ap=/APRON/.test(K);if(n){i=l.findIndex(x=>{const t=String(x.key).toUpperCase();return (t.match(/(\d{1,2})\s*$/)||[])[1]===n&&(/APRON/.test(t)===ap)});if(i>=0)return i;i=l.findIndex(x=>(String(x.key).toUpperCase().match(/(\d{1,2})\s*$/)||[])[1]===n);if(i>=0)return i}}
-  if(kind==='customer'||kind==='shipcust'){const c=custKey(key);i=l.findIndex(x=>custKey(x.title)===c||custKey(x.title).startsWith(c)||c.startsWith(custKey(x.title)));if(i>=0)return i}
+  if(kind==='customer'||kind==='shipcust'||kind==='custstyle'){const c=custKey(key);i=l.findIndex(x=>custKey(x.title)===c||custKey(x.title).startsWith(c)||c.startsWith(custKey(x.title)));if(i>=0)return i;
+    /* v4.53（Paul 11/27）BOM／IE 用客戶簡稱（WPL、ADI、NU、DICKSON…），訂單用全名 → 用字首縮寫、第一個字對 */
+    i=l.findIndex(x=>custSame(x.title,key));if(i>=0)return i}
   i=l.findIndex(x=>normK(x.key)===N||normK(x.title)===N);if(i>=0)return i;
   if(N.length>=5)i=l.findIndex(x=>{const a=normK(x.key);return a.length>=5&&(a.startsWith(N)||N.startsWith(a))});
   /* v4.44 機修：換零件紀錄的名稱常常只寫英文或少幾個字 → 名稱互相包含也算 */
   if(i<0&&N.length>=6&&(kind==='parts'||kind==='needle'))i=l.findIndex(x=>{const a=normK(x.key);return a.length>=6&&(a.indexOf(N)>=0||N.indexOf(a)>=0)});return i}
 async function findRef(kind,key){for(const k of (CHAIN[kind]||[kind])){const f=REF[k];if(!f)continue;let l;try{l=await f()}catch(_){continue}if(!l||!l.length)continue;const idx=matchIdx(l,k,key);if(idx>=0)return {list:l,idx,k}}return null}
 REF.style=segBuild('style',/近 3 個月車縫/);REF.line=segBuild('output',/車縫/);REF.customer=segBuild('orders',/每個客戶/);REF.shipcust=segBuild('ship',/每個客戶/);REF.pdfpo=segBuild('orders',/PDF/);
+/* v4.53（Paul 11/27：按客戶要列出下單、數量、生產、圖表）每個客戶的款式與生產：從款式總表（IE＋BOM＋車縫日報＋排單）依客戶彙整 */
+function custStyleGroups(){return once('custstyle',async()=>{const sm=await styleMaster();const M=new Map();sm.forEach(g=>{const c=String(g.cust||'').trim();if(!c)return;let k=[...M.keys()].find(x=>custSame(x,c));if(!k){k=c;M.set(k,[])}M.get(k).push(g)});
+  return [...M].map(([k,a])=>{const sew=a.flatMap(g=>g.sew||[]),plan=a.flatMap(g=>(g.plan||[]).map(r=>Object.assign({_s:g.title},r)));const today=ymdToday(),pcs6=sum(a,g=>g.pcs6||0),nb=a.filter(g=>g.bom).length,np=plan.filter(r=>String(r.endDate||r.startDate||'')>=today);
+    const extra=()=>`<h4>📈 每月車縫件數（近 6 個月）</h4>${sew.length?CH.bars(monthBars(sew,r=>r.date,r=>r.pieces,null,12))+`<p class="note">合計 ${F(sum(sew,r=>r.pieces))} 件・平均效率 ${P(effW(sew))}（依人數加權）</p>`:'<p class="note">近 6 個月車縫日報沒有這個客戶的款。</p>'}
+      <h4>👕 這個客戶的款式（${a.length} 款）</h4>${table([['款號',g=>link('style',g.key,g.title)],['品名',g=>E(String(g.name||'').slice(0,28))],['近 6 個月件數',g=>F(g.pcs6),1],['效率',g=>`<b class="${effCls(g.e)}">${P(g.e)}</b>`,1],['SMV',g=>F(g.smv,2),1],['BOM',g=>g.bom?'✅':'—'],['最後車縫',g=>E(String(g.lastSew||'').slice(5))]],a.slice().sort((x,y)=>(y.pcs6||0)-(x.pcs6||0)||String(y.last).localeCompare(String(x.last))),300)}
+      <h4>🧵 哪幾條線在做</h4>${sew.length?CH.hbars([...groupBy(sew,lineName)].map(([l,b])=>({label:l+' · '+P(effW(b)),v:sum(b,r=>r.pieces)})).sort((x,y)=>y.v-x.v)):'<p class="note">—</p>'}
+      <h4>📅 排單</h4>${plan.length?table([['款號',r=>link('style',styleK(r._s),r._s)],['線別',r=>E(r.line)],['開始',r=>E(r.startDate)],['結束',r=>E(r.endDate)],['件數',r=>F(r.qty),1],['PO',r=>E(r.po)]],plan.slice().sort((x,y)=>String(y.startDate||'').localeCompare(String(x.startDate||''))),200):'<p class="note">排單裡沒有這個客戶的款。</p>'}`;
+    return {key:k,kind:'客戶',title:k,n:pcs6,extra,styles:a,sub:a.length+' 款',search:a.map(g=>g.title).join(' '),chip:F(pcs6)+' 件',
+     kpis:[[String(a.length),'款式'],[F(pcs6),'近 6 個月車縫件數'],[String(nb),'款有 BOM'],[String(np.length),'筆排單進行中／未來',np.length?'ok':'']],
+     detail:()=>extra()+`<p class="note">這張卡是從款式（IE／BOM）、車縫日報、排單彙整的。這個客戶在訂單 Weekly／PDF 訂單裡的名稱如果對得上，訂單會顯示在「訂單與交期」。</p>`}}).sort((x,y)=>y.n-x.n)})}
+REF.custstyle=()=>custStyleGroups().then(l=>addPh(l,'customer'));
+async function custAug(groups){const cs=await custStyleGroups();(groups||[]).forEach(g=>{if(g._aug)return;const m=cs.filter(c=>custSame(c.title,g.title));if(!m.length)return;g._aug=1;const d=g.detail;g.detail=()=>d()+m.map(c=>c.extra()).join('');g.search=(g.search||'')+' '+m.map(c=>c.title+' '+c.search).join(' ')})}
+[['orders',/每個客戶/],['ship',/每個客戶/]].forEach(([h,re])=>{const sg=SPECS[h]&&SPECS[h].segments.find(x=>re.test(x.label));if(!sg)return;const b0=sg.build;sg.build=async function(){const r=await b0.call(this);try{await custAug(r.groups)}catch(_){}return r}});
 /* 某一天：那天裁了什麼、車了什麼、裝了多少箱、QC 怎樣 */
 REF.date=()=>once('days',async()=>{const ms=monthsBack(3);const [sw,ct,pk,qc]=await Promise.all([loadTool('sewing',keepMonths(3)).catch(()=>({rows:[]})),loadTool('cutting',keepMonths(3)).catch(()=>({rows:[]})),loadTool('packing').catch(()=>({rows:[]})),loadTool('qc',k=>/^m:/.test(k)&&ms.some(m=>k.indexOf(m)>=0)).catch(()=>({rows:[]}))]);
   const S=groupBy(sw.rows,r=>r.date),C=groupBy(ct.rows,r=>r.date),PK=groupBy(pk.rows,r=>r.date),Q=groupBy(qc.rows.filter(r=>r&&r.date&&!r._vrtEntity&&r.reportKind!=='sewingkpi'),r=>r.date);
