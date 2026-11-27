@@ -1,4 +1,4 @@
-/* ═══ v4.45 (2026-11-21) AI 排單比對接到日報／排單週報 — 新增一個 .gs 檔，放在專案「最後面」；Token 不動 ═══
+/* ═══ v4.49 (2026-11-27，模組 vrt-aps-v1.js 1.1：到布日、裁片 WIP；GAS 沒有布料資料時照舊當作料齊) · v4.45 (2026-11-21) AI 排單比對接到日報／排單週報 — 新增一個 .gs 檔，放在專案「最後面」；Token 不動 ═══
    做法：包住線上原本的 dailyReportSend_（情境版照舊發），發完再接一則「🤖 AI 排單比對」。指令碼屬性 APS_REPORT=0 可關掉。
    上半段＝vrt-aps-v1.js 原樣（瀏覽器頁面用同一份，數字一致）。 */
 /* VRT AI 排單比對 v1（2026-11-21）
@@ -53,6 +53,20 @@
       if (r.customer) custOf[s] = r.customer; if (num(r.smv) > 0 && !smvOf[s]) smvOf[s] = num(r.smv);
       jobs.push({ l: l, s: s, po: K(r.po), q: q, a: a, b: b, smv: num(r.smv) || 0, kind: /garment/i.test(r.product || '') ? 'G' : 'A', daily: num(r.dailyOutput), cust: r.customer || '', ready: /齐全|齊全|complete|ready/i.test(r.remark || ''), month: String(r.month || '').slice(0, 7) });
     });
+    /* ── v1.1（11/27）物料：到布日＋可上線（PLAYBOOK §5：只排 ready-to-sew；到布後 2 個工作天才上線＝48 小時內先裁第一批）──
+       data.fabric＝[{po, style, eta, actual}]（布料 PO 到廠表：actual＝實際到廠，eta＝預計）；data.custDetails＝客戶統計明細 [{po, style, cuttingWip, noFabric, etd}]（只代表快照那一天，只用在本週） */
+    var KP = function (v) { return K(String(v || '').replace(/^\s*(ADI|PO)\s*[-#:]*/i, '')); };
+    var fabPo = {}, fabSt = {};
+    (data.fabric || []).forEach(function (f) { var arr = String(f.actual || f.eta || '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(arr)) return; var rec = { d: arr, real: !!f.actual };
+      /* 布料明細有寫款號的就按款等；寫 MIXED STYLES／沒寫款的才按客戶 PO 等（一張 ADI PO 有很多款，不能整張一起等） */
+      var hasSt = f.style && !/MIXED|RESPOND|^\s*$/i.test(String(f.style)); var pos = hasSt ? [] : [].concat(f.po || [], f.pos || []); pos.forEach(function (x) { var k = KP(x); if (!k) return; var o = fabPo[k] || (fabPo[k] = []); o.push(rec); });
+      var sts = [].concat(f.styles || [], f.style ? String(f.style).split(/[,;\/]+/) : []).map(function (x) { return String(x).trim(); }).filter(function (x) { return x && !/MIXED|RESPOND|^ALL$|TABLECLOTH|NAPKIN/i.test(x); });
+      sts.forEach(function (st) { var ks = sk(st); if (ks) (fabSt[ks] || (fabSt[ks] = [])).push(rec); }); });
+    var cutSnap = {}, etdOf = {};
+    (data.custDetails || []).forEach(function (r) { var ks = sk(r.style); if (!ks) return; cutSnap[ks] = (cutSnap[ks] || 0) + num(r.cuttingWip); var e = String(r.etd || '').slice(0, 10); if (/^\d{4}-/.test(e) && (!etdOf[ks] || e < etdOf[ks])) etdOf[ks] = e; });
+    /* 某一款在 T 時要等的最晚到布日（T 以前已到的不算） */
+    var gateOf = function (p, T) { var g0 = ''; var chk = function (list) { (list || []).forEach(function (x) { if (x.d >= T && x.d > g0) g0 = x.d; }); }; (p.pos || []).forEach(function (po) { chk(fabPo[po]); }); chk(fabSt[p.s]); return g0; };
+    var hasMat = (data.fabric || []).length > 0;
     /* ── AI 預排（以 T＝週一為基準，只看 T 以前的實績）── */
     function aiPlan(T, horizonDays) {
       var w0 = addD(T, -35), hist = rows.filter(function (r) { return r.d >= w0 && r.d < T; });
@@ -63,29 +77,36 @@
       var lines = Object.keys(L); if (!lines.length) return { M: {}, blocks: [], lines: [] };
       /* 訂單池以「款」為單位（車縫日報和排產表的 PO 寫法常對不上）：剩餘＝排產件數 −（排產開工日到 T 之間已做的件數） */
       var m0 = T.slice(0, 7), m1 = addD(T.slice(0, 8) + '01', 35).slice(0, 7), pool = {}, stale = addD(T, -14);
-      jobs.forEach(function (j) { if (j.month && j.month !== m0 && j.month !== m1 && !(j.a <= addD(T, 28) && j.b >= T)) return; if (j.b < stale) return; var k = j.s, p = pool[k] || (pool[k] = { k: k, s: j.s, po: j.po, q: 0, smv: j.smv, kind: j.kind, cust: j.cust, ready: false, a: j.a }); p.q += j.q; if (j.daily > (p.daily || 0)) p.daily = j.daily; if (j.ready) p.ready = true; if (j.a < p.a) p.a = j.a; if (!p.smv) p.smv = j.smv; });
+      jobs.forEach(function (j) { if (j.month && j.month !== m0 && j.month !== m1 && !(j.a <= addD(T, 28) && j.b >= T)) return; if (j.b < stale) return; var k = j.s, p = pool[k] || (pool[k] = { k: k, s: j.s, po: j.po, pos: [], q: 0, smv: j.smv, kind: j.kind, cust: j.cust, ready: false, a: j.a }); p.q += j.q; if (j.po && p.pos.indexOf(KP(j.po)) < 0) p.pos.push(KP(j.po)); if (j.daily > (p.daily || 0)) p.daily = j.daily; if (j.ready) p.ready = true; if (j.a < p.a) p.a = j.a; if (!p.smv) p.smv = j.smv; });
       var sewn = {}; rows.forEach(function (r) { var p = pool[r.s]; if (p && r.d < T && r.d >= p.a) sewn[r.s] = (sewn[r.s] || 0) + r.q; });
-      var list = Object.keys(pool).map(function (k) { var p = pool[k]; p.rem = p.q - (sewn[k] || 0); p.due = shipOf[p.s] || ''; p.smv = p.smv || smvOf[p.s] || 6; return p; }).filter(function (p) { return p.rem > Math.max(10, p.q * 0.02); });
+      var list = Object.keys(pool).map(function (k) { var p = pool[k]; p.rem = p.q - (sewn[k] || 0); p.due = shipOf[p.s] || etdOf[p.s] || ''; p.smv = p.smv || smvOf[p.s] || 6;
+        var gd = hasMat ? gateOf(p, T) : ''; p.gate = ''; p.gi = 0; p.cutNow = 0;
+        if (gd) { var on = workIn(addD(gd, 1), addD(gd, 30)).slice(1, 2)[0] || addD(gd, 2); p.gate = on; p.gi = workIn(T, addD(on, -1)).length; if (T === monOf(today) && cutSnap[p.s] > 0) p.cutNow = Math.min(p.rem, cutSnap[p.s]); if (!p.cutNow) p.ready = false; }
+        return p; }).filter(function (p) { return p.rem > Math.max(10, p.q * 0.02); });
       var rate = {};
       var rateOf = function (l, s2) { var x = rate && rate[l + '|' + s2]; if (!x) return 0; var v = Object.keys(x).map(function (d) { return x[d]; }); return v.length >= 2 ? median(v) : 0; };
-      var blocks = [], place = function (p, l, qty) { var Li = L[l], ch = Li.last === p.s ? 0 : (qty < 200 ? 0.08 : 0.25), st = Li.t + ch, rt = rateOf(l, p.s) || p.daily || 0, dur = rt ? qty / rt : qty * p.smv / Li.cap; blocks.push({ l: l, s: p.s, po: p.po, cust: p.cust, q: qty, st: st, en: st + dur, due: p.due }); Li.t = st + dur; Li.last = p.s; Li.recent[p.s] = T; };
+      var blocks = [], place = function (p, l, qty, minSt) { var Li = L[l], ch = Li.last === p.s ? 0 : (qty < 200 ? 0.08 : 0.25), st = Math.max(Li.t + ch, minSt || 0), rt = rateOf(l, p.s) || p.daily || 0, dur = rt ? qty / rt : qty * p.smv / Li.cap; blocks.push({ l: l, s: p.s, po: p.po, cust: p.cust, q: qty, st: st, en: st + dur, due: p.due, wait: minSt > 0 ? p.gate : '' }); Li.t = st + dur; Li.last = p.s; Li.recent[p.s] = T; };
       /* 1) 正在做的款留在原組先做完；同一款幾組一起做的，照最近 4 天各組做的量分 */
       var d3 = addD(T, -4), done = {}, rec = {}; rate = {};
       hist.forEach(function (r) { var k = r.s; if (r.d >= d3) { var a = rec[k] || (rec[k] = {}); a[r.l] = (a[r.l] || 0) + r.q; } var x = rate[r.l + '|' + r.s] || (rate[r.l + '|' + r.s] = {}); x[r.d] = (x[r.d] || 0) + r.q; });
       Object.keys(rec).sort(function (x, y) { return (pool[y] ? pool[y].rem || 0 : 0) - (pool[x] ? pool[x].rem || 0 : 0); }).forEach(function (k) { var p = pool[k]; if (!p || !(p.rem > Math.max(10, p.q * 0.02))) return; var ls = Object.keys(rec[k]).filter(function (l) { return L[l]; }); if (!ls.length) return; var sum = ls.reduce(function (a, l) { return a + rec[k][l]; }, 0); ls.forEach(function (l) { place(p, l, p.rem * rec[k][l] / sum); }); done[k] = 1; });
       /* 2) 其餘：料齊的先、交期早的先、量大的先；挑「最早做完」的組，做過同款的組優先 */
-      list.filter(function (p) { return !done[p.k]; }).sort(function (x, y) { return (y.ready - x.ready) || ((x.due || '9999') < (y.due || '9999') ? -1 : (x.due || '9999') > (y.due || '9999') ? 1 : 0) || (y.rem - x.rem); }).forEach(function (p) {
+      list.filter(function (p) { return !done[p.k]; }).sort(function (x, y) { return ((x.gi > 0 && !x.cutNow) - (y.gi > 0 && !y.cutNow)) || (x.gi > 0 && y.gi > 0 && !x.cutNow && !y.cutNow ? x.gi - y.gi : 0) || (y.ready - x.ready) || ((x.due || '9999') < (y.due || '9999') ? -1 : (x.due || '9999') > (y.due || '9999') ? 1 : 0) || (y.rem - x.rem); }).forEach(function (p) {
         var cand = lines.filter(function (l) { return L[l].kind === p.kind; }); if (!cand.length) cand = lines;
-        var sc = function (l) { var Li = L[l]; return Li.t + (Li.last === p.s ? 0 : 0.25) + p.rem * p.smv / Li.cap - (Li.recent[p.s] ? 1.5 : 0); };
+        var g1 = p.gi && !p.cutNow ? p.gi : 0;
+        var sc = function (l) { var Li = L[l]; return Math.max(Li.t, g1) + (Li.last === p.s ? 0 : 0.25) + p.rem * p.smv / Li.cap - (Li.recent[p.s] ? 1.5 : 0); };
         cand.sort(function (a, b) { return sc(a) - sc(b); });
+        /* 有裁片 WIP、但還有布沒到：先排裁好的量，其餘等布 */
+        if (p.cutNow && p.gi && p.cutNow < p.rem) { place(p, cand[0], p.cutNow); place(p, cand[0], p.rem - p.cutNow, p.gi); return; }
         var dur = p.rem * p.smv / L[cand[0]].cap;
-        if (dur > 10 && cand.length > 1) { var h = Math.round(p.rem / 2); place(p, cand[0], h); place(p, cand[1], p.rem - h); } else place(p, cand[0], p.rem);
+        if (dur > 10 && cand.length > 1) { var h = Math.round(p.rem / 2); place(p, cand[0], h, g1); place(p, cand[1], p.rem - h, g1); } else place(p, cand[0], p.rem, g1);
       });
       /* 展開成每天件數 */
       var days = workIn(T, addD(T, horizonDays || 27)), M = {};
       var ldays = {}; lines.forEach(function (l) { ldays[l] = days.filter(function (d) { return !isShut(l, d); }); });
       blocks.forEach(function (b) { var dl = ldays[b.l] || days, per = b.q / Math.max(b.en - b.st, 0.01); for (var i = Math.floor(b.st); i < dl.length && i < b.en; i++) { var lo = Math.max(b.st, i), hi = Math.min(b.en, i + 1); if (hi > lo) put(M, dl[i], b.l, b.s, per * (hi - lo)); } b.d0 = dl[Math.min(Math.floor(b.st), dl.length - 1)] || ''; b.d1 = dl[Math.min(Math.max(Math.ceil(b.en) - 1, 0), dl.length - 1)] || ''; });
-      return { M: M, blocks: blocks, lines: lines, T: T };
+      var waits = blocks.filter(function (b) { return b.wait; }).map(function (b) { return { l: b.l, s: b.s, q: b.q, on: b.wait, d0: b.d0 }; });
+      return { M: M, blocks: blocks, lines: lines, T: T, waits: waits, matOn: hasMat };
     }
     /* 每週一重排一次，只取那一週的結果（＝當時的 AI 預排） */
     var firstPlan = Object.keys(plan).sort()[0] || today, wk = monOf(firstPlan < '2026-07-06' ? '2026-07-06' : firstPlan), curWk = monOf(today), ai = {}, weeks = [], fwd = null;
@@ -120,6 +141,8 @@
     L.push('　件數　AI ' + N(r.tot.ai) + '・實排 ' + N(r.tot.plan) + '・實績 ' + N(r.tot.act));
     var gaps = r.cells.map(function (c) { return { c: c, g: Math.abs(c.plan - c.act) }; }).filter(function (x) { return x.g >= 300; }).sort(function (x, y) { return y.g - x.g; }).slice(0, 3);
     gaps.forEach(function (x) { var c = x.c; L.push('　' + c.l + ' ' + c.s + '：排 ' + N(c.plan) + '／做 ' + N(c.act) + '／AI ' + N(c.ai)); });
+    var W = B.fwd && B.fwd.waits || []; if (W.length) { var by = {}; W.forEach(function (w) { var k = w.s; var o = by[k] || (by[k] = { s: w.s, q: 0, on: w.on, l: {} }); o.q += w.q; o.l[w.l] = 1; if (w.on < o.on) o.on = w.on; }); var arr = Object.keys(by).map(function (k) { return by[k]; }).sort(function (x, y) { return x.on < y.on ? -1 : 1; }).slice(0, 4); L.push('　等布才排：' + arr.map(function (o) { return o.s + ' ' + N(o.q) + ' 件 ' + md(o.on) + ' 上線（' + Object.keys(o.l).join('、') + '）'; }).join('；')); }
+    else if (B.fwd && B.fwd.matOn === false) L.push('　（布料到廠資料還沒接上，AI 預排先當作料都齊）');
     if (prev && T.length) { var cur = T[T.length - 1]; if (cur.aiAct != null && prev.aiAct != null) L.push('　AI↔實績 上週 ' + prev.aiAct + '% → 本週 ' + cur.aiAct + '%'); }
     return L.join('\n');
   }
@@ -168,7 +191,7 @@
     h += '<tr style="font-weight:700;background:rgba(37,99,235,.06)"><td>合計</td><td>' + bar(r.tot.ai, '#f59e0b') + bar(r.tot.plan, '#2563eb') + bar(r.tot.act, '#16a34a') + '</td><td></td><td></td><td></td><td>' + chip(r.planAct) + '</td><td>' + chip(r.aiAct) + '</td><td>' + chip(r.aiPlan) + '</td></tr></tbody></table></div></div>';
     var gaps = r.cells.map(function (c) { return { c: c, g: Math.max(Math.abs(c.plan - c.act), Math.abs(c.ai - c.act)) }; }).sort(function (x, y) { return y.g - x.g; }).slice(0, 8).filter(function (x) { return x.g >= 200; });
     if (gaps.length) { h += '<div class="card" style="padding:12px 14px;margin-top:10px"><div class="ctit" style="margin-bottom:6px">差最多的地方（先看這裡）</div>' + gaps.map(function (x) { var c = x.c, why = c.act < 1 && c.plan > 0 ? '排了沒做' : c.plan < 1 && c.act > 0 ? '沒排但做了' : c.act < c.plan ? '做得比排的少' : '做得比排的多'; return '<div style="font-size:13px;padding:4px 0;border-bottom:1px dashed var(--bd,#e5e7eb)"><b>' + c.l + '・' + esc(c.s) + '</b>（' + esc(B.custOf[c.s] || '') + '）　🤖 ' + N(c.ai) + '｜📋 ' + N(c.plan) + '｜🧵 ' + N(c.act) + '　<span style="color:#dc2626">' + why + '</span></div>'; }).join('') + '</div>'; }
-    if (B.fwd && B.fwd.blocks.length) { var bl = B.fwd.blocks.slice().sort(function (x, y) { return Number(x.l.slice(1)) - Number(y.l.slice(1)) || x.st - y.st; }); h += '<div class="card" style="padding:12px 14px;margin-top:10px"><div class="ctit" style="margin-bottom:6px">🤖 AI 本週起的預排（每週一重排，' + B.fwd.T + ' 版）</div><div class="tw"><table class="dt"><thead><tr><th>組</th><th>款</th><th>PO</th><th>客戶</th><th class="r">件數</th><th>開始</th><th>做完</th><th>交期</th></tr></thead><tbody>' + bl.filter(function (b) { return b.st < 24; }).slice(0, 120).map(function (b) { var late = b.due && b.d1 > b.due; return '<tr><td>' + b.l + '</td><td>' + esc(b.s) + '</td><td>' + esc(b.po) + '</td><td>' + esc(b.cust) + '</td><td class="r">' + N(b.q) + '</td><td>' + (b.d0 || '') + '</td><td>' + (b.d1 || '') + '</td><td style="' + (late ? 'color:#dc2626;font-weight:700' : '') + '">' + (b.due || '—') + (late ? ' ⚠️' : '') + '</td></tr>'; }).join('') + '</tbody></table></div></div>'; }
+    if (B.fwd && B.fwd.blocks.length) { var bl = B.fwd.blocks.slice().sort(function (x, y) { return Number(x.l.slice(1)) - Number(y.l.slice(1)) || x.st - y.st; }); h += '<div class="card" style="padding:12px 14px;margin-top:10px"><div class="ctit" style="margin-bottom:6px">🤖 AI 本週起的預排（每週一重排，' + B.fwd.T + ' 版）</div><div style="font-size:12px;color:#6b7280;margin-bottom:6px">' + (B.fwd.matOn ? '🧶 已用布料到廠日：還沒到的布，到廠後第 2 個工作天才排上線；有裁片的先做' + (B.fwd.waits.length ? '（等布 ' + B.fwd.waits.length + ' 段，標 🧶）' : '') : '⚠️ 布料到廠資料還沒接上（PO 交期中心匯入布料 PO 表後就會用），先當作料都齊') + '</div><div class="tw"><table class="dt"><thead><tr><th>組</th><th>款</th><th>PO</th><th>客戶</th><th class="r">件數</th><th>開始</th><th>做完</th><th>交期</th></tr></thead><tbody>' + bl.filter(function (b) { return b.st < 24; }).slice(0, 120).map(function (b) { var late = b.due && b.d1 > b.due; return '<tr><td>' + b.l + '</td><td>' + esc(b.s) + (b.wait ? ' <span title="等布 ' + b.wait + ' 上線">🧶</span>' : '') + '</td><td>' + esc(b.po) + '</td><td>' + esc(b.cust) + '</td><td class="r">' + N(b.q) + '</td><td>' + (b.d0 || '') + '</td><td>' + (b.d1 || '') + '</td><td style="' + (late ? 'color:#dc2626;font-weight:700' : '') + '">' + (b.due || '—') + (late ? ' ⚠️' : '') + '</td></tr>'; }).join('') + '</tbody></table></div></div>'; }
     el.innerHTML = h;
   }
   g.VRTAPS = { build: build, range: range, trend: trend, text: text, render: render, addD: addD, monOf: monOf, set: function (k, v) { ST[k] = v; if (k === 'view') ST.key = ''; var el = document.getElementById('aps-root'); if (el && BB) render(el, BB); }, state: ST };
