@@ -1,0 +1,154 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🧪 樣品組打樣＋馬克 · VRT 生產平台</title>
+<script src="vrt-deploy-config.js?v=4.25.0"></script>
+<script src="vrt-platform-v40.js?v=4.51.7"></script>
+<script src="vrt-theme-v1.js?v=4.52.0"></script>
+<script src="vrt-smart-sync-v3.js?v=4.19.0"></script>
+<script src="vrt-item-photos-v1.js?v=4.53.0"></script>
+<script src="vrt-sample-v1.js?v=1.0.0"></script>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--acc:#a21caf;--red:#dc2626;--grn:#059669;--amb:#d97706}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;font-size:14px}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:24px 12px 9px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+header h1{margin:0;font-size:17px;flex:1;min-width:180px}header a{color:#4f46e5;font-weight:700;text-decoration:none}
+main{max-width:1100px;margin:0 auto;padding:12px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer}.kpi b{display:block;font-size:22px}.kpi small{color:var(--mut)}.kpi.on{border-color:var(--acc);box-shadow:0 0 0 2px #f5d0fe}
+.tabs{display:flex;gap:6px;margin:6px 0 10px;overflow-x:auto}.tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 13px;font:inherit;cursor:pointer;white-space:nowrap}.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}.chips button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}.chips button.on{background:#fdf4ff;border-color:var(--acc);color:#86198f;font-weight:800}
+.flt{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:10px}@media(max-width:640px){.flt{grid-template-columns:1fr 1fr}.flt input#q{grid-column:1/-1}}
+input,select,textarea{font:inherit;border:1px solid #d6dde8;border-radius:9px;padding:8px 10px;background:#fff;color:var(--ink);width:100%}
+.btn{border:0;background:var(--acc);color:#fff;border-radius:10px;padding:9px 14px;font:inherit;font-weight:800;cursor:pointer;white-space:nowrap}.btn.g{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn.s{padding:6px 10px;font-size:13px}
+.day{margin:14px 0 6px;font-weight:900;color:#334155;font-size:15px;display:flex;gap:8px;align-items:baseline}.day small{color:var(--mut);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.it{background:#fff;border:1px solid var(--line);border-radius:12px;display:flex;gap:10px;padding:8px;cursor:pointer;align-items:flex-start}.it:hover{border-color:var(--acc)}
+.th{width:64px;height:64px;border-radius:10px;background:#f1f5f9;flex:none;display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden}.th img{width:100%;height:100%;object-fit:cover}
+.it .t{flex:1;min-width:0}.it .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.it .t small{color:var(--mut);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q{font-size:20px;font-weight:900;text-align:right;line-height:1}.q small{display:block;font-size:11px;color:var(--mut);font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:800;border-radius:99px;padding:1px 8px;color:#fff}
+.vl{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;text-decoration-color:#6366f1;color:#3730a3;font-weight:800}
+.note{font-size:12px;color:var(--mut);line-height:1.5}#msg{margin:8px 0;font-weight:700}
+.box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.form{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.form label{font-size:12px;color:var(--mut);display:grid;gap:3px}.form .w{grid-column:1/-1}.form .h{grid-column:span 2}
+.form fieldset{grid-column:1/-1;border:1px dashed #e879f9;border-radius:12px;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.form legend{font-size:12px;font-weight:800;color:#86198f}
+@media(max-width:640px){.form{grid-template-columns:1fr 1fr}.form fieldset{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.kpi b{font-size:19px}header h1 small{display:none}}
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}.ov>div{background:#fff;border-radius:16px;max-width:720px;width:100%;padding:14px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}.dl dt{color:var(--mut)}.dl dd{margin:0;font-weight:600}
+table.st{border-collapse:collapse;width:100%;background:#fff;font-size:13px}table.st th,table.st td{border:1px solid var(--line);padding:6px 8px;text-align:left}table.st th{background:#f8fafc}table.st td.n{text-align:right}
+.tw{overflow-x:auto}
+</style></head><body>
+<header><a href="vrt_hub_v1.html#style">◀ 生產平台</a><h1>🧪 <span id="ttl">樣品組打樣＋馬克排版</span> <small style="font-weight:400;color:#64748b;font-size:12px">Sample room &amp; marker log</small></h1>
+<span id="lng" style="display:flex;border:1px solid #e2e8f0;border-radius:99px;overflow:hidden"><button data-l="zh" class="btn g" style="border:0;border-radius:0;padding:6px 10px">中</button><button data-l="en" class="btn g" style="border:0;border-radius:0;padding:6px 10px">EN</button></span>
+<button class="btn" id="add">＋ <span>新增</span></button></header>
+<main>
+<div class="kpis" id="kpis"></div>
+<div class="tabs" id="tabs"><button data-v="day" class="on"></button><button data-v="style"></button><button data-v="import"></button></div>
+<div id="msg"></div>
+<div id="view"></div>
+</main>
+<script src="vendor/xlsx.full.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),E=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S=VRTSample;let LG=(()=>{try{return localStorage.getItem('vrt_lang')||'zh'}catch(_){return 'zh'}})();if(!/^(zh|en)$/.test(LG))LG='zh';
+const T=(zh,en)=>LG==='zh'?zh:en;
+const kindN=k=>{const x=S.KIND[k]||S.KIND.other;return x[1]+' '+(LG==='zh'?x[2]:x[3])};const kindC=k=>(S.KIND[k]||S.KIND.other)[4];
+const staN=s=>{const x=S.STA[s];return x?(LG==='zh'?x[1]:x[2]):''};const staC=s=>(S.STA[s]||S.STA.hold)[3];
+const today=()=>S.ymd();const ym=()=>today().slice(0,7);
+let VIEW='day',KF='all',FK='',FM='',Q=decodeURIComponent((location.hash.match(/q=([^&]+)/)||[])[1]||'');
+function msg(t,ok){$('msg').innerHTML=t?`<span style="color:${ok===false?'var(--red)':'var(--grn)'}">${t}</span>`:''}
+const styleLink=s=>String(s||'').split(/([,，、;；\/]+)/).map(p=>/[A-Z0-9]{3,}/i.test(p)?`<span class="vl" data-vk="style" data-vv="${E(p.trim())}" title="${T('開款式卡','Open style card')}">${E(p.trim())}</span>`:E(p)).join('');
+function rows(){return S.rows().slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(a.style).localeCompare(String(b.style)))}
+function ph(r){try{const s=window.VRTPhotos?VRTPhotos.summary('sample',r.id):null;return s||{total:0}}catch(_){return {total:0}}}
+const isMk=r=>r.kind==='marker'||r.mkLen||r.mkEff;
+function filtered(){const q=Q.trim().toUpperCase(),qk=S.nk(Q);return rows().filter(r=>(KF==='all'||(KF==='month'&&String(r.date).startsWith(ym()))||(KF==='doing'&&/doing|redo/.test(r.status))||(KF==='mk'&&isMk(r))||(KF==='noph'&&!ph(r).total))
+  &&(!FK||r.kind===FK)&&(!FM||String(r.date).startsWith(FM))&&(!q||[r.style,r.cust,r.color,r.size,r.maker,r.fabric,r.remarks,r.id].join(' ').toUpperCase().includes(q)||(qk.length>=4&&S.nk(r.style).startsWith(qk))))}
+function kpis(){const R=rows(),M=R.filter(r=>String(r.date).startsWith(ym()));
+  const k=[['all',T('全部記錄','All records'),R.length,R.length?R[R.length-1].date+' ～':''],['month',T('本月','This month'),M.length,M.reduce((a,r)=>a+(+r.qty||0),0)+' '+T('件','pcs')],['doing',T('進行中／要修改','In progress / revise'),R.filter(r=>/doing|redo/.test(r.status)).length],['mk',T('馬克排版','Markers'),R.filter(isMk).length],['noph',T('還沒附圖','No photo / layout'),R.filter(r=>!ph(r).total).length]];
+  $('kpis').innerHTML=k.map(x=>`<div class="kpi ${KF===x[0]?'on':''}" data-k="${x[0]}"><b style="color:${x[0]==='doing'&&x[2]?'var(--amb)':x[0]==='noph'&&x[2]?'var(--amb)':'var(--ink)'}">${x[2]}</b><small>${x[1]}${x[3]?' · '+x[3]:''}</small></div>`).join('');
+  document.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>{KF=KF===d.dataset.k?'all':d.dataset.k;VIEW='day';render()})}
+function card(r){const p=ph(r),t=p.cover;return `<div class="it" data-id="${E(r.id)}"><div class="th">${t?`<img src="${E(t)}" alt="">`:(S.KIND[r.kind]||S.KIND.other)[1]}</div><div class="t">
+  <span class="tag" style="background:${kindC(r.kind)}">${E(kindN(r.kind))}</span> ${r.status?`<span class="tag" style="background:${staC(r.status)}">${E(staN(r.status))}</span>`:''}${p.total?` <small style="display:inline">📷 ${p.total}</small>`:''}
+  <b>${r.style?styleLink(r.style):'—'} <span style="font-weight:500;color:var(--mut)">${E([r.color,r.size].filter(Boolean).join(' / '))}</span></b>
+  <small>${E([r.cust,r.maker,r.fabric].filter(Boolean).join(' · '))}</small>${S.mkLine(r)?`<small>📐 ${E(S.mkLine(r))}</small>`:''}${r.remarks?`<small>${E(r.remarks)}</small>`:''}</div>
+  <div class="q">${E(r.qty||'')}<small>${r.qty?T('件','pcs'):''}</small></div></div>`}
+function bind(){document.querySelectorAll('.it[data-id]').forEach(d=>d.onclick=e=>{if(e.target.closest('.vl'))return;detail(S.all().find(r=>r.id===d.dataset.id))})}
+function filters(){const all=rows();const months=[...new Set(all.map(r=>String(r.date).slice(0,7)).filter(Boolean))].sort().reverse();const cnt=k=>all.filter(r=>r.kind===k).length;
+  return `<div class="chips"><button data-c="" class="${FK?'':'on'}">${T('全部','All')} ${all.length}</button>${S.KINDS.filter(k=>cnt(k[0])||k[0]!=='other').map(k=>`<button data-c="${k[0]}" class="${FK===k[0]?'on':''}">${E(kindN(k[0]))} ${cnt(k[0])}</button>`).join('')}</div>
+  <div class="flt"><input id="q" placeholder="🔍 ${T('搜尋款號、客戶、顏色、樣品師…','Search style, buyer, colour, maker…')}" value="${E(Q)}"><select id="fm"><option value="">${T('全部月份','All months')}</option>${months.map(m=>`<option ${FM===m?'selected':''}>${m}</option>`).join('')}</select><button class="btn g" id="clr">${T('清除','Clear')}</button></div>`}
+function bindF(){document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{FK=b.dataset.c;render()});$('fm').onchange=e=>{FM=e.target.value;render()};$('clr').onclick=()=>{Q='';FK='';FM='';KF='all';history.replaceState(null,'',location.pathname);render()};
+  $('q').oninput=e=>{Q=e.target.value;clearTimeout(window._qt);window._qt=setTimeout(()=>{const p=$('q').selectionStart;render();$('q').focus();try{$('q').setSelectionRange(p,p)}catch(_){}},300)}}
+function empty(){return `<div class="box"><b>${T('還沒有任何打樣／馬克記錄','No sample or marker records yet')}</b><p class="note">${T('三種方式：① 右上「＋ 新增」一筆一筆登記（手機可以直接拍排版圖）；② 「📥 匯入」下載 Excel 範本，樣品組每天填好放回來（會先預覽，確認才寫入）；③ 把現有的打樣表交給 Claude 整理匯入。','① ＋ New, one by one (take a photo of the marker on the phone); ② 📥 Import the daily Excel (preview first); ③ give an existing sheet to Claude.')}</p><p class="note">${T('款號會自動連到款式卡；款式卡上也會出現這一款的打樣與馬克記錄。','Style numbers link to the style card, and the style card shows these records.')}</p></div>`}
+function dayView(){const R=filtered(),all=rows();let h=filters();if(!all.length)h+=empty();else if(!R.length)h+=`<p class="note">${T('沒有符合的記錄。','No matching records.')}</p>`;
+  let d='';R.forEach(r=>{if(r.date!==d){if(d)h+='</div>';d=r.date;const g=R.filter(x=>x.date===d);h+=`<div class="day">📅 ${E(d)} <small>${g.length} ${T('筆','records')} · ${g.reduce((a,x)=>a+(+x.qty||0),0)} ${T('件','pcs')}${g.filter(isMk).length?' · 📐 '+g.filter(isMk).length:''}</small></div><div class="grid">`}h+=card(r)});if(d)h+='</div>';
+  $('view').innerHTML=h;bindF();bind()}
+function styleView(){const R=filtered();const G=new Map();R.forEach(r=>{const k=String(r.style||'—').trim().toUpperCase();let a=G.get(k);if(!a)G.set(k,a={style:r.style||'—',cust:r.cust,rows:[]});a.rows.push(r);if(!a.cust&&r.cust)a.cust=r.cust});
+  const L=[...G.values()].sort((a,b)=>String(b.rows[0].date).localeCompare(String(a.rows[0].date)));
+  let h=filters()+(L.length?`<div class="tw"><table class="st"><thead><tr><th>${T('款號','Style')}</th><th>${T('客戶','Buyer')}</th><th>${T('打樣','Samples')}</th><th>${T('件數','Pcs')}</th><th>📐 ${T('馬克','Markers')}</th><th>${T('最新利用率','Latest eff.')}</th><th>${T('最近','Latest')}</th><th>${T('狀況','Status')}</th></tr></thead><tbody>${L.map(g=>{const mk=g.rows.filter(isMk),last=g.rows[0],eff=mk.find(r=>r.mkEff);return `<tr data-s="${E(g.style)}" style="cursor:pointer"><td>${styleLink(g.style)}</td><td>${E(g.cust||'')}</td><td class="n">${g.rows.filter(r=>r.kind!=='marker').length}</td><td class="n">${g.rows.reduce((a,r)=>a+(+r.qty||0),0)||''}</td><td class="n">${mk.length||''}</td><td class="n">${eff?E(String(eff.mkEff).replace(/%$/,''))+'%':''}</td><td>${E(last.date)} ${E(kindN(last.kind))}</td><td>${last.status?`<span class="tag" style="background:${staC(last.status)}">${E(staN(last.status))}</span>`:''}</td></tr>`}).join('')}</tbody></table></div>`:empty());
+  $('view').innerHTML=h;bindF();document.querySelectorAll('tr[data-s]').forEach(tr=>tr.onclick=e=>{if(e.target.closest('.vl'))return;Q=tr.dataset.s;VIEW='day';render()})}
+/* ── Excel 匯入（先預覽，確認才寫入）── */
+const HMAP=[['date',/^(日期|DATE|打樣日|做樣日)/i],['kind',/^(種類|類別|樣品種類|TYPE|KIND|SAMPLE\s*TYPE)/i],['cust',/^(客戶|CUSTOMER|BUYER)/i],['style',/^(款號|款式|STYLE)/i],['color',/^(顏色|COLOU?R)/i],['size',/^(尺寸|SIZE)/i],
+ ['qty',/^(數量|件數|QTY|PCS)/i],['maker',/^(樣品師|師傅|車工|負責人|MAKER|BY)/i],['status',/^(狀況|狀態|STATUS)/i],['fabric',/^(布料|主布|FABRIC)/i],['mkLen',/^(馬克長|排版長|MARKER\s*LEN|長度|LENGTH)/i],['mkWidth',/^(幅寬|布幅|WIDTH)/i],
+ ['mkEff',/^(利用率|使用率|EFF|EFFICIENCY|MARKER\s*EFF)/i],['mkRatio',/^(配比|尺碼配比|RATIO|SIZE\s*RATIO)/i],['mkLayers',/^(層數|LAYERS|PLY)/i],['hours',/^(工時|HOURS|分鐘|MIN)/i],['due',/^(交樣日|需求日|DUE|DEADLINE)/i],['remarks',/^(備註|說明|REMARKS?|NOTE)/i],['id',/^(編號|ID|NO\.?)$/i]];
+function findKind(v){v=String(v||'').toUpperCase();if(!v)return '';if(/MARK|馬克|排版|嘜/.test(v))return 'marker';if(/PP|產前|PRE.?PROD/.test(v))return 'pp';if(/FIT|SIZE|尺寸|試穿/.test(v))return 'fit';if(/SMS|SHIP|船|SALES|銷售|TOP/.test(v))return 'sms';if(/PROD|生產|大貨/.test(v))return 'prod';if(/PROTO|初|打樣|DEV|開發/.test(v))return 'proto';return 'other'}
+function findSta(v){v=String(v||'').toUpperCase();if(!v)return '';if(/APPROV|核可|OK|PASS/.test(v))return 'ok';if(/REVIS|REDO|改|REJECT|退/.test(v))return 'redo';if(/SENT|寄|送/.test(v))return 'sent';if(/HOLD|停/.test(v))return 'hold';if(/DOING|PROG|進行|做中/.test(v))return 'doing';if(/DONE|完成|好/.test(v))return 'done';return ''}
+function toDate(v){v=String(v||'').trim();if(!v)return '';if(/^\d{5}$/.test(v)){const d=new Date(Math.round((+v-25569)*864e5));return d.toISOString().slice(0,10)}let m=v.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m=v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')}m=v.match(/^(\d{1,2})[\/.](\d{1,2})$/);if(m)return today().slice(0,4)+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');return ''}
+const HD=['Date 日期','Type 種類','Customer 客戶','Style 款號','Colour 顏色','Size 尺寸','Qty 數量','Maker 樣品師','Status 狀況','Fabric 布料','Marker length 馬克長','Width 幅寬','Efficiency 利用率%','Size ratio 配比','Layers 層數','Hours 工時','Due 交樣日','Remarks 備註','ID 編號'];
+const toRow=r=>[r.date,(S.KIND[r.kind]||S.KIND.other)[2],r.cust,r.style,r.color,r.size,r.qty,r.maker,staN(r.status),r.fabric,r.mkLen,r.mkWidth,r.mkEff,r.mkRatio,r.mkLayers,r.hours,r.due,r.remarks,r.id];
+function importView(){$('view').innerHTML=`<div class="box"><b>📥 ${T('Excel 匯入／匯出','Excel import / export')}</b><p class="note">${T('一列一筆：日期、種類（打樣／尺寸樣／PP／船樣／生產記錄／馬克）、客戶、款號、顏色、尺寸、數量、樣品師、狀況；馬克另填馬克長、幅寬、利用率、配比、層數。同一天＋同種類＋同款號＋同顏色＋同尺寸會更新同一筆，重匯不會重複。先預覽，按確認才寫入雲端。','One row per record. Same date + type + style + colour + size updates the same record, so re-importing does not duplicate. Preview first; nothing is written until you confirm.')}</p><p class="note">${T('排版圖／照片：匯入後打開那一筆按「📷 加照片」或「📎 加 PDF」（PDF 會轉成圖）。','Layout images: open the record and add a photo or PDF.')}</p>
+  <button class="btn g" id="tpl">⬇️ ${T('下載 Excel 範本','Download template')}</button> <button class="btn g" id="exp">⬇️ ${T('匯出目前清單','Export current list')}</button><br><br><input type="file" id="imf" accept=".xlsx,.xls,.csv"><div id="imp"></div></div>`;
+  const dl=(aoa,fn)=>{const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=HD.map(()=>({wch:14}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Samples');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['種類 Type','說明']].concat(S.KINDS.map(k=>[k[2],k[3]])).concat([[],['狀況 Status']]).concat(S.STATUS.map(s=>[s[1],s[2]]))),'選項 Options');XLSX.writeFile(wb,fn)};
+  $('tpl').onclick=()=>dl([HD,[today(),'打樣（初樣）','(客戶)','(款號)','NAVY','M','2','(樣品師)','完成','','','','','','','3','','',''],[today(),'馬克排版','(客戶)','(款號)','','S-XL','','(排版員)','完成','(布號)','5.82 m','150 cm','86.5','S1 M2 L2 XL1','40','','','','']],'VRT_Sample_Template.xlsx');
+  $('exp').onclick=()=>dl([HD].concat(rows().map(toRow)),'VRT_Sample_'+today()+'.xlsx');
+  $('imf').onchange=async e=>{const f=e.target.files[0];if(!f)return;let recs=[],bad=0;try{const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});for(const sn of wb.SheetNames){if(/選項|OPTION/i.test(sn))continue;const a=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:''});
+      const hi=a.slice(0,15).findIndex(r=>r.filter(c=>HMAP.some(([,re])=>re.test(String(c).trim()))).length>=3);if(hi<0)continue;
+      const map=a[hi].map(h=>{const m=HMAP.find(([,re])=>re.test(String(h).trim()));return m?m[0]:null});
+      a.slice(hi+1).forEach(r=>{const o={};map.forEach((k,i)=>{if(k&&String(r[i]).trim()!==''&&o[k]==null)o[k]=String(r[i]).trim()});if(!o.style&&!o.remarks&&!o.mkLen)return;
+        o.date=toDate(o.date);if(!o.date){bad++;return}o.kind=findKind(o.kind)||(o.mkLen||o.mkEff?'marker':'proto');o.status=findSta(o.status)||'done';if(o.qty)o.qty=+String(o.qty).replace(/[^\d.]/g,'')||'';if(o.mkEff)o.mkEff=String(o.mkEff).replace(/%/,'').trim();
+        if(o.id&&!S.all().some(x=>x.id===o.id))delete o.id;recs.push(o)})}}catch(x){$('imp').innerHTML='<p style="color:var(--red)">'+T('讀不到：','Cannot read: ')+E(x.message||x)+'</p>';return}
+    if(!recs.length){$('imp').innerHTML='<p style="color:var(--red)">'+T('找不到資料（表頭要有 日期／款號／種類／數量 這類欄位，日期要看得懂）。','No rows found (need headers like Date / Style / Type / Qty).')+'</p>';return}
+    let all=S.all().slice();const before=all.length;recs.forEach(r=>{all=S.upsert(r,all)});const nNew=all.length-before,nUpd=recs.length-nNew;
+    $('imp').innerHTML=`<p><b>${recs.length}</b> ${T('列','rows')}（${T('新增','new')} ${nNew}、${T('更新','update')} ${nUpd}${bad?`、<span style="color:var(--red)">${T('日期看不懂略過','skipped (bad date)')} ${bad}</span>`:''}）</p><div class="tw"><table class="st"><thead><tr><th>${T('日期','Date')}</th><th>${T('種類','Type')}</th><th>${T('款號','Style')}</th><th>${T('顏色／尺寸','Colour / size')}</th><th>${T('數量','Qty')}</th><th>${T('樣品師','Maker')}</th><th>📐</th></tr></thead><tbody>`+recs.slice(0,60).map(r=>`<tr><td>${E(r.date)}</td><td>${E(kindN(r.kind))}</td><td>${E(r.style||'')}</td><td>${E([r.color,r.size].filter(Boolean).join(' / '))}</td><td class="n">${E(r.qty||'')}</td><td>${E(r.maker||'')}</td><td>${E(S.mkLine(r))}</td></tr>`).join('')+`</tbody></table></div>${recs.length>60?`<p class="note">…${T('另有','and')} ${recs.length-60} ${T('列','more rows')}</p>`:''}<button class="btn" id="impgo" style="margin-top:8px;width:100%">✅ ${T('確認匯入並上傳雲端','Confirm import and upload')}</button>`;
+    $('impgo').onclick=()=>push(all,T('匯入完成 ✅ ','Imported ✅ ')+recs.length)}}
+/* ── 一筆的詳細卡：資料、照片／排版圖、PDF ── */
+function detail(r){if(!r)return;const ov=document.createElement('div');ov.className='ov';const row=(k,v)=>v?`<dt>${k}</dt><dd>${v}</dd>`:'';
+  ov.innerHTML=`<div><div style="display:flex;gap:8px;align-items:center"><b style="font-size:17px;flex:1">${E(kindN(r.kind))} · ${r.style?styleLink(r.style):'—'}</b><button class="btn g s" id="dx">✕</button></div>
+   <dl class="dl" style="margin-top:8px">${row(T('日期','Date'),E(r.date))}${row(T('編號','ID'),E(r.id))}${row(T('客戶','Buyer'),E(r.cust))}${row(T('顏色／尺寸','Colour / size'),E([r.color,r.size].filter(Boolean).join(' / ')))}${row(T('數量','Qty'),E(r.qty))}${row(T('樣品師','Maker'),E(r.maker))}${row(T('狀況','Status'),E(staN(r.status)))}${row(T('布料','Fabric'),E(r.fabric))}${row(T('馬克','Marker'),E(S.mkLine(r)))}${row(T('工時','Hours'),E(r.hours))}${row(T('交樣日','Due'),E(r.due))}${row(T('備註','Remarks'),E(r.remarks))}</dl>
+   <div style="margin-top:10px"><b>📷 ${T('排版圖／照片','Marker layout / photos')}</b> <label class="btn g s" style="display:inline-block">📎 ${T('加 PDF（轉成圖）','Add PDF (as images)')}<input type="file" id="dpdf" accept=".pdf" style="display:none"></label><div id="dph"></div></div>
+   <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap"><button class="btn g" id="dedit">✏️ ${T('修改','Edit')}</button><button class="btn g" id="dcopy">📄 ${T('複製成新的一筆','Duplicate')}</button></div></div>`;
+  document.body.appendChild(ov);const close=()=>ov.remove();ov.onclick=e=>{if(e.target===ov)close()};ov.querySelector('#dx').onclick=close;
+  const name=[r.date,kindN(r.kind),r.style,r.color].filter(Boolean).join(' · ');
+  try{VRTPhotos.mount(ov.querySelector('#dph'),{domain:'sample',key:r.id,name,tip:T('馬克：拍整張排版圖（看得到尺碼與長度）或放排版軟體匯出的圖／PDF；打樣：拍正面、背面、細節。','Marker: the whole layout (sizes and length visible) or the exported image/PDF; sample: front, back, details.')})}catch(e){ov.querySelector('#dph').innerHTML='<p class="note">'+T('照片元件沒載入','Photo module not loaded')+'</p>'}
+  ov.querySelector('#dpdf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{msg(T('PDF 轉圖中…','Converting PDF…'));const files=await pdfToImages(f);await VRTPhotos.add(files,{domain:'sample',key:r.id,name,caption:f.name});msg(T('已加入 ','Added ')+files.length+T(' 頁',' pages'))}catch(x){msg(T('PDF 讀不到：','PDF failed: ')+(x.message||x),false)}};
+  ov.querySelector('#dedit').onclick=()=>{close();form(r)};ov.querySelector('#dcopy').onclick=()=>{close();const n=Object.assign({},r,{date:today()});delete n.id;form(n)}}
+async function pdfToImages(file){if(!window.pdfjsLib){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=res;s.onerror=()=>rej(new Error('pdf.js'));document.head.appendChild(s)})}
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';const doc=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,out=[];
+  for(let p=1;p<=Math.min(doc.numPages,8);p++){const pg=await doc.getPage(p),v=pg.getViewport({scale:1}),vp=pg.getViewport({scale:Math.min(2,1600/Math.max(v.width,v.height))});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.82));out.push(new File([b],file.name.replace(/\.pdf$/i,'')+'_p'+p+'.jpg',{type:'image/jpeg'}))}return out}
+/* ── 新增／修改 ── */
+function form(r){r=r||{date:today(),kind:FK||'proto',status:'done'};VIEW='form';document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('on'));
+  const sel=(k,opts,v)=>`<select data-f="${k}">${opts.map(o=>`<option value="${E(o[0])}" ${String(v)===String(o[0])?'selected':''}>${E(o[1])}</option>`).join('')}</select>`;
+  const inp=(k,lab,cls,ph,type)=>`<label class="${cls||''}">${lab}<input data-f="${k}" ${type?`type="${type}"`:''} value="${E(r[k]==null?'':r[k])}" placeholder="${E(ph||'')}"></label>`;
+  const styles=[...new Set(S.rows().map(x=>x.style).filter(Boolean))].slice(0,300);
+  $('view').innerHTML=`<div class="box"><b>${r.id?'✏️ '+T('修改','Edit')+' '+E(r.id):'＋ '+T('新增打樣／馬克記錄','New sample / marker record')}</b>
+   <div class="form" style="margin-top:8px">${inp('date',T('日期','Date'),'','', 'date')}<label>${T('種類','Type')}${sel('kind',S.KINDS.map(k=>[k[0],kindN(k[0])]),r.kind)}</label><label>${T('狀況','Status')}${sel('status',S.STATUS.map(s=>[s[0],staN(s[0])]),r.status)}</label>${inp('qty',T('數量（件）','Qty (pcs)'),'','','number')}
+   <label class="h">${T('款號（可多款，用逗號分開）','Style (comma-separate several)')}<input data-f="style" list="sty" value="${E(r.style||'')}"><datalist id="sty">${styles.map(s=>`<option value="${E(s)}">`).join('')}</datalist></label>${inp('cust',T('客戶','Buyer'))}${inp('maker',T('樣品師／排版員','Maker'))}
+   ${inp('color',T('顏色','Colour'))}${inp('size',T('尺寸','Size'))}${inp('fabric',T('布料','Fabric'))}${inp('due',T('交樣日','Due'),'','','date')}
+   <fieldset><legend>📐 ${T('馬克排版（有排版才填）','Marker (only if there is one)')}</legend>${inp('mkLen',T('馬克長','Length'),'','5.82 m')}${inp('mkWidth',T('幅寬','Width'),'','150 cm')}${inp('mkEff',T('利用率 %','Efficiency %'),'','86.5')}${inp('mkRatio',T('尺碼配比','Size ratio'),'','S1 M2 L2 XL1')}${inp('mkLayers',T('層數','Layers'),'','40')}${inp('hours',T('工時','Hours'))}</fieldset>
+   <label class="w">${T('備註（修改點、客戶意見…）','Remarks (changes, buyer comments…)')}<textarea data-f="remarks" rows="2">${E(r.remarks||'')}</textarea></label>
+   <div class="w" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn g" id="cancel">${T('取消','Cancel')}</button><button class="btn" id="save" style="flex:1">💾 ${T('儲存並上傳雲端','Save & upload')}</button>${r.id?`<button class="btn g" id="del" style="color:var(--red)">${T('刪除','Delete')}</button>`:''}</div></div>
+   <p class="note">${T('存好之後打開這一筆就可以加排版圖／照片。','After saving, open the record to add the layout image / photos.')}</p></div>`;
+  scrollTo(0,0);$('cancel').onclick=()=>{VIEW='day';render()};
+  const collect=()=>{const o=Object.assign({},r);document.querySelectorAll('[data-f]').forEach(x=>o[x.dataset.f]=x.type==='number'?(x.value===''?'':+x.value):x.value.trim());return o};
+  $('save').onclick=async()=>{const o=collect();if(!o.date){msg(T('請填日期','Fill the date'),false);return}if(!o.style&&!o.remarks){msg(T('請填款號（或備註）','Fill the style (or remarks)'),false);return}const all=S.upsert(o,S.all());const id=o.id||all[all.length-1].id;if(await push(all,T('已儲存 ✅ ','Saved ✅ ')+id)){const x=S.all().find(z=>z.id===id);if(x)detail(x)}};
+  if($('del'))$('del').onclick=async()=>{if(!confirm(T('刪除這一筆？（標記為已刪除，不會真的消失）','Delete this record? (marked deleted)')))return;await push(S.upsert(Object.assign(collect(),{deleted:true}),S.all()),T('已刪除','Deleted'))}}
+async function push(all,ok){msg(T('上傳雲端中…','Uploading…'));$('view').style.opacity=.5;try{await S.save(all,t=>msg(t));msg(ok);if(VIEW==='form')VIEW='day';render();return true}catch(e){msg(T('上傳失敗：','Upload failed: ')+(e.message||e),false);return false}finally{$('view').style.opacity=1}}
+function render(){kpis();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));if(VIEW==='style')styleView();else if(VIEW==='import')importView();else if(VIEW==='day')dayView()}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;msg('');render()});
+function paintL(){document.querySelectorAll('#lng button').forEach(b=>{const on=b.dataset.l===LG;b.style.background=on?'#a21caf':'#fff';b.style.color=on?'#fff':'#0f172a'});
+  const tb=[['📅 每日記錄','📅 Daily log'],['📐 依款式','📐 By style'],['📥 匯入／匯出','📥 Import / export']];document.querySelectorAll('#tabs button').forEach((b,i)=>b.textContent=T(...tb[i]));
+  $('ttl').textContent=T('樣品組打樣＋馬克排版','Sample room & markers');$('add').lastChild.textContent=T('新增','New')}
+document.querySelectorAll('#lng button').forEach(b=>b.onclick=()=>{LG=b.dataset.l;try{localStorage.setItem('vrt_lang',LG)}catch(_){}paintL();render()});paintL();
+$('add').onclick=()=>form();
+S.on(()=>{if(VIEW!=='form')render()});if(window.VRTPhotos&&VRTPhotos.on)VRTPhotos.on(()=>{if(VIEW!=='form')render()});render();
+S.load().then(()=>{if(VIEW!=='form')render();if(!S.cloudOk())msg(T('⚠️ 這次沒讀到雲端（顯示本機快取）；上傳會先暫停，請確認網路後重新整理。','⚠️ Cloud not reached (showing local cache); uploads are paused until it is.'),false)});
+window.addEventListener('hashchange',()=>{const m=location.hash.match(/q=([^&]+)/);if(m){Q=decodeURIComponent(m[1]);VIEW='day';render()}});
+</script></body></html>

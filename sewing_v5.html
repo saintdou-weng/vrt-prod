@@ -3755,7 +3755,7 @@ function renderDaily(){
         <td>${diff!==null?`<span style="color:${diff>=0?"#059669":"#dc2626"};font-weight:700;font-family:monospace">${diff>=0?"+":""}${diff}%</span>`:"-"}</td>
         <td class="mono" style="color:#0369a1">${pp}</td>
         <td class="mono">${l.cartons>0?Math.round(l.cartons*10)/10:"-"}</td>
-        <td class="mono">${l.styles.length||"-"}</td>
+        <td style="font-size:11px;max-width:200px">${(()=>{const u=[...new Set(l.styles.map(x=>String(x.styleNo||"").trim()).filter(Boolean))];if(!u.length)return "-";const esc=v=>v.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));/* v4.53：款號直接列出、可點開款式卡（原本只有數字，點了就連抓不到） */return `<b class="mono">${u.length}</b> `+u.slice(0,4).map(v=>`<span class="vl" data-vk="style" data-vv="${esc(v)}" title="點一下看款式卡">${esc(v)}</span>`).join(", ")+(u.length>4?` +${u.length-4}`:"")})()}</td>
         <td style="font-size:11px;color:#b91c1c;font-weight:600">${iTxt||"-"}</td>
         <td style="font-size:11px;color:#374151;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${rTxt.replace(/"/g,"&quot;")}">${rTxt||"-"}</td>
         <td><button onclick="deleteLineDay('${_dDate}','${l.lineNo}')" title="刪除 ${_dDate} ${l.lineNo} 的全部記錄"

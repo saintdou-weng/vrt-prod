@@ -6,11 +6,11 @@
 (function(g){
 'use strict';
 if(g.VRTPhotos&&g.VRTPhotos.version)return;
-const VERSION='1.4.1',TOOL='item_photos',DBN='VRT_ItemPhotos';
+const VERSION='1.5.1',TOOL='item_photos',DBN='VRT_ItemPhotos';
 const DOMAINS=[
  ['fabric','🧶','布料','Fabric'],['accessory','🧷','輔料','Accessories'],['parts','🔩','零件','Spare parts'],['needle','🪡','針','Needles'],['defect','🔍','瑕疵','Defects'],
  ['customer','👥','客戶','Customers'],['style','📐','款式／BOM','Styles / BOM'],['ship','🚢','成品／出貨','FG / Shipping'],
- ['line','🧵','線別／組別','Lines / Teams'],['machine','⚙️','機台','Machines'],['tool','🧰','器具／工具','Equipment / tools'],['other','📦','其他','Other']];
+ ['line','🧵','線別／組別','Lines / Teams'],['machine','⚙️','機台','Machines'],['tool','🧰','器具／工具','Equipment / tools'],['sample','🧪','打樣／馬克','Samples / markers'],['other','📦','其他','Other']];
 const DOM=Object.fromEntries(DOMAINS.map(d=>[d[0],d]));
 const E=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normKey=k=>String(k==null?'':k).replace(/[​﻿]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
