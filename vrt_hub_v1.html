@@ -169,7 +169,7 @@ body.vrt-focus>.hdr,body.vrt-focus>.tabs,body.vrt-focus>a[href^="portal_v2.html"
 <script>
 (function(){
 'use strict';
-const V='4.53.0';
+const V='4.54.0';
 /* ── 8 個入口（Paul 11/11 核可）── 每個分頁就是原本那一頁 */
 const HUBS=[
  {id:'overview',ic:'📊',name:'總覽＋報告',tabs:[['prod','生產總覽','production_v4.html'],['weekly','週報產生器','vrt_production_weekly_report_generator_v3.html'],['cust','客戶統計','vrt_customer_statistics_control_center_v1.html'],['erp','ERP 對照','vrt_erp_link_v1.html']]},
@@ -573,18 +573,45 @@ function sewerGroups(){return once('sewer',async()=>{const db=await hrIdb();cons
   return out.sort((a,b)=>String(a.line).localeCompare(String(b.line),'en',{numeric:true})||a.title.localeCompare(b.title))})}
 async function hrPhoto(pid){const db=await hrIdb();return db?await hrGet(db,'photo|'+pid):null}
 
+/* v4.54（Paul 11/27「照妳的」）輔料 ↔ 款式：平台 BOM 的副料沒有料號，改讀這台裝置 PSJERP 已下載的 ERP 資料（同網站、唯讀、不上傳）：
+   · ERP 訂單 BOM（W_COD550，只有品名）＋ ERP 採購單價（W_CPU795，有料號＋品名）→ 用品名把 BOM 的副料對回料號（2024 起 99.7% 對得到）
+   · 每個料號：哪些款在用（近 24 個月）、每年用量、採購單價與每年採購金額。結果存在這台裝置的快取（12 小時），第一次約 10 秒。 */
+const HC={db:null,open(){return this.db||(this.db=new Promise(res=>{try{const q=indexedDB.open('vrt_hub_cache',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)}catch(_){res(null)}}))},
+ async get(k){const d=await this.open();if(!d)return null;return new Promise(r=>{try{const t=d.transaction('kv').objectStore('kv').get(k);t.onsuccess=()=>r(t.result||null);t.onerror=()=>r(null)}catch(_){r(null)}})},
+ async set(k,v){const d=await this.open();if(!d)return;return new Promise(r=>{try{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>r();t.onerror=()=>r()}catch(_){r()}})}};
+function erpIdb(){return new Promise(res=>{try{const q=indexedDB.open('psjerp');q.onupgradeneeded=()=>{try{q.transaction.abort()}catch(_){}};q.onsuccess=()=>res(q.result);q.onerror=()=>res(null);q.onblocked=()=>res(null)}catch(_){res(null)}})}
+function erpTrim(accPairs){return once('erptrim',async()=>{const c=await HC.get('erptrim2');if(c&&c.at&&Date.now()-c.at<12*3600e3)return c.v;
+  const db=await erpIdb();if(!db||!db.objectStoreNames.contains('kv')){try{db&&db.close()}catch(_){}return c?c.v:null}
+  const get=k=>new Promise(r=>{try{const t=db.transaction('kv').objectStore('kv').get(k);t.onsuccess=()=>{let v=t.result;if(typeof v==='string'){try{v=JSON.parse(v)}catch(_){v=null}}r(v)};t.onerror=()=>r(null)}catch(_){r(null)}});
+  const [bom,pr]=[await get('db_real_v5#bom'),await get('db_real_v5#price')];try{db.close()}catch(_){}
+  if(!Array.isArray(bom)||!bom.length)return c?c.v:null;const N=normK,M=new Map(),add=(n,code)=>{n=N(n);code=String(code||'').trim().toUpperCase();if(!n||!code)return;let x=M.get(n);if(!x){x=new Set();M.set(n,x)}x.add(code)};
+  (pr||[]).forEach(r=>add(r.material,r.material_no));(accPairs||[]).forEach(a=>add(a[1],a[0]));
+  const since=addD(ymdToday(),-730),idx={};let asof='';
+  for(const r of bom){if(r.type!=='trim'||!r.order_date)continue;if(r.order_date>asof)asof=r.order_date;const cs=M.get(N(r.material));if(!cs)continue;const amb=cs.size>1?1:0;
+    for(const code of cs){const o=idx[code]||(idx[code]={y:{},st:{}});const y=r.order_date.slice(0,4);o.y[y]=(o.y[y]||0)+(+r.total_use||0);
+      if(r.order_date>=since){const k=String(r.style||'').trim();if(!k)continue;const t=o.st[k]||(o.st[k]={s:k,c:r.cust||'',n:0,use:0,qty:0,last:'',cons:0,amb,u:r.unit||''});t.n++;t.use+=+r.total_use||0;t.qty+=+r.order_qty||0;if(r.order_date>t.last){t.last=r.order_date;t.cons=+r.cons||0;t.c=r.cust||t.c}}}}
+  const price={};(pr||[]).forEach(r=>{const code=String(r.material_no||'').trim().toUpperCase();if(!code||!r.purchase_date)return;const o=price[code]||(price[code]={y:{},last:null,n:0});const up=+r.unit_price||+r.price||0,q=+r.qty||0,y=r.purchase_date.slice(0,4);const yy=o.y[y]||(o.y[y]={q:0,a:0});yy.q+=q;yy.a+=q*up;o.n++;if(!o.last||r.purchase_date>o.last.d)o.last={d:r.purchase_date,p:up,cur:r.currency||'',sup:r.supplier||'',unit:r.unit||'',no:r.purchase_no||''}});
+  const out={};const codes=new Set((accPairs||[]).map(a=>String(a[0]).toUpperCase()));for(const code of codes){const o=idx[code],p=price[code];if(!o&&!p)continue;out[code]={y:o?o.y:{},st:o?Object.values(o.st).sort((a,b)=>b.use-a.use).slice(0,150):[],p:p||null}}
+  const v={asof,codes:out};await HC.set('erptrim2',{at:Date.now(),v});return v})}
+let ERPT,SMK=null;
 /* v4.53（Paul 11/27）輔料：哪些款在用（BOM 的用料文字裡有寫到這個料號就算） */
 function bomTexts(){return once('bomtxt',async()=>{const {rows}=await loadTool('bom').catch(()=>({rows:[]}));return rows.filter(r=>r&&r.styleNo&&Array.isArray(r.items)).map(r=>({style:String(r.styleNo).trim(),name:r.styleName||'',cust:r.customerCode||'',items:r.items.filter(Boolean).map(x=>({x,t:normK(Object.values(x).filter(v=>typeof v==='string'||typeof v==='number').join(' '))}))}))})}
-function accGroups(){return once('acc',async()=>{const BT=await bomTexts().catch(()=>[]);const {rows}=await loadTool('fabricstock',keepMonths(12));const acc=rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted);const last=acc.map(r=>r.snapshotDate).filter(Boolean).sort().pop()||'';
+function accGroups(){return once('acc',async()=>{const BT=await bomTexts().catch(()=>[]);const {rows}=await loadTool('fabricstock',keepMonths(12));
+  styleMaster().then(l=>{SMK=new Set(l.map(g=>String(g.key)))}).catch(()=>{});
+  {const pairs=[...new Map(rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted).map(r=>[String(r.itemCode).toUpperCase(),[r.itemCode,r.description||'']])).values()];try{ERPT=await erpTrim(pairs)}catch(_){ERPT=null}}const acc=rows.filter(r=>r&&r.stockType==='accessory'&&r.itemCode&&!r.deleted);const last=acc.map(r=>r.snapshotDate).filter(Boolean).sort().pop()||'';
   const now=acc.filter(r=>r.snapshotDate===last);const H=groupBy(acc,r=>nk(r.itemCode)),N=groupBy(now,r=>nk(r.itemCode));
   return [...N].map(([k,a])=>{const bal=sum(a,r=>r.balance),unit=(a[0]||{}).unit||'',desc=(a.find(r=>r.description)||{}).description||'',cat=(a.find(r=>r.category)||{}).category||'';const hist=H.get(k)||[];
     const trend=[...groupBy(hist,r=>r.snapshotDate)].sort((x,y)=>x[0].localeCompare(y[0])).map(([d,b])=>({label:d.slice(5),v:sum(b,r=>r.balance)}));
     const NK=normK(a[0].itemCode);const used=NK.length>=6?BT.map(b=>{const it=b.items.filter(i=>i.t.indexOf(NK)>=0);return it.length?{b,it}:null}).filter(Boolean):[];
-    return {key:k,kind:'輔料',title:a[0].itemCode,alt:desc,bal,cat:cat||'未分類',nUsed:used.length,sub:E([desc,cat].filter(Boolean).join(' · ')),search:[desc,cat,...a.map(r=>(r.colorName||'')+' '+(r.size||'')),...used.map(u=>u.b.style)].join(' '),
-     kpis:[[F(bal),'結存 '+unit+(last?'（'+last.slice(5)+'）':''),bal>0?'ok':'crit'],[String(a.length),'個顏色／尺寸'],[E(cat||'—'),'分類']],
+    const ex=ERPT&&ERPT.codes[String(a[0].itemCode).toUpperCase()]||null,lp=ex&&ex.p&&ex.p.last;
+    return {key:k,kind:'輔料',title:a[0].itemCode,alt:desc,bal,cat:cat||'未分類',nUsed:(ex?ex.st.length:0)||used.length,sub:E([desc,cat].filter(Boolean).join(' · ')),search:[desc,cat,...a.map(r=>(r.colorName||'')+' '+(r.size||'')),...used.map(u=>u.b.style)].join(' '),
+     kpis:[[F(bal),'結存 '+unit+(last?'（'+last.slice(5)+'）':''),bal>0?'ok':'crit'],[String(a.length),'個顏色／尺寸'],[E(cat||'—'),'分類']].concat(ex?[[String(ex.st.length),'款在用（近 2 年）'],[lp?F(lp.p,4)+' '+E(lp.cur):'—','最近採購單價']]:[]),
      detail:()=>`<h4>目前結存（${E(last)}）</h4>${table([['顏色',r=>E([r.colorCode,r.colorName].filter(Boolean).join(' '))],['尺寸',r=>E(r.size)],['期初',r=>F(r.opening,1),1],['結存',r=>`<b>${F(r.balance,1)}</b>`,1],['單位',r=>E(r.unit)]],a.slice().sort((x,y)=>(+y.balance||0)-(+x.balance||0)))}
       ${trend.length>1?`<h4>每次盤點的結存</h4>${CH.bars(trend)}`:''}
-      <h4>👕 哪些款在用（${used.length} 款）</h4>${used.length?table([['款號',u=>link('style',styleK(u.b.style),u.b.style)],['品名',u=>E(String(u.b.name).slice(0,28))],['客戶',u=>u.b.cust?link('customer',u.b.cust):''],['每件用量',u=>F(sum(u.it,i=>+i.x.qtyPcs||0),4),1],['單位',u=>E(u.it[0].x.unit||'')]],used):'<p class="note">BOM 裡還沒有寫到這個料號（很多 BOM 的副料只寫品名、沒寫料號，所以對不到；BOM 補上料號後這裡就會列出來）。</p>'}
+      ${ex?`<h4>👕 哪些款在用（近 2 年 ${ex.st.length} 款）</h4>${ex.st.length?table([['款號',t=>SMK&&SMK.has(styleK(t.s))?link('style',styleK(t.s),t.s):E(t.s)],['客戶',t=>t.c?link('customer',t.c):''],['訂單數',t=>F(t.n),1],['訂單件數',t=>F(t.qty),1],['用量合計',t=>`<b>${F(t.use,0)}</b>`,1],['每件用量',t=>F(t.cons,3),1],['單位',t=>E(t.u)],['最近下單',t=>E(t.last)],['',t=>t.amb?'<span class="tag warn">同名多料號</span>':'']],ex.st,150)+`<p class="note">來源：ERP 訂單 BOM（到 ${E(ERPT.asof)}）。ERP 的 BOM 只寫品名，這裡是用採購單上的「料號＋品名」對回來的；標「同名多料號」的是同一個品名有好幾個料號（多半是不同尺寸），那一列可能是其中一個。</p>`:'<p class="note">近 2 年的 ERP 訂單 BOM 沒有用到這個料號。</p>'}
+      <h4>📊 每年用量（ERP 訂單 BOM）</h4>${Object.keys(ex.y).length?CH.bars(Object.keys(ex.y).sort().map(y=>({label:y,v:Math.round(ex.y[y])}))):'<p class="note">—</p>'}
+      <h4>💵 採購單價（ERP 採購單）</h4>${ex.p?kv([['最近單價',F(lp.p,4)+' '+lp.cur+'／'+(lp.unit||'')],['最近採購日',lp.d],['供應商',lp.sup],['採購單號',lp.no],['採購筆數',F(ex.p.n)]])+CH.bars(Object.keys(ex.p.y).sort().map(y=>({label:y,v:Math.round(ex.p.y[y].a)})),{legend:'每年採購金額（數量×單價，'+E(lp.cur)+'）'}):'<p class="note">ERP 採購單裡沒有這個料號。</p>'}`:(ERPT===null?'<p class="note">⚠️ 這台裝置還沒有 PSJERP 的資料，所以看不到「哪些款在用、每年用量、採購單價」。在這台裝置先打開一次 PSJERP（等它同步完），再回來重新整理就有。</p>':'')}
+      ${ex?'':`<h4>👕 哪些款在用（${used.length} 款）</h4>`}${ex?'':used.length?table([['款號',u=>link('style',styleK(u.b.style),u.b.style)],['品名',u=>E(String(u.b.name).slice(0,28))],['客戶',u=>u.b.cust?link('customer',u.b.cust):''],['每件用量',u=>F(sum(u.it,i=>+i.x.qtyPcs||0),4),1],['單位',u=>E(u.it[0].x.unit||'')]],used):'<p class="note">BOM 裡還沒有寫到這個料號（很多 BOM 的副料只寫品名、沒寫料號，所以對不到；BOM 補上料號後這裡就會列出來）。</p>'}
       <p class="note">輔料的進出明細、編輯請到「布料／副料庫存」分頁的副料。</p>`}}).sort((a,b)=>b.bal-a.bal)})}
 REF.accessory=()=>accGroups().then(l=>addPh(l,'accessory'));
 const SPECS={
