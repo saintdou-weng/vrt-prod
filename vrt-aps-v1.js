@@ -55,8 +55,10 @@
     var KP = function (v) { return K(String(v || '').replace(/^\s*(ADI|PO)\s*[-#:]*/i, '')); };
     var fabPo = {}, fabSt = {};
     (data.fabric || []).forEach(function (f) { var arr = String(f.actual || f.eta || '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(arr)) return; var rec = { d: arr, real: !!f.actual };
-      var pos = [].concat(f.po || [], f.pos || []); pos.forEach(function (x) { var k = KP(x); if (!k) return; var o = fabPo[k] || (fabPo[k] = []); o.push(rec); });
-      if (f.style) { var ks = sk(f.style); if (ks) (fabSt[ks] || (fabSt[ks] = [])).push(rec); } });
+      /* 布料明細有寫款號的就按款等；寫 MIXED STYLES／沒寫款的才按客戶 PO 等（一張 ADI PO 有很多款，不能整張一起等） */
+      var hasSt = f.style && !/MIXED|RESPOND|^\s*$/i.test(String(f.style)); var pos = hasSt ? [] : [].concat(f.po || [], f.pos || []); pos.forEach(function (x) { var k = KP(x); if (!k) return; var o = fabPo[k] || (fabPo[k] = []); o.push(rec); });
+      var sts = [].concat(f.styles || [], f.style ? String(f.style).split(/[,;\/]+/) : []).map(function (x) { return String(x).trim(); }).filter(function (x) { return x && !/MIXED|RESPOND|^ALL$|TABLECLOTH|NAPKIN/i.test(x); });
+      sts.forEach(function (st) { var ks = sk(st); if (ks) (fabSt[ks] || (fabSt[ks] = [])).push(rec); }); });
     var cutSnap = {}, etdOf = {};
     (data.custDetails || []).forEach(function (r) { var ks = sk(r.style); if (!ks) return; cutSnap[ks] = (cutSnap[ks] || 0) + num(r.cuttingWip); var e = String(r.etd || '').slice(0, 10); if (/^\d{4}-/.test(e) && (!etdOf[ks] || e < etdOf[ks])) etdOf[ks] = e; });
     /* 某一款在 T 時要等的最晚到布日（T 以前已到的不算） */
