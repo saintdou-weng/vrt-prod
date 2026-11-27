@@ -31,3 +31,5 @@
 (function(){try{if(window.VRTLink||document.querySelector('script[src*="vrt-link-v1.js"]'))return;var s=document.createElement('script');s.src='vrt-link-v1.js?v=4.34.0';(document.head||document.documentElement).appendChild(s)}catch(e){}})();
 /* v4.47（Paul 11/22）每一頁上方都有 🎵 放鬆音樂的 ON/OFF 小開關（預設關）；程式共用 PSJERP 的 music.js，各平台同一份 */
 (function(){try{if(window.__VRT_MUSIC||document.querySelector('script[src*="/PSJERP/music.js"]'))return;var s=document.createElement('script');s.src='https://saintdou-weng.github.io/PSJERP/music.js?v=2.16.0&h='+Math.floor(Date.now()/36e5);s.defer=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
+
+/* legible：字與底色對比不足自動加深、卡片微浮（Paul 11/27）。一支檔案在 ac-admin/shared/legible.js */(function(){try{if(window.VRTLegible||document.querySelector('script[src*="legible.js"]'))return;var s=document.createElement("script");s.src="https://saintdou-weng.github.io/ac-admin/shared/legible.js?v=1.0.1";s.async=true;(document.head||document.documentElement).appendChild(s)}catch(e){}})();
