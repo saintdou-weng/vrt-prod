@@ -177,7 +177,8 @@ const HUBS=[
  {id:'style',ic:'📐',name:'款式',drill:'style',tabs:[['ie','IE／SMV','ie_smv_report_v2_1.html'],['bom','BOM＋成本','VRT_BOM_Management_v2_AI.html']]}, /* v4.44：拿掉「成本」分頁——它其實是 BOM 頁裡面的 Costing Sheet，單獨開沒有 BOM 資料（USD 0、ACC 月份空白），跟 BOM 重複 */
  {id:'fabric',ic:'🧶',name:'布料',drill:'fabric',tabs:[['stock','布料／副料庫存','vrt_fabric_stock_control_v1.html'],['inbound','布料進倉','vrt_fabric_delivery_greige_center_v1.html']]},
  {id:'ship',ic:'🚢',name:'成品與出貨',drill:'ship',tabs:[['fg','成品庫存','VRT_FG_Inventory_Management_v1.html'],['shipping','出貨進度','shipping_v2.html'],['month','月出貨','vrt_monthly_shipping_control_center_v1.html']]},
- {id:'parts',ic:'🔧',name:'機修零件',drill:'parts',tabs:[['parts','零件／採購／換針','vrt_spare_parts_v2.html']]}
+ {id:'parts',ic:'🔧',name:'機修零件',drill:'parts',tabs:[['parts','零件／採購／換針','vrt_spare_parts_v2.html']]},
+ {id:'tools',ic:'🧰',name:'器具工具',tabs:[['tools','棧板／料架／桌椅／推車／工具／QC 設備','vrt_tools_v1.html']]} /* Paul 11/27：生產用器具與工具登記（照片、編號、QR） */
 ];
 window.VRT_HUBS=HUBS;
 const $=s=>document.querySelector(s);
